@@ -1,109 +1,22 @@
+/*
+ * Copyright (C) SUSE LINUX 2012, all rights reserved
+ *
+ * Author: ddiss@suse.de
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <errno.h>
 #include <string.h>
-
 #include <assert.h>
+
 #include <curl/curl.h>
 #include <libxml/tree.h>
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 
+#include "azure_xml.h"
 #include "azure_ssl.h"
-
-int
-azure_ssl_xml_slurp(const uint8_t *buf,
-		    uint64_t buf_len,
-		    xmlDoc **xp_doc,
-		    xmlXPathContext **xp_ctx)
-{
-	int ret;
-	xmlDoc *xdoc;
-	xmlXPathContext *xpath_ctx;
-	char *ns;
-
-	xdoc = xmlParseMemory(buf, buf_len);
-	if (xdoc == NULL) {
-		printf("unable to parse in-memory XML\n");
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	/* Create xpath evaluation context */
-	xpath_ctx = xmlXPathNewContext(xdoc);
-	if (xpath_ctx == NULL) {
-		printf("unable to create XPath context\n");
-		ret = -ENOMEM;
-		goto err_free_doc;
-	}
-
-	if (xmlXPathRegisterNs(xpath_ctx, "def",
-			"http://schemas.microsoft.com/windowsazure") != 0) {
-		printf("Unable to register NS: def\n");
-		ret = -EINVAL;
-		goto err_free_xpctx;
-	}
-	if (xmlXPathRegisterNs(xpath_ctx, "i",
-			"http://www.w3.org/2001/XMLSchema-instance") != 0) {
-		printf("Unable to register NS: i\n");
-		ret = -EINVAL;
-		goto err_free_xpctx;
-	}
-
-	*xp_doc = xdoc;
-	*xp_ctx = xpath_ctx;
-
-	return 0;
-
-err_free_xpctx:
-	xmlXPathFreeContext(xpath_ctx);
-err_free_doc:
-	xmlFreeDoc(xdoc);
-err_out:
-	return ret;
-}
-
-int
-azure_ssl_xml_get_path(xmlXPathContext *xp_ctx,
-		       const char *xp_expr,
-		       xmlChar **content)
-{
-	int ret;
-	xmlXPathObject *xp_obj;
-	xmlChar *ctnt;
-
-	/* Evaluate xpath expression */
-	xp_obj = xmlXPathEval(xp_expr, xp_ctx);
-	if (xp_obj == NULL) {
-		printf("Unable to evaluate xpath expression \"%s\"\n",
-		       xp_expr);
-		return -ENOENT;
-	}
-
-	if (xp_obj->nodesetval == NULL) {
-		printf("null nodesetval\n");
-		ret = -ENOENT;
-		goto err_xp_obj;
-	}
-	if (xp_obj->nodesetval->nodeNr == 0) {
-		printf("empty nodesetval\n");
-		ret = -ENOENT;
-		goto err_xp_obj;
-	}
-
-	ctnt = xmlNodeGetContent(xp_obj->nodesetval->nodeTab[0]);
-	if (ctnt == NULL) {
-		ret = -ENOMEM;
-		goto err_xp_obj;
-	}
-
-	*content = ctnt;
-	ret = 0;
-err_xp_obj:
-	xmlXPathFreeObject(xp_obj);
-	return ret;
-}
 
 CURL *
 azure_ssl_curl_init(const char *pem_file, const char *pem_pw)
@@ -144,7 +57,7 @@ curl_write_cb(char *ptr,
 
 	if (req->iov.off + num_bytes > req->iov.buf_len) {
 		printf("fatal: curl_write_cb buffer exceeded, "
-		       "len %u off %u io_sz %u\n",
+		       "len %lu off %lu io_sz %lu\n",
 		       req->iov.buf_len, req->iov.off, num_bytes);
 		return -1;
 	}
@@ -162,7 +75,7 @@ azure_ssl_curl_req_setup(CURL *curl, struct azure_req *req)
 	/* XXX we need to clear preset opts when reusing */
 	curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req->method);
 	curl_easy_setopt(curl, CURLOPT_URL, req->url);
-	if (req->method == REQ_METHOD_GET) {
+	if (strcmp(req->method, REQ_METHOD_GET) == 0) {
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, req);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	}
@@ -277,7 +190,7 @@ azure_ssl_mgmt_get_sa_keys_rsp(struct azure_req *req)
 	ret = azure_ssl_xml_get_path(xp_ctx,
 		"//def:StorageService/def:StorageServiceKeys/def:Primary",
 		&get_sa_keys->out.primary);
-	if (ret = 0) {
+	if (ret < 0) {
 		xmlXPathFreeContext(xp_ctx);
 		xmlFreeDoc(xp_doc);
 		return ret;

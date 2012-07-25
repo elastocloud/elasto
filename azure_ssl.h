@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) SUSE LINUX 2012, all rights reserved
+ *
+ * Author: ddiss@suse.de
+ */
 #ifndef _AZURE_SSL_H_
 #define _AZURE_SSL_H_
 
