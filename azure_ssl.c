@@ -86,7 +86,7 @@ int main(void)
 {
 	CURLcode res;
 	struct azure_req req;
-	const char *pem_file = "privateKey.pem";
+	const char *pem_file = "/home/ddiss/azure/privateKey.pem";
 	const char *pem_pword = "disso";
 	const char *subscriber_id = "9baf7f32-66ae-42ca-9ad7-220050765863";
 	CURL *curl;
