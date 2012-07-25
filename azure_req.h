@@ -3,17 +3,11 @@
  *
  * Author: ddiss@suse.de
  */
-#ifndef _AZURE_SSL_H_
-#define _AZURE_SSL_H_
+#ifndef _AZURE_REQ_H_
+#define _AZURE_REQ_H_
 
 enum azure_op {
 	AOP_MGMT_GET_SA_KEYS = 1,
-};
-
-struct curl_iov {
-	uint8_t *buf;
-	uint64_t buf_len;
-	uint64_t off;
 };
 
 struct azure_mgmt_get_sa_keys {
@@ -47,4 +41,15 @@ struct azure_req {
 	};
 };
 
-#endif /* ifdef _AZURE_SSL_H_ */
+int
+azure_req_mgmt_get_sa_keys_init(const char *sub_id,
+				const char *service_name,
+			        struct azure_req *req);
+
+int
+azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req);
+
+void
+azure_req_free(struct azure_req *req);
+
+#endif /* ifdef _AZURE_REQ_H_ */
