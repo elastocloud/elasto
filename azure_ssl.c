@@ -15,6 +15,7 @@
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 
+#include "azure_xml.h"
 #include "azure_req.h"
 
 CURL *
@@ -93,7 +94,7 @@ int main(void)
 	int ret;
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
-	xmlInitParser();
+	azure_xml_subsys_init();
 
 	memset(&req, 0, sizeof(req));
 
@@ -138,7 +139,7 @@ err_req_free:
 err_easy_clean:
 	curl_easy_cleanup(curl);
 err_global_clean:
-	xmlCleanupParser();
+	azure_xml_subsys_deinit();
 	curl_global_cleanup();
 
 	return ret;

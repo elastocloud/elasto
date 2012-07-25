@@ -103,3 +103,14 @@ err_xp_obj:
 	return ret;
 }
 
+int
+azure_xml_subsys_init(void)
+{
+	xmlInitParser();
+}
+
+void
+azure_xml_subsys_deinit(void)
+{
+	xmlCleanupParser();
+}

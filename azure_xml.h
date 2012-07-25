@@ -17,4 +17,9 @@ azure_xml_get_path(xmlXPathContext *xp_ctx,
 		   const char *xp_expr,
 		   xmlChar **content);
 
+int
+azure_xml_subsys_init(void);
+
+void
+azure_xml_subsys_deinit(void);
 #endif /* _AZURE_XML_H_ */
