@@ -1,0 +1,4 @@
+build/
+.waf-*
+.lock-wafbuild
+cscope.out
