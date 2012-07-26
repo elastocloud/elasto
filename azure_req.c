@@ -157,10 +157,14 @@ azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req)
 	return ret;
 }
 
-/* does not free curl, allowing for reuse */
+/* does not free curl, allowing for connection reuse */
 void
 azure_req_free(struct azure_req *req)
 {
+	/* reset headers, so that the slist can be freed */
+	curl_easy_setopt(req->curl, CURLOPT_HTTPHEADER, NULL);
+	curl_slist_free_all(req->http_hdr);
+
 	free(req->iov.buf);
 	free(req->signature);
 	free(req->url);

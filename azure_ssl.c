@@ -22,18 +22,12 @@ CURL *
 azure_ssl_curl_init(const char *pem_file, const char *pem_pw)
 {
 	CURL *curl;
-	struct curl_slist *chunk = NULL;
 
 	curl = curl_easy_init();
 	if (curl == NULL) {
 		return NULL;
 	}
 
-	chunk = curl_slist_append(chunk, "x-ms-version: 2012-03-01");
-	if (chunk == NULL) {
-		return NULL;
-	}
-	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, chunk);
 	curl_easy_setopt(curl, CURLOPT_SSLCERTTYPE, "PEM");
 	curl_easy_setopt(curl, CURLOPT_SSLCERT, pem_file);
 	curl_easy_setopt(curl, CURLOPT_SSLKEYTYPE, "PEM");
@@ -41,7 +35,6 @@ azure_ssl_curl_init(const char *pem_file, const char *pem_pw)
 	if (pem_pw) {
 		curl_easy_setopt(curl, CURLOPT_KEYPASSWD, pem_pw);
 	}
-	/* XXX chunk cannot be freed yet */
 
 	return curl;
 }
@@ -99,22 +92,30 @@ curl_fail_cb(char *ptr,
 }
 
 int
-azure_ssl_curl_req_setup(CURL *curl, struct azure_req *req)
+azure_ssl_curl_req_setup(struct azure_req *req)
 {
-	req->curl = curl;
-
 	/* XXX we need to clear preset opts when reusing */
-	curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req->method);
-	curl_easy_setopt(curl, CURLOPT_URL, req->url);
+	req->http_hdr = curl_slist_append(req->http_hdr,
+					  "x-ms-version: 2012-03-01");
+	if (req->http_hdr == NULL) {
+		return -1;
+	}
+	curl_easy_setopt(req->curl, CURLOPT_HTTPHEADER, req->http_hdr);
+	curl_easy_setopt(req->curl, CURLOPT_CUSTOMREQUEST, req->method);
+	curl_easy_setopt(req->curl, CURLOPT_URL, req->url);
 	/* one-way xfers only so far */
 	if (strcmp(req->method, REQ_METHOD_GET) == 0) {
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, req);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
-		curl_easy_setopt(curl, CURLOPT_READFUNCTION, curl_fail_cb);
+		curl_easy_setopt(req->curl, CURLOPT_WRITEDATA, req);
+		curl_easy_setopt(req->curl, CURLOPT_WRITEFUNCTION,
+				 curl_write_cb);
+		curl_easy_setopt(req->curl, CURLOPT_READFUNCTION,
+				 curl_fail_cb);
 	} else if (strcmp(req->method, REQ_METHOD_PUT) == 0) {
-		curl_easy_setopt(curl, CURLOPT_READDATA, req);
-		curl_easy_setopt(curl, CURLOPT_READFUNCTION, curl_read_cb);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_fail_cb);
+		curl_easy_setopt(req->curl, CURLOPT_READDATA, req);
+		curl_easy_setopt(req->curl, CURLOPT_READFUNCTION,
+				 curl_read_cb);
+		curl_easy_setopt(req->curl, CURLOPT_WRITEFUNCTION,
+				 curl_fail_cb);
 	}
 
 	return 0;	/* FIXME detect curl_easy_setopt errors */
@@ -127,7 +128,6 @@ int main(void)
 	const char *pem_file = "/home/ddiss/azure/privateKey.pem";
 	const char *pem_pword = "disso";
 	const char *subscriber_id = "9baf7f32-66ae-42ca-9ad7-220050765863";
-	CURL *curl;
 	int ret;
 
 	curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -135,8 +135,8 @@ int main(void)
 
 	memset(&req, 0, sizeof(req));
 
-	curl = azure_ssl_curl_init(pem_file, pem_pword);
-	if (curl == NULL) {
+	req.curl = azure_ssl_curl_init(pem_file, pem_pword);
+	if (req.curl == NULL) {
 		ret = -EINVAL;
 		goto err_global_clean;
 	}
@@ -146,13 +146,13 @@ int main(void)
 		goto err_easy_clean;
 	}
 
-	ret = azure_ssl_curl_req_setup(curl, &req);
+	ret = azure_ssl_curl_req_setup(&req);
 	if (ret < 0) {
 		goto err_req_free;
 	}
 
 	/* dispatch */
-	res = curl_easy_perform(curl);
+	res = curl_easy_perform(req.curl);
 	if (res != CURLE_OK) {
 		printf("curl_easy_perform() failed: %s\n",
 		       curl_easy_strerror(res));
@@ -174,7 +174,7 @@ int main(void)
 err_req_free:
 	azure_req_free(&req);
 err_easy_clean:
-	curl_easy_cleanup(curl);
+	curl_easy_cleanup(req.curl);
 err_global_clean:
 	azure_xml_subsys_deinit();
 	curl_global_cleanup();

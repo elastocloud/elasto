@@ -26,6 +26,7 @@ struct azure_mgmt_get_sa_keys {
 #define REQ_METHOD_DELETE	"DELETE"
 struct azure_req {
 	CURL *curl;
+	struct curl_slist *http_hdr;
 	struct {
 		uint8_t *buf;
 		uint64_t buf_len;
