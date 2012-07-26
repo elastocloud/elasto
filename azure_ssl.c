@@ -6,9 +6,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
+#include <time.h>
 
 #include <curl/curl.h>
 #include <libxml/tree.h>
