@@ -338,10 +338,14 @@ err_out:
 	return ret;
 }
 
-/* does not free curl, allowing for connection reuse */
+/*
+ * Free and zero request data. @req->curl is left as is, allowing for
+ * connection reuse.
+ */
 void
 azure_req_free(struct azure_req *req)
 {
+	CURL *curl = req->curl;
 	/* reset headers, so that the slist can be freed */
 	curl_easy_setopt(req->curl, CURLOPT_HTTPHEADER, NULL);
 	curl_slist_free_all(req->http_hdr);
@@ -357,5 +361,7 @@ azure_req_free(struct azure_req *req)
 		azure_req_blob_put_free(&req->blob_put);
 		break;
 	};
+	memset(req, 0, sizeof(*req));
+	req->curl = curl;
 }
 
