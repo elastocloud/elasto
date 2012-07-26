@@ -47,6 +47,27 @@ azure_ssl_curl_init(const char *pem_file, const char *pem_pw)
 }
 
 size_t
+curl_read_cb(char *ptr,
+	     size_t size,
+	     size_t nmemb,
+	     void *userdata)
+{
+	struct azure_req *req = (struct azure_req *)userdata;
+	uint64_t num_bytes = (size * nmemb);
+
+	if (req->iov.off + num_bytes > req->iov.buf_len) {
+		printf("fatal: curl_read_cb buffer exceeded, "
+		       "len %lu off %lu io_sz %lu\n",
+		       req->iov.buf_len, req->iov.off, num_bytes);
+		return -1;
+	}
+
+	memcpy(ptr, (void *)(req->iov.buf + req->iov.off), num_bytes);
+	req->iov.off += num_bytes;
+	return num_bytes;
+}
+
+size_t
 curl_write_cb(char *ptr,
 	      size_t size,
 	      size_t nmemb,
@@ -67,6 +88,16 @@ curl_write_cb(char *ptr,
 	return num_bytes;
 }
 
+size_t
+curl_fail_cb(char *ptr,
+	     size_t size,
+	     size_t nmemb,
+	     void *userdata)
+{
+	printf("Failure: server body data when not expected!\n");
+	return -1;
+}
+
 int
 azure_ssl_curl_req_setup(CURL *curl, struct azure_req *req)
 {
@@ -75,9 +106,15 @@ azure_ssl_curl_req_setup(CURL *curl, struct azure_req *req)
 	/* XXX we need to clear preset opts when reusing */
 	curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req->method);
 	curl_easy_setopt(curl, CURLOPT_URL, req->url);
+	/* one-way xfers only so far */
 	if (strcmp(req->method, REQ_METHOD_GET) == 0) {
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, req);
 		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
+		curl_easy_setopt(curl, CURLOPT_READFUNCTION, curl_fail_cb);
+	} else if (strcmp(req->method, REQ_METHOD_PUT) == 0) {
+		curl_easy_setopt(curl, CURLOPT_READDATA, req);
+		curl_easy_setopt(curl, CURLOPT_READFUNCTION, curl_read_cb);
+		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_fail_cb);
 	}
 
 	return 0;	/* FIXME detect curl_easy_setopt errors */
