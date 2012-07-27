@@ -246,7 +246,6 @@ azure_req_blob_put_fill_hdr(struct azure_req *req)
 			goto err_free_hdr;
 		}
 	}
-	req->sign = true;
 	/* common headers and signature added later */
 
 	return 0;
@@ -258,6 +257,7 @@ err_out:
 }
 
 /*
+ * @container may be NULL, in which case the root container is used.
  * @content_len_bytes only valid when @is_page is set, @buf and @len only valid
  * when @is_page is not set. */
 int
@@ -289,10 +289,14 @@ azure_req_blob_put_init(const char *account,
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	put_req->in.container = strdup(container);
-	if (put_req->in.container == NULL) {
-		ret = -ENOMEM;
-		goto err_free_account;
+	if (container == NULL) {
+		put_req->in.container = NULL;
+	} else {
+		put_req->in.container = strdup(container);
+		if (put_req->in.container == NULL) {
+			ret = -ENOMEM;
+			goto err_free_account;
+		}
 	}
 	put_req->in.bname = strdup(bname);
 	if (put_req->in.bname == NULL) {
@@ -312,9 +316,16 @@ azure_req_blob_put_init(const char *account,
 	}
 
 	req->method = REQ_METHOD_PUT;
-	/* http://myaccount.blob.core.windows.net/mycontainer/myblob */
-	ret = asprintf(&req->url, "https://%s.blob.core.windows.net/%s/%s",
-		       account, container, bname);
+	if (container == NULL) {
+		ret = asprintf(&req->url,
+			       "https://%s.blob.core.windows.net/%s",
+			       account, bname);
+	} else {
+		/* http://myaccount.blob.core.windows.net/mycontainer/myblob */
+		ret = asprintf(&req->url,
+			       "https://%s.blob.core.windows.net/%s/%s",
+			       account, container, bname);
+	}
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_free_bname;
@@ -324,6 +335,9 @@ azure_req_blob_put_init(const char *account,
 	ret = azure_req_blob_put_fill_hdr(req);
 	if (ret < 0)
 		goto err_free_url;
+
+	/* the connection layer must sign this request before sending */
+	req->sign = true;
 
 	return 0;
 err_free_url:
