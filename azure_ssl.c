@@ -28,6 +28,9 @@ int main(void)
 	const char *pem_file = "/home/ddiss/azure/privateKey.pem";
 	const char *pem_pword = "disso";
 	const char *subscriber_id = "9baf7f32-66ae-42ca-9ad7-220050765863";
+	const char *blob_acc = "istgt";
+	const char *blob_container = NULL;	/* use root container */
+	const char *blob_name = "test";
 	int ret;
 
 	azure_conn_subsys_init();
@@ -40,7 +43,7 @@ int main(void)
 		goto err_global_clean;
 	}
 
-	ret = azure_req_mgmt_get_sa_keys_init(subscriber_id, "ddiss", &req);
+	ret = azure_req_mgmt_get_sa_keys_init(subscriber_id, blob_acc, &req);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
@@ -60,8 +63,24 @@ int main(void)
 	       req.mgmt_get_sa_keys.out.primary,
 	       req.mgmt_get_sa_keys.out.secondary);
 
-	ret = azure_conn_sign_setkey(&aconn,
+	ret = azure_conn_sign_setkey(&aconn, blob_acc,
 				     req.mgmt_get_sa_keys.out.primary);
+	if (ret < 0) {
+		goto err_req_free;
+	}
+
+	azure_req_free(&req);
+
+	ret = azure_req_blob_put_init(blob_acc, blob_container, blob_name,
+				      false, 0,
+				      (uint8_t *)strdup("hello world"),
+				      sizeof("hello world"),
+				      &req);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+
+	ret = azure_conn_send_req(&aconn, &req);
 	if (ret < 0) {
 		goto err_req_free;
 	}

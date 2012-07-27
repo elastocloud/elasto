@@ -71,6 +71,17 @@ azure_req_mgmt_get_sa_keys_free(struct azure_mgmt_get_sa_keys *get_sa_keys)
 	free(get_sa_keys->out.secondary);
 }
 
+static int
+azure_req_mgmt_get_sa_keys_fill_hdr(struct azure_req *req)
+{
+	req->http_hdr = curl_slist_append(req->http_hdr,
+					  "x-ms-version: 2012-03-01");
+	if (req->http_hdr == NULL) {
+		return -ENOMEM;
+	}
+	return 0;
+}
+
 int
 azure_req_mgmt_get_sa_keys_init(const char *sub_id,
 				const char *service_name,
@@ -112,7 +123,14 @@ azure_req_mgmt_get_sa_keys_init(const char *sub_id,
 		goto err_free_url;
 	}
 
+	ret = azure_req_mgmt_get_sa_keys_fill_hdr(req);
+	if (ret < 0) {
+		goto err_free_buf;
+	}
+
 	return 0;
+err_free_buf:
+	free(req->iov.buf);
 err_free_url:
 	free(req->url);
 err_free_svc:
@@ -211,48 +229,54 @@ azure_req_blob_put_fill_hdr(struct azure_req *req)
 	ret = asprintf(&hdr_str, "Content-Length: %lu", req->iov.buf_len);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_free_hdr;
+		goto err_out;
 	}
 	req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
 	free(hdr_str);
 	if (req->http_hdr == NULL) {
 		ret = -ENOMEM;
-		goto err_free_hdr;
+		goto err_out;
 	}
 	if (strcmp(req->blob_put.in.type, BLOB_TYPE_PAGE) == 0) {
 		req->http_hdr = curl_slist_append(req->http_hdr,
 						  "x-ms-blob-type: PageBlob");
 		if (req->http_hdr == NULL) {
 			ret = -ENOMEM;
-			goto err_free_hdr;
+			goto err_out;
 		}
 		ret = asprintf(&hdr_str, "x-ms-blob-content-length: %lu",
 			       req->blob_put.in.content_len_bytes);
 		if (ret < 0) {
 			ret = -ENOMEM;
-			goto err_free_hdr;
+			goto err_out;
 		}
 		req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
 		free(hdr_str);
 		if (req->http_hdr == NULL) {
 			ret = -ENOMEM;
-			goto err_free_hdr;
+			goto err_out;
 		}
 	} else {
 		req->http_hdr = curl_slist_append(req->http_hdr,
 						  "x-ms-blob-type: BlockBlob");
 		if (req->http_hdr == NULL) {
 			ret = -ENOMEM;
-			goto err_free_hdr;
+			goto err_out;
 		}
+	}
+	/* different to the version in management */
+	req->http_hdr = curl_slist_append(req->http_hdr,
+					  "x-ms-version: 2009-09-19");
+	if (req->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
 	}
 	/* common headers and signature added later */
 
 	return 0;
 
-err_free_hdr:
-	curl_slist_free_all(req->http_hdr);
 err_out:
+	/* the slist is leaked on failure here */
 	return ret;
 }
 
@@ -360,7 +384,7 @@ azure_req_free(struct azure_req *req)
 	curl_slist_free_all(req->http_hdr);
 
 	free(req->iov.buf);
-	free(req->signature);
+	free(req->sig_src);
 	free(req->url);
 	switch (req->op) {
 	case AOP_MGMT_GET_SA_KEYS:

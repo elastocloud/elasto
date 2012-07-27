@@ -3,6 +3,7 @@
  *
  * Author: ddiss@suse.de
  */
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -16,28 +17,46 @@
 
 #include "base64.h"
 #include "azure_req.h"
+#include "azure_sign.h"
 #include "azure_conn.h"
 
 /* convert base64 encoded key to binary and store in @aconn */
 int
 azure_conn_sign_setkey(struct azure_conn *aconn,
+		       const char *account,
 		       const char *key_b64)
 {
 	int ret;
 
 	free(aconn->sign.key);
 	aconn->sign.key = malloc(strlen(key_b64));
-	if (aconn->sign.key == NULL)
-		return -ENOMEM;
+	if (aconn->sign.key == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	aconn->sign.account = strdup(account);
+	if (aconn->sign.account == NULL) {
+		ret = -ENOMEM;
+		goto err_key_free;
+	}
 
 	ret = base64_decode(key_b64, aconn->sign.key);
 	if (ret < 0) {
-		free(aconn->sign.key);
-		aconn->sign.key = NULL;
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_acc_free;
 	}
 	aconn->sign.key_len = ret;
+
 	return 0;
+
+err_acc_free:
+	free(aconn->sign.account);
+err_key_free:
+	free(aconn->sign.key);
+	aconn->sign.key = NULL;
+err_out:
+	return ret;
 }
 
 static size_t
@@ -89,18 +108,38 @@ curl_fail_cb(char *ptr,
 	     void *userdata)
 {
 	printf("Failure: server body data when not expected!\n");
-	return -1;
+	return 0;
 }
 
+/* a bit ugly, the signature src string is stored in @req for debugging */
 static int
 azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 {
-	/* XXX we need to clear preset opts when reusing */
-	req->http_hdr = curl_slist_append(req->http_hdr,
-					  "x-ms-version: 2012-03-01");
-	if (req->http_hdr == NULL) {
-		return -ENOMEM;
+	if (req->sign) {
+		char *sig_str;
+		char *hdr_str = NULL;
+		int ret;
+		assert(aconn->sign.key != NULL);
+		ret = azure_sign_gen_lite(aconn->sign.account,
+					  aconn->sign.key, aconn->sign.key_len,
+					  req, &req->sig_src, &sig_str);
+		if (ret < 0) {
+			printf("signing failed: %s\n", strerror(-ret));
+			return ret;
+		}
+		ret = asprintf(&hdr_str, "Authorization: SharedKeyLite %s:%s",
+			       aconn->sign.account, sig_str);
+		free(sig_str);
+		if (ret < 0) {
+			return -ENOMEM;
+		}
+		req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+		free(hdr_str);
+		if (req->http_hdr == NULL) {
+			return -ENOMEM;
+		}
 	}
+
 	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, req->http_hdr);
 	curl_easy_setopt(aconn->curl, CURLOPT_CUSTOMREQUEST, req->method);
 	curl_easy_setopt(aconn->curl, CURLOPT_URL, req->url);
@@ -118,6 +157,9 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 		curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION,
 				 curl_fail_cb);
 	}
+
+	/* TODO remove this later */
+	curl_easy_setopt(aconn->curl, CURLOPT_VERBOSE, 1);
 
 	return 0;	/* FIXME detect curl_easy_setopt errors */
 }
@@ -186,6 +228,8 @@ azure_conn_subsys_init(void)
 	if (res != CURLE_OK)
 		return -ENOMEM;
 
+	azure_sign_init();
+
 	return 0;
 }
 
@@ -193,4 +237,5 @@ void
 azure_conn_subsys_deinit(void)
 {
 	curl_global_cleanup();
+	azure_sign_deinit();
 }

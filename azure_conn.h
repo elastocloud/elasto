@@ -9,6 +9,7 @@
 struct azure_conn {
 	CURL *curl;
 	struct {
+		char *account;
 		uint8_t *key;
 		uint64_t key_len;
 	} sign;
@@ -16,6 +17,7 @@ struct azure_conn {
 
 int
 azure_conn_sign_setkey(struct azure_conn *aconn,
+		       const char *account,
 		       const char *key_b64);
 
 int
