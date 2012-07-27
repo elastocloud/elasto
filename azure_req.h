@@ -55,7 +55,7 @@ struct azure_req {
 		uint64_t off;
 	} iov;
 	bool sign;
-	char *signature;
+	char *sig_src;	/* debug, compare with signing error response */
 	const char *method;
 	char *url;
 
