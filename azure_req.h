@@ -48,7 +48,6 @@ struct azure_blob_put {
 #define REQ_METHOD_PUT		"PUT"
 #define REQ_METHOD_DELETE	"DELETE"
 struct azure_req {
-	CURL *curl;
 	struct curl_slist *http_hdr;
 	struct {
 		uint8_t *buf;

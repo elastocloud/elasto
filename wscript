@@ -12,4 +12,4 @@ def configure(conf):
 
 def build(bld):
 	print("build!")
-	bld.program(source='azure_ssl.c azure_xml.c azure_req.c azure_sign.c base64.c', target='azure_ssl', lib=['curl','xml2','crypto'])
+	bld.program(source='azure_ssl.c azure_xml.c azure_req.c azure_sign.c base64.c azure_conn.c', target='azure_ssl', lib=['curl','xml2','crypto'])
