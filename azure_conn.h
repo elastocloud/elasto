@@ -9,10 +9,14 @@
 struct azure_conn {
 	CURL *curl;
 	struct {
-		uint8_t key;
+		uint8_t *key;
 		uint64_t key_len;
 	} sign;
 };
+
+int
+azure_conn_sign_setkey(struct azure_conn *aconn,
+		       const char *key_b64);
 
 int
 azure_conn_send_req(struct azure_conn *aconn,

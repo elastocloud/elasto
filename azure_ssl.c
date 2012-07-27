@@ -60,6 +60,12 @@ int main(void)
 	       req.mgmt_get_sa_keys.out.primary,
 	       req.mgmt_get_sa_keys.out.secondary);
 
+	ret = azure_conn_sign_setkey(&aconn,
+				     req.mgmt_get_sa_keys.out.primary);
+	if (ret < 0) {
+		goto err_req_free;
+	}
+
 	ret = 0;
 err_req_free:
 	azure_req_free(&req);

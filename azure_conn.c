@@ -14,8 +14,31 @@
 
 #include <curl/curl.h>
 
+#include "base64.h"
 #include "azure_req.h"
 #include "azure_conn.h"
+
+/* convert base64 encoded key to binary and store in @aconn */
+int
+azure_conn_sign_setkey(struct azure_conn *aconn,
+		       const char *key_b64)
+{
+	int ret;
+
+	free(aconn->sign.key);
+	aconn->sign.key = malloc(strlen(key_b64));
+	if (aconn->sign.key == NULL)
+		return -ENOMEM;
+
+	ret = base64_decode(key_b64, aconn->sign.key);
+	if (ret < 0) {
+		free(aconn->sign.key);
+		aconn->sign.key = NULL;
+		return -EINVAL;
+	}
+	aconn->sign.key_len = ret;
+	return 0;
+}
 
 static size_t
 curl_read_cb(char *ptr,
@@ -143,6 +166,7 @@ azure_conn_init(const char *pem_file,
 	if (pem_pw) {
 		curl_easy_setopt(aconn->curl, CURLOPT_KEYPASSWD, pem_pw);
 	}
+	memset(&aconn->sign, 0, sizeof(aconn->sign));
 
 	return 0;
 }
