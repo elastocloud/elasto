@@ -13,7 +13,6 @@
 #include <time.h>
 
 #include <curl/curl.h>
-#include <libxml/tree.h>
 
 #include "azure_req.h"
 #include "azure_conn.h"

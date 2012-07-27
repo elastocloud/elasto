@@ -15,9 +15,9 @@ azure_xml_slurp(const uint8_t *buf,
 int
 azure_xml_get_path(xmlXPathContext *xp_ctx,
 		   const char *xp_expr,
-		   xmlChar **content);
+		   char **content);
 
-int
+void
 azure_xml_subsys_init(void);
 
 void

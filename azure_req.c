@@ -67,8 +67,8 @@ azure_req_mgmt_get_sa_keys_free(struct azure_mgmt_get_sa_keys *get_sa_keys)
 {
 	free(get_sa_keys->in.sub_id);
 	free(get_sa_keys->in.service_name);
-	xmlFree(get_sa_keys->out.primary);
-	xmlFree(get_sa_keys->out.secondary);
+	free(get_sa_keys->out.primary);
+	free(get_sa_keys->out.secondary);
 }
 
 int

@@ -4,6 +4,7 @@
  * Author: ddiss@suse.de
  */
 #include <stdint.h>
+#include <string.h>
 #include <errno.h>
 
 #include <libxml/tree.h>
@@ -65,7 +66,7 @@ err_out:
 int
 azure_xml_get_path(xmlXPathContext *xp_ctx,
 		   const char *xp_expr,
-		   xmlChar **content)
+		   char **content)
 {
 	int ret;
 	xmlXPathObject *xp_obj;
@@ -96,14 +97,20 @@ azure_xml_get_path(xmlXPathContext *xp_ctx,
 		goto err_xp_obj;
 	}
 
-	*content = ctnt;
+	*content = strdup((char *)ctnt);
+	xmlFree(ctnt);
+	if (*content == NULL) {
+		ret = -ENOMEM;
+		goto err_xp_obj;
+	}
+
 	ret = 0;
 err_xp_obj:
 	xmlXPathFreeObject(xp_obj);
 	return ret;
 }
 
-int
+void
 azure_xml_subsys_init(void)
 {
 	xmlInitParser();

@@ -17,8 +17,8 @@ struct azure_mgmt_get_sa_keys {
 		char *service_name;
 	} in;
 	struct {
-		xmlChar *primary;
-		xmlChar *secondary;
+		char *primary;
+		char *secondary;
 	} out;
 };
 
