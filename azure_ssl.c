@@ -17,6 +17,7 @@
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 
+#include "ccan/list/list.h"
 #include "azure_xml.h"
 #include "azure_req.h"
 #include "azure_conn.h"
@@ -71,11 +72,15 @@ int main(void)
 
 	azure_req_free(&req);
 
+	/*
 	ret = azure_req_blob_put_init(blob_acc, blob_container, blob_name,
 				      false, 0,
 				      (uint8_t *)strdup("hello world"),
 				      sizeof("hello world"),
 				      &req);
+				      */
+
+	ret = azure_req_ctnr_list(blob_acc, &req);
 	if (ret < 0) {
 		goto err_conn_free;
 	}

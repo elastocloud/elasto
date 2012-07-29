@@ -18,6 +18,7 @@
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 
+#include "ccan/list/list.h"
 #include "azure_xml.h"
 #include "azure_req.h"
 
@@ -61,6 +62,24 @@ azure_req_mgmt_url_check_sa_availability(const char *sub_id, const char *service
 	return url;
 }
 #endif
+
+static char *
+gen_date_str(void)
+{
+	char buf[200];
+	time_t now;
+	struct tm utc_tm;
+	size_t ret;
+
+	time(&now);
+	gmtime_r(&now, &utc_tm);
+	/* Sun, 11 Oct 2009 21:49:13 GMT */
+	ret = strftime(buf, sizeof(buf), "%a, %d %b %Y %T GMT", &utc_tm);
+	if (ret == 0)
+		return NULL;
+	return strdup(buf);
+
+}
 
 static void
 azure_req_mgmt_get_sa_keys_free(struct azure_mgmt_get_sa_keys *get_sa_keys)
@@ -177,29 +196,116 @@ azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req)
 }
 
 static void
+azure_req_ctnr_list_free(struct azure_ctnr_list *ctnr_list_req)
+{
+	struct azure_ctnr *ctnr;
+	struct azure_ctnr *ctnr_n;
+	free(ctnr_list_req->in.account);
+
+	list_for_each_safe(&ctnr_list_req->out.ctnrs, ctnr, ctnr_n, list) {
+		free(ctnr);
+	}
+}
+
+static int
+azure_req_ctnr_list_fill_hdr(struct azure_req *req)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+	free(hdr_str);
+	if (req->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* different to the version in management */
+	req->http_hdr = curl_slist_append(req->http_hdr,
+					  "x-ms-version: 2009-09-19");
+	if (req->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+int
+azure_req_ctnr_list(const char *account,
+		    struct azure_req *req)
+{
+
+	int ret;
+	struct azure_ctnr_list *ctnr_list_req;
+
+	/* TODO input validation */
+
+	req->op = AOP_CONTAINER_LIST;
+	ctnr_list_req = &req->ctnr_list;
+
+	ctnr_list_req->in.account = strdup(account);
+	if (ctnr_list_req->in.account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	req->method = REQ_METHOD_GET;
+	ret = asprintf(&req->url,
+		       "https://%s.blob.core.windows.net/?comp=list",
+		       account);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	azure_req_ctnr_list_fill_hdr(req);
+	/* the connection layer must sign this request before sending */
+	req->sign = true;
+
+	/* allocate response buffer, TODO determine appropriate size */
+	req->iov.buf_len = (1024 * 1024);
+	req->iov.buf = malloc(req->iov.buf_len);
+	if (req->iov.buf == NULL) {
+		ret = -ENOMEM;
+		goto err_url_free;
+	}
+
+	list_head_init(&ctnr_list_req->out.ctnrs);
+
+	return 0;
+
+err_url_free:
+	free(req->url);
+err_acc_free:
+	free(ctnr_list_req->in.account);
+err_out:
+	return ret;
+}
+
+/* TODO unmarshall ctnr list response */
+
+static void
 azure_req_blob_put_free(struct azure_blob_put *put_req)
 {
 	free(put_req->in.account);
 	free(put_req->in.container);
 	free(put_req->in.bname);
-}
-
-static char *
-gen_date_str(void)
-{
-	char buf[200];
-	time_t now;
-	struct tm utc_tm;
-	size_t ret;
-
-	time(&now);
-	gmtime_r(&now, &utc_tm);
-	/* Sun, 11 Oct 2009 21:49:13 GMT */
-	ret = strftime(buf, sizeof(buf), "%a, %d %b %Y %T GMT", &utc_tm);
-	if (ret == 0)
-		return NULL;
-	return strdup(buf);
-
 }
 
 static int
@@ -389,6 +495,9 @@ azure_req_free(struct azure_req *req)
 	switch (req->op) {
 	case AOP_MGMT_GET_SA_KEYS:
 		azure_req_mgmt_get_sa_keys_free(&req->mgmt_get_sa_keys);
+		break;
+	case AOP_CONTAINER_LIST:
+		azure_req_ctnr_list_free(&req->ctnr_list);
 		break;
 	case AOP_BLOB_PUT:
 		azure_req_blob_put_free(&req->blob_put);
