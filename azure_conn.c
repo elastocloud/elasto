@@ -73,7 +73,7 @@ curl_read_cb(char *ptr,
 		printf("curl_read_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu, capping\n",
 		       req->iov.buf_len, req->iov.off, num_bytes);
-		num_bytes = num_bytes - req->iov.off;
+		num_bytes = req->iov.buf_len - req->iov.off;
 	}
 
 	memcpy(ptr, (void *)(req->iov.buf + req->iov.off), num_bytes);
@@ -147,10 +147,6 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 		}
 		req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
 		free(hdr_str);
-		if (req->http_hdr == NULL) {
-			return -ENOMEM;
-		}
-		req->http_hdr = curl_slist_append(req->http_hdr, "Content-Type: text/plain; charset=UTF-8");
 		if (req->http_hdr == NULL) {
 			return -ENOMEM;
 		}
