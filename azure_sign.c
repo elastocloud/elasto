@@ -126,6 +126,10 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 	}
 	if (count == 0) {
 		ms_hdr_str = strdup("");
+		if (ms_hdr_str == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
 		goto out_empty;
 	}
 
@@ -155,14 +159,22 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 			     s && ((*s == ' ' ) || (*s == ':'));
 			     s++);
 			assert(s != NULL);
+			assert(ctype == NULL);
 			ctype = strdup(s);
-			/* FIXME */
+			if (ctype == NULL) {
+				ret = -ENOMEM;
+				goto err_array_free;
+			}
 		}
 	}
 	count = i;
 	if (count == 0) {
 		free(ms_hdr_array);
 		ms_hdr_str = strdup("");
+		if (ms_hdr_str == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
 		goto out_empty;
 	}
 
