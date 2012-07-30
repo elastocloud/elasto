@@ -203,6 +203,7 @@ azure_req_ctnr_list_free(struct azure_ctnr_list *ctnr_list_req)
 	free(ctnr_list_req->in.account);
 
 	list_for_each_safe(&ctnr_list_req->out.ctnrs, ctnr, ctnr_n, list) {
+		free(ctnr->name);
 		free(ctnr);
 	}
 }
@@ -298,7 +299,156 @@ err_out:
 	return ret;
 }
 
-/* TODO unmarshall ctnr list response */
+int
+azure_req_ctnr_list_rsp(struct azure_req *req)
+{
+	int ret;
+	int i;
+	struct azure_ctnr_list *ctnr_list_req;
+	xmlDoc *xp_doc;
+	xmlXPathContext *xp_ctx;
+
+	/* parse response */
+	ret = azure_xml_slurp(req->iov.buf, req->iov.off, &xp_doc, &xp_ctx);
+	if (ret < 0) {
+		return ret;
+	}
+
+	assert(req->op == AOP_CONTAINER_LIST);
+	ctnr_list_req = &req->ctnr_list;
+
+	/* returns up to 5000 records (maxresults default) */
+	for (i = 1; i <= 5000; i++) {
+		char *query;
+		char *name;
+		struct azure_ctnr *ctnr;
+		ret = asprintf(&query, "//Containers/Container[%d]/Name",
+			       i);	/* start at 1 for W3C standard? */
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+		ret = azure_xml_get_path(xp_ctx,
+			query,
+			&name);
+		free(query);
+		if (ret == -ENOENT)
+			break;	/* all processed */
+		else if (ret < 0) {
+			goto err_out;
+		}
+
+		ctnr = malloc(sizeof(*ctnr));
+		if (ctnr == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+		ctnr->name = name;
+		list_add_tail(&ctnr_list_req->out.ctnrs, &ctnr->list);
+		ctnr_list_req->out.num_ctnrs++;
+	}
+	ret = 0;
+
+err_out:
+	/* XXX should unwind out.ctnrs on error */
+	xmlXPathFreeContext(xp_ctx);
+	xmlFreeDoc(xp_doc);
+
+	return ret;
+}
+
+static void
+azure_req_ctnr_create_free(struct azure_ctnr_create *ctnr_create_req)
+{
+	free(ctnr_create_req->in.account);
+	free(ctnr_create_req->in.ctnr);
+}
+
+static int
+azure_req_ctnr_create_fill_hdr(struct azure_req *req)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+	free(hdr_str);
+	if (req->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	req->http_hdr = curl_slist_append(req->http_hdr,
+					  "x-ms-version: 2009-09-19");
+	if (req->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+int
+azure_req_ctnr_create(const char *account,
+		      const char *ctnr,
+		      struct azure_req *req)
+{
+
+	int ret;
+	struct azure_ctnr_create *ctnr_create_req;
+
+	/* TODO input validation */
+
+	req->op = AOP_CONTAINER_CREATE;
+	ctnr_create_req = &req->ctnr_create;
+
+	ctnr_create_req->in.account = strdup(account);
+	if (ctnr_create_req->in.account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ctnr_create_req->in.ctnr = strdup(ctnr);
+	if (ctnr_create_req->in.ctnr == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	req->method = REQ_METHOD_PUT;
+	ret = asprintf(&req->url,
+		       "https://%s.blob.core.windows.net/%s?restype=container",
+		       account, ctnr);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_ctnr_free;
+	}
+
+	azure_req_ctnr_create_fill_hdr(req);
+	/* the connection layer must sign this request before sending */
+	req->sign = true;
+
+	return 0;
+
+err_ctnr_free:
+	free(ctnr_create_req->in.ctnr);
+err_acc_free:
+	free(ctnr_create_req->in.account);
+err_out:
+	return ret;
+}
 
 static void
 azure_req_blob_put_free(struct azure_blob_put *put_req)
@@ -322,17 +472,6 @@ azure_req_blob_put_fill_hdr(struct azure_req *req)
 	}
 	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
 	free(date_str);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
-	free(hdr_str);
-	if (req->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "Content-Length: %lu", req->iov.buf_len);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -498,6 +637,9 @@ azure_req_free(struct azure_req *req)
 		break;
 	case AOP_CONTAINER_LIST:
 		azure_req_ctnr_list_free(&req->ctnr_list);
+		break;
+	case AOP_CONTAINER_CREATE:
+		azure_req_ctnr_create_free(&req->ctnr_create);
 		break;
 	case AOP_BLOB_PUT:
 		azure_req_blob_put_free(&req->blob_put);

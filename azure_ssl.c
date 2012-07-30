@@ -30,8 +30,10 @@ int main(void)
 	const char *pem_pword = "disso";
 	const char *subscriber_id = "9baf7f32-66ae-42ca-9ad7-220050765863";
 	const char *blob_acc = "istgt";
-	const char *blob_container = NULL;	/* use root container */
+	const char *blob_container = "target1";
 	const char *blob_name = "test";
+	struct azure_ctnr *ctnr;
+	bool ctnr_exists;
 	int ret;
 
 	azure_conn_subsys_init();
@@ -88,6 +90,38 @@ int main(void)
 	ret = azure_conn_send_req(&aconn, &req);
 	if (ret < 0) {
 		goto err_req_free;
+	}
+
+	ret = azure_req_ctnr_list_rsp(&req);
+	if (ret < 0) {
+		goto err_req_free;
+	}
+
+	ctnr_exists = false;
+	list_for_each(&req.ctnr_list.out.ctnrs, ctnr, list) {
+		if (strcmp(ctnr->name, blob_container) == 0) {
+			ctnr_exists = true;
+			break;
+		}
+	}
+
+	azure_req_free(&req);
+
+	if (ctnr_exists == false) {
+		ret = azure_req_ctnr_create(blob_acc, blob_container, &req);
+		if (ret < 0) {
+			goto err_conn_free;
+		}
+		/*
+		 * returns:
+		 * < HTTP/1.1 201 Created
+		 * < HTTP/1.1 409 The specified container already exists.
+		 */
+
+		ret = azure_conn_send_req(&aconn, &req);
+		if (ret < 0) {
+			goto err_req_free;
+		}
 	}
 
 	ret = 0;

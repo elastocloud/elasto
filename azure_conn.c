@@ -116,10 +116,11 @@ curl_fail_cb(char *ptr,
 static int
 azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 {
+	int ret;
+	char *hdr_str = NULL;
+
 	if (req->sign) {
 		char *sig_str;
-		char *hdr_str = NULL;
-		int ret;
 		assert(aconn->sign.key != NULL);
 		ret = azure_sign_gen_lite(aconn->sign.account,
 					  aconn->sign.key, aconn->sign.key_len,
@@ -157,6 +158,16 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 				 curl_read_cb);
 		curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION,
 				 curl_fail_cb);
+		/* must be set for PUT, TODO ensure not already set */
+		ret = asprintf(&hdr_str, "Content-Length: %lu", req->iov.buf_len);
+		if (ret < 0) {
+			return -ENOMEM;
+		}
+		req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+		free(hdr_str);
+		if (req->http_hdr == NULL) {
+			return -ENOMEM;
+		}
 	}
 
 	/* TODO remove this later */

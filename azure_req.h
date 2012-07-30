@@ -9,6 +9,7 @@
 enum azure_op {
 	AOP_MGMT_GET_SA_KEYS = 1,
 	AOP_CONTAINER_LIST,
+	AOP_CONTAINER_CREATE,
 	AOP_BLOB_PUT,
 };
 
@@ -26,7 +27,6 @@ struct azure_mgmt_get_sa_keys {
 struct azure_ctnr {
 	struct list_node list;
 	char *name;
-	char *url;
 };
 
 /* @ctnrs: struct azure_blob_ctnr list */
@@ -104,6 +104,14 @@ azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req);
 int
 azure_req_ctnr_list(const char *account,
 		    struct azure_req *req);
+
+int
+azure_req_ctnr_list_rsp(struct azure_req *req);
+
+int
+azure_req_ctnr_create(const char *account,
+		      const char *ctnr,
+		      struct azure_req *req);
 
 int
 azure_req_blob_put_init(const char *account,
