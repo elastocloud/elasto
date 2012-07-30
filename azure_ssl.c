@@ -47,7 +47,7 @@ int main(void)
 		goto err_global_clean;
 	}
 
-	ret = azure_req_mgmt_get_sa_keys_init(subscriber_id, blob_acc, &req);
+	ret = azure_req_mgmt_get_sa_keys(subscriber_id, blob_acc, &req);
 	if (ret < 0) {
 		goto err_conn_free;
 	}

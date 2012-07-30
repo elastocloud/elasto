@@ -102,9 +102,9 @@ azure_req_mgmt_get_sa_keys_fill_hdr(struct azure_req *req)
 }
 
 int
-azure_req_mgmt_get_sa_keys_init(const char *sub_id,
-				const char *service_name,
-			        struct azure_req *req)
+azure_req_mgmt_get_sa_keys(const char *sub_id,
+			   const char *service_name,
+			   struct azure_req *req)
 {
 	int ret;
 	struct azure_mgmt_get_sa_keys *get_sa_keys;
