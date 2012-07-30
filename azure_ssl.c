@@ -74,14 +74,6 @@ int main(void)
 
 	azure_req_free(&req);
 
-	/*
-	ret = azure_req_blob_put_init(blob_acc, blob_container, blob_name,
-				      false, 0,
-				      (uint8_t *)strdup("hello world"),
-				      sizeof("hello world"),
-				      &req);
-				      */
-
 	ret = azure_req_ctnr_list(blob_acc, &req);
 	if (ret < 0) {
 		goto err_conn_free;
@@ -122,7 +114,25 @@ int main(void)
 		if (ret < 0) {
 			goto err_req_free;
 		}
+
+		azure_req_free(&req);
 	}
+
+	ret = azure_req_blob_put(blob_acc, blob_container, blob_name,
+				 false, 0,
+				 (uint8_t *)strdup("hello world"),
+				 sizeof("hello world") - 1,
+				 &req);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+
+	ret = azure_conn_send_req(&aconn, &req);
+	if (ret < 0) {
+		goto err_req_free;
+	}
+
+	azure_req_free(&req);
 
 	ret = 0;
 err_req_free:

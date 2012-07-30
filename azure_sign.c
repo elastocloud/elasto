@@ -102,14 +102,18 @@ str_cmp_lexi(const void *p1, const void *p2)
  * resulting list. Construct the CanonicalizedHeaders string by concatenating
  * all headers in this list into a single string.
  */
-static char *
-canon_hdrs_gen(struct curl_slist *http_hdr)
+static int
+canon_hdrs_gen(struct curl_slist *http_hdr,
+	       char **canon_hdrs,
+	       char **content_type)
 {
 	struct curl_slist *l;
 	int count = 0;
 	int i;
+	int ret;
 	char **ms_hdr_array;
 	char *ms_hdr_str;
+	char *ctype = NULL;
 	char *s;
 	int ms_hdr_str_len = 0;
 
@@ -120,11 +124,14 @@ canon_hdrs_gen(struct curl_slist *http_hdr)
 		 */
 		count++;
 	}
-	if (count == 0)
-		return strdup("");
+	if (count == 0) {
+		ms_hdr_str = strdup("");
+		goto out_empty;
+	}
 
 	ms_hdr_array = malloc(count * sizeof(char *));
 	if (ms_hdr_array == NULL) {
+		ret = -ENOMEM;
 		goto err_out;
 	}
 
@@ -134,6 +141,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr)
 			ms_hdr_array[i] = strdup(l->data);
 			if (ms_hdr_array[i] == NULL) {
 				count = i;
+				ret = -ENOMEM;
 				goto err_array_free;
 			}
 			ms_hdr_tolower(ms_hdr_array[i]);
@@ -141,18 +149,28 @@ canon_hdrs_gen(struct curl_slist *http_hdr)
 			ms_hdr_str_len += (strlen(ms_hdr_array[i])
 					   + 1);	/* newline */
 			i++;
+		} else if (strncasecmp(l->data, "Content-Type",
+				       sizeof("Content-Type") -1) == 0) {
+			for (s = strchr(l->data, ':');
+			     s && ((*s == ' ' ) || (*s == ':'));
+			     s++);
+			assert(s != NULL);
+			ctype = strdup(s);
+			/* FIXME */
 		}
 	}
 	count = i;
 	if (count == 0) {
 		free(ms_hdr_array);
-		return strdup("");
+		ms_hdr_str = strdup("");
+		goto out_empty;
 	}
 
 	qsort(ms_hdr_array, count, sizeof(char *), str_cmp_lexi);
 
 	ms_hdr_str = malloc(ms_hdr_str_len + 1);
 	if (ms_hdr_str == NULL) {
+		ret = -ENOMEM;
 		goto err_array_free;
 	}
 
@@ -164,15 +182,18 @@ canon_hdrs_gen(struct curl_slist *http_hdr)
 		s += (len + 1);
 	}
 	*s = '\0';
+out_empty:
+	*canon_hdrs = ms_hdr_str;
+	*content_type = ctype;
 
-	return ms_hdr_str;
+	return 0;
 
 err_array_free:
 	for (i = 0; i < count; i++)
 		free(ms_hdr_array[i]);
 	free(ms_hdr_array);
 err_out:
-	return NULL;
+	return ret;
 }
 
 /*
@@ -244,15 +265,15 @@ azure_sign_gen_lite(const char *account,
 {
 	int ret;
 	char *canon_hdrs;
+	char *content_type = NULL;
 	char *canon_rsc;
 	char *str_to_sign = NULL;
 	uint8_t *md;
 	int md_len;
 	char *md_b64;
 
-	canon_hdrs = canon_hdrs_gen(req->http_hdr);
-	if (canon_hdrs == NULL) {
-		ret = -ENOMEM;
+	ret = canon_hdrs_gen(req->http_hdr, &canon_hdrs, &content_type);
+	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -265,11 +286,13 @@ azure_sign_gen_lite(const char *account,
 	ret = asprintf(&str_to_sign,
 		       "%s\n"	/* VERB */
 		       "\n"	/* Content-MD5 (not supported) */
-		       "\n"	/* Content-Type (not supported) */
+		       "%s\n"	/* Content-Type */
 		       "\n"	/* Date (not supported) */
 		       "%s"	/* CanonicalizedHeaders */
 		       "%s",	/* CanonicalizedResource */
-		       req->method, canon_hdrs, canon_rsc);
+		       req->method,
+		       content_type ? content_type : "",
+		       canon_hdrs, canon_rsc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_rsc_free;

@@ -70,10 +70,10 @@ curl_read_cb(char *ptr,
 	uint64_t num_bytes = (size * nmemb);
 
 	if (req->iov.off + num_bytes > req->iov.buf_len) {
-		printf("fatal: curl_read_cb buffer exceeded, "
-		       "len %lu off %lu io_sz %lu\n",
+		printf("curl_read_cb buffer exceeded, "
+		       "len %lu off %lu io_sz %lu, capping\n",
 		       req->iov.buf_len, req->iov.off, num_bytes);
-		return -1;
+		num_bytes = num_bytes - req->iov.off;
 	}
 
 	memcpy(ptr, (void *)(req->iov.buf + req->iov.off), num_bytes);
@@ -119,6 +119,40 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 	int ret;
 	char *hdr_str = NULL;
 
+	curl_easy_setopt(aconn->curl, CURLOPT_CUSTOMREQUEST, req->method);
+	curl_easy_setopt(aconn->curl, CURLOPT_URL, req->url);
+	/* one-way xfers only so far */
+	if (strcmp(req->method, REQ_METHOD_GET) == 0) {
+		curl_easy_setopt(aconn->curl, CURLOPT_WRITEDATA, req);
+		curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION,
+				 curl_write_cb);
+		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
+				 curl_fail_cb);
+	} else if (strcmp(req->method, REQ_METHOD_PUT) == 0) {
+		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 1);
+		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE,
+				 req->iov.buf_len);
+		curl_easy_setopt(aconn->curl, CURLOPT_READDATA, req);
+		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
+				 curl_read_cb);
+		curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION,
+				 curl_fail_cb);
+		/* must be set for PUT, TODO ensure not already set */
+		ret = asprintf(&hdr_str, "Content-Length: %lu", req->iov.buf_len);
+		if (ret < 0) {
+			return -ENOMEM;
+		}
+		req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+		free(hdr_str);
+		if (req->http_hdr == NULL) {
+			return -ENOMEM;
+		}
+		req->http_hdr = curl_slist_append(req->http_hdr, "Content-Type: text/plain; charset=UTF-8");
+		if (req->http_hdr == NULL) {
+			return -ENOMEM;
+		}
+	}
+
 	if (req->sign) {
 		char *sig_str;
 		assert(aconn->sign.key != NULL);
@@ -143,32 +177,6 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 	}
 
 	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, req->http_hdr);
-	curl_easy_setopt(aconn->curl, CURLOPT_CUSTOMREQUEST, req->method);
-	curl_easy_setopt(aconn->curl, CURLOPT_URL, req->url);
-	/* one-way xfers only so far */
-	if (strcmp(req->method, REQ_METHOD_GET) == 0) {
-		curl_easy_setopt(aconn->curl, CURLOPT_WRITEDATA, req);
-		curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION,
-				 curl_write_cb);
-		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
-				 curl_fail_cb);
-	} else if (strcmp(req->method, REQ_METHOD_PUT) == 0) {
-		curl_easy_setopt(aconn->curl, CURLOPT_READDATA, req);
-		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
-				 curl_read_cb);
-		curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION,
-				 curl_fail_cb);
-		/* must be set for PUT, TODO ensure not already set */
-		ret = asprintf(&hdr_str, "Content-Length: %lu", req->iov.buf_len);
-		if (ret < 0) {
-			return -ENOMEM;
-		}
-		req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
-		free(hdr_str);
-		if (req->http_hdr == NULL) {
-			return -ENOMEM;
-		}
-	}
 
 	/* TODO remove this later */
 	curl_easy_setopt(aconn->curl, CURLOPT_VERBOSE, 1);
@@ -213,6 +221,7 @@ azure_conn_init(const char *pem_file,
 		return -ENOMEM;
 	}
 
+//	curl_easy_setopt(aconn->curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(aconn->curl, CURLOPT_SSLCERTTYPE, "PEM");
 	curl_easy_setopt(aconn->curl, CURLOPT_SSLCERT, pem_file);
 	curl_easy_setopt(aconn->curl, CURLOPT_SSLKEYTYPE, "PEM");

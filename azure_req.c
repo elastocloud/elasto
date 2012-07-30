@@ -530,14 +530,14 @@ err_out:
  * @content_len_bytes only valid when @is_page is set, @buf and @len only valid
  * when @is_page is not set. */
 int
-azure_req_blob_put_init(const char *account,
-			const char *container,
-			const char *bname,
-			bool is_page,
-			uint64_t content_len_bytes,
-			uint8_t *buf,
-			uint64_t len,
-			struct azure_req *req)
+azure_req_blob_put(const char *account,
+		   const char *container,
+		   const char *bname,
+		   bool is_page,
+		   uint64_t content_len_bytes,
+		   uint8_t *buf,
+		   uint64_t len,
+		   struct azure_req *req)
 {
 	int ret;
 	struct azure_blob_put *put_req;

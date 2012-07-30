@@ -114,14 +114,14 @@ azure_req_ctnr_create(const char *account,
 		      struct azure_req *req);
 
 int
-azure_req_blob_put_init(const char *account,
-			const char *container,
-			const char *bname,
-			bool is_page,
-			uint64_t content_len_bytes,
-			uint8_t *buf,
-			uint64_t len,
-			struct azure_req *req);
+azure_req_blob_put(const char *account,
+		   const char *container,
+		   const char *bname,
+		   bool is_page,
+		   uint64_t content_len_bytes,
+		   uint8_t *buf,
+		   uint64_t len,
+		   struct azure_req *req);
 
 int
 azure_req_blob_put_rsp(struct azure_req *req);
