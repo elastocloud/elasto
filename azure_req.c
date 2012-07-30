@@ -621,6 +621,137 @@ err_out:
 	return ret;
 }
 
+static void
+azure_req_blob_get_free(struct azure_blob_get *get_req)
+{
+	free(get_req->in.account);
+	free(get_req->in.container);
+	free(get_req->in.bname);
+}
+
+static int
+azure_req_blob_get_fill_hdr(struct azure_req *req)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+	free(hdr_str);
+	if (req->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	req->http_hdr = curl_slist_append(req->http_hdr,
+					  "x-ms-blob-type: BlockBlob");
+	if (req->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* different to the version in management */
+	req->http_hdr = curl_slist_append(req->http_hdr,
+					  "x-ms-version: 2009-09-19");
+	if (req->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* common headers and signature added later */
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+int
+azure_req_blob_get(const char *account,
+		   const char *container,
+		   const char *bname,
+		   uint8_t *buf,
+		   uint64_t len,
+		   struct azure_req *req)
+{
+	int ret;
+	struct azure_blob_get *get_req;
+
+	/* TODO input validation */
+
+	req->op = AOP_BLOB_GET;
+	get_req = &req->blob_get;
+
+	get_req->in.account = strdup(account);
+	if (get_req->in.account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	if (container == NULL) {
+		get_req->in.container = NULL;
+	} else {
+		get_req->in.container = strdup(container);
+		if (get_req->in.container == NULL) {
+			ret = -ENOMEM;
+			goto err_free_account;
+		}
+	}
+	get_req->in.bname = strdup(bname);
+	if (get_req->in.bname == NULL) {
+		ret = -ENOMEM;
+		goto err_free_container;
+	}
+
+	get_req->in.type = BLOB_TYPE_BLOCK;
+	req->iov.buf = buf;
+	req->iov.buf_len = len;
+
+	req->method = REQ_METHOD_GET;
+	if (container == NULL) {
+		ret = asprintf(&req->url,
+			       "https://%s.blob.core.windows.net/%s",
+			       account, bname);
+	} else {
+		/* http://myaccount.blob.core.windows.net/mycontainer/myblob */
+		ret = asprintf(&req->url,
+			       "https://%s.blob.core.windows.net/%s/%s",
+			       account, container, bname);
+	}
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_free_bname;
+	}
+
+	/* mandatory headers */
+	ret = azure_req_blob_get_fill_hdr(req);
+	if (ret < 0)
+		goto err_free_url;
+
+	/* the connection layer must sign this request before sending */
+	req->sign = true;
+
+	return 0;
+err_free_url:
+	free(req->url);
+err_free_bname:
+	free(get_req->in.bname);
+err_free_container:
+	free(get_req->in.container);
+err_free_account:
+	free(get_req->in.account);
+err_out:
+	return ret;
+}
+
 /* Free and zero request data */
 void
 azure_req_free(struct azure_req *req)
@@ -643,6 +774,9 @@ azure_req_free(struct azure_req *req)
 		break;
 	case AOP_BLOB_PUT:
 		azure_req_blob_put_free(&req->blob_put);
+		break;
+	case AOP_BLOB_GET:
+		azure_req_blob_get_free(&req->blob_get);
 		break;
 	};
 	memset(req, 0, sizeof(*req));

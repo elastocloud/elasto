@@ -11,6 +11,7 @@ enum azure_op {
 	AOP_CONTAINER_LIST,
 	AOP_CONTAINER_CREATE,
 	AOP_BLOB_PUT,
+	AOP_BLOB_GET,
 };
 
 struct azure_mgmt_get_sa_keys {
@@ -69,6 +70,19 @@ struct azure_blob_put {
 	} out;
 };
 
+struct azure_blob_get {
+	struct {
+		char *account;
+		char *container;
+		char *bname;
+		char *type;
+	} in;
+	struct {
+		time_t last_mod;
+		char *content_md5;
+	} out;
+};
+
 #define REQ_METHOD_GET		"GET"
 #define REQ_METHOD_PUT		"PUT"
 #define REQ_METHOD_DELETE	"DELETE"
@@ -90,6 +104,7 @@ struct azure_req {
 		struct azure_ctnr_list ctnr_list;
 		struct azure_ctnr_create ctnr_create;
 		struct azure_blob_put blob_put;
+		struct azure_blob_get blob_get;
 	};
 };
 
@@ -125,6 +140,14 @@ azure_req_blob_put(const char *account,
 
 int
 azure_req_blob_put_rsp(struct azure_req *req);
+
+int
+azure_req_blob_get(const char *account,
+		   const char *container,
+		   const char *bname,
+		   uint8_t *buf,
+		   uint64_t len,
+		   struct azure_req *req);
 
 void
 azure_req_free(struct azure_req *req);

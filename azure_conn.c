@@ -123,6 +123,9 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 	curl_easy_setopt(aconn->curl, CURLOPT_URL, req->url);
 	/* one-way xfers only so far */
 	if (strcmp(req->method, REQ_METHOD_GET) == 0) {
+		curl_easy_setopt(aconn->curl, CURLOPT_HTTPGET, 1);
+		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 0);
+		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE, 0);
 		curl_easy_setopt(aconn->curl, CURLOPT_WRITEDATA, req);
 		curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION,
 				 curl_write_cb);
