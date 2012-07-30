@@ -119,7 +119,6 @@ int main(void)
 		azure_req_free(&req);
 	}
 
-	/*
 	ret = azure_req_blob_put(blob_acc, blob_container, blob_name,
 				 false, 0,
 				 (uint8_t *)strdup("hello world"),
@@ -133,8 +132,8 @@ int main(void)
 	if (ret < 0) {
 		goto err_req_free;
 	}
+
 	azure_req_free(&req);
-*/
 
 	buf = malloc(sizeof("hello world"));
 	ret = azure_req_blob_get(blob_acc, blob_container, blob_name,
