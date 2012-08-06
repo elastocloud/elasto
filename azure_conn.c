@@ -265,6 +265,8 @@ azure_conn_send_req(struct azure_conn *aconn,
 		return -EBADF;
 	}
 
+	curl_easy_getinfo(aconn->curl, CURLINFO_RESPONSE_CODE, &req->rsp_code);
+
 	/* reset headers, so that req->http_hdr can be freed */
 	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, NULL);
 

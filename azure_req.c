@@ -774,4 +774,3 @@ azure_req_free(struct azure_req *req)
 	};
 	memset(req, 0, sizeof(*req));
 }
-

@@ -102,6 +102,12 @@ int main(void)
 		goto err_req_free;
 	}
 
+	if (req.rsp_code != 0) {
+		ret = -EIO;
+		printf("failed response: %d\n", req.rsp_code);
+		goto err_req_free;
+	}
+
 	ret = azure_req_ctnr_list_rsp(&req);
 	if (ret < 0) {
 		goto err_req_free;
@@ -133,6 +139,12 @@ int main(void)
 			goto err_req_free;
 		}
 
+		if (req.rsp_code != 0) {
+			ret = -EIO;
+			printf("failed response: %d\n", req.rsp_code);
+			goto err_req_free;
+		}
+
 		azure_req_free(&req);
 	}
 
@@ -150,6 +162,12 @@ int main(void)
 		goto err_req_free;
 	}
 
+	if (req.rsp_code != 0) {
+		ret = -EIO;
+		printf("failed response: %d\n", req.rsp_code);
+		goto err_req_free;
+	}
+
 	azure_req_free(&req);
 
 	ret = azure_req_blob_get(blob_acc, blob_container, blob_name, &req);
@@ -159,6 +177,12 @@ int main(void)
 
 	ret = azure_conn_send_req(&aconn, &req);
 	if (ret < 0) {
+		goto err_req_free;
+	}
+
+	if (req.rsp_code != 0) {
+		ret = -EIO;
+		printf("failed response: %d\n", req.rsp_code);
 		goto err_req_free;
 	}
 

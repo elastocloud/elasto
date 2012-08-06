@@ -122,6 +122,7 @@ struct azure_req {
 		uint64_t buf_len;
 		uint64_t off;
 	} iov_in;	/* alloced by conn hdr callback */
+	int32_t rsp_code;
 };
 
 int
