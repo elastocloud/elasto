@@ -36,7 +36,7 @@
 int main(void)
 {
 	struct azure_conn aconn;
-	struct azure_req req;
+	struct azure_op op;
 	const char *ps_file = "/home/ddiss/azure/Windows Azure MSDN - Visual Studio Ultimate-7-20-2012-credentials.publishsettings";
 	char *pem_file;
 	char *sub_id;
@@ -51,7 +51,7 @@ int main(void)
 	azure_conn_subsys_init();
 	azure_xml_subsys_init();
 
-	memset(&req, 0, sizeof(req));
+	memset(&op, 0, sizeof(op));
 
 	ret = azure_ssl_pubset_process(ps_file, &pem_file, &sub_id, &sub_name);
 	if (ret < 0) {
@@ -64,67 +64,67 @@ int main(void)
 		goto err_global_clean;
 	}
 
-	ret = azure_req_mgmt_get_sa_keys(sub_id, blob_acc, &req);
+	ret = azure_op_mgmt_get_sa_keys(sub_id, blob_acc, &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_req(&aconn, &req);
+	ret = azure_conn_send_op(&aconn, &op);
 	if (ret < 0) {
-		goto err_req_free;
+		goto err_op_free;
 	}
 
-	ret = azure_req_mgmt_get_sa_keys_rsp(&req);
+	ret = azure_op_mgmt_get_sa_keys_rsp(&op);
 	if (ret < 0) {
-		goto err_req_free;
+		goto err_op_free;
 	}
 
 	printf("primary key: %s\n"
 	       "secondary key: %s\n",
-	       req.mgmt_get_sa_keys.out.primary,
-	       req.mgmt_get_sa_keys.out.secondary);
+	       op.rsp.mgmt_get_sa_keys.primary,
+	       op.rsp.mgmt_get_sa_keys.secondary);
 
 	ret = azure_conn_sign_setkey(&aconn, blob_acc,
-				     req.mgmt_get_sa_keys.out.primary);
+				     op.rsp.mgmt_get_sa_keys.primary);
 	if (ret < 0) {
-		goto err_req_free;
+		goto err_op_free;
 	}
 
-	azure_req_free(&req);
+	azure_op_free(&op);
 
-	ret = azure_req_ctnr_list(blob_acc, &req);
+	ret = azure_op_ctnr_list(blob_acc, &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_req(&aconn, &req);
+	ret = azure_conn_send_op(&aconn, &op);
 	if (ret < 0) {
-		goto err_req_free;
+		goto err_op_free;
 	}
 
-	if (req.rsp_code != 0) {
+	if (op.rsp.err_code != 0) {
 		ret = -EIO;
-		printf("failed response: %d\n", req.rsp_code);
-		goto err_req_free;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
 	}
 
-	ret = azure_req_ctnr_list_rsp(&req);
+	ret = azure_op_ctnr_list_rsp(&op);
 	if (ret < 0) {
-		goto err_req_free;
+		goto err_op_free;
 	}
 
 	ctnr_exists = false;
-	list_for_each(&req.ctnr_list.out.ctnrs, ctnr, list) {
+	list_for_each(&op.rsp.ctnr_list.ctnrs, ctnr, list) {
 		if (strcmp(ctnr->name, blob_container) == 0) {
 			ctnr_exists = true;
 			break;
 		}
 	}
 
-	azure_req_free(&req);
+	azure_op_free(&op);
 
 	if (ctnr_exists == false) {
-		ret = azure_req_ctnr_create(blob_acc, blob_container, &req);
+		ret = azure_op_ctnr_create(blob_acc, blob_container, &op);
 		if (ret < 0) {
 			goto err_conn_free;
 		}
@@ -134,64 +134,64 @@ int main(void)
 		 * < HTTP/1.1 409 The specified container already exists.
 		 */
 
-		ret = azure_conn_send_req(&aconn, &req);
+		ret = azure_conn_send_op(&aconn, &op);
 		if (ret < 0) {
-			goto err_req_free;
+			goto err_op_free;
 		}
 
-		if (req.rsp_code != 0) {
+		if (op.rsp.err_code != 0) {
 			ret = -EIO;
-			printf("failed response: %d\n", req.rsp_code);
-			goto err_req_free;
+			printf("failed response: %d\n", op.rsp.err_code);
+			goto err_op_free;
 		}
 
-		azure_req_free(&req);
+		azure_op_free(&op);
 	}
 
-	ret = azure_req_blob_put(blob_acc, blob_container, blob_name,
+	ret = azure_op_blob_put(blob_acc, blob_container, blob_name,
 				 false, 0,
 				 (uint8_t *)strdup("hello world"),
 				 sizeof("hello world"),
-				 &req);
+				 &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_req(&aconn, &req);
+	ret = azure_conn_send_op(&aconn, &op);
 	if (ret < 0) {
-		goto err_req_free;
+		goto err_op_free;
 	}
 
-	if (req.rsp_code != 0) {
+	if (op.rsp.err_code != 0) {
 		ret = -EIO;
-		printf("failed response: %d\n", req.rsp_code);
-		goto err_req_free;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
 	}
 
-	azure_req_free(&req);
+	azure_op_free(&op);
 
-	ret = azure_req_blob_get(blob_acc, blob_container, blob_name, &req);
+	ret = azure_op_blob_get(blob_acc, blob_container, blob_name, &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_req(&aconn, &req);
+	ret = azure_conn_send_op(&aconn, &op);
 	if (ret < 0) {
-		goto err_req_free;
+		goto err_op_free;
 	}
 
-	if (req.rsp_code != 0) {
+	if (op.rsp.err_code != 0) {
 		ret = -EIO;
-		printf("failed response: %d\n", req.rsp_code);
-		goto err_req_free;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
 	}
 
 	printf("data consistency test: %s\n",
-	       strcmp((char *)req.iov_in.buf, "hello world") ? "failed" : "passed");
+	       strcmp((char *)op.rsp.iov.buf, "hello world") ? "failed" : "passed");
 
 	ret = 0;
-err_req_free:
-	azure_req_free(&req);
+err_op_free:
+	azure_op_free(&op);
 err_conn_free:
 	azure_conn_free(&aconn);
 err_global_clean:

@@ -131,7 +131,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 
 	for (l = http_hdr; l != NULL; l = l->next) {
 		/*
-		 * TODO add counter alongside req->http_hdr to avoid this
+		 * TODO add counter alongside op->http_hdr to avoid this
 		 * also, a stack alloced array could be used.
 		 */
 		count++;
@@ -278,12 +278,12 @@ canon_rsc_gen_lite(const char *account,
 	return rsc_str;
 }
 
-/* generate base64 encoded signature string for @req */
+/* generate base64 encoded signature string for @op */
 int
 azure_sign_gen_lite(const char *account,
 		    const uint8_t *key,
 		    int key_len,
-		    struct azure_req *req,
+		    struct azure_op *op,
 		    char **sig_src,
 		    char **sig_str)
 {
@@ -296,12 +296,12 @@ azure_sign_gen_lite(const char *account,
 	int md_len;
 	char *md_b64;
 
-	ret = canon_hdrs_gen(req->http_hdr, &canon_hdrs, &content_type);
+	ret = canon_hdrs_gen(op->http_hdr, &canon_hdrs, &content_type);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	canon_rsc = canon_rsc_gen_lite(account, req->url);
+	canon_rsc = canon_rsc_gen_lite(account, op->url);
 	if (canon_rsc == NULL) {
 		ret = -ENOMEM;
 		goto err_hdrs_free;
@@ -314,7 +314,7 @@ azure_sign_gen_lite(const char *account,
 		       "\n"	/* Date (not supported) */
 		       "%s"	/* CanonicalizedHeaders */
 		       "%s",	/* CanonicalizedResource */
-		       req->method,
+		       op->method,
 		       content_type ? content_type : "",
 		       canon_hdrs, canon_rsc);
 	if (ret < 0) {

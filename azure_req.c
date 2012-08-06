@@ -34,7 +34,7 @@
 
 #if 0
 char *
-azure_req_mgmt_url_list_sas(const char *sub_id)
+azure_op_mgmt_url_list_sas(const char *sub_id)
 {
 	char *url;
 	int ret;
@@ -47,7 +47,7 @@ azure_req_mgmt_url_list_sas(const char *sub_id)
 }
 
 char *
-azure_req_mgmt_url_get_sa_props(const char *sub_id, const char *service_name)
+azure_op_mgmt_url_get_sa_props(const char *sub_id, const char *service_name)
 {
 	char *url;
 	int ret;
@@ -60,7 +60,7 @@ azure_req_mgmt_url_get_sa_props(const char *sub_id, const char *service_name)
 }
 
 char *
-azure_req_mgmt_url_check_sa_availability(const char *sub_id, const char *service_name)
+azure_op_mgmt_url_check_sa_availability(const char *sub_id, const char *service_name)
 {
 	char *url;
 	int ret;
@@ -92,51 +92,51 @@ gen_date_str(void)
 }
 
 static void
-azure_req_mgmt_get_sa_keys_free(struct azure_mgmt_get_sa_keys *get_sa_keys)
+azure_op_mgmt_get_sa_keys_free(struct azure_op *op)
 {
-	free(get_sa_keys->in.sub_id);
-	free(get_sa_keys->in.service_name);
-	free(get_sa_keys->out.primary);
-	free(get_sa_keys->out.secondary);
+	free(op->req.mgmt_get_sa_keys.sub_id);
+	free(op->req.mgmt_get_sa_keys.service_name);
+	free(op->rsp.mgmt_get_sa_keys.primary);
+	free(op->rsp.mgmt_get_sa_keys.secondary);
 }
 
 static int
-azure_req_mgmt_get_sa_keys_fill_hdr(struct azure_req *req)
+azure_op_mgmt_get_sa_keys_fill_hdr(struct azure_op *op)
 {
-	req->http_hdr = curl_slist_append(req->http_hdr,
+	op->http_hdr = curl_slist_append(op->http_hdr,
 					  "x-ms-version: 2012-03-01");
-	if (req->http_hdr == NULL) {
+	if (op->http_hdr == NULL) {
 		return -ENOMEM;
 	}
 	return 0;
 }
 
 int
-azure_req_mgmt_get_sa_keys(const char *sub_id,
+azure_op_mgmt_get_sa_keys(const char *sub_id,
 			   const char *service_name,
-			   struct azure_req *req)
+			   struct azure_op *op)
 {
 	int ret;
-	struct azure_mgmt_get_sa_keys *get_sa_keys;
+	struct azure_req_mgmt_get_sa_keys *get_sa_keys_req;
 
 	/* TODO input validation */
 
-	req->op = AOP_MGMT_GET_SA_KEYS;
-	get_sa_keys = &req->mgmt_get_sa_keys;
+	op->opcode = AOP_MGMT_GET_SA_KEYS;
+	get_sa_keys_req = &op->req.mgmt_get_sa_keys;
 
 	/* we may not need to keep these, as they're only used in the URL */
-	get_sa_keys->in.sub_id = strdup(sub_id);
-	if (get_sa_keys->in.sub_id == NULL) {
+	get_sa_keys_req->sub_id = strdup(sub_id);
+	if (get_sa_keys_req->sub_id == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	get_sa_keys->in.service_name = strdup(service_name);
-	if (get_sa_keys->in.service_name == NULL) {
+	get_sa_keys_req->service_name = strdup(service_name);
+	if (get_sa_keys_req->service_name == NULL) {
 		ret = -ENOMEM;
 		goto err_free_sub;
 	}
-	req->method = REQ_METHOD_GET;
-	ret = asprintf(&req->url, "https://management.core.windows.net/"
+	op->method = REQ_METHOD_GET;
+	ret = asprintf(&op->url, "https://management.core.windows.net/"
 		       "%s/services/storageservices/%s/keys",
 		       sub_id, service_name);
 	if (ret < 0) {
@@ -144,43 +144,43 @@ azure_req_mgmt_get_sa_keys(const char *sub_id,
 		goto err_free_svc;
 	}
 
-	ret = azure_req_mgmt_get_sa_keys_fill_hdr(req);
+	ret = azure_op_mgmt_get_sa_keys_fill_hdr(op);
 	if (ret < 0) {
 		goto err_free_url;
 	}
 
 	return 0;
 err_free_url:
-	free(req->url);
+	free(op->url);
 err_free_svc:
-	free(get_sa_keys->in.service_name);
+	free(get_sa_keys_req->service_name);
 err_free_sub:
-	free(get_sa_keys->in.sub_id);
+	free(get_sa_keys_req->sub_id);
 err_out:
 	return ret;
 }
 
 int
-azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req)
+azure_op_mgmt_get_sa_keys_rsp(struct azure_op *op)
 {
 	int ret;
-	struct azure_mgmt_get_sa_keys *get_sa_keys;
+	struct azure_rsp_mgmt_get_sa_keys *get_sa_keys_rsp;
 	xmlDoc *xp_doc;
 	xmlXPathContext *xp_ctx;
 
 	/* parse response */
-	ret = azure_xml_slurp(false, req->iov_in.buf, req->iov_in.off,
+	ret = azure_xml_slurp(false, op->rsp.iov.buf, op->rsp.iov.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		return ret;
 	}
 
-	assert(req->op == AOP_MGMT_GET_SA_KEYS);
-	get_sa_keys = &req->mgmt_get_sa_keys;
+	assert(op->opcode == AOP_MGMT_GET_SA_KEYS);
+	get_sa_keys_rsp = &op->rsp.mgmt_get_sa_keys;
 
 	ret = azure_xml_get_path(xp_ctx,
 		"//def:StorageService/def:StorageServiceKeys/def:Primary",
-		NULL, &get_sa_keys->out.primary);
+		NULL, &get_sa_keys_rsp->primary);
 	if (ret < 0) {
 		xmlXPathFreeContext(xp_ctx);
 		xmlFreeDoc(xp_doc);
@@ -188,7 +188,7 @@ azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req)
 	}
 	ret = azure_xml_get_path(xp_ctx,
 		"//def:StorageService/def:StorageServiceKeys/def:Secondary",
-		NULL, &get_sa_keys->out.secondary);
+		NULL, &get_sa_keys_rsp->secondary);
 
 	xmlXPathFreeContext(xp_ctx);
 	xmlFreeDoc(xp_doc);
@@ -197,20 +197,22 @@ azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req)
 }
 
 static void
-azure_req_ctnr_list_free(struct azure_ctnr_list *ctnr_list_req)
+azure_op_ctnr_list_free(struct azure_op *op)
 {
-	struct azure_ctnr *ctnr;
-	struct azure_ctnr *ctnr_n;
-	free(ctnr_list_req->in.account);
+	free(op->req.ctnr_list.account);
 
-	list_for_each_safe(&ctnr_list_req->out.ctnrs, ctnr, ctnr_n, list) {
-		free(ctnr->name);
-		free(ctnr);
+	if (op->rsp.ctnr_list.num_ctnrs > 0) {
+		struct azure_ctnr *ctnr;
+		struct azure_ctnr *ctnr_n;
+		list_for_each_safe(&op->rsp.ctnr_list.ctnrs, ctnr, ctnr_n, list) {
+			free(ctnr->name);
+			free(ctnr);
+		}
 	}
 }
 
 static int
-azure_req_ctnr_list_fill_hdr(struct azure_req *req)
+azure_op_ctnr_list_fill_hdr(struct azure_op *op)
 {
 	int ret;
 	char *hdr_str;
@@ -227,16 +229,16 @@ azure_req_ctnr_list_fill_hdr(struct azure_req *req)
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
 	free(hdr_str);
-	if (req->http_hdr == NULL) {
+	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 	/* different to the version in management */
-	req->http_hdr = curl_slist_append(req->http_hdr,
+	op->http_hdr = curl_slist_append(op->http_hdr,
 					  "x-ms-version: 2009-09-19");
-	if (req->http_hdr == NULL) {
+	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
@@ -249,26 +251,26 @@ err_out:
 }
 
 int
-azure_req_ctnr_list(const char *account,
-		    struct azure_req *req)
+azure_op_ctnr_list(const char *account,
+		    struct azure_op *op)
 {
 
 	int ret;
-	struct azure_ctnr_list *ctnr_list_req;
+	struct azure_req_ctnr_list *ctnr_list_req;
 
 	/* TODO input validation */
 
-	req->op = AOP_CONTAINER_LIST;
-	ctnr_list_req = &req->ctnr_list;
+	op->opcode = AOP_CONTAINER_LIST;
+	ctnr_list_req = &op->req.ctnr_list;
 
-	ctnr_list_req->in.account = strdup(account);
-	if (ctnr_list_req->in.account == NULL) {
+	ctnr_list_req->account = strdup(account);
+	if (ctnr_list_req->account == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
-	req->method = REQ_METHOD_GET;
-	ret = asprintf(&req->url,
+	op->method = REQ_METHOD_GET;
+	ret = asprintf(&op->url,
 		       "https://%s.blob.core.windows.net/?comp=list",
 		       account);
 	if (ret < 0) {
@@ -276,44 +278,43 @@ azure_req_ctnr_list(const char *account,
 		goto err_acc_free;
 	}
 
-	ret = azure_req_ctnr_list_fill_hdr(req);
+	ret = azure_op_ctnr_list_fill_hdr(op);
 	if (ret < 0) {
 		goto err_url_free;
 	}
 	/* the connection layer must sign this request before sending */
-	req->sign = true;
-
-	list_head_init(&ctnr_list_req->out.ctnrs);
+	op->sign = true;
 
 	return 0;
 
 err_url_free:
-	free(req->url);
+	free(op->url);
 err_acc_free:
-	free(ctnr_list_req->in.account);
+	free(ctnr_list_req->account);
 err_out:
 	return ret;
 }
 
 int
-azure_req_ctnr_list_rsp(struct azure_req *req)
+azure_op_ctnr_list_rsp(struct azure_op *op)
 {
 	int ret;
 	int i;
-	struct azure_ctnr_list *ctnr_list_req;
+	struct azure_rsp_ctnr_list *ctnr_list_rsp;
 	xmlDoc *xp_doc;
 	xmlXPathContext *xp_ctx;
 
 	/* parse response */
-	ret = azure_xml_slurp(false, req->iov_in.buf, req->iov_in.off,
+	ret = azure_xml_slurp(false, op->rsp.iov.buf, op->rsp.iov.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		return ret;
 	}
 
-	assert(req->op == AOP_CONTAINER_LIST);
-	ctnr_list_req = &req->ctnr_list;
+	assert(op->opcode == AOP_CONTAINER_LIST);
+	ctnr_list_rsp = &op->rsp.ctnr_list;
 
+	list_head_init(&ctnr_list_rsp->ctnrs);
 	/* returns up to 5000 records (maxresults default) */
 	for (i = 1; i <= 5000; i++) {
 		char *query;
@@ -339,8 +340,8 @@ azure_req_ctnr_list_rsp(struct azure_req *req)
 			goto err_out;
 		}
 		ctnr->name = name;
-		list_add_tail(&ctnr_list_req->out.ctnrs, &ctnr->list);
-		ctnr_list_req->out.num_ctnrs++;
+		list_add_tail(&ctnr_list_rsp->ctnrs, &ctnr->list);
+		ctnr_list_rsp->num_ctnrs++;
 	}
 	ret = 0;
 
@@ -353,14 +354,14 @@ err_out:
 }
 
 static void
-azure_req_ctnr_create_free(struct azure_ctnr_create *ctnr_create_req)
+azure_op_ctnr_create_free(struct azure_op *op)
 {
-	free(ctnr_create_req->in.account);
-	free(ctnr_create_req->in.ctnr);
+	free(op->req.ctnr_create.account);
+	free(op->req.ctnr_create.ctnr);
 }
 
 static int
-azure_req_ctnr_create_fill_hdr(struct azure_req *req)
+azure_op_ctnr_create_fill_hdr(struct azure_op *op)
 {
 	int ret;
 	char *hdr_str;
@@ -377,15 +378,15 @@ azure_req_ctnr_create_fill_hdr(struct azure_req *req)
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
 	free(hdr_str);
-	if (req->http_hdr == NULL) {
+	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	req->http_hdr = curl_slist_append(req->http_hdr,
+	op->http_hdr = curl_slist_append(op->http_hdr,
 					  "x-ms-version: 2009-09-19");
-	if (req->http_hdr == NULL) {
+	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
@@ -398,32 +399,32 @@ err_out:
 }
 
 int
-azure_req_ctnr_create(const char *account,
+azure_op_ctnr_create(const char *account,
 		      const char *ctnr,
-		      struct azure_req *req)
+		      struct azure_op *op)
 {
 
 	int ret;
-	struct azure_ctnr_create *ctnr_create_req;
+	struct azure_req_ctnr_create *ctnr_create_req;
 
 	/* TODO input validation */
 
-	req->op = AOP_CONTAINER_CREATE;
-	ctnr_create_req = &req->ctnr_create;
+	op->opcode = AOP_CONTAINER_CREATE;
+	ctnr_create_req = &op->req.ctnr_create;
 
-	ctnr_create_req->in.account = strdup(account);
-	if (ctnr_create_req->in.account == NULL) {
+	ctnr_create_req->account = strdup(account);
+	if (ctnr_create_req->account == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	ctnr_create_req->in.ctnr = strdup(ctnr);
-	if (ctnr_create_req->in.ctnr == NULL) {
+	ctnr_create_req->ctnr = strdup(ctnr);
+	if (ctnr_create_req->ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
 
-	req->method = REQ_METHOD_PUT;
-	ret = asprintf(&req->url,
+	op->method = REQ_METHOD_PUT;
+	ret = asprintf(&op->url,
 		       "https://%s.blob.core.windows.net/%s?restype=container",
 		       account, ctnr);
 	if (ret < 0) {
@@ -431,30 +432,30 @@ azure_req_ctnr_create(const char *account,
 		goto err_ctnr_free;
 	}
 
-	azure_req_ctnr_create_fill_hdr(req);
+	azure_op_ctnr_create_fill_hdr(op);
 	/* the connection layer must sign this request before sending */
-	req->sign = true;
+	op->sign = true;
 
 	return 0;
 
 err_ctnr_free:
-	free(ctnr_create_req->in.ctnr);
+	free(ctnr_create_req->ctnr);
 err_acc_free:
-	free(ctnr_create_req->in.account);
+	free(ctnr_create_req->account);
 err_out:
 	return ret;
 }
 
 static void
-azure_req_blob_put_free(struct azure_blob_put *put_req)
+azure_op_blob_put_free(struct azure_op *op)
 {
-	free(put_req->in.account);
-	free(put_req->in.container);
-	free(put_req->in.bname);
+	free(op->req.blob_put.account);
+	free(op->req.blob_put.container);
+	free(op->req.blob_put.bname);
 }
 
 static int
-azure_req_blob_put_fill_hdr(struct azure_req *req)
+azure_op_blob_put_fill_hdr(struct azure_op *op)
 {
 	int ret;
 	char *hdr_str;
@@ -471,43 +472,43 @@ azure_req_blob_put_fill_hdr(struct azure_req *req)
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
 	free(hdr_str);
-	if (req->http_hdr == NULL) {
+	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	if (strcmp(req->blob_put.in.type, BLOB_TYPE_PAGE) == 0) {
-		req->http_hdr = curl_slist_append(req->http_hdr,
+	if (strcmp(op->req.blob_put.type, BLOB_TYPE_PAGE) == 0) {
+		op->http_hdr = curl_slist_append(op->http_hdr,
 						  "x-ms-blob-type: PageBlob");
-		if (req->http_hdr == NULL) {
+		if (op->http_hdr == NULL) {
 			ret = -ENOMEM;
 			goto err_out;
 		}
 		ret = asprintf(&hdr_str, "x-ms-blob-content-length: %lu",
-			       req->blob_put.in.content_len_bytes);
+			       op->req.blob_put.content_len_bytes);
 		if (ret < 0) {
 			ret = -ENOMEM;
 			goto err_out;
 		}
-		req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+		op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
 		free(hdr_str);
-		if (req->http_hdr == NULL) {
+		if (op->http_hdr == NULL) {
 			ret = -ENOMEM;
 			goto err_out;
 		}
 	} else {
-		req->http_hdr = curl_slist_append(req->http_hdr,
+		op->http_hdr = curl_slist_append(op->http_hdr,
 						  "x-ms-blob-type: BlockBlob");
-		if (req->http_hdr == NULL) {
+		if (op->http_hdr == NULL) {
 			ret = -ENOMEM;
 			goto err_out;
 		}
 	}
 	/* different to the version in management */
-	req->http_hdr = curl_slist_append(req->http_hdr,
+	op->http_hdr = curl_slist_append(op->http_hdr,
 					  "x-ms-version: 2009-09-19");
-	if (req->http_hdr == NULL) {
+	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
@@ -525,17 +526,17 @@ err_out:
  * @content_len_bytes only valid when @is_page is set, @buf and @len only valid
  * when @is_page is not set. */
 int
-azure_req_blob_put(const char *account,
+azure_op_blob_put(const char *account,
 		   const char *container,
 		   const char *bname,
 		   bool is_page,
 		   uint64_t content_len_bytes,
 		   uint8_t *buf,
 		   uint64_t len,
-		   struct azure_req *req)
+		   struct azure_op *op)
 {
 	int ret;
-	struct azure_blob_put *put_req;
+	struct azure_req_blob_put *put_req;
 
 	/* TODO input validation */
 	if (is_page
@@ -545,48 +546,48 @@ azure_req_blob_put(const char *account,
 		goto err_out;
 	}
 
-	req->op = AOP_BLOB_PUT;
-	put_req = &req->blob_put;
+	op->opcode = AOP_BLOB_PUT;
+	put_req = &op->req.blob_put;
 
-	put_req->in.account = strdup(account);
-	if (put_req->in.account == NULL) {
+	put_req->account = strdup(account);
+	if (put_req->account == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 	if (container == NULL) {
-		put_req->in.container = NULL;
+		put_req->container = NULL;
 	} else {
-		put_req->in.container = strdup(container);
-		if (put_req->in.container == NULL) {
+		put_req->container = strdup(container);
+		if (put_req->container == NULL) {
 			ret = -ENOMEM;
 			goto err_free_account;
 		}
 	}
-	put_req->in.bname = strdup(bname);
-	if (put_req->in.bname == NULL) {
+	put_req->bname = strdup(bname);
+	if (put_req->bname == NULL) {
 		ret = -ENOMEM;
 		goto err_free_container;
 	}
 
 	if (is_page) {
-		put_req->in.type = BLOB_TYPE_PAGE;
-		put_req->in.content_len_bytes = content_len_bytes;
+		put_req->type = BLOB_TYPE_PAGE;
+		put_req->content_len_bytes = content_len_bytes;
 		assert(buf == NULL);	/* block only */
 	} else {
-		put_req->in.type = BLOB_TYPE_BLOCK;
+		put_req->type = BLOB_TYPE_BLOCK;
 		assert(content_len_bytes == 0);	/* page only */
-		req->iov_out.buf = buf;
-		req->iov_out.buf_len = len;
+		op->req.iov.buf = buf;
+		op->req.iov.buf_len = len;
 	}
 
-	req->method = REQ_METHOD_PUT;
+	op->method = REQ_METHOD_PUT;
 	if (container == NULL) {
-		ret = asprintf(&req->url,
+		ret = asprintf(&op->url,
 			       "https://%s.blob.core.windows.net/%s",
 			       account, bname);
 	} else {
 		/* http://myaccount.blob.core.windows.net/mycontainer/myblob */
-		ret = asprintf(&req->url,
+		ret = asprintf(&op->url,
 			       "https://%s.blob.core.windows.net/%s/%s",
 			       account, container, bname);
 	}
@@ -596,36 +597,36 @@ azure_req_blob_put(const char *account,
 	}
 
 	/* mandatory headers */
-	ret = azure_req_blob_put_fill_hdr(req);
+	ret = azure_op_blob_put_fill_hdr(op);
 	if (ret < 0)
 		goto err_free_url;
 
 	/* the connection layer must sign this request before sending */
-	req->sign = true;
+	op->sign = true;
 
 	return 0;
 err_free_url:
-	free(req->url);
+	free(op->url);
 err_free_bname:
-	free(put_req->in.bname);
+	free(put_req->bname);
 err_free_container:
-	free(put_req->in.container);
+	free(put_req->container);
 err_free_account:
-	free(put_req->in.account);
+	free(put_req->account);
 err_out:
 	return ret;
 }
 
 static void
-azure_req_blob_get_free(struct azure_blob_get *get_req)
+azure_op_blob_get_free(struct azure_op *op)
 {
-	free(get_req->in.account);
-	free(get_req->in.container);
-	free(get_req->in.bname);
+	free(op->req.blob_get.account);
+	free(op->req.blob_get.container);
+	free(op->req.blob_get.bname);
 }
 
 static int
-azure_req_blob_get_fill_hdr(struct azure_req *req)
+azure_op_blob_get_fill_hdr(struct azure_op *op)
 {
 	int ret;
 	char *hdr_str;
@@ -642,22 +643,22 @@ azure_req_blob_get_fill_hdr(struct azure_req *req)
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
 	free(hdr_str);
-	if (req->http_hdr == NULL) {
+	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	req->http_hdr = curl_slist_append(req->http_hdr,
+	op->http_hdr = curl_slist_append(op->http_hdr,
 					  "x-ms-blob-type: BlockBlob");
-	if (req->http_hdr == NULL) {
+	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 	/* different to the version in management */
-	req->http_hdr = curl_slist_append(req->http_hdr,
+	op->http_hdr = curl_slist_append(op->http_hdr,
 					  "x-ms-version: 2009-09-19");
-	if (req->http_hdr == NULL) {
+	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
@@ -671,50 +672,50 @@ err_out:
 }
 
 int
-azure_req_blob_get(const char *account,
-		   const char *container,
-		   const char *bname,
-		   struct azure_req *req)
+azure_op_blob_get(const char *account,
+		  const char *container,
+		  const char *bname,
+		  struct azure_op *op)
 {
 	int ret;
-	struct azure_blob_get *get_req;
+	struct azure_req_blob_get *get_req;
 
 	/* TODO input validation */
 
-	req->op = AOP_BLOB_GET;
-	get_req = &req->blob_get;
+	op->opcode = AOP_BLOB_GET;
+	get_req = &op->req.blob_get;
 
-	get_req->in.account = strdup(account);
-	if (get_req->in.account == NULL) {
+	get_req->account = strdup(account);
+	if (get_req->account == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 	if (container == NULL) {
-		get_req->in.container = NULL;
+		get_req->container = NULL;
 	} else {
-		get_req->in.container = strdup(container);
-		if (get_req->in.container == NULL) {
+		get_req->container = strdup(container);
+		if (get_req->container == NULL) {
 			ret = -ENOMEM;
 			goto err_free_account;
 		}
 	}
-	get_req->in.bname = strdup(bname);
-	if (get_req->in.bname == NULL) {
+	get_req->bname = strdup(bname);
+	if (get_req->bname == NULL) {
 		ret = -ENOMEM;
 		goto err_free_container;
 	}
 
-	get_req->in.type = BLOB_TYPE_BLOCK;
+	get_req->type = BLOB_TYPE_BLOCK;
 	/* recv buffer allocated by conn layer */
 
-	req->method = REQ_METHOD_GET;
+	op->method = REQ_METHOD_GET;
 	if (container == NULL) {
-		ret = asprintf(&req->url,
+		ret = asprintf(&op->url,
 			       "https://%s.blob.core.windows.net/%s",
 			       account, bname);
 	} else {
 		/* http://myaccount.blob.core.windows.net/mycontainer/myblob */
-		ret = asprintf(&req->url,
+		ret = asprintf(&op->url,
 			       "https://%s.blob.core.windows.net/%s/%s",
 			       account, container, bname);
 	}
@@ -724,53 +725,53 @@ azure_req_blob_get(const char *account,
 	}
 
 	/* mandatory headers */
-	ret = azure_req_blob_get_fill_hdr(req);
+	ret = azure_op_blob_get_fill_hdr(op);
 	if (ret < 0)
 		goto err_free_url;
 
 	/* the connection layer must sign this request before sending */
-	req->sign = true;
+	op->sign = true;
 
 	return 0;
 err_free_url:
-	free(req->url);
+	free(op->url);
 err_free_bname:
-	free(get_req->in.bname);
+	free(get_req->bname);
 err_free_container:
-	free(get_req->in.container);
+	free(get_req->container);
 err_free_account:
-	free(get_req->in.account);
+	free(get_req->account);
 err_out:
 	return ret;
 }
 
 /* Free and zero request data */
 void
-azure_req_free(struct azure_req *req)
+azure_op_free(struct azure_op *op)
 {
 	/* CURLOPT_HTTPHEADER must be cleared before doing this */
-	curl_slist_free_all(req->http_hdr);
+	curl_slist_free_all(op->http_hdr);
 
-	free(req->iov_in.buf);
-	free(req->iov_out.buf);
-	free(req->sig_src);
-	free(req->url);
-	switch (req->op) {
+	free(op->req.iov.buf);
+	free(op->rsp.iov.buf);
+	free(op->sig_src);
+	free(op->url);
+	switch (op->opcode) {
 	case AOP_MGMT_GET_SA_KEYS:
-		azure_req_mgmt_get_sa_keys_free(&req->mgmt_get_sa_keys);
+		azure_op_mgmt_get_sa_keys_free(op);
 		break;
 	case AOP_CONTAINER_LIST:
-		azure_req_ctnr_list_free(&req->ctnr_list);
+		azure_op_ctnr_list_free(op);
 		break;
 	case AOP_CONTAINER_CREATE:
-		azure_req_ctnr_create_free(&req->ctnr_create);
+		azure_op_ctnr_create_free(op);
 		break;
 	case AOP_BLOB_PUT:
-		azure_req_blob_put_free(&req->blob_put);
+		azure_op_blob_put_free(op);
 		break;
 	case AOP_BLOB_GET:
-		azure_req_blob_get_free(&req->blob_get);
+		azure_op_blob_get_free(op);
 		break;
 	};
-	memset(req, 0, sizeof(*req));
+	memset(op, 0, sizeof(*op));
 }

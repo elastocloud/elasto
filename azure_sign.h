@@ -20,7 +20,7 @@ int
 azure_sign_gen_lite(const char *account,
 		    const uint8_t *key,
 		    int key_len,
-		    struct azure_req *req,
+		    struct azure_op *op,
 		    char **sig_src,
 		    char **sig_str);
 

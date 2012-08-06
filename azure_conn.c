@@ -76,7 +76,7 @@ err_out:
  * @num_bytes:	length of @hdr_str.
  */
 static int
-curl_hdr_process(struct azure_req *req,
+curl_hdr_process(struct azure_op *op,
 		 char *hdr_str,
 		 uint64_t num_bytes)
 {
@@ -94,12 +94,12 @@ curl_hdr_process(struct azure_req *req,
 			return 0;
 		}
 		/* TODO check clen isn't too huge */
-		req->iov_in.buf = malloc(clen);
-		if (req->iov_in.buf == NULL) {
+		op->rsp.iov.buf = malloc(clen);
+		if (op->rsp.iov.buf == NULL) {
 			return -1;
 		}
-		req->iov_in.buf_len = clen;
-		req->iov_in.off = 0;
+		op->rsp.iov.buf_len = clen;
+		op->rsp.iov.off = 0;
 	}
 
 	return 0;
@@ -111,11 +111,11 @@ curl_hdr_cb(char *ptr,
 	    size_t nmemb,
 	    void *userdata)
 {
-	struct azure_req *req = (struct azure_req *)userdata;
+	struct azure_op *op = (struct azure_op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
 	int ret;
 
-	ret = curl_hdr_process(req, ptr, num_bytes);
+	ret = curl_hdr_process(op, ptr, num_bytes);
 	if (ret < 0) {
 		return 0;
 	}
@@ -129,18 +129,18 @@ curl_read_cb(char *ptr,
 	     size_t nmemb,
 	     void *userdata)
 {
-	struct azure_req *req = (struct azure_req *)userdata;
+	struct azure_op *op = (struct azure_op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
 
-	if (req->iov_out.off + num_bytes > req->iov_out.buf_len) {
+	if (op->req.iov.off + num_bytes > op->req.iov.buf_len) {
 		printf("curl_read_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu, capping\n",
-		       req->iov_out.buf_len, req->iov_out.off, num_bytes);
-		num_bytes = req->iov_out.buf_len - req->iov_out.off;
+		       op->req.iov.buf_len, op->req.iov.off, num_bytes);
+		num_bytes = op->req.iov.buf_len - op->req.iov.off;
 	}
 
-	memcpy(ptr, (void *)(req->iov_out.buf + req->iov_out.off), num_bytes);
-	req->iov_out.off += num_bytes;
+	memcpy(ptr, (void *)(op->req.iov.buf + op->req.iov.off), num_bytes);
+	op->req.iov.off += num_bytes;
 	return num_bytes;
 }
 
@@ -150,18 +150,18 @@ curl_write_cb(char *ptr,
 	      size_t nmemb,
 	      void *userdata)
 {
-	struct azure_req *req = (struct azure_req *)userdata;
+	struct azure_op *op = (struct azure_op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
 
-	if (req->iov_in.off + num_bytes > req->iov_in.buf_len) {
+	if (op->rsp.iov.off + num_bytes > op->rsp.iov.buf_len) {
 		printf("fatal: curl_write_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu\n",
-		       req->iov_in.buf_len, req->iov_in.off, num_bytes);
+		       op->rsp.iov.buf_len, op->rsp.iov.off, num_bytes);
 		return -1;
 	}
 
-	memcpy((void *)(req->iov_in.buf + req->iov_in.off), ptr, num_bytes);
-	req->iov_in.off += num_bytes;
+	memcpy((void *)(op->rsp.iov.buf + op->rsp.iov.off), ptr, num_bytes);
+	op->rsp.iov.off += num_bytes;
 	return num_bytes;
 }
 
@@ -175,50 +175,50 @@ curl_fail_cb(char *ptr,
 	return 0;
 }
 
-/* a bit ugly, the signature src string is stored in @req for debugging */
+/* a bit ugly, the signature src string is stored in @op for debugging */
 static int
-azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
+azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 {
 	int ret;
 	char *hdr_str = NULL;
 
-	curl_easy_setopt(aconn->curl, CURLOPT_CUSTOMREQUEST, req->method);
-	curl_easy_setopt(aconn->curl, CURLOPT_URL, req->url);
+	curl_easy_setopt(aconn->curl, CURLOPT_CUSTOMREQUEST, op->method);
+	curl_easy_setopt(aconn->curl, CURLOPT_URL, op->url);
 	curl_easy_setopt(aconn->curl, CURLOPT_HEADERFUNCTION, curl_hdr_cb);
-	curl_easy_setopt(aconn->curl, CURLOPT_HEADERDATA, req);
-	curl_easy_setopt(aconn->curl, CURLOPT_WRITEDATA, req);
+	curl_easy_setopt(aconn->curl, CURLOPT_HEADERDATA, op);
+	curl_easy_setopt(aconn->curl, CURLOPT_WRITEDATA, op);
 	curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
-	if (strcmp(req->method, REQ_METHOD_GET) == 0) {
+	if (strcmp(op->method, REQ_METHOD_GET) == 0) {
 		curl_easy_setopt(aconn->curl, CURLOPT_HTTPGET, 1);
 		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 0);
 		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE, 0);
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_fail_cb);
-	} else if (strcmp(req->method, REQ_METHOD_PUT) == 0) {
+	} else if (strcmp(op->method, REQ_METHOD_PUT) == 0) {
 		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 1);
 		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE,
-				 req->iov_out.buf_len);
-		curl_easy_setopt(aconn->curl, CURLOPT_READDATA, req);
+				 op->req.iov.buf_len);
+		curl_easy_setopt(aconn->curl, CURLOPT_READDATA, op);
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_read_cb);
 		/* must be set for PUT, TODO ensure not already set */
-		ret = asprintf(&hdr_str, "Content-Length: %lu", req->iov_out.buf_len);
+		ret = asprintf(&hdr_str, "Content-Length: %lu", op->req.iov.buf_len);
 		if (ret < 0) {
 			return -ENOMEM;
 		}
-		req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+		op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
 		free(hdr_str);
-		if (req->http_hdr == NULL) {
+		if (op->http_hdr == NULL) {
 			return -ENOMEM;
 		}
 	}
 
-	if (req->sign) {
+	if (op->sign) {
 		char *sig_str;
 		assert(aconn->sign.key != NULL);
 		ret = azure_sign_gen_lite(aconn->sign.account,
 					  aconn->sign.key, aconn->sign.key_len,
-					  req, &req->sig_src, &sig_str);
+					  op, &op->sig_src, &sig_str);
 		if (ret < 0) {
 			printf("signing failed: %s\n", strerror(-ret));
 			return ret;
@@ -229,14 +229,14 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 		if (ret < 0) {
 			return -ENOMEM;
 		}
-		req->http_hdr = curl_slist_append(req->http_hdr, hdr_str);
+		op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
 		free(hdr_str);
-		if (req->http_hdr == NULL) {
+		if (op->http_hdr == NULL) {
 			return -ENOMEM;
 		}
 	}
 
-	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, req->http_hdr);
+	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, op->http_hdr);
 
 	/* TODO remove this later */
 	curl_easy_setopt(aconn->curl, CURLOPT_VERBOSE, 1);
@@ -245,13 +245,13 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 }
 
 int
-azure_conn_send_req(struct azure_conn *aconn,
-		    struct azure_req *req)
+azure_conn_send_op(struct azure_conn *aconn,
+		    struct azure_op *op)
 {
 	int ret;
 	CURLcode res;
 
-	ret = azure_conn_send_prepare(aconn, req);
+	ret = azure_conn_send_prepare(aconn, op);
 	if (ret < 0) {
 		return ret;
 	}
@@ -265,9 +265,9 @@ azure_conn_send_req(struct azure_conn *aconn,
 		return -EBADF;
 	}
 
-	curl_easy_getinfo(aconn->curl, CURLINFO_RESPONSE_CODE, &req->rsp_code);
+	curl_easy_getinfo(aconn->curl, CURLINFO_RESPONSE_CODE, &op->rsp.err_code);
 
-	/* reset headers, so that req->http_hdr can be freed */
+	/* reset headers, so that op->http_hdr can be freed */
 	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, NULL);
 
 	return 0;

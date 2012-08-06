@@ -31,8 +31,8 @@ azure_conn_sign_setkey(struct azure_conn *aconn,
 		       const char *key_b64);
 
 int
-azure_conn_send_req(struct azure_conn *aconn,
-		    struct azure_req *req);
+azure_conn_send_op(struct azure_conn *aconn,
+		    struct azure_op *op);
 
 int
 azure_conn_init(const char *pem_file,
