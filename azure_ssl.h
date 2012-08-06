@@ -13,25 +13,13 @@
  *
  * Author: David Disseldorp <ddiss@suse.de>
  */
-#ifndef _AZURE_XML_H_
-#define _AZURE_XML_H_
+#ifndef _AZURE_SSL_H_
+#define _AZURE_SSL_H_
 
 int
-azure_xml_slurp(bool is_file,
-		const uint8_t *buf,
-		uint64_t buf_len,
-		xmlDoc **xp_doc,
-		xmlXPathContext **xp_ctx);
+azure_ssl_pubset_process(const char *ps_file,
+			 char **pem_file,
+			 char **sub_id,
+			 char **sub_name);
 
-int
-azure_xml_get_path(xmlXPathContext *xp_ctx,
-		   const char *xp_expr,
-		   const char *xp_attr,
-		   char **content);
-
-void
-azure_xml_subsys_init(void);
-
-void
-azure_xml_subsys_deinit(void);
-#endif /* _AZURE_XML_H_ */
+#endif /* ifdef _AZURE_SSL_H_ */

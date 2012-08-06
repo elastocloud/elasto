@@ -31,14 +31,16 @@
 #include "azure_xml.h"
 #include "azure_req.h"
 #include "azure_conn.h"
+#include "azure_ssl.h"
 
 int main(void)
 {
 	struct azure_conn aconn;
 	struct azure_req req;
-	const char *pem_file = "/home/ddiss/azure/privateKey.pem";
-	const char *pem_pword = "disso";
-	const char *subscriber_id = "9baf7f32-66ae-42ca-9ad7-220050765863";
+	const char *ps_file = "/home/ddiss/azure/Windows Azure MSDN - Visual Studio Ultimate-7-20-2012-credentials.publishsettings";
+	char *pem_file;
+	char *sub_id;
+	char *sub_name;
 	const char *blob_acc = "istgt";
 	const char *blob_container = "target1";
 	const char *blob_name = "test";
@@ -52,12 +54,18 @@ int main(void)
 
 	memset(&req, 0, sizeof(req));
 
-	ret = azure_conn_init(pem_file, pem_pword, &aconn);
+	ret = azure_ssl_pubset_process(ps_file, &pem_file, &sub_id, &sub_name);
 	if (ret < 0) {
 		goto err_global_clean;
 	}
 
-	ret = azure_req_mgmt_get_sa_keys(subscriber_id, blob_acc, &req);
+	ret = azure_conn_init(pem_file, NULL, &aconn);
+	if (ret < 0) {
+		/* FIXME */
+		goto err_global_clean;
+	}
+
+	ret = azure_req_mgmt_get_sa_keys(sub_id, blob_acc, &req);
 	if (ret < 0) {
 		goto err_conn_free;
 	}

@@ -14,6 +14,7 @@
  * Author: David Disseldorp <ddiss@suse.de>
  */
 #include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 #include <errno.h>
 
@@ -23,7 +24,8 @@
 #include <libxml/xpathInternals.h>
 
 int
-azure_xml_slurp(const uint8_t *buf,
+azure_xml_slurp(bool is_file,
+		const uint8_t *buf,
 		uint64_t buf_len,
 		xmlDoc **xp_doc,
 		xmlXPathContext **xp_ctx)
@@ -32,7 +34,11 @@ azure_xml_slurp(const uint8_t *buf,
 	xmlDoc *xdoc;
 	xmlXPathContext *xpath_ctx;
 
-	xdoc = xmlParseMemory((char *)buf, buf_len);
+	if (is_file) {
+		xdoc = xmlParseFile((char *)buf);
+	} else {
+		xdoc = xmlParseMemory((char *)buf, buf_len);
+	}
 	if (xdoc == NULL) {
 		printf("unable to parse in-memory XML\n");
 		ret = -EINVAL;
@@ -76,6 +82,7 @@ err_out:
 int
 azure_xml_get_path(xmlXPathContext *xp_ctx,
 		   const char *xp_expr,
+		   const char *xp_attr,
 		   char **content)
 {
 	int ret;
@@ -101,7 +108,12 @@ azure_xml_get_path(xmlXPathContext *xp_ctx,
 		goto err_xp_obj;
 	}
 
-	ctnt = xmlNodeGetContent(xp_obj->nodesetval->nodeTab[0]);
+	if (xp_attr != NULL) {
+		ctnt = xmlGetProp(xp_obj->nodesetval->nodeTab[0],
+				  (const xmlChar *)xp_attr);
+	} else {
+		ctnt = xmlNodeGetContent(xp_obj->nodesetval->nodeTab[0]);
+	}
 	if (ctnt == NULL) {
 		ret = -ENOMEM;
 		goto err_xp_obj;

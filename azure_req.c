@@ -179,7 +179,8 @@ azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req)
 	xmlXPathContext *xp_ctx;
 
 	/* parse response */
-	ret = azure_xml_slurp(req->iov.buf, req->iov.off, &xp_doc, &xp_ctx);
+	ret = azure_xml_slurp(false, req->iov.buf, req->iov.off,
+			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		return ret;
 	}
@@ -189,7 +190,7 @@ azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req)
 
 	ret = azure_xml_get_path(xp_ctx,
 		"//def:StorageService/def:StorageServiceKeys/def:Primary",
-		&get_sa_keys->out.primary);
+		NULL, &get_sa_keys->out.primary);
 	if (ret < 0) {
 		xmlXPathFreeContext(xp_ctx);
 		xmlFreeDoc(xp_doc);
@@ -197,7 +198,7 @@ azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req)
 	}
 	ret = azure_xml_get_path(xp_ctx,
 		"//def:StorageService/def:StorageServiceKeys/def:Secondary",
-		&get_sa_keys->out.secondary);
+		NULL, &get_sa_keys->out.secondary);
 
 	xmlXPathFreeContext(xp_ctx);
 	xmlFreeDoc(xp_doc);
@@ -319,7 +320,8 @@ azure_req_ctnr_list_rsp(struct azure_req *req)
 	xmlXPathContext *xp_ctx;
 
 	/* parse response */
-	ret = azure_xml_slurp(req->iov.buf, req->iov.off, &xp_doc, &xp_ctx);
+	ret = azure_xml_slurp(false, req->iov.buf, req->iov.off,
+			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		return ret;
 	}
@@ -338,9 +340,7 @@ azure_req_ctnr_list_rsp(struct azure_req *req)
 			ret = -ENOMEM;
 			goto err_out;
 		}
-		ret = azure_xml_get_path(xp_ctx,
-			query,
-			&name);
+		ret = azure_xml_get_path(xp_ctx, query, NULL, &name);
 		free(query);
 		if (ret == -ENOENT)
 			break;	/* all processed */

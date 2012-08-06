@@ -14,4 +14,4 @@ def configure(conf):
 def build(bld):
 	print("build!")
 	bld.recurse('ccan')
-	bld.program(source='azure_ssl.c azure_xml.c azure_req.c azure_sign.c base64.c azure_conn.c', target='azure_ssl', lib=['curl','xml2','crypto'], use=['ccan'])
+	bld.program(source='azure_test.c azure_xml.c azure_req.c azure_sign.c base64.c azure_conn.c azure_ssl.c', target='azure_test', lib=['curl','xml2','crypto'], use=['ccan'])
