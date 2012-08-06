@@ -92,12 +92,18 @@ gen_date_str(void)
 }
 
 static void
-azure_op_mgmt_get_sa_keys_free(struct azure_op *op)
+azure_req_mgmt_get_sa_keys_free(
+		struct azure_req_mgmt_get_sa_keys *mgmt_get_sa_keys_req)
 {
-	free(op->req.mgmt_get_sa_keys.sub_id);
-	free(op->req.mgmt_get_sa_keys.service_name);
-	free(op->rsp.mgmt_get_sa_keys.primary);
-	free(op->rsp.mgmt_get_sa_keys.secondary);
+	free(mgmt_get_sa_keys_req->sub_id);
+	free(mgmt_get_sa_keys_req->service_name);
+}
+static void
+azure_rsp_mgmt_get_sa_keys_free(
+		struct azure_rsp_mgmt_get_sa_keys *mgmt_get_sa_keys_rsp)
+{
+	free(mgmt_get_sa_keys_rsp->primary);
+	free(mgmt_get_sa_keys_rsp->secondary);
 }
 
 static int
@@ -197,17 +203,22 @@ azure_op_mgmt_get_sa_keys_rsp(struct azure_op *op)
 }
 
 static void
-azure_op_ctnr_list_free(struct azure_op *op)
+azure_req_ctnr_list_free(struct azure_req_ctnr_list *ctnr_list_req)
 {
-	free(op->req.ctnr_list.account);
+	free(ctnr_list_req->account);
+}
+static void
+azure_rsp_ctnr_list_free(struct azure_rsp_ctnr_list *ctnr_list_rsp)
+{
+	struct azure_ctnr *ctnr;
+	struct azure_ctnr *ctnr_n;
 
-	if (op->rsp.ctnr_list.num_ctnrs > 0) {
-		struct azure_ctnr *ctnr;
-		struct azure_ctnr *ctnr_n;
-		list_for_each_safe(&op->rsp.ctnr_list.ctnrs, ctnr, ctnr_n, list) {
-			free(ctnr->name);
-			free(ctnr);
-		}
+	if (ctnr_list_rsp->num_ctnrs <= 0)
+		return;
+
+	list_for_each_safe(&ctnr_list_rsp->ctnrs, ctnr, ctnr_n, list) {
+		free(ctnr->name);
+		free(ctnr);
 	}
 }
 
@@ -354,10 +365,10 @@ err_out:
 }
 
 static void
-azure_op_ctnr_create_free(struct azure_op *op)
+azure_req_ctnr_create_free(struct azure_req_ctnr_create *ctnr_create_req)
 {
-	free(op->req.ctnr_create.account);
-	free(op->req.ctnr_create.ctnr);
+	free(ctnr_create_req->account);
+	free(ctnr_create_req->ctnr);
 }
 
 static int
@@ -447,11 +458,11 @@ err_out:
 }
 
 static void
-azure_op_blob_put_free(struct azure_op *op)
+azure_req_blob_put_free(struct azure_req_blob_put *blob_put_req)
 {
-	free(op->req.blob_put.account);
-	free(op->req.blob_put.container);
-	free(op->req.blob_put.bname);
+	free(blob_put_req->account);
+	free(blob_put_req->container);
+	free(blob_put_req->bname);
 }
 
 static int
@@ -618,11 +629,11 @@ err_out:
 }
 
 static void
-azure_op_blob_get_free(struct azure_op *op)
+azure_req_blob_get_free(struct azure_req_blob_get *blob_get_req)
 {
-	free(op->req.blob_get.account);
-	free(op->req.blob_get.container);
-	free(op->req.blob_get.bname);
+	free(blob_get_req->account);
+	free(blob_get_req->container);
+	free(blob_get_req->bname);
 }
 
 static int
@@ -745,33 +756,57 @@ err_out:
 	return ret;
 }
 
-/* Free and zero request data */
+static void
+azure_req_free(struct azure_op *op)
+{
+	free(op->req.iov.buf);
+	switch (op->opcode) {
+	case AOP_MGMT_GET_SA_KEYS:
+		azure_req_mgmt_get_sa_keys_free(&op->req.mgmt_get_sa_keys);
+		break;
+	case AOP_CONTAINER_LIST:
+		azure_req_ctnr_list_free(&op->req.ctnr_list);
+		break;
+	case AOP_CONTAINER_CREATE:
+		azure_req_ctnr_create_free(&op->req.ctnr_create);
+		break;
+	case AOP_BLOB_PUT:
+		azure_req_blob_put_free(&op->req.blob_put);
+		break;
+	case AOP_BLOB_GET:
+		azure_req_blob_get_free(&op->req.blob_get);
+		break;
+	};
+}
+
+static void
+azure_rsp_free(struct azure_op *op)
+{
+	free(op->rsp.iov.buf);
+	switch (op->opcode) {
+	case AOP_MGMT_GET_SA_KEYS:
+		azure_rsp_mgmt_get_sa_keys_free(&op->rsp.mgmt_get_sa_keys);
+		break;
+	case AOP_CONTAINER_LIST:
+		azure_rsp_ctnr_list_free(&op->rsp.ctnr_list);
+		break;
+	case AOP_CONTAINER_CREATE:
+	case AOP_BLOB_PUT:
+	case AOP_BLOB_GET:
+		/* nothing to do */
+		break;
+	};
+}
+
+/* Free and zero op data */
 void
 azure_op_free(struct azure_op *op)
 {
 	/* CURLOPT_HTTPHEADER must be cleared before doing this */
 	curl_slist_free_all(op->http_hdr);
-
-	free(op->req.iov.buf);
-	free(op->rsp.iov.buf);
 	free(op->sig_src);
 	free(op->url);
-	switch (op->opcode) {
-	case AOP_MGMT_GET_SA_KEYS:
-		azure_op_mgmt_get_sa_keys_free(op);
-		break;
-	case AOP_CONTAINER_LIST:
-		azure_op_ctnr_list_free(op);
-		break;
-	case AOP_CONTAINER_CREATE:
-		azure_op_ctnr_create_free(op);
-		break;
-	case AOP_BLOB_PUT:
-		azure_op_blob_put_free(op);
-		break;
-	case AOP_BLOB_GET:
-		azure_op_blob_get_free(op);
-		break;
-	};
+	azure_req_free(op);
+	azure_rsp_free(op);
 	memset(op, 0, sizeof(*op));
 }
