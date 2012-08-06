@@ -144,22 +144,12 @@ azure_req_mgmt_get_sa_keys(const char *sub_id,
 		goto err_free_svc;
 	}
 
-	/* allocate response buffer, TODO determine appropriate size */
-	req->iov.buf_len = (1024 * 1024);
-	req->iov.buf = malloc(req->iov.buf_len);
-	if (req->iov.buf == NULL) {
-		ret = -ENOMEM;
+	ret = azure_req_mgmt_get_sa_keys_fill_hdr(req);
+	if (ret < 0) {
 		goto err_free_url;
 	}
 
-	ret = azure_req_mgmt_get_sa_keys_fill_hdr(req);
-	if (ret < 0) {
-		goto err_free_buf;
-	}
-
 	return 0;
-err_free_buf:
-	free(req->iov.buf);
 err_free_url:
 	free(req->url);
 err_free_svc:
@@ -179,7 +169,7 @@ azure_req_mgmt_get_sa_keys_rsp(struct azure_req *req)
 	xmlXPathContext *xp_ctx;
 
 	/* parse response */
-	ret = azure_xml_slurp(false, req->iov.buf, req->iov.off,
+	ret = azure_xml_slurp(false, req->iov_in.buf, req->iov_in.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		return ret;
@@ -286,17 +276,12 @@ azure_req_ctnr_list(const char *account,
 		goto err_acc_free;
 	}
 
-	azure_req_ctnr_list_fill_hdr(req);
-	/* the connection layer must sign this request before sending */
-	req->sign = true;
-
-	/* allocate response buffer, TODO determine appropriate size */
-	req->iov.buf_len = (1024 * 1024);
-	req->iov.buf = malloc(req->iov.buf_len);
-	if (req->iov.buf == NULL) {
-		ret = -ENOMEM;
+	ret = azure_req_ctnr_list_fill_hdr(req);
+	if (ret < 0) {
 		goto err_url_free;
 	}
+	/* the connection layer must sign this request before sending */
+	req->sign = true;
 
 	list_head_init(&ctnr_list_req->out.ctnrs);
 
@@ -320,7 +305,7 @@ azure_req_ctnr_list_rsp(struct azure_req *req)
 	xmlXPathContext *xp_ctx;
 
 	/* parse response */
-	ret = azure_xml_slurp(false, req->iov.buf, req->iov.off,
+	ret = azure_xml_slurp(false, req->iov_in.buf, req->iov_in.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		return ret;
@@ -590,8 +575,8 @@ azure_req_blob_put(const char *account,
 	} else {
 		put_req->in.type = BLOB_TYPE_BLOCK;
 		assert(content_len_bytes == 0);	/* page only */
-		req->iov.buf = buf;
-		req->iov.buf_len = len;
+		req->iov_out.buf = buf;
+		req->iov_out.buf_len = len;
 	}
 
 	req->method = REQ_METHOD_PUT;
@@ -689,8 +674,6 @@ int
 azure_req_blob_get(const char *account,
 		   const char *container,
 		   const char *bname,
-		   uint8_t *buf,
-		   uint64_t len,
 		   struct azure_req *req)
 {
 	int ret;
@@ -722,8 +705,7 @@ azure_req_blob_get(const char *account,
 	}
 
 	get_req->in.type = BLOB_TYPE_BLOCK;
-	req->iov.buf = buf;
-	req->iov.buf_len = len;
+	/* recv buffer allocated by conn layer */
 
 	req->method = REQ_METHOD_GET;
 	if (container == NULL) {
@@ -769,7 +751,8 @@ azure_req_free(struct azure_req *req)
 	/* CURLOPT_HTTPHEADER must be cleared before doing this */
 	curl_slist_free_all(req->http_hdr);
 
-	free(req->iov.buf);
+	free(req->iov_in.buf);
+	free(req->iov_out.buf);
 	free(req->sig_src);
 	free(req->url);
 	switch (req->op) {

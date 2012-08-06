@@ -47,7 +47,6 @@ int main(void)
 	struct azure_ctnr *ctnr;
 	bool ctnr_exists;
 	int ret;
-	uint8_t *buf;
 
 	azure_conn_subsys_init();
 	azure_xml_subsys_init();
@@ -153,11 +152,7 @@ int main(void)
 
 	azure_req_free(&req);
 
-	buf = malloc(sizeof("hello world"));
-	ret = azure_req_blob_get(blob_acc, blob_container, blob_name,
-				 buf,
-				 sizeof("hello world"),
-				 &req);
+	ret = azure_req_blob_get(blob_acc, blob_container, blob_name, &req);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
@@ -168,7 +163,7 @@ int main(void)
 	}
 
 	printf("data consistency test: %s\n",
-	       strcmp((char *)buf, "hello world") ? "failed" : "passed");
+	       strcmp((char *)req.iov_in.buf, "hello world") ? "failed" : "passed");
 
 	ret = 0;
 err_req_free:

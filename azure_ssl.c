@@ -145,7 +145,7 @@ azure_ssl_pubset_process(const char *ps_file,
 
 	ret = azure_xml_get_path(xp_ctx,
 		"//PublishData/PublishProfile/Subscription", "Id",
-	       	&sid);
+		&sid);
 	if (ret < 0) {
 		printf("Failed to read Azure Subscription ID from %s\n",
 		       ps_file);

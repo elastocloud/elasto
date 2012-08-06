@@ -102,7 +102,7 @@ struct azure_req {
 		uint8_t *buf;
 		uint64_t buf_len;
 		uint64_t off;
-	} iov;
+	} iov_out;	/* alloced by req */
 	bool sign;
 	char *sig_src;	/* debug, compare with signing error response */
 	const char *method;
@@ -116,6 +116,12 @@ struct azure_req {
 		struct azure_blob_put blob_put;
 		struct azure_blob_get blob_get;
 	};
+
+	struct {
+		uint8_t *buf;
+		uint64_t buf_len;
+		uint64_t off;
+	} iov_in;	/* alloced by conn hdr callback */
 };
 
 int
@@ -155,8 +161,6 @@ int
 azure_req_blob_get(const char *account,
 		   const char *container,
 		   const char *bname,
-		   uint8_t *buf,
-		   uint64_t len,
 		   struct azure_req *req);
 
 void

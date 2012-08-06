@@ -70,6 +70,59 @@ err_out:
 	return ret;
 }
 
+#define HDR_PFX_CLEN "Content-Length: "
+/*
+ * @hdr_str:	single non-null terminated header string.
+ * @num_bytes:	length of @hdr_str.
+ */
+static int
+curl_hdr_process(struct azure_req *req,
+		 char *hdr_str,
+		 uint64_t num_bytes)
+{
+
+	if (!strncmp(hdr_str, HDR_PFX_CLEN, sizeof(HDR_PFX_CLEN) - 1)) {
+		int64_t clen;
+		char *eptr;
+		char *loff = hdr_str + sizeof(HDR_PFX_CLEN) - 1;
+
+		clen = strtoll(loff, &eptr, 10);
+		if ((eptr == loff) || (eptr > hdr_str + num_bytes)) {
+			return -1;
+		}
+		if (clen == 0) {
+			return 0;
+		}
+		/* TODO check clen isn't too huge */
+		req->iov_in.buf = malloc(clen);
+		if (req->iov_in.buf == NULL) {
+			return -1;
+		}
+		req->iov_in.buf_len = clen;
+		req->iov_in.off = 0;
+	}
+
+	return 0;
+}
+
+static size_t
+curl_hdr_cb(char *ptr,
+	    size_t size,
+	    size_t nmemb,
+	    void *userdata)
+{
+	struct azure_req *req = (struct azure_req *)userdata;
+	uint64_t num_bytes = (size * nmemb);
+	int ret;
+
+	ret = curl_hdr_process(req, ptr, num_bytes);
+	if (ret < 0) {
+		return 0;
+	}
+
+	return num_bytes;
+}
+
 static size_t
 curl_read_cb(char *ptr,
 	     size_t size,
@@ -79,15 +132,15 @@ curl_read_cb(char *ptr,
 	struct azure_req *req = (struct azure_req *)userdata;
 	uint64_t num_bytes = (size * nmemb);
 
-	if (req->iov.off + num_bytes > req->iov.buf_len) {
+	if (req->iov_out.off + num_bytes > req->iov_out.buf_len) {
 		printf("curl_read_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu, capping\n",
-		       req->iov.buf_len, req->iov.off, num_bytes);
-		num_bytes = req->iov.buf_len - req->iov.off;
+		       req->iov_out.buf_len, req->iov_out.off, num_bytes);
+		num_bytes = req->iov_out.buf_len - req->iov_out.off;
 	}
 
-	memcpy(ptr, (void *)(req->iov.buf + req->iov.off), num_bytes);
-	req->iov.off += num_bytes;
+	memcpy(ptr, (void *)(req->iov_out.buf + req->iov_out.off), num_bytes);
+	req->iov_out.off += num_bytes;
 	return num_bytes;
 }
 
@@ -100,15 +153,15 @@ curl_write_cb(char *ptr,
 	struct azure_req *req = (struct azure_req *)userdata;
 	uint64_t num_bytes = (size * nmemb);
 
-	if (req->iov.off + num_bytes > req->iov.buf_len) {
+	if (req->iov_in.off + num_bytes > req->iov_in.buf_len) {
 		printf("fatal: curl_write_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu\n",
-		       req->iov.buf_len, req->iov.off, num_bytes);
+		       req->iov_in.buf_len, req->iov_in.off, num_bytes);
 		return -1;
 	}
 
-	memcpy((void *)(req->iov.buf + req->iov.off), ptr, num_bytes);
-	req->iov.off += num_bytes;
+	memcpy((void *)(req->iov_in.buf + req->iov_in.off), ptr, num_bytes);
+	req->iov_in.off += num_bytes;
 	return num_bytes;
 }
 
@@ -131,27 +184,25 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_req *req)
 
 	curl_easy_setopt(aconn->curl, CURLOPT_CUSTOMREQUEST, req->method);
 	curl_easy_setopt(aconn->curl, CURLOPT_URL, req->url);
-	/* one-way xfers only so far */
+	curl_easy_setopt(aconn->curl, CURLOPT_HEADERFUNCTION, curl_hdr_cb);
+	curl_easy_setopt(aconn->curl, CURLOPT_HEADERDATA, req);
+	curl_easy_setopt(aconn->curl, CURLOPT_WRITEDATA, req);
+	curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	if (strcmp(req->method, REQ_METHOD_GET) == 0) {
 		curl_easy_setopt(aconn->curl, CURLOPT_HTTPGET, 1);
 		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 0);
 		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE, 0);
-		curl_easy_setopt(aconn->curl, CURLOPT_WRITEDATA, req);
-		curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION,
-				 curl_write_cb);
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_fail_cb);
 	} else if (strcmp(req->method, REQ_METHOD_PUT) == 0) {
 		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 1);
 		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE,
-				 req->iov.buf_len);
+				 req->iov_out.buf_len);
 		curl_easy_setopt(aconn->curl, CURLOPT_READDATA, req);
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_read_cb);
-		curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION,
-				 curl_fail_cb);
 		/* must be set for PUT, TODO ensure not already set */
-		ret = asprintf(&hdr_str, "Content-Length: %lu", req->iov.buf_len);
+		ret = asprintf(&hdr_str, "Content-Length: %lu", req->iov_out.buf_len);
 		if (ret < 0) {
 			return -ENOMEM;
 		}
