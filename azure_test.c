@@ -73,7 +73,7 @@ int main(void)
 		goto err_op_free;
 	}
 
-	ret = azure_op_mgmt_get_sa_keys_rsp(&op);
+	ret = azure_rsp_process(&op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -101,15 +101,14 @@ int main(void)
 		goto err_op_free;
 	}
 
-	if (op.rsp.err_code != 0) {
-		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
-		azure_op_error_rsp(&op);
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_op_ctnr_list_rsp(&op);
-	if (ret < 0) {
+	if (op.rsp.err_code != 0) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
 		goto err_op_free;
 	}
 
@@ -139,10 +138,14 @@ int main(void)
 			goto err_op_free;
 		}
 
+		ret = azure_rsp_process(&op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+
 		if (op.rsp.err_code != 0) {
 			ret = -EIO;
 			printf("failed response: %d\n", op.rsp.err_code);
-			azure_op_error_rsp(&op);
 			goto err_op_free;
 		}
 
@@ -163,10 +166,14 @@ int main(void)
 		goto err_op_free;
 	}
 
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
 	if (op.rsp.err_code != 0) {
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
-		azure_op_error_rsp(&op);
 		goto err_op_free;
 	}
 
@@ -182,10 +189,14 @@ int main(void)
 		goto err_op_free;
 	}
 
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
 	if (op.rsp.err_code != 0) {
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
-		azure_op_error_rsp(&op);
 		goto err_op_free;
 	}
 

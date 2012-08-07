@@ -166,8 +166,8 @@ err_out:
 	return ret;
 }
 
-int
-azure_op_mgmt_get_sa_keys_rsp(struct azure_op *op)
+static int
+azure_rsp_mgmt_get_sa_keys_process(struct azure_op *op)
 {
 	int ret;
 	struct azure_rsp_mgmt_get_sa_keys *get_sa_keys_rsp;
@@ -178,7 +178,7 @@ azure_op_mgmt_get_sa_keys_rsp(struct azure_op *op)
 	ret = azure_xml_slurp(false, op->rsp.iov.buf, op->rsp.iov.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
-		return ret;
+		goto err_out;
 	}
 
 	assert(op->opcode == AOP_MGMT_GET_SA_KEYS);
@@ -188,17 +188,21 @@ azure_op_mgmt_get_sa_keys_rsp(struct azure_op *op)
 		"//def:StorageService/def:StorageServiceKeys/def:Primary",
 		NULL, &get_sa_keys_rsp->primary);
 	if (ret < 0) {
-		xmlXPathFreeContext(xp_ctx);
-		xmlFreeDoc(xp_doc);
-		return ret;
+		goto err_xml_free;
 	}
 	ret = azure_xml_get_path(xp_ctx,
 		"//def:StorageService/def:StorageServiceKeys/def:Secondary",
 		NULL, &get_sa_keys_rsp->secondary);
+	if (ret < 0) {
+		free(get_sa_keys_rsp->primary);
+		goto err_xml_free;
+	}
+	ret = 0;
 
+err_xml_free:
 	xmlXPathFreeContext(xp_ctx);
 	xmlFreeDoc(xp_doc);
-
+err_out:
 	return ret;
 }
 
@@ -306,8 +310,8 @@ err_out:
 	return ret;
 }
 
-int
-azure_op_ctnr_list_rsp(struct azure_op *op)
+static int
+azure_rsp_ctnr_list_process(struct azure_op *op)
 {
 	int ret;
 	int i;
@@ -762,8 +766,23 @@ azure_rsp_error_free(struct azure_rsp_error *err)
 	free(err->msg);
 }
 
-int
-azure_op_error_rsp(struct azure_op *op)
+/*
+ * Check whether @err_code represents an azure error response. Nothing opcode
+ * specific yet.
+ */
+static bool
+azure_rsp_is_error(int opcode, int err_code)
+{
+	if (err_code == 0) {
+		return false;
+	} else if ((err_code >= 200) && (err_code < 300)) {
+		return false;
+	}
+	return true;
+}
+
+static int
+azure_rsp_error_process(struct azure_op *op)
 {
 	int ret;
 	xmlDoc *xp_doc;
@@ -821,7 +840,7 @@ static void
 azure_rsp_free(struct azure_op *op)
 {
 	free(op->rsp.iov.buf);
-	if (op->rsp.err_code) {
+	if (azure_rsp_is_error(op->opcode, op->rsp.err_code)) {
 		/* error response only, no aop data */
 		azure_rsp_error_free(&op->rsp.err);
 		return;
@@ -854,3 +873,34 @@ azure_op_free(struct azure_op *op)
 	azure_rsp_free(op);
 	memset(op, 0, sizeof(*op));
 }
+
+/*
+ * unmarshall response data
+ */
+int
+azure_rsp_process(struct azure_op *op)
+{
+	int ret;
+	if (azure_rsp_is_error(op->opcode, op->rsp.err_code)) {
+		/* error response only */
+		return azure_rsp_error_process(op);
+	}
+
+	switch (op->opcode) {
+	case AOP_MGMT_GET_SA_KEYS:
+		ret = azure_rsp_mgmt_get_sa_keys_process(op);
+		break;
+	case AOP_CONTAINER_LIST:
+		ret = azure_rsp_ctnr_list_process(op);
+		break;
+	case AOP_CONTAINER_CREATE:
+	case AOP_BLOB_PUT:
+	case AOP_BLOB_GET:
+		/* nothing to do */
+		ret = 0;
+		break;
+	};
+
+	return ret;
+}
+

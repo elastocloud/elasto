@@ -140,14 +140,8 @@ azure_op_mgmt_get_sa_keys(const char *sub_id,
 			  struct azure_op *op);
 
 int
-azure_op_mgmt_get_sa_keys_rsp(struct azure_op *op);
-
-int
 azure_op_ctnr_list(const char *account,
 		   struct azure_op *op);
-
-int
-azure_op_ctnr_list_rsp(struct azure_op *op);
 
 int
 azure_op_ctnr_create(const char *account,
@@ -165,18 +159,15 @@ azure_op_blob_put(const char *account,
 		  struct azure_op *op);
 
 int
-azure_op_blob_put_rsp(struct azure_op *op);
-
-int
 azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
 		  struct azure_op *op);
 
-int
-azure_op_error_rsp(struct azure_op *op);
-
 void
 azure_op_free(struct azure_op *op);
+
+int
+azure_rsp_process(struct azure_op *op);
 
 #endif /* ifdef _AZURE_REQ_H_ */
