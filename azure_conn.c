@@ -39,7 +39,11 @@ azure_conn_sign_setkey(struct azure_conn *aconn,
 {
 	int ret;
 
-	free(aconn->sign.key);
+	if (aconn->sign.key_len > 0) {
+		free(aconn->sign.key);
+		free(aconn->sign.account);
+		aconn->sign.key_len = 0;
+	}
 	aconn->sign.key = malloc(strlen(key_b64));
 	if (aconn->sign.key == NULL) {
 		ret = -ENOMEM;
@@ -65,7 +69,7 @@ err_acc_free:
 	free(aconn->sign.account);
 err_key_free:
 	free(aconn->sign.key);
-	aconn->sign.key = NULL;
+	aconn->sign.key_len = 0;
 err_out:
 	return ret;
 }
@@ -300,6 +304,10 @@ void
 azure_conn_free(struct azure_conn *aconn)
 {
 	curl_easy_cleanup(aconn->curl);
+	if (aconn->sign.key_len > 0) {
+		free(aconn->sign.key);
+		free(aconn->sign.account);
+	}
 }
 
 int
