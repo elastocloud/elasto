@@ -61,12 +61,16 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 	}
 
 	bmem = BIO_new_mem_buf((void *)mcert, ret);
+	if (bmem == NULL) {
+		ret = -ENOMEM;
+		goto err_mc_free;
+	}
 
 	p12 = d2i_PKCS12_bio(bmem, NULL);
-	if (!p12) {
+	if (p12 == NULL) {
 		printf("Error reading PKCS#12 data\n");
 		ret = -EBADF;
-		goto err_mc_free;
+		goto err_bio_free;
 	}
 
 	/* no passphrase, ignore CAs */
@@ -74,7 +78,7 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 	PKCS12_free(p12);
 	if (!ret) {
 		ret = -EBADF;
-		goto err_mc_free;
+		goto err_bio_free;
 	}
 
 	/* write output pem */
@@ -82,16 +86,16 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 	if (fp == NULL) {
 		printf("Error opening file %s\n", pem_file);
 		ret = -errno;
-		goto err_mc_free;
+		goto err_pkey_free;
 	}
-	if (pkey) {
+	if (pkey != NULL) {
 		ret = PEM_write_PrivateKey(fp, pkey, NULL, NULL, 0, NULL, NULL);
 		if (!ret) {
 			ret = -EBADF;
 			goto err_fp_close;
 		}
 	}
-	if (cert) {
+	if (cert != NULL) {
 		ret = PEM_write_X509_AUX(fp, cert);
 		if (!ret) {
 			ret = -EBADF;
@@ -102,6 +106,13 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 	ret = 0;
 err_fp_close:
 	fclose(fp);
+err_pkey_free:
+	if (pkey != NULL)
+		EVP_PKEY_free(pkey);
+	if (cert != NULL)
+		X509_free(cert);
+err_bio_free:
+	BIO_free(bmem);
 err_mc_free:
 	free(mcert);
 err_out:
