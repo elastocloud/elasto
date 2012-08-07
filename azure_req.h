@@ -83,6 +83,10 @@ struct azure_rsp_blob_get {
 	char *content_md5;
 };
 
+struct azure_rsp_error {
+	char *msg;
+};
+
 #define REQ_METHOD_GET		"GET"
 #define REQ_METHOD_PUT		"PUT"
 #define REQ_METHOD_DELETE	"DELETE"
@@ -112,6 +116,7 @@ struct azure_op {
 	struct {
 		int32_t err_code;
 		union {
+			struct azure_rsp_error err;
 			struct azure_rsp_mgmt_get_sa_keys mgmt_get_sa_keys;
 			struct azure_rsp_ctnr_list ctnr_list;
 			/*
@@ -167,6 +172,9 @@ azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
 		  struct azure_op *op);
+
+int
+azure_op_error_rsp(struct azure_op *op);
 
 void
 azure_op_free(struct azure_op *op);

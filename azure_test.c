@@ -105,6 +105,7 @@ int main(void)
 	if (op.rsp.err_code != 0) {
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
+		azure_op_error_rsp(&op);
 		goto err_op_free;
 	}
 
@@ -142,6 +143,7 @@ int main(void)
 		if (op.rsp.err_code != 0) {
 			ret = -EIO;
 			printf("failed response: %d\n", op.rsp.err_code);
+			azure_op_error_rsp(&op);
 			goto err_op_free;
 		}
 
@@ -165,6 +167,7 @@ int main(void)
 	if (op.rsp.err_code != 0) {
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
+		azure_op_error_rsp(&op);
 		goto err_op_free;
 	}
 
@@ -183,6 +186,7 @@ int main(void)
 	if (op.rsp.err_code != 0) {
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
+		azure_op_error_rsp(&op);
 		goto err_op_free;
 	}
 

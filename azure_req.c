@@ -757,6 +757,44 @@ err_out:
 }
 
 static void
+azure_rsp_error_free(struct azure_rsp_error *err)
+{
+	free(err->msg);
+}
+
+int
+azure_op_error_rsp(struct azure_op *op)
+{
+	int ret;
+	xmlDoc *xp_doc;
+	xmlXPathContext *xp_ctx;
+
+	if (op->rsp.err_code == 0) {
+		return 0;
+	}
+
+	ret = azure_xml_slurp(false, op->rsp.iov.buf, op->rsp.iov.off,
+			      &xp_doc, &xp_ctx);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_xml_get_path(xp_ctx, "/Error/Message", NULL,
+				 &op->rsp.err.msg);
+	if (ret < 0) {
+		goto err_xml_free;
+	}
+	printf("got error msg: %s\n", op->rsp.err.msg);
+	ret = 0;
+
+err_xml_free:
+	xmlXPathFreeContext(xp_ctx);
+	xmlFreeDoc(xp_doc);
+err_out:
+	return ret;
+}
+
+static void
 azure_req_free(struct azure_op *op)
 {
 	free(op->req.iov.buf);
@@ -783,6 +821,12 @@ static void
 azure_rsp_free(struct azure_op *op)
 {
 	free(op->rsp.iov.buf);
+	if (op->rsp.err_code) {
+		/* error response only, no aop data */
+		azure_rsp_error_free(&op->rsp.err);
+		return;
+	}
+
 	switch (op->opcode) {
 	case AOP_MGMT_GET_SA_KEYS:
 		azure_rsp_mgmt_get_sa_keys_free(&op->rsp.mgmt_get_sa_keys);
