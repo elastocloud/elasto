@@ -204,8 +204,10 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 		memcpy(s, ms_hdr_array[i], len);
 		*(s + len) = '\n';
 		s += (len + 1);
+		free(ms_hdr_array[i]);
 	}
 	*s = '\0';
+	free(ms_hdr_array);
 out_empty:
 	*canon_hdrs = ms_hdr_str;
 	*content_type = ctype;
