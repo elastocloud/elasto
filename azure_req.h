@@ -78,6 +78,8 @@ struct azure_req_blob_get {
 	char *container;
 	char *bname;
 	char *type;
+	uint64_t off;
+	uint64_t len;
 };
 struct azure_rsp_blob_get {
 	time_t last_mod;
@@ -178,6 +180,9 @@ int
 azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
+		  bool is_page,
+		  uint64_t off,
+		  uint64_t len,
 		  struct azure_op *op);
 
 int

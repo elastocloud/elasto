@@ -651,8 +651,30 @@ azure_op_blob_get_fill_hdr(struct azure_op *op)
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-blob-type: BlockBlob");
+
+	if (op->req.blob_get.len > 0) {
+		ret = asprintf(&hdr_str, "x-ms-range: bytes=%lu-%lu",
+			       op->req.blob_get.off,
+			       (op->req.blob_get.off + op->req.blob_get.len - 1));
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+		op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+		free(hdr_str);
+		if (op->http_hdr == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+	}
+
+	if (strcmp(op->req.blob_get.type, BLOB_TYPE_PAGE) == 0) {
+		op->http_hdr = curl_slist_append(op->http_hdr,
+						 "x-ms-blob-type: PageBlob");
+	} else {
+		op->http_hdr = curl_slist_append(op->http_hdr,
+						 "x-ms-blob-type: BlockBlob");
+	}
 	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -673,16 +695,30 @@ err_out:
 	return ret;
 }
 
+/*
+ * if @len is zero then ignore @off and retrieve entire blob
+ */
 int
 azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
+		  bool is_page,
+		  uint64_t off,
+		  uint64_t len,
 		  struct azure_op *op)
 {
 	int ret;
 	struct azure_req_blob_get *get_req;
 
-	/* TODO input validation */
+	/* check for correct alignment */
+	if (is_page && (((len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != len)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+	if (is_page && (((off / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != off)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	op->opcode = AOP_BLOB_GET;
 	get_req = &op->req.blob_get;
@@ -705,7 +741,16 @@ azure_op_blob_get(const char *account,
 		goto err_free_container;
 	}
 
-	get_req->type = BLOB_TYPE_BLOCK;
+	if (is_page) {
+		get_req->type = BLOB_TYPE_PAGE;
+	} else {
+		get_req->type = BLOB_TYPE_BLOCK;
+	}
+	if (len > 0) {
+		/* retrieve a specific range */
+		get_req->off = off;
+		get_req->len = len;
+	}
 	/* recv buffer allocated by conn layer */
 
 	op->method = REQ_METHOD_GET;

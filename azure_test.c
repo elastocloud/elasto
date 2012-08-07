@@ -178,7 +178,8 @@ int main(void)
 
 	azure_op_free(&op);
 
-	ret = azure_op_blob_get(blob_acc, blob_container, blob_name, &op);
+	ret = azure_op_blob_get(blob_acc, blob_container, blob_name,
+				false, 0, 0, &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
