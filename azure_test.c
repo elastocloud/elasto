@@ -153,10 +153,9 @@ int main(void)
 	}
 
 	ret = azure_op_blob_put(blob_acc, blob_container, blob_name,
-				 false, 0,
-				 (uint8_t *)strdup("hello world"),
-				 sizeof("hello world"),
-				 &op);
+				false, (uint8_t *)strdup("hello world"),
+				sizeof("hello world"),
+				&op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}

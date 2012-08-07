@@ -66,7 +66,7 @@ struct azure_req_blob_put {
 	char *container;
 	char *bname;
 	char *type;
-	uint64_t content_len_bytes;
+	uint64_t pg_len;
 };
 struct azure_rsp_blob_put {
 	time_t last_mod;
@@ -170,7 +170,6 @@ azure_op_blob_put(const char *account,
 		  const char *container,
 		  const char *bname,
 		  bool is_page,
-		  uint64_t content_len_bytes,
 		  uint8_t *buf,
 		  uint64_t len,
 		  struct azure_op *op);

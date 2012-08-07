@@ -501,7 +501,7 @@ azure_op_blob_put_fill_hdr(struct azure_op *op)
 			goto err_out;
 		}
 		ret = asprintf(&hdr_str, "x-ms-blob-content-length: %lu",
-			       op->req.blob_put.content_len_bytes);
+			       op->req.blob_put.pg_len);
 		if (ret < 0) {
 			ret = -ENOMEM;
 			goto err_out;
@@ -537,14 +537,14 @@ err_out:
 }
 
 /*
- * @content_len_bytes only valid when @is_page is set, @buf and @len only valid
- * when @is_page is not set. */
+ * if @is_page is set, then @len corresponds to the page blob length, @buf must
+ * be NULL. For a block blob, @len bytes from @buf are put.
+ */
 int
 azure_op_blob_put(const char *account,
 		   const char *container,
 		   const char *bname,
 		   bool is_page,
-		   uint64_t content_len_bytes,
 		   uint8_t *buf,
 		   uint64_t len,
 		   struct azure_op *op)
@@ -553,9 +553,7 @@ azure_op_blob_put(const char *account,
 	struct azure_req_blob_put *bl_put_req;
 
 	/* TODO input validation */
-	if (is_page
-	 && (((content_len_bytes / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ)
-						!= content_len_bytes)) {
+	if (is_page && (((len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != len)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -583,11 +581,10 @@ azure_op_blob_put(const char *account,
 
 	if (is_page) {
 		bl_put_req->type = BLOB_TYPE_PAGE;
-		bl_put_req->content_len_bytes = content_len_bytes;
+		bl_put_req->pg_len = len;
 		assert(buf == NULL);	/* block only */
 	} else {
 		bl_put_req->type = BLOB_TYPE_BLOCK;
-		assert(content_len_bytes == 0);	/* page only */
 		op->req.iov.buf = buf;
 		op->req.iov.buf_len = len;
 	}
