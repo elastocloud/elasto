@@ -984,6 +984,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_PAGE_PUT:
 		azure_req_page_put_free(&op->req.page_put);
 		break;
+	default:
+		assert(true);
+		break;
 	};
 }
 
@@ -1009,6 +1012,9 @@ azure_rsp_free(struct azure_op *op)
 	case AOP_BLOB_GET:
 	case AOP_PAGE_PUT:
 		/* nothing to do */
+		break;
+	default:
+		assert(true);
 		break;
 	};
 }
@@ -1051,6 +1057,9 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_PAGE_PUT:
 		/* nothing to do */
 		ret = 0;
+		break;
+	default:
+		assert(true);
 		break;
 	};
 
