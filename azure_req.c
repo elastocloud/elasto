@@ -550,7 +550,7 @@ azure_op_blob_put(const char *account,
 		   struct azure_op *op)
 {
 	int ret;
-	struct azure_req_blob_put *put_req;
+	struct azure_req_blob_put *bl_put_req;
 
 	/* TODO input validation */
 	if (is_page
@@ -561,32 +561,32 @@ azure_op_blob_put(const char *account,
 	}
 
 	op->opcode = AOP_BLOB_PUT;
-	put_req = &op->req.blob_put;
+	bl_put_req = &op->req.blob_put;
 
-	put_req->account = strdup(account);
-	if (put_req->account == NULL) {
+	bl_put_req->account = strdup(account);
+	if (bl_put_req->account == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
-	put_req->container = strdup(container);
-	if (put_req->container == NULL) {
+	bl_put_req->container = strdup(container);
+	if (bl_put_req->container == NULL) {
 		ret = -ENOMEM;
 		goto err_free_account;
 	}
 
-	put_req->bname = strdup(bname);
-	if (put_req->bname == NULL) {
+	bl_put_req->bname = strdup(bname);
+	if (bl_put_req->bname == NULL) {
 		ret = -ENOMEM;
 		goto err_free_container;
 	}
 
 	if (is_page) {
-		put_req->type = BLOB_TYPE_PAGE;
-		put_req->content_len_bytes = content_len_bytes;
+		bl_put_req->type = BLOB_TYPE_PAGE;
+		bl_put_req->content_len_bytes = content_len_bytes;
 		assert(buf == NULL);	/* block only */
 	} else {
-		put_req->type = BLOB_TYPE_BLOCK;
+		bl_put_req->type = BLOB_TYPE_BLOCK;
 		assert(content_len_bytes == 0);	/* page only */
 		op->req.iov.buf = buf;
 		op->req.iov.buf_len = len;
@@ -613,11 +613,11 @@ azure_op_blob_put(const char *account,
 err_free_url:
 	free(op->url);
 err_free_bname:
-	free(put_req->bname);
+	free(bl_put_req->bname);
 err_free_container:
-	free(put_req->container);
+	free(bl_put_req->container);
 err_free_account:
-	free(put_req->account);
+	free(bl_put_req->account);
 err_out:
 	return ret;
 }
@@ -742,6 +742,173 @@ err_out:
 }
 
 static void
+azure_req_page_put_free(struct azure_req_page_put *pg_put_req)
+{
+	free(pg_put_req->account);
+	free(pg_put_req->container);
+	free(pg_put_req->bname);
+}
+
+static int
+azure_op_page_put_fill_hdr(struct azure_op *op)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	ret = asprintf(&hdr_str, "x-ms-range: bytes=%lu-%lu",
+		       op->req.page_put.off,
+		       (op->req.page_put.off + op->req.page_put.len - 1));
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	if (op->req.page_put.clear_data) {
+		op->http_hdr = curl_slist_append(op->http_hdr,
+						 "x-ms-page-write: clear");
+		if (op->http_hdr == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+	} else {
+		op->http_hdr = curl_slist_append(op->http_hdr,
+						 "x-ms-page-write: update");
+		if (op->http_hdr == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+	}
+
+	/* different to the version in management */
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					 "x-ms-version: 2009-09-19");
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* common headers and signature added later */
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+/*
+ * update or clear @len bytes of page data at @off.
+ * if @buf is null then clear the byte range, otherwise update.
+ */
+int
+azure_op_page_put(const char *account,
+		   const char *container,
+		   const char *bname,
+		   uint8_t *buf,
+		   uint64_t off,
+		   uint64_t len,
+		   struct azure_op *op)
+{
+	int ret;
+	struct azure_req_page_put *pg_put_req;
+
+	/* check for correct alignment */
+	if (((len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != len) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+	if (((off / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != off) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	op->opcode = AOP_BLOB_PUT;
+	pg_put_req = &op->req.page_put;
+
+	pg_put_req->account = strdup(account);
+	if (pg_put_req->account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	if (container == NULL) {
+		pg_put_req->container = NULL;
+	} else {
+		pg_put_req->container = strdup(container);
+		if (pg_put_req->container == NULL) {
+			ret = -ENOMEM;
+			goto err_free_account;
+		}
+	}
+	pg_put_req->bname = strdup(bname);
+	if (pg_put_req->bname == NULL) {
+		ret = -ENOMEM;
+		goto err_free_container;
+	}
+
+	pg_put_req->off = off;
+	pg_put_req->len = len;
+	if (buf == NULL) {
+		pg_put_req->clear_data = true;
+	} else {
+		pg_put_req->clear_data = false;
+		op->req.iov.buf = buf;
+		op->req.iov.buf_len = len;
+	}
+
+	op->method = REQ_METHOD_PUT;
+	ret = asprintf(&op->url,
+		       "https://%s.blob.core.windows.net/%s/%s",
+		       account, container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_free_bname;
+	}
+
+	/* mandatory headers */
+	ret = azure_op_page_put_fill_hdr(op);
+	if (ret < 0)
+		goto err_free_url;
+
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+err_free_url:
+	free(op->url);
+err_free_bname:
+	free(pg_put_req->bname);
+err_free_container:
+	free(pg_put_req->container);
+err_free_account:
+	free(pg_put_req->account);
+err_out:
+	return ret;
+}
+
+static void
 azure_rsp_error_free(struct azure_rsp_error *err)
 {
 	free(err->msg);
@@ -814,6 +981,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_BLOB_GET:
 		azure_req_blob_get_free(&op->req.blob_get);
 		break;
+	case AOP_PAGE_PUT:
+		azure_req_page_put_free(&op->req.page_put);
+		break;
 	};
 }
 
@@ -837,6 +1007,7 @@ azure_rsp_free(struct azure_op *op)
 	case AOP_CONTAINER_CREATE:
 	case AOP_BLOB_PUT:
 	case AOP_BLOB_GET:
+	case AOP_PAGE_PUT:
 		/* nothing to do */
 		break;
 	};
@@ -877,6 +1048,7 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_CONTAINER_CREATE:
 	case AOP_BLOB_PUT:
 	case AOP_BLOB_GET:
+	case AOP_PAGE_PUT:
 		/* nothing to do */
 		ret = 0;
 		break;

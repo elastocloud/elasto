@@ -22,6 +22,7 @@ enum azure_opcode {
 	AOP_CONTAINER_CREATE,
 	AOP_BLOB_PUT,
 	AOP_BLOB_GET,
+	AOP_PAGE_PUT,
 };
 
 struct azure_req_mgmt_get_sa_keys {
@@ -83,6 +84,20 @@ struct azure_rsp_blob_get {
 	char *content_md5;
 };
 
+struct azure_req_page_put {
+	char *account;
+	char *container;
+	char *bname;
+	uint64_t off;
+	uint64_t len;
+	bool clear_data;
+};
+struct azure_rsp_page_put {
+	time_t last_mod;
+	char *content_md5;
+	uint64_t seq_num;
+};
+
 struct azure_rsp_error {
 	char *msg;
 };
@@ -105,6 +120,7 @@ struct azure_op {
 			struct azure_req_ctnr_create ctnr_create;
 			struct azure_req_blob_put blob_put;
 			struct azure_req_blob_get blob_get;
+			struct azure_req_page_put page_put;
 		};
 		struct {
 			uint8_t *buf;
@@ -124,6 +140,7 @@ struct azure_op {
 			 * struct azure_rsp_ctnr_create ctnr_create;
 			 * struct azure_rsp_blob_put blob_put;
 			 * struct azure_rsp_blob_get blob_get;
+			 * struct azure_rsp_page_put page_put;
 			 */
 		};
 		struct {
@@ -162,6 +179,15 @@ int
 azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
+		  struct azure_op *op);
+
+int
+azure_op_page_put(const char *account,
+		  const char *container,
+		  const char *bname,
+		  uint8_t *buf,
+		  uint64_t off,
+		  uint64_t len,
 		  struct azure_op *op);
 
 void
