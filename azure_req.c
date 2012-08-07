@@ -537,7 +537,6 @@ err_out:
 }
 
 /*
- * @container may be NULL, in which case the root container is used.
  * @content_len_bytes only valid when @is_page is set, @buf and @len only valid
  * when @is_page is not set. */
 int
@@ -569,15 +568,13 @@ azure_op_blob_put(const char *account,
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	if (container == NULL) {
-		put_req->container = NULL;
-	} else {
-		put_req->container = strdup(container);
-		if (put_req->container == NULL) {
-			ret = -ENOMEM;
-			goto err_free_account;
-		}
+
+	put_req->container = strdup(container);
+	if (put_req->container == NULL) {
+		ret = -ENOMEM;
+		goto err_free_account;
 	}
+
 	put_req->bname = strdup(bname);
 	if (put_req->bname == NULL) {
 		ret = -ENOMEM;
@@ -596,16 +593,9 @@ azure_op_blob_put(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	if (container == NULL) {
-		ret = asprintf(&op->url,
-			       "https://%s.blob.core.windows.net/%s",
-			       account, bname);
-	} else {
-		/* http://myaccount.blob.core.windows.net/mycontainer/myblob */
-		ret = asprintf(&op->url,
-			       "https://%s.blob.core.windows.net/%s/%s",
-			       account, container, bname);
-	}
+	ret = asprintf(&op->url,
+		       "https://%s.blob.core.windows.net/%s/%s",
+		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_free_bname;
@@ -705,15 +695,13 @@ azure_op_blob_get(const char *account,
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	if (container == NULL) {
-		get_req->container = NULL;
-	} else {
-		get_req->container = strdup(container);
-		if (get_req->container == NULL) {
-			ret = -ENOMEM;
-			goto err_free_account;
-		}
+
+	get_req->container = strdup(container);
+	if (get_req->container == NULL) {
+		ret = -ENOMEM;
+		goto err_free_account;
 	}
+
 	get_req->bname = strdup(bname);
 	if (get_req->bname == NULL) {
 		ret = -ENOMEM;
@@ -724,16 +712,9 @@ azure_op_blob_get(const char *account,
 	/* recv buffer allocated by conn layer */
 
 	op->method = REQ_METHOD_GET;
-	if (container == NULL) {
-		ret = asprintf(&op->url,
-			       "https://%s.blob.core.windows.net/%s",
-			       account, bname);
-	} else {
-		/* http://myaccount.blob.core.windows.net/mycontainer/myblob */
-		ret = asprintf(&op->url,
-			       "https://%s.blob.core.windows.net/%s/%s",
-			       account, container, bname);
-	}
+	ret = asprintf(&op->url,
+		       "https://%s.blob.core.windows.net/%s/%s",
+		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_free_bname;
