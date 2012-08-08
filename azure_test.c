@@ -21,6 +21,7 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <curl/curl.h>
 #include <libxml/tree.h>
@@ -33,22 +34,110 @@
 #include "azure_conn.h"
 #include "azure_ssl.h"
 
-int main(void)
+static void
+test_args_usage(const char *progname)
+{
+
+	fprintf(stderr, "Usage: %s -s publish_settings "
+				  "-a storage_account "
+				  "[-l storage_location] [-g]\n\n"
+		"-s publish_settings:	Azure PublishSettings file\n"
+		"-a storage_account:	Storage account, created if needed\n"
+		"-l storage_location:	Storage geographic location\n"
+		"-g:			Enable geographic redundancy\n",
+		progname);
+}
+
+static int
+test_args_parse(int argc,
+		char * const *argv,
+		char **ps_file,
+		char **blob_acc)
+{
+	int opt;
+	int ret;
+	extern char *optarg;
+	char *pub_settings;
+	char *store_acc = NULL;
+	char *store_loc = NULL;	/* not yet supported */
+	bool store_geo = false;	/* not yet supported */
+
+	while ((opt = getopt(argc, argv, "s:a:l:g")) != -1) {
+		switch (opt) {
+		case 's':
+			pub_settings = strdup(optarg);
+			if (pub_settings == NULL) {
+				ret = -ENOMEM;
+				goto err_out;
+			}
+			break;
+		case 'a':
+			store_acc = strdup(optarg);
+			if (store_acc == NULL) {
+				ret = -ENOMEM;
+				goto err_out;
+			}
+			break;
+		case 'l':
+			store_loc = strdup(optarg);
+			if (store_loc == NULL) {
+				ret = -ENOMEM;
+				goto err_out;
+			}
+			break;
+		case 'g':
+			store_geo = true;
+			break;
+		default: /* '?' */
+			test_args_usage(argv[0]);
+			ret = -EINVAL;
+			goto err_out;
+			break;
+		}
+	}
+	if ((pub_settings == NULL) || (store_acc == NULL)) {
+		test_args_usage(argv[0]);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	*ps_file = pub_settings;
+	*blob_acc = store_acc;
+
+	return 0;
+err_out:
+	free(pub_settings);
+	free(store_acc);
+	free(store_loc);
+
+	return ret;
+}
+
+int
+main(int argc, char * const *argv)
 {
 	struct azure_conn aconn;
 	struct azure_op op;
-	const char *ps_file = "/home/ddiss/azure/Windows Azure MSDN - Visual Studio Ultimate-7-20-2012-credentials.publishsettings";
+	char *ps_file;
 	char *pem_file;
 	char *sub_id;
 	char *sub_name;
-	const char *blob_acc = "istgt";
+	char *blob_acc;
 	const char *blob_container = "target1";
 	const char *blob_name = "test";
 	struct azure_ctnr *ctnr;
 	bool ctnr_exists;
 	int ret;
 
-	azure_conn_subsys_init();
+	ret = test_args_parse(argc, argv, &ps_file, &blob_acc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_conn_subsys_init();
+	if (ret < 0) {
+		goto err_acc_free;
+	}
 	azure_xml_subsys_init();
 
 	memset(&op, 0, sizeof(op));
@@ -215,6 +304,9 @@ err_sub_info_free:
 err_global_clean:
 	azure_xml_subsys_deinit();
 	azure_conn_subsys_deinit();
-
+err_acc_free:
+	free(ps_file);
+	free(blob_acc);
+err_out:
 	return ret;
 }
