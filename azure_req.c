@@ -1000,7 +1000,14 @@ azure_rsp_error_process(struct azure_op *op)
 
 	ret = azure_xml_get_path(xp_ctx, "/Error/Message", NULL,
 				 &op->rsp.err.msg);
-	if (ret < 0) {
+	if (ret == -ENOENT) {
+		/* no error description XML attached */
+		op->rsp.err.msg = strdup("no error description");
+		if (op->rsp.err.msg == NULL) {
+			ret = -ENOMEM;
+			goto err_xml_free;
+		}
+	} else if (ret < 0) {
 		goto err_xml_free;
 	}
 	printf("got error msg: %s\n", op->rsp.err.msg);
