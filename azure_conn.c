@@ -90,6 +90,11 @@ curl_hdr_process(struct azure_op *op,
 		char *eptr;
 		char *loff = hdr_str + sizeof(HDR_PFX_CLEN) - 1;
 
+		if (op->rsp.iov.buf != NULL) {
+			/* recv buf already allocated by request */
+			return 0;
+		}
+
 		clen = strtoll(loff, &eptr, 10);
 		if ((eptr == loff) || (eptr > hdr_str + num_bytes)) {
 			return -1;
