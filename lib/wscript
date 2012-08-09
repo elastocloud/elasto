@@ -1,0 +1,12 @@
+def options(opt):
+	opt.load('compiler_c')
+
+def configure(conf):
+	conf.load('compiler_c')
+	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
+
+def build(bld):
+	bld.stlib(source='azure_xml.c azure_req.c azure_sign.c base64.c azure_conn.c azure_ssl.c',
+		  target='elasto',
+		  lib=['curl','xml2','crypto'],
+		  use=['ccan'])

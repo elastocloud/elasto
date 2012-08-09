@@ -28,7 +28,7 @@
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
 
-#include "ccan/list/list.h"
+#include "../ccan/list/list.h"
 #include "azure_xml.h"
 #include "azure_req.h"
 

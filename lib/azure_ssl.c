@@ -32,7 +32,7 @@
 #include <openssl/err.h>
 #include <openssl/pkcs12.h>
 
-#include "ccan/list/list.h"
+#include "../ccan/list/list.h"
 #include "base64.h"
 #include "azure_xml.h"
 #include "azure_req.h"

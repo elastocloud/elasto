@@ -29,10 +29,10 @@
 #include <libxml/xpath.h>
 
 #include "ccan/list/list.h"
-#include "azure_xml.h"
-#include "azure_req.h"
-#include "azure_conn.h"
-#include "azure_ssl.h"
+#include "lib/azure_xml.h"
+#include "lib/azure_req.h"
+#include "lib/azure_conn.h"
+#include "lib/azure_ssl.h"
 
 static void
 test_args_usage(const char *progname)
