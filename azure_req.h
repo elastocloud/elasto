@@ -42,7 +42,7 @@ struct azure_ctnr {
 struct azure_req_ctnr_list {
 	char *account;
 };
-/* @ctnrs: struct azure_blob_ctnr list */
+/* @ctnrs: struct azure_ctnr list */
 struct azure_rsp_ctnr_list {
 	int num_ctnrs;
 	struct list_head ctnrs;

@@ -293,15 +293,25 @@ azure_op_ctnr_list(const char *account,
 		goto err_acc_free;
 	}
 
+	/* Response does not include a content-length header, alloc buf here */
+	op->rsp.iov.buf = malloc(1024 * 1024);	/* XXX determine best size */
+	if (op->rsp.iov.buf == NULL) {
+		ret = -ENOMEM;
+		goto err_url_free;
+	}
+	op->rsp.iov.buf_len = (1024 * 1024);
+
 	ret = azure_op_ctnr_list_fill_hdr(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_buf_free;
 	}
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
 
+err_buf_free:
+	free(op->rsp.iov.buf);
 err_url_free:
 	free(op->url);
 err_acc_free:
