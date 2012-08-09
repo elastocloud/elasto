@@ -34,29 +34,98 @@
 #include "lib/azure_conn.h"
 #include "lib/azure_ssl.h"
 
+enum cli_cmd {
+	CLI_CMD_NONE = 0,
+	CLI_CMD_PUT = 1,
+};
+
+struct cli_args {
+	char *ps_file;
+	char *blob_acc;
+	char *blob_loc;
+	bool blob_geo;
+	enum cli_cmd cmd;
+	union {
+		struct {
+			char *local_path;
+			char *remote_path;
+		} put;
+	};
+};
+
 static void
 cli_args_usage(const char *progname)
 {
 
 	fprintf(stderr, "Usage: %s -s publish_settings "
 				  "-a storage_account "
-				  "[-l storage_location] [-g]\n\n"
+				  "[-l storage_location] [-g] "
+				  "<cmd> <cmd args>\n\n"
 		"-s publish_settings:	Azure PublishSettings file\n"
 		"-a storage_account:	Storage account, created if needed\n"
 		"-l storage_location:	Storage geographic location\n"
-		"-g:			Enable geographic redundancy\n",
+		"-g:			Enable geographic redundancy\n\n"
+		"Commands:\n"
+		"	put	<local file> <remote path>\n",
 		progname);
+}
+
+static void
+cli_args_free(struct cli_args *cli_args)
+{
+	free(cli_args->ps_file);
+	free(cli_args->blob_acc);
+
+	if (cli_args->cmd == CLI_CMD_PUT) {
+		free(cli_args->put.local_path);
+		free(cli_args->put.remote_path);
+	}
+}
+
+static int
+cli_cmd_parse(const char *progname,
+	      int argc,
+	      char * const *argv,
+	      struct cli_args *cli_args)
+{
+	if (argc == 0) {
+		cli_args_usage(progname);
+		return -EINVAL;
+	}
+
+	if (!strcmp(argv[0], "put")) {
+		if (argc < 3) {
+			cli_args_usage(progname);
+			return -EINVAL;
+		}
+
+		cli_args->put.local_path = strdup(argv[1]);
+		if (cli_args->put.local_path == NULL) {
+			return -ENOMEM;
+		}
+		cli_args->put.remote_path = strdup(argv[2]);
+		if (cli_args->put.local_path == NULL) {
+			free(cli_args->put.local_path);
+			return -ENOMEM;
+		}
+		cli_args->cmd = CLI_CMD_PUT;
+	} else {
+		cli_args_usage(progname);
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 static int
 cli_args_parse(int argc,
-		char * const *argv,
-		char **ps_file,
-		char **blob_acc)
+	       char * const *argv,
+	       struct cli_args *cli_args)
 {
 	int opt;
 	int ret;
 	extern char *optarg;
+	extern int optind;
 	char *pub_settings;
 	char *store_acc = NULL;
 	char *store_loc = NULL;	/* not yet supported */
@@ -101,8 +170,14 @@ cli_args_parse(int argc,
 		goto err_out;
 	}
 
-	*ps_file = pub_settings;
-	*blob_acc = store_acc;
+	ret = cli_cmd_parse(argv[0], argc - optind, &argv[optind],
+			    cli_args);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	cli_args->ps_file = pub_settings;
+	cli_args->blob_acc = store_acc;
 
 	return 0;
 err_out:
@@ -116,29 +191,30 @@ err_out:
 int
 main(int argc, char * const *argv)
 {
+	struct cli_args cli_args;
 	struct azure_conn aconn;
 	struct azure_op op;
-	char *ps_file;
 	char *pem_file;
 	char *sub_id;
 	char *sub_name;
-	char *blob_acc;
 	int ret;
 
-	ret = cli_args_parse(argc, argv, &ps_file, &blob_acc);
+	memset(&cli_args, 0, sizeof(cli_args));
+
+	ret = cli_args_parse(argc, argv, &cli_args);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	ret = azure_conn_subsys_init();
 	if (ret < 0) {
-		goto err_acc_free;
+		goto err_args_free;
 	}
 	azure_xml_subsys_init();
 
 	memset(&op, 0, sizeof(op));
 
-	ret = azure_ssl_pubset_process(ps_file, &pem_file, &sub_id, &sub_name);
+	ret = azure_ssl_pubset_process(cli_args.ps_file, &pem_file, &sub_id, &sub_name);
 	if (ret < 0) {
 		goto err_global_clean;
 	}
@@ -148,7 +224,7 @@ main(int argc, char * const *argv)
 		goto err_sub_info_free;
 	}
 
-	ret = azure_op_mgmt_get_sa_keys(sub_id, blob_acc, &op);
+	ret = azure_op_mgmt_get_sa_keys(sub_id, cli_args.blob_acc, &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
@@ -174,10 +250,15 @@ main(int argc, char * const *argv)
 	       op.rsp.mgmt_get_sa_keys.primary,
 	       op.rsp.mgmt_get_sa_keys.secondary);
 
-	ret = azure_conn_sign_setkey(&aconn, blob_acc,
+	ret = azure_conn_sign_setkey(&aconn, cli_args.blob_acc,
 				     op.rsp.mgmt_get_sa_keys.primary);
 	if (ret < 0) {
 		goto err_op_free;
+	}
+
+	if (cli_args.cmd == CLI_CMD_PUT) {
+		printf("putting %s to %s\n",
+		       cli_args.put.local_path, cli_args.put.remote_path);
 	}
 
 	ret = 0;
@@ -192,9 +273,8 @@ err_sub_info_free:
 err_global_clean:
 	azure_xml_subsys_deinit();
 	azure_conn_subsys_deinit();
-err_acc_free:
-	free(ps_file);
-	free(blob_acc);
+err_args_free:
+	cli_args_free(&cli_args);
 err_out:
 	return ret;
 }
