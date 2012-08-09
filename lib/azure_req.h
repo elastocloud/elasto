@@ -104,6 +104,28 @@ struct azure_rsp_error {
 	char *msg;
 };
 
+enum azure_op_data_type {
+	AOP_DATA_NONE = 0,
+	AOP_DATA_IOV,
+	AOP_DATA_FILE,
+};
+struct azure_op_data {
+	enum azure_op_data_type type;
+	uint8_t *buf;
+	uint64_t len;
+	union {
+		struct {
+			/* @buf is allocated io buffer of size @len */
+			uint64_t off;
+		} iov;
+		struct {
+			/* @buf is io file path, file is @len bytes in size */
+			uint64_t off;
+			int fd;
+		} file;
+	};
+};
+
 #define REQ_METHOD_GET		"GET"
 #define REQ_METHOD_PUT		"PUT"
 #define REQ_METHOD_DELETE	"DELETE"
@@ -124,11 +146,7 @@ struct azure_op {
 			struct azure_req_blob_get blob_get;
 			struct azure_req_page_put page_put;
 		};
-		struct {
-			uint8_t *buf;
-			uint64_t buf_len;
-			uint64_t off;
-		} iov;
+		struct azure_op_data data;
 	} req;
 
 	struct {
@@ -146,11 +164,7 @@ struct azure_op {
 			 * struct azure_rsp_page_put page_put;
 			 */
 		};
-		struct {
-			uint8_t *buf;
-			uint64_t buf_len;
-			uint64_t off;
-		} iov;	/* alloced by conn hdr callback */
+		struct azure_op_data data;
 	} rsp;
 };
 

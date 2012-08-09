@@ -296,7 +296,7 @@ main(int argc, char * const *argv)
 	}
 
 	printf("data consistency test: %s\n",
-	       strcmp((char *)op.rsp.iov.buf, "hello world") ? "failed" : "passed");
+	       strcmp((char *)op.rsp.data.buf, "hello world") ? "failed" : "passed");
 
 	ret = 0;
 err_op_free:

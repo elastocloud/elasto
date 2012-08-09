@@ -90,7 +90,7 @@ curl_hdr_process(struct azure_op *op,
 		char *eptr;
 		char *loff = hdr_str + sizeof(HDR_PFX_CLEN) - 1;
 
-		if (op->rsp.iov.buf != NULL) {
+		if (op->rsp.data.type != AOP_DATA_NONE) {
 			/* recv buf already allocated by request */
 			return 0;
 		}
@@ -103,12 +103,13 @@ curl_hdr_process(struct azure_op *op,
 			return 0;
 		}
 		/* TODO check clen isn't too huge */
-		op->rsp.iov.buf = malloc(clen);
-		if (op->rsp.iov.buf == NULL) {
+		op->rsp.data.buf = malloc(clen);
+		if (op->rsp.data.buf == NULL) {
 			return -1;
 		}
-		op->rsp.iov.buf_len = clen;
-		op->rsp.iov.off = 0;
+		op->rsp.data.len = clen;
+		op->rsp.data.iov.off = 0;
+		op->rsp.data.type = AOP_DATA_IOV;
 	}
 
 	return 0;
@@ -141,15 +142,19 @@ curl_read_cb(char *ptr,
 	struct azure_op *op = (struct azure_op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
 
-	if (op->req.iov.off + num_bytes > op->req.iov.buf_len) {
+	if (op->req.data.type != AOP_DATA_IOV) {
+		return -1;	/* not yet supported */
+	}
+	if (op->req.data.iov.off + num_bytes > op->req.data.len) {
 		printf("curl_read_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu, capping\n",
-		       op->req.iov.buf_len, op->req.iov.off, num_bytes);
-		num_bytes = op->req.iov.buf_len - op->req.iov.off;
+		       op->req.data.len, op->req.data.iov.off, num_bytes);
+		num_bytes = op->req.data.len - op->req.data.iov.off;
 	}
 
-	memcpy(ptr, (void *)(op->req.iov.buf + op->req.iov.off), num_bytes);
-	op->req.iov.off += num_bytes;
+	memcpy(ptr, (void *)(op->req.data.buf + op->req.data.iov.off),
+	       num_bytes);
+	op->req.data.iov.off += num_bytes;
 	return num_bytes;
 }
 
@@ -162,15 +167,19 @@ curl_write_cb(char *ptr,
 	struct azure_op *op = (struct azure_op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
 
-	if (op->rsp.iov.off + num_bytes > op->rsp.iov.buf_len) {
+	if (op->rsp.data.type != AOP_DATA_IOV) {
+		return -1;	/* not yet supported */
+	}
+	if (op->rsp.data.iov.off + num_bytes > op->rsp.data.len) {
 		printf("fatal: curl_write_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu\n",
-		       op->rsp.iov.buf_len, op->rsp.iov.off, num_bytes);
+		       op->rsp.data.len, op->rsp.data.iov.off, num_bytes);
 		return -1;
 	}
 
-	memcpy((void *)(op->rsp.iov.buf + op->rsp.iov.off), ptr, num_bytes);
-	op->rsp.iov.off += num_bytes;
+	memcpy((void *)(op->rsp.data.buf + op->rsp.data.iov.off), ptr,
+	       num_bytes);
+	op->rsp.data.iov.off += num_bytes;
 	return num_bytes;
 }
 
@@ -206,12 +215,12 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 	} else if (strcmp(op->method, REQ_METHOD_PUT) == 0) {
 		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 1);
 		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE,
-				 op->req.iov.buf_len);
+				 op->req.data.len);
 		curl_easy_setopt(aconn->curl, CURLOPT_READDATA, op);
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_read_cb);
 		/* must be set for PUT, TODO ensure not already set */
-		ret = asprintf(&hdr_str, "Content-Length: %lu", op->req.iov.buf_len);
+		ret = asprintf(&hdr_str, "Content-Length: %lu", op->req.data.len);
 		if (ret < 0) {
 			return -ENOMEM;
 		}

@@ -174,14 +174,16 @@ azure_rsp_mgmt_get_sa_keys_process(struct azure_op *op)
 	xmlDoc *xp_doc;
 	xmlXPathContext *xp_ctx;
 
+	assert(op->opcode == AOP_MGMT_GET_SA_KEYS);
+	assert(op->rsp.data.type == AOP_DATA_IOV);
+
 	/* parse response */
-	ret = azure_xml_slurp(false, op->rsp.iov.buf, op->rsp.iov.off,
+	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.iov.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	assert(op->opcode == AOP_MGMT_GET_SA_KEYS);
 	get_sa_keys_rsp = &op->rsp.mgmt_get_sa_keys;
 
 	ret = azure_xml_get_path(xp_ctx,
@@ -294,12 +296,13 @@ azure_op_ctnr_list(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	op->rsp.iov.buf = malloc(1024 * 1024);	/* XXX determine best size */
-	if (op->rsp.iov.buf == NULL) {
+	op->rsp.data.buf = malloc(1024 * 1024);	/* XXX determine best size */
+	if (op->rsp.data.buf == NULL) {
 		ret = -ENOMEM;
 		goto err_url_free;
 	}
-	op->rsp.iov.buf_len = (1024 * 1024);
+	op->rsp.data.len = (1024 * 1024);
+	op->rsp.data.type = AOP_DATA_IOV;
 
 	ret = azure_op_ctnr_list_fill_hdr(op);
 	if (ret < 0) {
@@ -311,7 +314,7 @@ azure_op_ctnr_list(const char *account,
 	return 0;
 
 err_buf_free:
-	free(op->rsp.iov.buf);
+	free(op->rsp.data.buf);
 err_url_free:
 	free(op->url);
 err_acc_free:
@@ -329,14 +332,16 @@ azure_rsp_ctnr_list_process(struct azure_op *op)
 	xmlDoc *xp_doc;
 	xmlXPathContext *xp_ctx;
 
+	assert(op->opcode == AOP_CONTAINER_LIST);
+	assert(op->rsp.data.type == AOP_DATA_IOV);
+
 	/* parse response */
-	ret = azure_xml_slurp(false, op->rsp.iov.buf, op->rsp.iov.off,
+	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.iov.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		return ret;
 	}
 
-	assert(op->opcode == AOP_CONTAINER_LIST);
 	ctnr_list_rsp = &op->rsp.ctnr_list;
 
 	list_head_init(&ctnr_list_rsp->ctnrs);
@@ -595,8 +600,9 @@ azure_op_blob_put(const char *account,
 		assert(buf == NULL);	/* block only */
 	} else {
 		bl_put_req->type = BLOB_TYPE_BLOCK;
-		op->req.iov.buf = buf;
-		op->req.iov.buf_len = len;
+		op->req.data.type = AOP_DATA_IOV;
+		op->req.data.buf = buf;
+		op->req.data.len = len;
 	}
 
 	op->method = REQ_METHOD_PUT;
@@ -926,8 +932,9 @@ azure_op_page_put(const char *account,
 		pg_put_req->clear_data = true;
 	} else {
 		pg_put_req->clear_data = false;
-		op->req.iov.buf = buf;
-		op->req.iov.buf_len = len;
+		op->req.data.type = AOP_DATA_IOV;
+		op->req.data.buf = buf;
+		op->req.data.len = len;
 	}
 
 	op->method = REQ_METHOD_PUT;
@@ -992,7 +999,8 @@ azure_rsp_error_process(struct azure_op *op)
 		return 0;
 	}
 
-	ret = azure_xml_slurp(false, op->rsp.iov.buf, op->rsp.iov.off,
+	assert(op->rsp.data.type == AOP_DATA_IOV);
+	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.iov.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		goto err_out;
@@ -1023,7 +1031,7 @@ err_out:
 static void
 azure_req_free(struct azure_op *op)
 {
-	free(op->req.iov.buf);
+	free(op->req.data.buf);
 	switch (op->opcode) {
 	case AOP_MGMT_GET_SA_KEYS:
 		azure_req_mgmt_get_sa_keys_free(&op->req.mgmt_get_sa_keys);
@@ -1052,7 +1060,7 @@ azure_req_free(struct azure_op *op)
 static void
 azure_rsp_free(struct azure_op *op)
 {
-	free(op->rsp.iov.buf);
+	free(op->rsp.data.buf);
 	if (op->rsp.is_error) {
 		/* error response only, no aop data */
 		azure_rsp_error_free(&op->rsp.err);
