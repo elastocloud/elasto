@@ -48,16 +48,19 @@ struct cli_args {
 	union {
 		struct {
 			char *local_path;
-			char *remote_path;
+			char *ctnr_name;
+			char *blob_name;
 		} put;
 	};
 };
 
 static void
-cli_args_usage(const char *progname)
+cli_args_usage(const char *progname, const char *msg)
 {
-
-	fprintf(stderr, "Usage: %s -s publish_settings "
+	if (msg != NULL) {
+		fprintf(stderr, "%s\n\n", msg);
+	}
+	fprintf(stderr, "usage: %s -s publish_settings "
 				  "-a storage_account "
 				  "[-l storage_location] [-g] "
 				  "<cmd> <cmd args>\n\n"
@@ -66,7 +69,7 @@ cli_args_usage(const char *progname)
 		"-l storage_location:	Storage geographic location\n"
 		"-g:			Enable geographic redundancy\n\n"
 		"Commands:\n"
-		"	put	<local file> <remote path>\n",
+		"	put	<local path> <container>/<blob>\n",
 		progname);
 }
 
@@ -78,7 +81,8 @@ cli_args_free(struct cli_args *cli_args)
 
 	if (cli_args->cmd == CLI_CMD_PUT) {
 		free(cli_args->put.local_path);
-		free(cli_args->put.remote_path);
+		free(cli_args->put.ctnr_name);
+		free(cli_args->put.blob_name);
 	}
 }
 
@@ -88,33 +92,68 @@ cli_cmd_parse(const char *progname,
 	      char * const *argv,
 	      struct cli_args *cli_args)
 {
+	int ret;
+
 	if (argc == 0) {
-		cli_args_usage(progname);
-		return -EINVAL;
+		cli_args_usage(progname, NULL);
+		ret = -EINVAL;
+		goto err_out;
 	}
 
 	if (!strcmp(argv[0], "put")) {
+		char *s;
 		if (argc < 3) {
-			cli_args_usage(progname);
-			return -EINVAL;
+			cli_args_usage(progname, NULL);
+			ret = -EINVAL;
+			goto err_out;
 		}
 
 		cli_args->put.local_path = strdup(argv[1]);
 		if (cli_args->put.local_path == NULL) {
-			return -ENOMEM;
+			ret = -ENOMEM;
+			goto err_out;
 		}
-		cli_args->put.remote_path = strdup(argv[2]);
-		if (cli_args->put.local_path == NULL) {
-			free(cli_args->put.local_path);
-			return -ENOMEM;
+
+		cli_args->put.ctnr_name = strdup(argv[2]);
+		if (cli_args->put.ctnr_name == NULL) {
+			ret = -ENOMEM;
+			goto err_local_free;
 		}
+
+		s = strchr(cli_args->put.ctnr_name, '/');
+		if ((s == NULL) || (s == cli_args->put.ctnr_name)) {
+			cli_args_usage(progname,
+			    "Invalid remote path, must be <container>/<blob>");
+			ret = -EINVAL;
+			goto err_ctnr_free;
+		}
+		*(s++) = '\0';	/* null term for cntnr */
+		if (*s == '\0') {
+			/* zero len blob name */
+			cli_args_usage(progname, NULL);
+			ret = -EINVAL;
+			goto err_ctnr_free;
+		}
+		cli_args->put.blob_name = strdup(s);
+		if (cli_args->put.blob_name == NULL) {
+			ret = -ENOMEM;
+			goto err_ctnr_free;
+		}
+
 		cli_args->cmd = CLI_CMD_PUT;
 	} else {
-		cli_args_usage(progname);
+		cli_args_usage(progname, NULL);
 		return -EINVAL;
 	}
 
 	return 0;
+
+err_ctnr_free:
+	free(cli_args->put.ctnr_name);
+err_local_free:
+	free(cli_args->put.local_path);
+err_out:
+	return ret;
 }
 
 static int
@@ -158,14 +197,14 @@ cli_args_parse(int argc,
 			store_geo = true;
 			break;
 		default: /* '?' */
-			cli_args_usage(argv[0]);
+			cli_args_usage(argv[0], NULL);
 			ret = -EINVAL;
 			goto err_out;
 			break;
 		}
 	}
 	if ((pub_settings == NULL) || (store_acc == NULL)) {
-		cli_args_usage(argv[0]);
+		cli_args_usage(argv[0], NULL);
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -257,8 +296,10 @@ main(int argc, char * const *argv)
 	}
 
 	if (cli_args.cmd == CLI_CMD_PUT) {
-		printf("putting %s to %s\n",
-		       cli_args.put.local_path, cli_args.put.remote_path);
+		printf("putting %s to container %s blob %s\n",
+		       cli_args.put.local_path,
+		       cli_args.put.ctnr_name,
+		       cli_args.put.blob_name);
 	}
 
 	ret = 0;
