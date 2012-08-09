@@ -167,6 +167,12 @@ main(int argc, char * const *argv)
 		goto err_op_free;
 	}
 
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
 	printf("primary key: %s\n"
 	       "secondary key: %s\n",
 	       op.rsp.mgmt_get_sa_keys.primary,
@@ -195,7 +201,7 @@ main(int argc, char * const *argv)
 		goto err_op_free;
 	}
 
-	if (op.rsp.err_code != 0) {
+	if (op.rsp.is_error) {
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
 		goto err_op_free;
@@ -232,7 +238,7 @@ main(int argc, char * const *argv)
 			goto err_op_free;
 		}
 
-		if (op.rsp.err_code != 0) {
+		if (op.rsp.is_error) {
 			ret = -EIO;
 			printf("failed response: %d\n", op.rsp.err_code);
 			goto err_op_free;
@@ -259,7 +265,7 @@ main(int argc, char * const *argv)
 		goto err_op_free;
 	}
 
-	if (op.rsp.err_code != 0) {
+	if (op.rsp.is_error) {
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
 		goto err_op_free;
@@ -283,7 +289,7 @@ main(int argc, char * const *argv)
 		goto err_op_free;
 	}
 
-	if (op.rsp.err_code != 0) {
+	if (op.rsp.is_error) {
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
 		goto err_op_free;
