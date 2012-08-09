@@ -1053,7 +1053,7 @@ static void
 azure_rsp_free(struct azure_op *op)
 {
 	free(op->rsp.iov.buf);
-	if (azure_rsp_is_error(op->opcode, op->rsp.err_code)) {
+	if (op->rsp.is_error) {
 		/* error response only, no aop data */
 		azure_rsp_error_free(&op->rsp.err);
 		return;
@@ -1098,7 +1098,9 @@ int
 azure_rsp_process(struct azure_op *op)
 {
 	int ret;
-	if (azure_rsp_is_error(op->opcode, op->rsp.err_code)) {
+
+	op->rsp.is_error = azure_rsp_is_error(op->opcode, op->rsp.err_code);
+	if (op->rsp.is_error) {
 		/* error response only */
 		return azure_rsp_error_process(op);
 	}

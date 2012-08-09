@@ -132,6 +132,7 @@ struct azure_op {
 	} req;
 
 	struct {
+		bool is_error;
 		int32_t err_code;
 		union {
 			struct azure_rsp_error err;
