@@ -300,10 +300,68 @@ main(int argc, char * const *argv)
 
 	if (cli_args.cmd == CLI_CMD_PUT) {
 		struct stat st;
+		struct azure_ctnr *ctnr;
+		bool ctnr_exists;
 		ret = stat(cli_args.put.local_path, &st);
 		if (ret < 0) {
 			printf("failed to stat %s\n", cli_args.put.local_path);
 			goto err_conn_free;
+		}
+		ret = azure_op_ctnr_list(cli_args.blob_acc, &op);
+		if (ret < 0) {
+			goto err_conn_free;
+		}
+
+		ret = azure_conn_send_op(&aconn, &op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+
+		ret = azure_rsp_process(&op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+
+		if (op.rsp.is_error) {
+			ret = -EIO;
+			printf("failed response: %d\n", op.rsp.err_code);
+			goto err_op_free;
+		}
+
+		ctnr_exists = false;
+		list_for_each(&op.rsp.ctnr_list.ctnrs, ctnr, list) {
+			if (strcmp(ctnr->name, cli_args.put.ctnr_name) == 0) {
+				ctnr_exists = true;
+				break;
+			}
+		}
+
+		azure_op_free(&op);
+
+		if (ctnr_exists == false) {
+			ret = azure_op_ctnr_create(cli_args.blob_acc,
+						   cli_args.put.ctnr_name, &op);
+			if (ret < 0) {
+				goto err_conn_free;
+			}
+
+			ret = azure_conn_send_op(&aconn, &op);
+			if (ret < 0) {
+				goto err_op_free;
+			}
+
+			ret = azure_rsp_process(&op);
+			if (ret < 0) {
+				goto err_op_free;
+			}
+
+			if (op.rsp.is_error) {
+				ret = -EIO;
+				printf("failed response: %d\n", op.rsp.err_code);
+				goto err_op_free;
+			}
+
+			azure_op_free(&op);
 		}
 		printf("putting %zd from %s to container %s blob %s\n",
 		       st.st_size,
