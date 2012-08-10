@@ -22,6 +22,10 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <curl/curl.h>
 #include <libxml/tree.h>
@@ -552,14 +556,16 @@ err_out:
 }
 
 /*
- * if @is_page is set, then @len corresponds to the page blob length, @buf must
- * be NULL. For a block blob, @len bytes from @buf are put.
+ * if @data_type is AOP_DATA_NONE, then @len corresponds to the page blob
+ * length, @buf must be NULL.
+ * For a block blob, @len bytes from @buf are put if @data_type is AOP_DATA_IOV,
+ * or @len bytes from the file at path @buf if @data_type is AOP_DATA_FILE.
  */
 int
 azure_op_blob_put(const char *account,
 		   const char *container,
 		   const char *bname,
-		   bool is_page,
+		   enum azure_op_data_type data_type,
 		   uint8_t *buf,
 		   uint64_t len,
 		   struct azure_op *op)
@@ -568,7 +574,8 @@ azure_op_blob_put(const char *account,
 	struct azure_req_blob_put *bl_put_req;
 
 	/* TODO input validation */
-	if (is_page && (((len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != len)) {
+	if ((data_type == AOP_DATA_NONE)
+	 && (((len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != len)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -594,13 +601,23 @@ azure_op_blob_put(const char *account,
 		goto err_free_container;
 	}
 
-	if (is_page) {
+	if (data_type == AOP_DATA_NONE) {
 		bl_put_req->type = BLOB_TYPE_PAGE;
 		bl_put_req->pg_len = len;
 		assert(buf == NULL);	/* block only */
-	} else {
+	} else if (data_type == AOP_DATA_IOV) {
 		bl_put_req->type = BLOB_TYPE_BLOCK;
 		op->req.data.type = AOP_DATA_IOV;
+		op->req.data.buf = buf;
+		op->req.data.len = len;
+	} else if (data_type == AOP_DATA_FILE) {
+		bl_put_req->type = BLOB_TYPE_BLOCK;
+		op->req.data.type = AOP_DATA_FILE;
+		op->req.data.file.fd = open((char *)buf, 0);
+		if (op->req.data.file.fd < 0) {
+			ret = -errno;
+			goto err_free_bname;
+		}
 		op->req.data.buf = buf;
 		op->req.data.len = len;
 	}
@@ -611,7 +628,7 @@ azure_op_blob_put(const char *account,
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_free_bname;
+		goto err_data_close;
 	}
 
 	/* mandatory headers */
@@ -625,6 +642,9 @@ azure_op_blob_put(const char *account,
 	return 0;
 err_free_url:
 	free(op->url);
+err_data_close:
+	if (op->req.data.type == AOP_DATA_FILE)
+		close(op->req.data.file.fd);
 err_free_bname:
 	free(bl_put_req->bname);
 err_free_container:
@@ -1032,6 +1052,9 @@ static void
 azure_req_free(struct azure_op *op)
 {
 	free(op->req.data.buf);
+	if (op->req.data.type == AOP_DATA_FILE)
+		close(op->req.data.file.fd);
+
 	switch (op->opcode) {
 	case AOP_MGMT_GET_SA_KEYS:
 		azure_req_mgmt_get_sa_keys_free(&op->req.mgmt_get_sa_keys);
@@ -1061,6 +1084,9 @@ static void
 azure_rsp_free(struct azure_op *op)
 {
 	free(op->rsp.data.buf);
+	if (op->rsp.data.type == AOP_DATA_FILE)
+		close(op->rsp.data.file.fd);
+
 	if (op->rsp.is_error) {
 		/* error response only, no aop data */
 		azure_rsp_error_free(&op->rsp.err);

@@ -22,6 +22,7 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <curl/curl.h>
 
@@ -141,20 +142,33 @@ curl_read_cb(char *ptr,
 {
 	struct azure_op *op = (struct azure_op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
+	uint64_t *off;
 
-	if (op->req.data.type != AOP_DATA_IOV) {
+	if (op->req.data.type == AOP_DATA_IOV) {
+		off = &op->req.data.iov.off;
+	} else if (op->req.data.type == AOP_DATA_FILE) {
+		off = &op->req.data.file.off;
+	} else {
 		return -1;	/* not yet supported */
 	}
-	if (op->req.data.iov.off + num_bytes > op->req.data.len) {
+	if (*off + num_bytes > op->req.data.len) {
 		printf("curl_read_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu, capping\n",
-		       op->req.data.len, op->req.data.iov.off, num_bytes);
-		num_bytes = op->req.data.len - op->req.data.iov.off;
+		       op->req.data.len, *off, num_bytes);
+		num_bytes = op->req.data.len - *off;
 	}
 
-	memcpy(ptr, (void *)(op->req.data.buf + op->req.data.iov.off),
-	       num_bytes);
-	op->req.data.iov.off += num_bytes;
+	if (op->req.data.type == AOP_DATA_IOV) {
+		memcpy(ptr, (void *)(op->req.data.buf + *off), num_bytes);
+	} else if (op->req.data.type == AOP_DATA_FILE) {
+		ssize_t ret;
+		ret = pread(op->req.data.file.fd, ptr, num_bytes, *off);
+		if (ret != num_bytes) {
+			printf("failed to read from file\n");
+			return -1;
+		}
+	}
+	*off += num_bytes;
 	return num_bytes;
 }
 

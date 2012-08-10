@@ -186,7 +186,7 @@ int
 azure_op_blob_put(const char *account,
 		  const char *container,
 		  const char *bname,
-		  bool is_page,
+		  enum azure_op_data_type data_type,
 		  uint8_t *buf,
 		  uint64_t len,
 		  struct azure_op *op);

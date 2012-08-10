@@ -22,6 +22,7 @@
 #include <assert.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include <curl/curl.h>
 #include <libxml/tree.h>
@@ -295,11 +296,42 @@ main(int argc, char * const *argv)
 		goto err_op_free;
 	}
 
+	azure_op_free(&op);
+
 	if (cli_args.cmd == CLI_CMD_PUT) {
-		printf("putting %s to container %s blob %s\n",
+		struct stat st;
+		ret = stat(cli_args.put.local_path, &st);
+		if (ret < 0) {
+			printf("failed to stat %s\n", cli_args.put.local_path);
+			goto err_conn_free;
+		}
+		printf("putting %zd from %s to container %s blob %s\n",
+		       st.st_size,
 		       cli_args.put.local_path,
 		       cli_args.put.ctnr_name,
 		       cli_args.put.blob_name);
+
+		ret = azure_op_blob_put(cli_args.blob_acc,
+					cli_args.put.ctnr_name,
+					cli_args.put.blob_name,
+					AOP_DATA_FILE,
+					(uint8_t *)cli_args.put.local_path,
+					st.st_size, &op);
+		if (ret < 0) {
+			goto err_conn_free;
+		}
+
+		ret = azure_conn_send_op(&aconn, &op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+
+		ret = azure_rsp_process(&op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+		/* data buffer contains cli_args.put.local_path */
+		op.req.data.buf = NULL;
 	}
 
 	ret = 0;
