@@ -328,6 +328,44 @@ err_out:
 }
 
 static int
+azure_rsp_ctnr_iter_process(xmlXPathContext *xp_ctx,
+			    int iter,
+			    struct azure_ctnr **ctnr)
+{
+	int ret;
+	char *query;
+	char *name;
+	struct azure_ctnr *ictnr;
+
+	ret = asprintf(&query, "//Containers/Container[%d]/Name",
+		       iter);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &name);
+	free(query);
+	if (ret < 0) {
+		goto err_out;	/* -ENOENT = all processed */
+	}
+
+	ictnr = malloc(sizeof(*ictnr));
+	if (ictnr == NULL) {
+		ret = -ENOMEM;
+		goto err_name_free;
+	}
+	ictnr->name = name;
+	*ctnr = ictnr;
+
+	return 0;
+
+err_name_free:
+	free(name);
+err_out:
+	return ret;
+}
+
+static int
 azure_rsp_ctnr_list_process(struct azure_op *op)
 {
 	int ret;
@@ -335,6 +373,8 @@ azure_rsp_ctnr_list_process(struct azure_op *op)
 	struct azure_rsp_ctnr_list *ctnr_list_rsp;
 	xmlDoc *xp_doc;
 	xmlXPathContext *xp_ctx;
+	struct azure_ctnr *ctnr;
+	struct azure_ctnr *ctnr_n;
 
 	assert(op->opcode == AOP_CONTAINER_LIST);
 	assert(op->rsp.data.type == AOP_DATA_IOV);
@@ -343,48 +383,39 @@ azure_rsp_ctnr_list_process(struct azure_op *op)
 	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.iov.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
-		return ret;
+		goto err_out;
 	}
 
 	ctnr_list_rsp = &op->rsp.ctnr_list;
 
 	list_head_init(&ctnr_list_rsp->ctnrs);
-	/* returns up to 5000 records (maxresults default) */
+	/*
+	 * Returns up to 5000 records (maxresults default),
+	 * start at 1 for W3C xpath standard
+	 */
 	for (i = 1; i <= 5000; i++) {
-		char *query;
-		char *name;
-		struct azure_ctnr *ctnr;
-		ret = asprintf(&query, "//Containers/Container[%d]/Name",
-			       i);	/* start at 1 for W3C standard? */
-		if (ret < 0) {
-			ret = -ENOMEM;
-			goto err_out;
+		ret = azure_rsp_ctnr_iter_process(xp_ctx, i, &ctnr);
+		if (ret == -ENOENT) {
+			break;
+		} else if (ret < 0) {
+			goto err_ctnrs_free;
 		}
-		ret = azure_xml_get_path(xp_ctx, query, NULL, &name);
-		free(query);
-		if (ret == -ENOENT)
-			break;	/* all processed */
-		else if (ret < 0) {
-			goto err_out;
-		}
-
-		ctnr = malloc(sizeof(*ctnr));
-		if (ctnr == NULL) {
-			free(name);
-			ret = -ENOMEM;
-			goto err_out;
-		}
-		ctnr->name = name;
 		list_add_tail(&ctnr_list_rsp->ctnrs, &ctnr->list);
 		ctnr_list_rsp->num_ctnrs++;
 	}
-	ret = 0;
 
-err_out:
-	/* XXX should unwind out.ctnrs on error */
 	xmlXPathFreeContext(xp_ctx);
 	xmlFreeDoc(xp_doc);
+	return 0;
 
+err_ctnrs_free:
+	list_for_each_safe(&ctnr_list_rsp->ctnrs, ctnr, ctnr_n, list) {
+		free(ctnr->name);
+		free(ctnr);
+	}
+	xmlXPathFreeContext(xp_ctx);
+	xmlFreeDoc(xp_doc);
+err_out:
 	return ret;
 }
 
