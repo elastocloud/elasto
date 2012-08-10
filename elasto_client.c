@@ -34,29 +34,12 @@
 #include "lib/azure_req.h"
 #include "lib/azure_conn.h"
 #include "lib/azure_ssl.h"
+#include "cli_common.h"
+#include "cli_put.h"
 
-enum cli_cmd {
-	CLI_CMD_NONE = 0,
-	CLI_CMD_PUT = 1,
-};
-
-struct cli_args {
-	char *ps_file;
-	char *blob_acc;
-	char *blob_loc;
-	bool blob_geo;
-	enum cli_cmd cmd;
-	union {
-		struct {
-			char *local_path;
-			char *ctnr_name;
-			char *blob_name;
-		} put;
-	};
-};
-
-static void
-cli_args_usage(const char *progname, const char *msg)
+void
+cli_args_usage(const char *progname,
+	       const char *msg)
 {
 	if (msg != NULL) {
 		fprintf(stderr, "%s\n\n", msg);
@@ -81,9 +64,7 @@ cli_args_free(struct cli_args *cli_args)
 	free(cli_args->blob_acc);
 
 	if (cli_args->cmd == CLI_CMD_PUT) {
-		free(cli_args->put.local_path);
-		free(cli_args->put.ctnr_name);
-		free(cli_args->put.blob_name);
+		cli_put_args_free(cli_args);
 	}
 }
 
@@ -102,57 +83,17 @@ cli_cmd_parse(const char *progname,
 	}
 
 	if (!strcmp(argv[0], "put")) {
-		char *s;
-		if (argc < 3) {
-			cli_args_usage(progname, NULL);
-			ret = -EINVAL;
+		ret = cli_put_args_parse(progname, argc, argv, cli_args);
+		if (ret < 0) {
 			goto err_out;
 		}
-
-		cli_args->put.local_path = strdup(argv[1]);
-		if (cli_args->put.local_path == NULL) {
-			ret = -ENOMEM;
-			goto err_out;
-		}
-
-		cli_args->put.ctnr_name = strdup(argv[2]);
-		if (cli_args->put.ctnr_name == NULL) {
-			ret = -ENOMEM;
-			goto err_local_free;
-		}
-
-		s = strchr(cli_args->put.ctnr_name, '/');
-		if ((s == NULL) || (s == cli_args->put.ctnr_name)) {
-			cli_args_usage(progname,
-			    "Invalid remote path, must be <container>/<blob>");
-			ret = -EINVAL;
-			goto err_ctnr_free;
-		}
-		*(s++) = '\0';	/* null term for cntnr */
-		if (*s == '\0') {
-			/* zero len blob name */
-			cli_args_usage(progname, NULL);
-			ret = -EINVAL;
-			goto err_ctnr_free;
-		}
-		cli_args->put.blob_name = strdup(s);
-		if (cli_args->put.blob_name == NULL) {
-			ret = -ENOMEM;
-			goto err_ctnr_free;
-		}
-
-		cli_args->cmd = CLI_CMD_PUT;
 	} else {
 		cli_args_usage(progname, NULL);
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_out;
 	}
 
-	return 0;
-
-err_ctnr_free:
-	free(cli_args->put.ctnr_name);
-err_local_free:
-	free(cli_args->put.local_path);
+	ret = 0;
 err_out:
 	return ret;
 }
@@ -296,100 +237,13 @@ main(int argc, char * const *argv)
 		goto err_op_free;
 	}
 
-	azure_op_free(&op);
+	/* op freed later */
 
 	if (cli_args.cmd == CLI_CMD_PUT) {
-		struct stat st;
-		struct azure_ctnr *ctnr;
-		bool ctnr_exists;
-		ret = stat(cli_args.put.local_path, &st);
-		if (ret < 0) {
-			printf("failed to stat %s\n", cli_args.put.local_path);
-			goto err_conn_free;
-		}
-		ret = azure_op_ctnr_list(cli_args.blob_acc, &op);
-		if (ret < 0) {
-			goto err_conn_free;
-		}
-
-		ret = azure_conn_send_op(&aconn, &op);
+		ret = cli_put_handle(&aconn, &cli_args);
 		if (ret < 0) {
 			goto err_op_free;
 		}
-
-		ret = azure_rsp_process(&op);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-
-		if (op.rsp.is_error) {
-			ret = -EIO;
-			printf("failed response: %d\n", op.rsp.err_code);
-			goto err_op_free;
-		}
-
-		ctnr_exists = false;
-		list_for_each(&op.rsp.ctnr_list.ctnrs, ctnr, list) {
-			if (strcmp(ctnr->name, cli_args.put.ctnr_name) == 0) {
-				ctnr_exists = true;
-				break;
-			}
-		}
-
-		azure_op_free(&op);
-
-		if (ctnr_exists == false) {
-			ret = azure_op_ctnr_create(cli_args.blob_acc,
-						   cli_args.put.ctnr_name, &op);
-			if (ret < 0) {
-				goto err_conn_free;
-			}
-
-			ret = azure_conn_send_op(&aconn, &op);
-			if (ret < 0) {
-				goto err_op_free;
-			}
-
-			ret = azure_rsp_process(&op);
-			if (ret < 0) {
-				goto err_op_free;
-			}
-
-			if (op.rsp.is_error) {
-				ret = -EIO;
-				printf("failed response: %d\n", op.rsp.err_code);
-				goto err_op_free;
-			}
-
-			azure_op_free(&op);
-		}
-		printf("putting %zd from %s to container %s blob %s\n",
-		       st.st_size,
-		       cli_args.put.local_path,
-		       cli_args.put.ctnr_name,
-		       cli_args.put.blob_name);
-
-		ret = azure_op_blob_put(cli_args.blob_acc,
-					cli_args.put.ctnr_name,
-					cli_args.put.blob_name,
-					AOP_DATA_FILE,
-					(uint8_t *)cli_args.put.local_path,
-					st.st_size, &op);
-		if (ret < 0) {
-			goto err_conn_free;
-		}
-
-		ret = azure_conn_send_op(&aconn, &op);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-
-		ret = azure_rsp_process(&op);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-		/* data buffer contains cli_args.put.local_path */
-		op.req.data.buf = NULL;
 	}
 
 	ret = 0;
