@@ -122,7 +122,7 @@ cli_args_parse(int argc,
 	int ret;
 	extern char *optarg;
 	extern int optind;
-	char *pub_settings;
+	char *pub_settings = NULL;
 	char *store_acc = NULL;
 	char *store_loc = NULL;	/* not yet supported */
 	bool store_geo = false;	/* not yet supported */
