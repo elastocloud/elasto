@@ -20,7 +20,7 @@ def build(bld):
 		    target='azure_test',
 		    lib=['curl','xml2','crypto'],
 		    use=['ccan','elasto'])
-	bld.program(source='elasto_client.c cli_put.c',
+	bld.program(source='elasto_client.c cli_ls.c cli_put.c',
 		    target='elasto_cli',
 		    lib=['curl','xml2','crypto'],
 		    use=['ccan','elasto'])
