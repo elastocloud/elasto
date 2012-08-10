@@ -370,6 +370,7 @@ azure_rsp_ctnr_list_process(struct azure_op *op)
 
 		ctnr = malloc(sizeof(*ctnr));
 		if (ctnr == NULL) {
+			free(name);
 			ret = -ENOMEM;
 			goto err_out;
 		}
@@ -476,6 +477,262 @@ err_ctnr_free:
 	free(ctnr_create_req->ctnr);
 err_acc_free:
 	free(ctnr_create_req->account);
+err_out:
+	return ret;
+}
+
+static void
+azure_req_blob_list_free(struct azure_req_blob_list *blob_list_req)
+{
+	free(blob_list_req->account);
+	free(blob_list_req->ctnr);
+}
+static void
+azure_rsp_blob_list_free(struct azure_rsp_blob_list *blob_list_rsp)
+{
+	struct azure_blob *blob;
+	struct azure_blob *blob_n;
+
+	if (blob_list_rsp->num_blobs <= 0)
+		return;
+
+	list_for_each_safe(&blob_list_rsp->blobs, blob, blob_n, list) {
+		free(blob->name);
+		free(blob);
+	}
+}
+
+static int
+azure_op_blob_list_fill_hdr(struct azure_op *op)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* different to the version in management */
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					  "x-ms-version: 2009-09-19");
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+int
+azure_op_blob_list(const char *account,
+		   const char *ctnr,
+		   struct azure_op *op)
+{
+
+	int ret;
+	struct azure_req_blob_list *blob_list_req;
+
+	/* TODO input validation */
+
+	op->opcode = AOP_BLOB_LIST;
+	blob_list_req = &op->req.blob_list;
+
+	blob_list_req->account = strdup(account);
+	if (blob_list_req->account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	blob_list_req->ctnr = strdup(ctnr);
+	if (blob_list_req->ctnr == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	op->method = REQ_METHOD_GET;
+	ret = asprintf(&op->url,
+		       "https://%s.blob.core.windows.net"
+		       "/%s?restype=container&comp=list",
+		       account, ctnr);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_ctnr_free;
+	}
+
+	/* Response does not include a content-length header, alloc buf here */
+	op->rsp.data.buf = malloc(1024 * 1024);	/* XXX determine best size */
+	if (op->rsp.data.buf == NULL) {
+		ret = -ENOMEM;
+		goto err_url_free;
+	}
+	op->rsp.data.len = (1024 * 1024);
+	op->rsp.data.type = AOP_DATA_IOV;
+
+	ret = azure_op_blob_list_fill_hdr(op);
+	if (ret < 0) {
+		goto err_buf_free;
+	}
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+
+err_buf_free:
+	free(op->rsp.data.buf);
+err_url_free:
+	free(op->url);
+err_ctnr_free:
+	free(blob_list_req->ctnr);
+err_acc_free:
+	free(blob_list_req->account);
+err_out:
+	return ret;
+}
+
+/*
+ * process a single blob list iteration at @iter, return -ENOENT if no such
+ * iteration exists
+ */
+static int
+azure_rsp_blob_iter_process(xmlXPathContext *xp_ctx,
+			    int iter,
+			    struct azure_blob **blob)
+{
+	int ret;
+	char *query;
+	char *name;
+	char *len;
+	char *type;
+	struct azure_blob *iblob;
+
+	ret = asprintf(&query, "//EnumerationResults/Blobs/Blob[%d]/Name",
+		       iter);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &name);
+	free(query);
+	if (ret < 0) {
+		goto err_out;	/* -ENOENT = all processed */
+	}
+	ret = asprintf(&query, "//EnumerationResults/Blobs/Blob[%d]"
+			       "/Properties/Content-Length",
+		       iter);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_name_free;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &len);
+	free(query);
+	if (ret < 0) {
+		goto err_name_free;
+	}
+	ret = asprintf(&query, "//EnumerationResults/Blobs/Blob[%d]"
+			       "/Properties/BlobType",
+		       iter);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_len_free;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &type);
+	free(query);
+	if (ret < 0) {
+		goto err_len_free;
+	}
+
+	iblob = malloc(sizeof(*iblob));
+	if (iblob == NULL) {
+		ret = -ENOMEM;
+		goto err_type_free;
+	}
+	iblob->name = name;
+	iblob->len = strtoll(len, &query, 10);
+	if (query == len) {
+		printf("unsupported blob length response\n");
+		ret = -EINVAL;
+		goto err_blob_free;
+	}
+	iblob->is_page = (strcmp(type, BLOB_TYPE_PAGE) == 0);
+	*blob = iblob;
+
+	return 0;
+
+err_blob_free:
+	free(blob);
+err_type_free:
+	free(type);
+err_len_free:
+	free(len);
+err_name_free:
+	free(name);
+err_out:
+	return ret;
+}
+
+static int
+azure_rsp_blob_list_process(struct azure_op *op)
+{
+	int ret;
+	int i;
+	struct azure_rsp_blob_list *blob_list_rsp;
+	xmlDoc *xp_doc;
+	xmlXPathContext *xp_ctx;
+	struct azure_blob *blob;
+	struct azure_blob *blob_n;
+
+	assert(op->opcode == AOP_BLOB_LIST);
+	assert(op->rsp.data.type == AOP_DATA_IOV);
+
+	/* parse response */
+	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.iov.off,
+			      &xp_doc, &xp_ctx);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	blob_list_rsp = &op->rsp.blob_list;
+
+	list_head_init(&blob_list_rsp->blobs);
+	for (i = 1; i <= 5000; i++) {
+		ret = azure_rsp_blob_iter_process(xp_ctx, i, &blob);
+		if (ret == -ENOENT) {
+			break;
+		} else if (ret < 0) {
+			goto err_blobs_free;
+		}
+		list_add_tail(&blob_list_rsp->blobs, &blob->list);
+		blob_list_rsp->num_blobs++;
+	}
+	xmlXPathFreeContext(xp_ctx);
+	xmlFreeDoc(xp_doc);
+	return 0;
+
+err_blobs_free:
+	list_for_each_safe(&blob_list_rsp->blobs, blob, blob_n, list) {
+		free(blob->name);
+		free(blob);
+	}
+	xmlXPathFreeContext(xp_ctx);
+	xmlFreeDoc(xp_doc);
 err_out:
 	return ret;
 }
@@ -1065,6 +1322,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_CONTAINER_CREATE:
 		azure_req_ctnr_create_free(&op->req.ctnr_create);
 		break;
+	case AOP_BLOB_LIST:
+		azure_req_blob_list_free(&op->req.blob_list);
+		break;
 	case AOP_BLOB_PUT:
 		azure_req_blob_put_free(&op->req.blob_put);
 		break;
@@ -1099,6 +1359,9 @@ azure_rsp_free(struct azure_op *op)
 		break;
 	case AOP_CONTAINER_LIST:
 		azure_rsp_ctnr_list_free(&op->rsp.ctnr_list);
+		break;
+	case AOP_BLOB_LIST:
+		azure_rsp_blob_list_free(&op->rsp.blob_list);
 		break;
 	case AOP_CONTAINER_CREATE:
 	case AOP_BLOB_PUT:
@@ -1145,6 +1408,9 @@ azure_rsp_process(struct azure_op *op)
 		break;
 	case AOP_CONTAINER_LIST:
 		ret = azure_rsp_ctnr_list_process(op);
+		break;
+	case AOP_BLOB_LIST:
+		ret = azure_rsp_blob_list_process(op);
 		break;
 	case AOP_CONTAINER_CREATE:
 	case AOP_BLOB_PUT:

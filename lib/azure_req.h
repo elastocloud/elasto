@@ -20,6 +20,7 @@ enum azure_opcode {
 	AOP_MGMT_GET_SA_KEYS = 1,
 	AOP_CONTAINER_LIST,
 	AOP_CONTAINER_CREATE,
+	AOP_BLOB_LIST,
 	AOP_BLOB_PUT,
 	AOP_BLOB_GET,
 	AOP_PAGE_PUT,
@@ -51,6 +52,23 @@ struct azure_rsp_ctnr_list {
 struct azure_req_ctnr_create {
 	char *account;
 	char *ctnr;
+};
+
+struct azure_blob {
+	struct list_node list;
+	char *name;
+	bool is_page;
+	uint64_t len;
+};
+
+struct azure_req_blob_list {
+	char *account;
+	char *ctnr;
+};
+/* @blobs: struct azure_blob list */
+struct azure_rsp_blob_list {
+	int num_blobs;
+	struct list_head blobs;
 };
 
 /*
@@ -142,6 +160,7 @@ struct azure_op {
 			struct azure_req_mgmt_get_sa_keys mgmt_get_sa_keys;
 			struct azure_req_ctnr_list ctnr_list;
 			struct azure_req_ctnr_create ctnr_create;
+			struct azure_req_blob_list blob_list;
 			struct azure_req_blob_put blob_put;
 			struct azure_req_blob_get blob_get;
 			struct azure_req_page_put page_put;
@@ -156,6 +175,7 @@ struct azure_op {
 			struct azure_rsp_error err;
 			struct azure_rsp_mgmt_get_sa_keys mgmt_get_sa_keys;
 			struct azure_rsp_ctnr_list ctnr_list;
+			struct azure_rsp_blob_list blob_list;
 			/*
 			 * No response specific data handled yet:
 			 * struct azure_rsp_ctnr_create ctnr_create;
@@ -181,6 +201,11 @@ int
 azure_op_ctnr_create(const char *account,
 		     const char *ctnr,
 		     struct azure_op *op);
+
+int
+azure_op_blob_list(const char *account,
+		   const char *ctnr,
+		   struct azure_op *op);
 
 int
 azure_op_blob_put(const char *account,
