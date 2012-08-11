@@ -51,7 +51,6 @@ cli_ls_args_parse(const char *progname,
 		   struct cli_args *cli_args)
 {
 	int ret;
-	char *s;
 
 	if ((argc < 1) || (argc > 2)) {
 		cli_args_usage(progname, NULL);
@@ -60,18 +59,24 @@ cli_ls_args_parse(const char *progname,
 	}
 
 	if (argc == 2) {
+		char *s;
+		int len;
 		cli_args->ls.ctnr_name = strdup(argv[1]);
 		if (cli_args->ls.ctnr_name == NULL) {
 			ret = -ENOMEM;
 			goto err_out;
 		}
-		/* remove a trailing slash */
 		s = strchr(cli_args->ls.ctnr_name, '/');
-		if ((s == NULL) || (s == cli_args->ls.ctnr_name)) {
-			ret = -EINVAL;
-			goto err_ctnr_free;
+		if (s != NULL) {
+			len = strlen(cli_args->ls.ctnr_name);
+			if ((s == cli_args->ls.ctnr_name)
+			 || (s != cli_args->ls.ctnr_name + len - 1)) {
+				ret = -EINVAL;
+				goto err_ctnr_free;
+			}
+			/* remove a trailing slash */
+			*s = '\0';
 		}
-		*s = '\0';
 	} else {
 		cli_args->ls.ctnr_name = NULL;
 	}
@@ -82,6 +87,56 @@ cli_ls_args_parse(const char *progname,
 
 err_ctnr_free:
 	free(cli_args->ls.ctnr_name);
+err_out:
+	return ret;
+}
+
+static int
+cli_ls_ctnr_handle(struct azure_conn *aconn,
+		   const char *acc_name,
+		   const char *ctnr_name)
+{
+	struct azure_op op;
+	struct azure_blob *blob;
+	int ret;
+
+	memset(&op, 0, sizeof(op));
+	ret = azure_op_blob_list(acc_name, ctnr_name, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_conn_send_op(aconn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	if (op.rsp.blob_list.num_blobs == 0) {
+		printf("Container %s is empty\n", ctnr_name);
+		ret = 0;
+		goto err_op_free;
+	}
+
+	printf("Contents of %s (*= page blob)/\n", ctnr_name);
+	list_for_each(&op.rsp.blob_list.blobs, blob, list) {
+		printf("%lu\t%s%s\n",
+		       blob->len, blob->name,
+		       (blob->is_page ? "*" : ""));
+	}
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
 err_out:
 	return ret;
 }
@@ -124,8 +179,12 @@ cli_ls_handle(struct azure_conn *aconn,
 			printf("\t%s/\n", ctnr->name);
 			ctnr_exists = true;
 		} else if (strcmp(ctnr->name, cli_args->ls.ctnr_name) == 0) {
+			ret = cli_ls_ctnr_handle(aconn, cli_args->blob_acc,
+						 ctnr->name);
+			if (ret < 0) {
+				goto err_op_free;
+			}
 			ctnr_exists = true;
-			printf("Contents of %s/\n", ctnr->name);
 			break;
 		}
 	}
