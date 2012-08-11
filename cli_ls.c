@@ -128,7 +128,7 @@ cli_ls_ctnr_handle(struct azure_conn *aconn,
 		goto err_op_free;
 	}
 
-	printf("Contents of %s (*= page blob)/\n", ctnr_name);
+	printf("Contents of %s (*= page blob)\n", ctnr_name);
 	list_for_each(&op.rsp.blob_list.blobs, blob, list) {
 		printf("%lu\t%s%s\n",
 		       blob->len, blob->name,
