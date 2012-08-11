@@ -1276,6 +1276,115 @@ err_out:
 }
 
 static void
+azure_req_blob_del_free(struct azure_req_blob_del *bl_del_req)
+{
+	free(bl_del_req->account);
+	free(bl_del_req->container);
+	free(bl_del_req->bname);
+}
+
+static int
+azure_op_blob_del_fill_hdr(struct azure_op *op)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	/* different to the version in management */
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					 "x-ms-version: 2009-09-19");
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* common headers and signature added later */
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+int
+azure_op_blob_del(const char *account,
+		   const char *container,
+		   const char *bname,
+		   struct azure_op *op)
+{
+	int ret;
+	struct azure_req_blob_del *bl_del_req;
+
+	op->opcode = AOP_BLOB_DEL;
+	bl_del_req = &op->req.blob_del;
+
+	bl_del_req->account = strdup(account);
+	if (bl_del_req->account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	bl_del_req->container = strdup(container);
+	if (bl_del_req->container == NULL) {
+		ret = -ENOMEM;
+		goto err_free_account;
+	}
+
+	bl_del_req->bname = strdup(bname);
+	if (bl_del_req->bname == NULL) {
+		ret = -ENOMEM;
+		goto err_free_container;
+	}
+
+	op->method = REQ_METHOD_DELETE;
+	ret = asprintf(&op->url,
+		       "https://%s.blob.core.windows.net/%s/%s",
+		       account, container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_free_bname;
+	}
+
+	/* mandatory headers */
+	ret = azure_op_blob_del_fill_hdr(op);
+	if (ret < 0)
+		goto err_free_url;
+
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+err_free_url:
+	free(op->url);
+err_free_bname:
+	free(bl_del_req->bname);
+err_free_container:
+	free(bl_del_req->container);
+err_free_account:
+	free(bl_del_req->account);
+err_out:
+	return ret;
+}
+
+static void
 azure_rsp_error_free(struct azure_rsp_error *err)
 {
 	free(err->msg);
@@ -1365,6 +1474,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_PAGE_PUT:
 		azure_req_page_put_free(&op->req.page_put);
 		break;
+	case AOP_BLOB_DEL:
+		azure_req_blob_del_free(&op->req.blob_del);
+		break;
 	default:
 		assert(true);
 		break;
@@ -1398,6 +1510,7 @@ azure_rsp_free(struct azure_op *op)
 	case AOP_BLOB_PUT:
 	case AOP_BLOB_GET:
 	case AOP_PAGE_PUT:
+	case AOP_BLOB_DEL:
 		/* nothing to do */
 		break;
 	default:
@@ -1447,6 +1560,7 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_BLOB_PUT:
 	case AOP_BLOB_GET:
 	case AOP_PAGE_PUT:
+	case AOP_BLOB_DEL:
 		/* nothing to do */
 		ret = 0;
 		break;
