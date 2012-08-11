@@ -236,6 +236,10 @@ err_out:
  * component of the resource, append the appropriate query string. The query
  * string should include the question mark and the comp parameter (for example,
  * ?comp=metadata). No other parameters should be included on the query string.
+ * ----
+ *
+ * @url is modified in place to pull out the comp parameter. Could be optimized
+ * greatly, but simple code is nicer.
  */
 static char *
 canon_rsc_gen_lite(const char *account,
@@ -244,8 +248,7 @@ canon_rsc_gen_lite(const char *account,
 	int ret;
 	char *s;
 	char *q;
-	char *trim_pos = NULL;
-	char saved;
+	char *comp;
 	char *rsc_str = NULL;
 
 	/* find the first forward slash after the protocol */
@@ -254,28 +257,32 @@ canon_rsc_gen_lite(const char *account,
 	s += sizeof("://") - 1;
 	s = strchrnul(s, '/');
 
-	q = strstr(url, "?comp=");
-	if (q) {
-		trim_pos = strchr(q, '&');
-		if (trim_pos) {
-			*trim_pos = '\0';
-			saved = '&';
+	q = strchr(s, '?');
+	if (q == NULL) {
+		/* no parameters, nice and easy */
+		ret = asprintf(&rsc_str, "/%s%s", account, s);
+		if (ret < 0) {
+			rsc_str = NULL;
 		}
-	} else {
-		/* no comp param, but may have others */
-		trim_pos = strchr(url, '?');
-		if (trim_pos) {
-			*trim_pos = '\0';
-			saved = '?';
-		}
+		return rsc_str;
 	}
 
-	ret = asprintf(&rsc_str, "/%s%s", account, s);
+	*q = '\0';
+	comp = strstr(q + 1, "comp=");
+	if (comp) {
+		char *amp = strchr(comp, '&');
+		if (amp)
+			*amp = '\0';
+		ret = asprintf(&rsc_str, "/%s%s?%s", account, s, comp);
+		if (amp)
+			*amp = '&';
+	} else {
+		ret = asprintf(&rsc_str, "/%s%s", account, s);
+	}
+	*q = '?';
 	if (ret < 0) {
 		rsc_str = NULL;
 	}
-	if (trim_pos)
-		*trim_pos = saved;
 
 	return rsc_str;
 }
