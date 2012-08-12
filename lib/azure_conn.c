@@ -278,13 +278,15 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 
 int
 azure_conn_send_op(struct azure_conn *aconn,
-		    struct azure_op *op)
+		   struct azure_op *op)
 {
 	int ret;
 	CURLcode res;
 
+	op->aconn = aconn;
 	ret = azure_conn_send_prepare(aconn, op);
 	if (ret < 0) {
+		op->aconn = NULL;
 		return ret;
 	}
 
@@ -294,6 +296,7 @@ azure_conn_send_op(struct azure_conn *aconn,
 		printf("curl_easy_perform() failed: %s\n",
 		       curl_easy_strerror(res));
 		curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, NULL);
+		op->aconn = NULL;
 		return -EBADF;
 	}
 
@@ -301,6 +304,7 @@ azure_conn_send_op(struct azure_conn *aconn,
 
 	/* reset headers, so that op->http_hdr can be freed */
 	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, NULL);
+	op->aconn = NULL;
 
 	return 0;
 }

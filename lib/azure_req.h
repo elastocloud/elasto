@@ -155,6 +155,7 @@ struct azure_op_data {
 #define REQ_METHOD_PUT		"PUT"
 #define REQ_METHOD_DELETE	"DELETE"
 struct azure_op {
+	struct azure_conn *aconn;
 	enum azure_opcode opcode;
 	struct curl_slist *http_hdr;
 	bool sign;
