@@ -91,11 +91,6 @@ curl_hdr_process(struct azure_op *op,
 		char *eptr;
 		char *loff = hdr_str + sizeof(HDR_PFX_CLEN) - 1;
 
-		if (op->rsp.data.type != AOP_DATA_NONE) {
-			/* recv buf already allocated by request */
-			return 0;
-		}
-
 		clen = strtoll(loff, &eptr, 10);
 		if ((eptr == loff) || (eptr > hdr_str + num_bytes)) {
 			return -1;
@@ -103,14 +98,9 @@ curl_hdr_process(struct azure_op *op,
 		if (clen == 0) {
 			return 0;
 		}
-		/* TODO check clen isn't too huge */
-		op->rsp.data.buf = malloc(clen);
-		if (op->rsp.data.buf == NULL) {
-			return -1;
-		}
-		op->rsp.data.len = clen;
-		op->rsp.data.iov.off = 0;
-		op->rsp.data.type = AOP_DATA_IOV;
+
+		/* allocate recv buffer in write callback */
+		op->rsp.clen = clen;
 	}
 
 	return 0;
@@ -172,6 +162,115 @@ curl_read_cb(char *ptr,
 	return num_bytes;
 }
 
+static int
+curl_write_alloc_err(struct azure_op *op)
+{
+	op->rsp.err.buf = malloc(op->rsp.clen);
+	if (op->rsp.err.buf == NULL) {
+		return -ENOMEM;
+	}
+	op->rsp.err.len = op->rsp.clen;
+	op->rsp.err.off = 0;
+	return 0;
+}
+
+static int
+curl_write_alloc_std(struct azure_op *op)
+{
+	uint64_t clen = op->rsp.clen;
+	switch (op->rsp.data.type) {
+	case AOP_DATA_NONE:
+		/* requester wants us to allocate a recv iov */
+		/* TODO check clen isn't too huge */
+		op->rsp.data.buf = malloc(clen);
+		if (op->rsp.data.buf == NULL) {
+			return -ENOMEM;
+		}
+		op->rsp.data.len = clen;
+		op->rsp.data.iov.off = 0;
+		op->rsp.data.type = AOP_DATA_IOV;
+		break;
+	case AOP_DATA_IOV:
+		if (clen > op->rsp.data.len) {
+			printf("preallocated rsp buf not large enough - "
+			       "alloced=%lu, clen=%lu\n",
+			       op->rsp.data.len, clen);
+			return -E2BIG;
+		}
+		break;
+	case AOP_DATA_FILE:
+		op->rsp.data.len = clen;
+		/* TODO, could preallocate entire file */
+		break;
+	default:
+		assert(true);
+		break;
+	}
+
+	return 0;
+}
+
+static int
+curl_write_err(struct azure_op *op,
+	       uint8_t *data,
+	       uint64_t num_bytes)
+{
+	if (op->rsp.err.off + num_bytes > op->rsp.err.len) {
+		printf("fatal: error rsp buffer exceeded, "
+		       "len %lu off %lu io_sz %lu\n",
+		       op->rsp.err.len, op->rsp.err.off, num_bytes);
+		return -E2BIG;
+	}
+	memcpy((void *)(op->rsp.err.buf + op->rsp.err.off), data,
+	       num_bytes);
+	op->rsp.err.off += num_bytes;
+
+	return 0;
+}
+
+static int
+curl_write_std(struct azure_op *op,
+	       uint8_t *data,
+	       uint64_t num_bytes)
+{
+	int ret;
+
+	switch (op->rsp.data.type) {
+	case AOP_DATA_IOV:
+		if (op->rsp.data.iov.off + num_bytes > op->rsp.data.len) {
+			printf("fatal: curl_write_cb buffer exceeded, "
+			       "len %lu off %lu io_sz %lu\n",
+			       op->rsp.data.len, op->rsp.data.iov.off, num_bytes);
+			return -E2BIG;
+		}
+		memcpy((void *)(op->rsp.data.buf + op->rsp.data.iov.off), data,
+		       num_bytes);
+		op->rsp.data.iov.off += num_bytes;
+		break;
+	case AOP_DATA_FILE:
+		if (op->rsp.data.file.off + num_bytes > op->rsp.data.len) {
+			printf("fatal: curl_write_cb file exceeded, "
+			       "len %lu off %lu io_sz %lu\n",
+			       op->rsp.data.len, op->rsp.data.iov.off, num_bytes);
+			return -E2BIG;
+		}
+		ret = pwrite(op->rsp.data.file.fd, data, num_bytes,
+			     op->rsp.data.file.off);
+		if (ret != num_bytes) {
+			printf("file write io failed\n");
+			return -EBADF;
+		}
+		op->rsp.data.file.off += num_bytes;
+		break;
+	case AOP_DATA_NONE:
+	default:
+		/* rsp buffer must have been allocated */
+		assert(true);
+		break;
+	}
+	return 0;
+}
+
 static size_t
 curl_write_cb(char *ptr,
 	      size_t size,
@@ -180,20 +279,42 @@ curl_write_cb(char *ptr,
 {
 	struct azure_op *op = (struct azure_op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
+	int ret;
 
-	if (op->rsp.data.type != AOP_DATA_IOV) {
-		return -1;	/* not yet supported */
+	if (op->rsp.write_cbs++ == 0) {
+		CURLcode cc;
+		int ret_code;
+		/* should already have the http response code by the time we get here */
+		cc = curl_easy_getinfo(op->aconn->curl, CURLINFO_RESPONSE_CODE,
+				       &ret_code);
+		if (cc != CURLE_OK) {
+			printf("could not get response code in write cb\n");
+			return -1;
+		}
+
+		op->rsp.err_code = ret_code;
+		op->rsp.is_error = azure_rsp_is_error(op->opcode, ret_code);
+
+		if (op->rsp.is_error) {
+			ret = curl_write_alloc_err(op);
+		} else {
+			ret = curl_write_alloc_std(op);
+		}
+		if (ret < 0) {
+			printf("failed to allocate response buffer\n");
+			return -1;
+		}
+
 	}
-	if (op->rsp.data.iov.off + num_bytes > op->rsp.data.len) {
-		printf("fatal: curl_write_cb buffer exceeded, "
-		       "len %lu off %lu io_sz %lu\n",
-		       op->rsp.data.len, op->rsp.data.iov.off, num_bytes);
+
+	if (op->rsp.is_error) {
+		ret = curl_write_err(op, (uint8_t *)ptr, num_bytes);
+	} else {
+		ret = curl_write_std(op, (uint8_t *)ptr, num_bytes);
+	}
+	if (ret < 0) {
 		return -1;
 	}
-
-	memcpy((void *)(op->rsp.data.buf + op->rsp.data.iov.off), ptr,
-	       num_bytes);
-	op->rsp.data.iov.off += num_bytes;
 	return num_bytes;
 }
 
@@ -300,7 +421,13 @@ azure_conn_send_op(struct azure_conn *aconn,
 		return -EBADF;
 	}
 
-	curl_easy_getinfo(aconn->curl, CURLINFO_RESPONSE_CODE, &op->rsp.err_code);
+	if (op->rsp.write_cbs == 0) {
+		/* write callback already sets this, otherwise still needed */
+		curl_easy_getinfo(aconn->curl, CURLINFO_RESPONSE_CODE,
+				  &op->rsp.err_code);
+		op->rsp.is_error = azure_rsp_is_error(op->opcode,
+						      op->rsp.err_code);
+	}
 
 	/* reset headers, so that op->http_hdr can be freed */
 	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, NULL);

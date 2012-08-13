@@ -125,8 +125,12 @@ struct azure_req_blob_del {
 	char *bname;
 };
 
+/* error response buffer is separate to request/response data */
 struct azure_rsp_error {
 	char *msg;
+	uint8_t *buf;
+	uint64_t len;
+	uint64_t off;
 };
 
 enum azure_op_data_type {
@@ -194,6 +198,8 @@ struct azure_op {
 			 * struct azure_rsp_blob_del blob_del;
 			 */
 		};
+		uint64_t clen;
+		uint64_t write_cbs;
 		struct azure_op_data data;
 	} rsp;
 };
@@ -249,6 +255,9 @@ azure_op_blob_del(const char *account,
 		  const char *ctnr,
 		  const char *bname,
 		  struct azure_op *op);
+
+bool
+azure_rsp_is_error(enum azure_opcode opcode, int err_code);
 
 void
 azure_op_free(struct azure_op *op);

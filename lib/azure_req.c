@@ -1388,14 +1388,15 @@ static void
 azure_rsp_error_free(struct azure_rsp_error *err)
 {
 	free(err->msg);
+	free(err->buf);
 }
 
 /*
  * Check whether @err_code represents an azure error response. Nothing opcode
  * specific yet.
  */
-static bool
-azure_rsp_is_error(int opcode, int err_code)
+bool
+azure_rsp_is_error(enum azure_opcode opcode, int err_code)
 {
 	if (err_code == 0) {
 		return false;
@@ -1416,8 +1417,7 @@ azure_rsp_error_process(struct azure_op *op)
 		return 0;
 	}
 
-	assert(op->rsp.data.type == AOP_DATA_IOV);
-	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.iov.off,
+	ret = azure_xml_slurp(false, op->rsp.err.buf, op->rsp.err.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		goto err_out;
@@ -1540,9 +1540,8 @@ azure_rsp_process(struct azure_op *op)
 {
 	int ret;
 
-	op->rsp.is_error = azure_rsp_is_error(op->opcode, op->rsp.err_code);
 	if (op->rsp.is_error) {
-		/* error response only */
+		/* set by conn layer, error response only */
 		return azure_rsp_error_process(op);
 	}
 
