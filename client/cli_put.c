@@ -55,12 +55,6 @@ cli_put_args_parse(const char *progname,
 	int ret;
 	char *s;
 
-	if (argc < 3) {
-		cli_args_usage(progname, NULL);
-		ret = -EINVAL;
-		goto err_out;
-	}
-
 	cli_args->put.local_path = strdup(argv[1]);
 	if (cli_args->put.local_path == NULL) {
 		ret = -ENOMEM;

@@ -52,12 +52,6 @@ cli_ls_args_parse(const char *progname,
 {
 	int ret;
 
-	if ((argc < 1) || (argc > 2)) {
-		cli_args_usage(progname, NULL);
-		ret = -EINVAL;
-		goto err_out;
-	}
-
 	if (argc == 2) {
 		char *s;
 		int len;
