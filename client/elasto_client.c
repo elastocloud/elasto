@@ -123,39 +123,27 @@ struct cli_cmd_spec {
 	},
 };
 
-
-static void
-cli_args_free(struct cli_args *cli_args)
+static const struct cli_cmd_spec *
+cli_cmd_lookup(const char *name)
 {
-	free(cli_args->ps_file);
-	free(cli_args->blob_acc);
+	struct cli_cmd_spec *cmd;
 
-	switch (cli_args->cmd) {
-	case CLI_CMD_LS:
-		cli_ls_args_free(cli_args);
-		break;
-	case CLI_CMD_PUT:
-		cli_put_args_free(cli_args);
-		break;
-	case CLI_CMD_GET:
-		cli_get_args_free(cli_args);
-		break;
-	case CLI_CMD_DEL:
-		cli_del_args_free(cli_args);
-		break;
-	default:
-		assert(true);
-		break;
+	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
+		if (strcmp(cmd->name, name) == 0)
+			return cmd;
 	}
+	return NULL;
 }
 
 static int
 cli_cmd_parse(const char *progname,
 	      int argc,
 	      char * const *argv,
-	      struct cli_args *cli_args)
+	      struct cli_args *cli_args,
+	      const struct cli_cmd_spec **cmd_spec)
 {
 	int ret;
+	const struct cli_cmd_spec *cmd;
 
 	if (argc == 0) {
 		cli_args_usage(progname, NULL);
@@ -163,32 +151,31 @@ cli_cmd_parse(const char *progname,
 		goto err_out;
 	}
 
-	if (!strcmp(argv[0], "ls")) {
-		ret = cli_ls_args_parse(progname, argc, argv, cli_args);
-		if (ret < 0) {
-			goto err_out;
-		}
-	} else if (!strcmp(argv[0], "put")) {
-		ret = cli_put_args_parse(progname, argc, argv, cli_args);
-		if (ret < 0) {
-			goto err_out;
-		}
-	} else if (!strcmp(argv[0], "get")) {
-		ret = cli_get_args_parse(progname, argc, argv, cli_args);
-		if (ret < 0) {
-			goto err_out;
-		}
-	} else if (!strcmp(argv[0], "del")) {
-		ret = cli_del_args_parse(progname, argc, argv, cli_args);
-		if (ret < 0) {
-			goto err_out;
-		}
-	} else {
-		cli_args_usage(progname, NULL);
+	cmd = cli_cmd_lookup(argv[0]);
+	if (cmd == NULL) {
+		cli_args_usage(progname, "command not found");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
+	if (argc - 1 < cmd->arg_min) {
+		cli_args_usage(progname, "to few arguments for command");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (argc - 1 > cmd->arg_max) {
+		cli_args_usage(progname, "to many arguments for command");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = cmd->args_parse(progname, argc, argv, cli_args);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	*cmd_spec = cmd;
 	ret = 0;
 err_out:
 	return ret;
@@ -197,7 +184,8 @@ err_out:
 static int
 cli_args_parse(int argc,
 	       char * const *argv,
-	       struct cli_args *cli_args)
+	       struct cli_args *cli_args,
+	       const struct cli_cmd_spec **cmd_spec)
 {
 	int opt;
 	int ret;
@@ -248,7 +236,7 @@ cli_args_parse(int argc,
 	}
 
 	ret = cli_cmd_parse(argv[0], argc - optind, &argv[optind],
-			    cli_args);
+			    cli_args, cmd_spec);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -269,6 +257,7 @@ int
 main(int argc, char * const *argv)
 {
 	struct cli_args cli_args;
+	const struct cli_cmd_spec *cmd;
 	struct azure_conn aconn;
 	struct azure_op op;
 	char *pem_file;
@@ -278,7 +267,7 @@ main(int argc, char * const *argv)
 
 	memset(&cli_args, 0, sizeof(cli_args));
 
-	ret = cli_args_parse(argc, argv, &cli_args);
+	ret = cli_args_parse(argc, argv, &cli_args, &cmd);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -334,34 +323,9 @@ main(int argc, char * const *argv)
 	}
 
 	/* op freed later */
-	switch (cli_args.cmd) {
-	case CLI_CMD_LS:
-		ret = cli_ls_handle(&aconn, &cli_args);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-		break;
-	case CLI_CMD_PUT:
-		ret = cli_put_handle(&aconn, &cli_args);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-		break;
-	case CLI_CMD_GET:
-		ret = cli_get_handle(&aconn, &cli_args);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-		break;
-	case CLI_CMD_DEL:
-		ret = cli_del_handle(&aconn, &cli_args);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-		break;
-	default:
-		assert(true);
-		break;
+	ret = cmd->handle(&aconn, &cli_args);
+	if (ret < 0) {
+		goto err_op_free;
 	}
 
 	ret = 0;
@@ -377,7 +341,7 @@ err_global_clean:
 	azure_xml_subsys_deinit();
 	azure_conn_subsys_deinit();
 err_args_free:
-	cli_args_free(&cli_args);
+	cmd->args_free(&cli_args);
 err_out:
 	return ret;
 }
