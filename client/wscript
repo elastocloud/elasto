@@ -1,0 +1,13 @@
+def options(opt):
+	opt.load('compiler_c')
+
+def configure(conf):
+	conf.load('compiler_c')
+	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
+
+def build(bld):
+	bld.program(source='elasto_client.c cli_ls.c cli_put.c cli_get.c cli_del.c',
+		    target='elasto_cli',
+		    lib=['curl','xml2','crypto'],
+		    use=['ccan','elasto'],
+		    includes = '. ..')

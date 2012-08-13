@@ -11,16 +11,14 @@ def configure(conf):
 	conf.env.CFLAGS = ['-Wall','-g']
 	conf.recurse('ccan')
 	conf.recurse('lib')
+	conf.recurse('client')
 
 def build(bld):
 	print("build!")
 	bld.recurse('ccan')
 	bld.recurse('lib')
+	bld.recurse('client')
 	bld.program(source='azure_test.c',
 		    target='azure_test',
-		    lib=['curl','xml2','crypto'],
-		    use=['ccan','elasto'])
-	bld.program(source='elasto_client.c cli_ls.c cli_put.c cli_get.c cli_del.c',
-		    target='elasto_cli',
 		    lib=['curl','xml2','crypto'],
 		    use=['ccan','elasto'])
