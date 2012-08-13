@@ -37,6 +37,7 @@
 #include "cli_common.h"
 #include "cli_ls.h"
 #include "cli_put.h"
+#include "cli_get.h"
 #include "cli_del.h"
 
 void
@@ -57,6 +58,7 @@ cli_args_usage(const char *progname,
 		"Commands:\n"
 		"	ls	[container]\n"
 		"	put	<local path> <container>/<blob>\n"
+		"	get	<container>/<blob> <local path>\n"
 		"	del	<container>/<blob>\n",
 		progname);
 }
@@ -73,6 +75,9 @@ cli_args_free(struct cli_args *cli_args)
 		break;
 	case CLI_CMD_PUT:
 		cli_put_args_free(cli_args);
+		break;
+	case CLI_CMD_GET:
+		cli_get_args_free(cli_args);
 		break;
 	case CLI_CMD_DEL:
 		cli_del_args_free(cli_args);
@@ -104,6 +109,11 @@ cli_cmd_parse(const char *progname,
 		}
 	} else if (!strcmp(argv[0], "put")) {
 		ret = cli_put_args_parse(progname, argc, argv, cli_args);
+		if (ret < 0) {
+			goto err_out;
+		}
+	} else if (!strcmp(argv[0], "get")) {
+		ret = cli_get_args_parse(progname, argc, argv, cli_args);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -272,6 +282,12 @@ main(int argc, char * const *argv)
 		break;
 	case CLI_CMD_PUT:
 		ret = cli_put_handle(&aconn, &cli_args);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+		break;
+	case CLI_CMD_GET:
+		ret = cli_get_handle(&aconn, &cli_args);
 		if (ret < 0) {
 			goto err_op_free;
 		}

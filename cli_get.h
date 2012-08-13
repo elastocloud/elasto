@@ -13,46 +13,20 @@
  *
  * Author: David Disseldorp <ddiss@suse.de>
  */
-#ifndef _CLI_COMMON_H_
-#define _CLI_COMMON_H_
-
-enum cli_cmd {
-	CLI_CMD_NONE = 0,
-	CLI_CMD_LS,
-	CLI_CMD_PUT,
-	CLI_CMD_GET,
-	CLI_CMD_DEL,
-};
-
-struct cli_args {
-	char *ps_file;
-	char *blob_acc;
-	char *blob_loc;
-	bool blob_geo;
-	enum cli_cmd cmd;
-	union {
-		struct {
-			char *ctnr_name;
-		} ls;
-		struct {
-			char *local_path;
-			char *ctnr_name;
-			char *blob_name;
-		} put;
-		struct {
-			char *ctnr_name;
-			char *blob_name;
-			char *local_path;
-		} get;
-		struct {
-			char *ctnr_name;
-			char *blob_name;
-		} del;
-	};
-};
+#ifndef _CLI_GET_H_
+#define _CLI_GET_H_
 
 void
-cli_args_usage(const char *progname,
-	       const char *msg);
+cli_get_args_free(struct cli_args *cli_args);
 
-#endif /* ifdef _CLI_COMMON_H_ */
+int
+cli_get_args_parse(const char *progname,
+		   int argc,
+		   char * const *argv,
+		   struct cli_args *cli_args);
+
+int
+cli_get_handle(struct azure_conn *aconn,
+	       struct cli_args *cli_args);
+
+#endif /* ifdef _CLI_GET_H_ */
