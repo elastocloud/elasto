@@ -26,7 +26,7 @@
 #include <assert.h>
 #include <ctype.h>
 
-#include "../ccan/list/list.h"
+#include "ccan/list/list.h"
 #include "base64.h"
 #include "azure_req.h"
 #include "azure_sign.h"
