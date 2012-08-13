@@ -27,6 +27,12 @@ enum azure_opcode {
 	AOP_BLOB_DEL,
 };
 
+enum azure_op_data_type {
+	AOP_DATA_NONE = 0,
+	AOP_DATA_IOV,
+	AOP_DATA_FILE,
+};
+
 struct azure_req_mgmt_get_sa_keys {
 	char *sub_id;
 	char *service_name;
@@ -133,11 +139,6 @@ struct azure_rsp_error {
 	uint64_t off;
 };
 
-enum azure_op_data_type {
-	AOP_DATA_NONE = 0,
-	AOP_DATA_IOV,
-	AOP_DATA_FILE,
-};
 struct azure_op_data {
 	enum azure_op_data_type type;
 	uint8_t *buf;
@@ -237,6 +238,8 @@ azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
 		  bool is_page,
+		  enum azure_op_data_type data_type,
+		  uint8_t *buf,
 		  uint64_t off,
 		  uint64_t len,
 		  struct azure_op *op);

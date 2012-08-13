@@ -1027,6 +1027,8 @@ azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
 		  bool is_page,
+		  enum azure_op_data_type data_type,
+		  uint8_t *buf,
 		  uint64_t off,
 		  uint64_t len,
 		  struct azure_op *op)
@@ -1056,13 +1058,13 @@ azure_op_blob_get(const char *account,
 	get_req->container = strdup(container);
 	if (get_req->container == NULL) {
 		ret = -ENOMEM;
-		goto err_free_account;
+		goto err_acc_free;
 	}
 
 	get_req->bname = strdup(bname);
 	if (get_req->bname == NULL) {
 		ret = -ENOMEM;
-		goto err_free_container;
+		goto err_ctnr_free;
 	}
 
 	if (is_page) {
@@ -1075,7 +1077,34 @@ azure_op_blob_get(const char *account,
 		get_req->off = off;
 		get_req->len = len;
 	}
-	/* recv buffer allocated by conn layer */
+
+	op->rsp.data.type = data_type;
+	switch (data_type) {
+	case AOP_DATA_NONE:
+		/* recv buffer allocated when data arrives */
+		assert(buf == NULL);
+		break;
+	case AOP_DATA_IOV:
+		/* caller request data is stuffed into this buffer */
+		assert(buf != NULL);
+		op->rsp.data.buf = buf;
+		op->rsp.data.len = len;
+		break;
+	case AOP_DATA_FILE:
+		/* file name is stored in buf */
+		assert(buf != NULL);
+		op->rsp.data.file.fd = open((char *)buf, O_CREAT | O_WRONLY,
+					S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+		if (op->rsp.data.file.fd < 0) {
+			ret = -errno;
+			goto err_bname_free;
+		}
+		op->rsp.data.buf = buf;
+		break;
+	default:
+		assert(true);	/* unsupported */
+		break;
+	}
 
 	op->method = REQ_METHOD_GET;
 	ret = asprintf(&op->url,
@@ -1083,25 +1112,29 @@ azure_op_blob_get(const char *account,
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_free_bname;
+		goto err_data_close;
 	}
 
 	/* mandatory headers */
 	ret = azure_op_blob_get_fill_hdr(op);
 	if (ret < 0)
-		goto err_free_url;
+		goto err_url_free;
 
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
-err_free_url:
+err_url_free:
 	free(op->url);
-err_free_bname:
+err_data_close:
+	if (op->req.data.type == AOP_DATA_FILE)
+		close(op->req.data.file.fd);
+	op->rsp.data.buf = NULL;
+err_bname_free:
 	free(get_req->bname);
-err_free_container:
+err_ctnr_free:
 	free(get_req->container);
-err_free_account:
+err_acc_free:
 	free(get_req->account);
 err_out:
 	return ret;

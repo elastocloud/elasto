@@ -257,7 +257,7 @@ curl_write_std(struct azure_op *op,
 		ret = pwrite(op->rsp.data.file.fd, data, num_bytes,
 			     op->rsp.data.file.off);
 		if (ret != num_bytes) {
-			printf("file write io failed\n");
+			printf("file write io failed: %s\n", strerror(errno));
 			return -EBADF;
 		}
 		op->rsp.data.file.off += num_bytes;
