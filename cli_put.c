@@ -201,11 +201,11 @@ cli_put_handle(struct azure_conn *aconn,
 	if (ret < 0) {
 		goto err_op_free;
 	}
-	/* data buffer contains cli_args->put.local_path */
-	op.req.data.buf = NULL;
 
 	ret = 0;
 err_op_free:
+	/* data buffer contains cli_args->put.local_path */
+	op.req.data.buf = NULL;
 	azure_op_free(&op);
 err_out:
 	return ret;
