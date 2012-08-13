@@ -63,6 +63,67 @@ cli_args_usage(const char *progname,
 		progname);
 }
 
+struct cli_cmd_spec {
+	enum cli_cmd id;
+	char *name;
+	char *help;
+	int arg_min;
+	int arg_max;
+	int (*args_parse)(const char *,
+			  int argc,
+			  char * const *argv,
+			  struct cli_args *cli_args);
+	int (*handle)(struct azure_conn *,
+		      struct cli_args *);
+	void (*args_free)(struct cli_args *);
+} cli_cmd_specs[] = {
+	{
+		.id = CLI_CMD_LS,
+		.name = "ls",
+		.help = "[container]",
+		.arg_min = 0,
+		.arg_max = 1,
+		.args_parse = &cli_ls_args_parse,
+		.handle = &cli_ls_handle,
+		.args_free = &cli_ls_args_free,
+	},
+	{
+		.id = CLI_CMD_PUT,
+		.name = "put",
+		.help = "<local path> <container>/<blob>",
+		.arg_min = 2,
+		.arg_max = 2,
+		.args_parse = &cli_put_args_parse,
+		.handle = &cli_put_handle,
+		.args_free = &cli_put_args_free,
+	},
+	{
+		.id = CLI_CMD_GET,
+		.name = "get",
+		.help = "<container>/<blob> <local path>",
+		.arg_min = 2,
+		.arg_max = 2,
+		.args_parse = &cli_get_args_parse,
+		.handle = &cli_get_handle,
+		.args_free = &cli_get_args_free,
+	},
+	{
+		.id = CLI_CMD_DEL,
+		.name = "del",
+		.help = "<container>/<blob>",
+		.arg_min = 1,
+		.arg_max = 1,
+		.args_parse = &cli_del_args_parse,
+		.handle = &cli_del_handle,
+		.args_free = &cli_del_args_free,
+	},
+	{
+		/* must be last entry */
+		.id = CLI_CMD_NONE,
+	},
+};
+
+
 static void
 cli_args_free(struct cli_args *cli_args)
 {
