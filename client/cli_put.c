@@ -103,8 +103,6 @@ cli_put_handle(struct azure_conn *aconn,
 	       struct cli_args *cli_args)
 {
 	struct stat st;
-	struct azure_ctnr *ctnr;
-	bool ctnr_exists;
 	struct azure_op op;
 	int ret;
 
@@ -114,7 +112,8 @@ cli_put_handle(struct azure_conn *aconn,
 		goto err_out;
 	}
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_ctnr_list(cli_args->blob_acc, &op);
+	ret = azure_op_ctnr_create(cli_args->blob_acc,
+				   cli_args->put.ctnr_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -129,47 +128,16 @@ cli_put_handle(struct azure_conn *aconn,
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op.rsp.is_error && (op.rsp.err_code == 409)) {
+		printf("container already exists, proceeding with put\n");
+	} else if (op.rsp.is_error) {
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
 		goto err_op_free;
 	}
 
-	ctnr_exists = false;
-	list_for_each(&op.rsp.ctnr_list.ctnrs, ctnr, list) {
-		if (strcmp(ctnr->name, cli_args->put.ctnr_name) == 0) {
-			ctnr_exists = true;
-			break;
-		}
-	}
-
 	azure_op_free(&op);
 
-	if (ctnr_exists == false) {
-		ret = azure_op_ctnr_create(cli_args->blob_acc,
-					   cli_args->put.ctnr_name, &op);
-		if (ret < 0) {
-			goto err_out;
-		}
-
-		ret = azure_conn_send_op(aconn, &op);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-
-		ret = azure_rsp_process(&op);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-
-		if (op.rsp.is_error) {
-			ret = -EIO;
-			printf("failed response: %d\n", op.rsp.err_code);
-			goto err_op_free;
-		}
-
-		azure_op_free(&op);
-	}
 	printf("putting %zd from %s to container %s blob %s\n",
 	       st.st_size,
 	       cli_args->put.local_path,
