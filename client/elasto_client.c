@@ -40,29 +40,6 @@
 #include "cli_get.h"
 #include "cli_del.h"
 
-void
-cli_args_usage(const char *progname,
-	       const char *msg)
-{
-	if (msg != NULL) {
-		fprintf(stderr, "%s\n\n", msg);
-	}
-	fprintf(stderr, "usage: %s -s publish_settings "
-				  "-a storage_account "
-				  "[-l storage_location] [-g] "
-				  "<cmd> <cmd args>\n\n"
-		"-s publish_settings:	Azure PublishSettings file\n"
-		"-a storage_account:	Storage account, created if needed\n"
-		"-l storage_location:	Storage geographic location\n"
-		"-g:			Enable geographic redundancy\n\n"
-		"Commands:\n"
-		"	ls	[container]\n"
-		"	put	<local path> <container>/<blob>\n"
-		"	get	<container>/<blob> <local path>\n"
-		"	del	<container>/<blob>\n",
-		progname);
-}
-
 struct cli_cmd_spec {
 	enum cli_cmd id;
 	char *name;
@@ -122,6 +99,30 @@ struct cli_cmd_spec {
 		.id = CLI_CMD_NONE,
 	},
 };
+
+void
+cli_args_usage(const char *progname,
+	       const char *msg)
+{
+	struct cli_cmd_spec *cmd;
+
+	if (msg != NULL) {
+		fprintf(stderr, "%s\n\n", msg);
+	}
+	fprintf(stderr, "Usage: %s -s publish_settings "
+				  "-a storage_account "
+				  "[-l storage_location] [-g] "
+				  "<cmd> <cmd args>\n\n"
+		"-s publish_settings:	Azure PublishSettings file\n"
+		"-a storage_account:	Storage account, created if needed\n"
+		"-l storage_location:	Storage geographic location\n"
+		"-g:			Enable geographic redundancy\n\n"
+		"Commands:\n", progname);
+
+	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
+		fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->help);
+	}
+}
 
 static const struct cli_cmd_spec *
 cli_cmd_lookup(const char *name)
