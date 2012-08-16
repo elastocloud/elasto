@@ -33,6 +33,7 @@
 #include <libxml/xpath.h>
 
 #include "ccan/list/list.h"
+#include "base64.h"
 #include "azure_xml.h"
 #include "azure_req.h"
 
@@ -1309,6 +1310,175 @@ err_out:
 }
 
 static void
+azure_req_block_put_free(struct azure_req_block_put *blk_put_req)
+{
+	free(blk_put_req->account);
+	free(blk_put_req->container);
+	free(blk_put_req->bname);
+	free(blk_put_req->blk_id);
+}
+
+static int
+azure_op_block_put_fill_hdr(struct azure_op *op)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* different to the version in management */
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					  "x-ms-version: 2009-09-19");
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* common headers and signature added later */
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+/*
+ * @len bytes from @buf are put if @data_type is AOP_DATA_IOV, or @len bytes
+ * fom the file at path @buf if @data_type is AOP_DATA_FILE.
+ * Note: For a given blob, the length of the value specified for the blockid
+ *	 parameter must be the same size for each block.
+ */
+int
+azure_op_block_put(const char *account,
+		   const char *container,
+		   const char *bname,
+		   const char *blk_id,
+		   enum azure_op_data_type data_type,
+		   uint8_t *buf,
+		   uint64_t len,
+		   struct azure_op *op)
+{
+	int ret;
+	struct azure_req_block_put *blk_put_req;
+	char *b64_blk_id;
+
+	if (data_type == AOP_DATA_NONE) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+	if (strlen(blk_id) > 64) {
+		/*
+		 * Prior to encoding, the string must be less than or equal to
+		 * 64 bytes in size.
+		 */
+		ret = -EINVAL;
+		goto err_out;
+	}
+	if (len > BLOB_BLOCK_MAX) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	op->opcode = AOP_BLOCK_PUT;
+	blk_put_req = &op->req.block_put;
+
+	blk_put_req->account = strdup(account);
+	if (blk_put_req->account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	blk_put_req->container = strdup(container);
+	if (blk_put_req->container == NULL) {
+		ret = -ENOMEM;
+		goto err_account_free;
+	}
+
+	blk_put_req->bname = strdup(bname);
+	if (blk_put_req->bname == NULL) {
+		ret = -ENOMEM;
+		goto err_container_free;
+	}
+
+	blk_put_req->blk_id = strdup(blk_id);
+	if (blk_put_req->blk_id == NULL) {
+		ret = -ENOMEM;
+		goto err_bname_free;
+	}
+
+	op->req.data.type = data_type;
+	if (data_type == AOP_DATA_IOV) {
+		op->req.data.buf = buf;
+		op->req.data.len = len;
+	} else if (data_type == AOP_DATA_FILE) {
+		op->req.data.file.fd = open((char *)buf, 0);
+		if (op->req.data.file.fd < 0) {
+			ret = -errno;
+			goto err_id_free;
+		}
+		op->req.data.buf = buf;
+		op->req.data.len = len;
+	}
+
+	ret = base64_html_encode(blk_id, strlen(blk_id), &b64_blk_id);
+	if (ret < 0) {
+		ret = -EINVAL;
+		goto err_data_close;
+	}
+
+	op->method = REQ_METHOD_PUT;
+	ret = asprintf(&op->url,
+		       "https://%s.blob.core.windows.net"
+		       "/%s/%s?comp=block&blockid=%s",
+		       account, container, bname, b64_blk_id);
+	free(b64_blk_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_data_close;
+	}
+
+	ret = azure_op_block_put_fill_hdr(op);
+	if (ret < 0)
+		goto err_url_free;
+
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_data_close:
+	if (op->req.data.type == AOP_DATA_FILE)
+		close(op->req.data.file.fd);
+err_id_free:
+	free(blk_put_req->blk_id);
+err_bname_free:
+	free(blk_put_req->bname);
+err_container_free:
+	free(blk_put_req->container);
+err_account_free:
+	free(blk_put_req->account);
+err_out:
+	return ret;
+}
+
+static void
 azure_req_blob_del_free(struct azure_req_blob_del *bl_del_req)
 {
 	free(bl_del_req->account);
@@ -1507,6 +1677,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_PAGE_PUT:
 		azure_req_page_put_free(&op->req.page_put);
 		break;
+	case AOP_BLOCK_PUT:
+		azure_req_block_put_free(&op->req.block_put);
+		break;
 	case AOP_BLOB_DEL:
 		azure_req_blob_del_free(&op->req.blob_del);
 		break;
@@ -1543,6 +1716,7 @@ azure_rsp_free(struct azure_op *op)
 	case AOP_BLOB_PUT:
 	case AOP_BLOB_GET:
 	case AOP_PAGE_PUT:
+	case AOP_BLOCK_PUT:
 	case AOP_BLOB_DEL:
 		/* nothing to do */
 		break;
@@ -1592,6 +1766,7 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_BLOB_PUT:
 	case AOP_BLOB_GET:
 	case AOP_PAGE_PUT:
+	case AOP_BLOCK_PUT:
 	case AOP_BLOB_DEL:
 		/* nothing to do */
 		ret = 0;

@@ -24,6 +24,7 @@ enum azure_opcode {
 	AOP_BLOB_PUT,
 	AOP_BLOB_GET,
 	AOP_PAGE_PUT,
+	AOP_BLOCK_PUT,
 	AOP_BLOB_DEL,
 };
 
@@ -125,6 +126,18 @@ struct azure_rsp_page_put {
 	uint64_t seq_num;
 };
 
+/* The block must be less than or equal to 4 MB in size. */
+#define BLOB_BLOCK_MAX (4 * 1024 * 1024)
+struct azure_req_block_put {
+	char *account;
+	char *container;
+	char *bname;
+	char *blk_id;
+};
+struct azure_rsp_block_put {
+	char *content_md5;
+};
+
 struct azure_req_blob_del {
 	char *account;
 	char *container;
@@ -177,6 +190,7 @@ struct azure_op {
 			struct azure_req_blob_put blob_put;
 			struct azure_req_blob_get blob_get;
 			struct azure_req_page_put page_put;
+			struct azure_req_block_put block_put;
 			struct azure_req_blob_del blob_del;
 		};
 		struct azure_op_data data;
@@ -196,6 +210,7 @@ struct azure_op {
 			 * struct azure_rsp_blob_put blob_put;
 			 * struct azure_rsp_blob_get blob_get;
 			 * struct azure_rsp_page_put page_put;
+			 * struct azure_rsp_block_put block_put;
 			 * struct azure_rsp_blob_del blob_del;
 			 */
 		};
@@ -252,6 +267,16 @@ azure_op_page_put(const char *account,
 		  uint64_t off,
 		  uint64_t len,
 		  struct azure_op *op);
+
+int
+azure_op_block_put(const char *account,
+		   const char *container,
+		   const char *bname,
+		   const char *blk_id,
+		   enum azure_op_data_type data_type,
+		   uint8_t *buf,
+		   uint64_t len,
+		   struct azure_op *op);
 
 int
 azure_op_blob_del(const char *account,
