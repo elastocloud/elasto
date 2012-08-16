@@ -903,7 +903,7 @@ azure_op_blob_put(const char *account,
 	} else if (data_type == AOP_DATA_FILE) {
 		bl_put_req->type = BLOB_TYPE_BLOCK;
 		op->req.data.type = AOP_DATA_FILE;
-		op->req.data.file.fd = open((char *)buf, 0);
+		op->req.data.file.fd = open((char *)buf, O_RDONLY);
 		if (op->req.data.file.fd < 0) {
 			ret = -errno;
 			goto err_free_bname;
@@ -1428,7 +1428,7 @@ azure_op_block_put(const char *account,
 		op->req.data.buf = buf;
 		op->req.data.len = len;
 	} else if (data_type == AOP_DATA_FILE) {
-		op->req.data.file.fd = open((char *)buf, 0);
+		op->req.data.file.fd = open((char *)buf, O_RDONLY);
 		if (op->req.data.file.fd < 0) {
 			ret = -errno;
 			goto err_id_free;
