@@ -25,6 +25,7 @@ enum azure_opcode {
 	AOP_BLOB_GET,
 	AOP_PAGE_PUT,
 	AOP_BLOCK_PUT,
+	AOP_BLOCK_LIST_PUT,
 	AOP_BLOB_DEL,
 };
 
@@ -138,6 +139,24 @@ struct azure_rsp_block_put {
 	char *content_md5;
 };
 
+enum azure_block_state {
+	BLOCK_STATE_COMMITED,
+	BLOCK_STATE_UNCOMMITED,
+	BLOCK_STATE_LATEST,
+};
+
+struct azure_block {
+	enum azure_block_state state;
+	char *id;
+	struct list_node list;
+};
+struct azure_req_block_list_put {
+	char *account;
+	char *container;
+	char *bname;
+	struct list_head blks;
+};
+
 struct azure_req_blob_del {
 	char *account;
 	char *container;
@@ -191,6 +210,7 @@ struct azure_op {
 			struct azure_req_blob_get blob_get;
 			struct azure_req_page_put page_put;
 			struct azure_req_block_put block_put;
+			struct azure_req_block_list_put block_list_put;
 			struct azure_req_blob_del blob_del;
 		};
 		struct azure_op_data data;
@@ -277,6 +297,13 @@ azure_op_block_put(const char *account,
 		   uint8_t *buf,
 		   uint64_t len,
 		   struct azure_op *op);
+
+int
+azure_op_block_list_put(const char *account,
+			const char *container,
+			const char *bname,
+			struct list_head *blks,
+			struct azure_op *op);
 
 int
 azure_op_blob_del(const char *account,

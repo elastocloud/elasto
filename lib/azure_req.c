@@ -31,6 +31,7 @@
 #include <libxml/tree.h>
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
+#include <libxml/xmlwriter.h>
 
 #include "ccan/list/list.h"
 #include "base64.h"
@@ -1479,6 +1480,226 @@ err_out:
 }
 
 static void
+azure_req_block_list_put_free(struct azure_req_block_list_put *blk_list_put_req)
+{
+	struct azure_block *blk;
+	struct azure_block *blk_n;
+	free(blk_list_put_req->account);
+	free(blk_list_put_req->container);
+	free(blk_list_put_req->bname);
+	list_for_each_safe(&blk_list_put_req->blks, blk, blk_n, list) {
+		free(blk->id);
+		free(blk);
+	}
+}
+
+static int
+azure_op_block_list_put_fill_hdr(struct azure_op *op)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* different to the version in management */
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					  "x-ms-version: 2009-09-19");
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* common headers and signature added later */
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+static int
+azure_op_block_list_put_fill_body(struct list_head *blks,
+				  struct azure_op_data *req_data)
+{
+	int ret;
+	xmlTextWriter *writer;
+	xmlBuffer *xbuf;
+	struct azure_block *blk;
+
+	xbuf = xmlBufferCreate();
+	if (xbuf == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	writer = xmlNewTextWriterMemory(xbuf, 0);
+	if (writer == NULL) {
+		ret = -ENOMEM;
+		goto err_xbuf_free;
+	}
+
+	ret = xmlTextWriterStartDocument(writer, "1.0", "utf-8", NULL);
+	if (ret < 0) {
+		ret = -EIO;
+		goto err_writer_free;
+	}
+
+	ret = xmlTextWriterStartElement(writer, BAD_CAST "BlockList");
+	if (ret < 0) {
+		ret = -EIO;
+		goto err_writer_free;
+	}
+
+	list_for_each(blks, blk, list) {
+		const char *state;
+		char *b64_id;
+
+		switch(blk->state) {
+		case BLOCK_STATE_COMMITED:
+			state = "Committed";
+			break;
+		case BLOCK_STATE_UNCOMMITED:
+			state = "Uncommitted";
+			break;
+		case BLOCK_STATE_LATEST:
+			state = "Latest";
+			break;
+		default:
+			ret = -EINVAL;
+			goto err_writer_free;
+			break;
+		}
+		ret = base64_encode(blk->id, strlen(blk->id), &b64_id);
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_writer_free;
+		}
+		ret = xmlTextWriterWriteFormatElement(writer, BAD_CAST state,
+						     "%s", b64_id);
+		free(b64_id);
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_writer_free;
+		}
+	}
+
+	ret = xmlTextWriterEndElement(writer);
+	if (ret < 0) {
+		ret = -EBADF;
+		goto err_writer_free;
+	}
+
+	ret = xmlTextWriterEndDocument(writer);
+	if (ret < 0) {
+		ret = -EBADF;
+		goto err_writer_free;
+	}
+
+	req_data->len = xmlBufferLength(xbuf);
+	/* XXX could use xmlBufferDetach to avoid the memcpy? */
+	req_data->buf = malloc(req_data->len);
+	if (req_data->buf == NULL) {
+		ret = -ENOMEM;
+		goto err_writer_free;
+	}
+	memcpy(req_data->buf, xmlBufferContent(xbuf), req_data->len);
+	req_data->type = AOP_DATA_IOV;
+
+	ret = 0;
+err_writer_free:
+	xmlFreeTextWriter(writer);
+err_xbuf_free:
+	xmlBufferFree(xbuf);
+err_out:
+	return ret;
+}
+
+/*
+ * @blks is a list of blocks to commit, items in the list are not duped
+ */
+int
+azure_op_block_list_put(const char *account,
+			const char *container,
+			const char *bname,
+			struct list_head *blks,
+			struct azure_op *op)
+{
+	int ret;
+	struct azure_req_block_list_put *blk_list_put_req;
+
+	op->opcode = AOP_BLOCK_LIST_PUT;
+	blk_list_put_req = &op->req.block_list_put;
+
+	blk_list_put_req->account = strdup(account);
+	if (blk_list_put_req->account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	blk_list_put_req->container = strdup(container);
+	if (blk_list_put_req->container == NULL) {
+		ret = -ENOMEM;
+		goto err_account_free;
+	}
+
+	blk_list_put_req->bname = strdup(bname);
+	if (blk_list_put_req->bname == NULL) {
+		ret = -ENOMEM;
+		goto err_container_free;
+	}
+
+	op->method = REQ_METHOD_PUT;
+	ret = asprintf(&op->url,
+		       "https://%s.blob.core.windows.net"
+		       "/%s/%s?comp=blocklist",
+		       account, container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_bname_free;
+	}
+
+	ret = azure_op_block_list_put_fill_hdr(op);
+	if (ret < 0)
+		goto err_url_free;
+
+	ret = azure_op_block_list_put_fill_body(blks, &op->req.data);
+	if (ret < 0)
+		goto err_url_free;
+
+	blk_list_put_req->blks = *blks;
+
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_bname_free:
+	free(blk_list_put_req->bname);
+err_container_free:
+	free(blk_list_put_req->container);
+err_account_free:
+	free(blk_list_put_req->account);
+err_out:
+	return ret;
+}
+static void
 azure_req_blob_del_free(struct azure_req_blob_del *bl_del_req)
 {
 	free(bl_del_req->account);
@@ -1680,6 +1901,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_BLOCK_PUT:
 		azure_req_block_put_free(&op->req.block_put);
 		break;
+	case AOP_BLOCK_LIST_PUT:
+		azure_req_block_list_put_free(&op->req.block_list_put);
+		break;
 	case AOP_BLOB_DEL:
 		azure_req_blob_del_free(&op->req.blob_del);
 		break;
@@ -1717,6 +1941,7 @@ azure_rsp_free(struct azure_op *op)
 	case AOP_BLOB_GET:
 	case AOP_PAGE_PUT:
 	case AOP_BLOCK_PUT:
+	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
 		/* nothing to do */
 		break;
@@ -1767,6 +1992,7 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_BLOB_GET:
 	case AOP_PAGE_PUT:
 	case AOP_BLOCK_PUT:
+	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
 		/* nothing to do */
 		ret = 0;
