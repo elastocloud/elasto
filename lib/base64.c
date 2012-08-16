@@ -94,6 +94,70 @@ base64_encode(const void *data, int size, char **str)
     return (int) strlen(s);
 }
 
+/*
+ * Replace all occurances of +, / and = with a percent-encoded hexadecimal
+ * sequences: '+' = '%2B', '/' = '%2F' and '=' = '%3D'
+ * Note: this could be optimized with changes to base64_encode
+ */
+ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
+base64_html_encode(const void *data, int size, char **str)
+{
+	int url_chrs;
+	int new_len;
+	char *b64_str;
+	char *new_b64_str;
+	char *s;
+	int old_len;
+	int i;
+
+	old_len = base64_encode(data, size, &b64_str);
+	if (old_len < 0) {
+		*str = NULL;
+		return old_len;
+	}
+
+	url_chrs = 0;
+	for (i = 0; i < old_len; i++) {
+		if ((b64_str[i] == '+')
+		 || (b64_str[i] == '/')
+		 || (b64_str[i] == '=')) {
+			url_chrs++;
+		}
+	}
+	if (url_chrs == 0) {
+		*str = b64_str;
+		return old_len;
+	}
+
+	new_len = old_len + (2 * url_chrs);
+	new_b64_str = malloc(new_len + 1);
+	if (new_b64_str == NULL) {
+		*str = NULL;
+		return -1;
+	}
+
+	s = new_b64_str;
+	for (i = 0; i < old_len; i++) {
+		if (b64_str[i] == '+') {
+			memcpy(s, "%2B", 3);
+			s += 3;
+		} else if (b64_str[i] == '/') {
+			memcpy(s, "%2F", 3);
+			s += 3;
+		} else if (b64_str[i] == '=') {
+			memcpy(s, "%3D", 3);
+			s += 3;
+		} else {
+			*(s++) = b64_str[i];
+		}
+	}
+	*s = '\0';
+	*str = new_b64_str;
+	free(b64_str);
+
+	return new_len;
+}
+
 #define DECODE_ERROR 0xffffffff
 
 static unsigned int
