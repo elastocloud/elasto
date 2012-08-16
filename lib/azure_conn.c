@@ -132,33 +132,31 @@ curl_read_cb(char *ptr,
 {
 	struct azure_op *op = (struct azure_op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
-	uint64_t *off;
+	uint64_t read_off;
 
-	if (op->req.data.type == AOP_DATA_IOV) {
-		off = &op->req.data.iov.off;
-	} else if (op->req.data.type == AOP_DATA_FILE) {
-		off = &op->req.data.file.off;
-	} else {
-		return -1;	/* not yet supported */
+	if ((op->req.data.type != AOP_DATA_IOV)
+	 && (op->req.data.type != AOP_DATA_FILE)) {
+		return -1;	/* unsupported */
 	}
-	if (*off + num_bytes > op->req.data.len) {
+	read_off = op->req.data.base_off + op->req.data.off;
+	if (read_off + num_bytes > op->req.data.len) {
 		printf("curl_read_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu, capping\n",
-		       op->req.data.len, *off, num_bytes);
-		num_bytes = op->req.data.len - *off;
+		       op->req.data.len, read_off, num_bytes);
+		num_bytes = op->req.data.len - read_off;
 	}
 
 	if (op->req.data.type == AOP_DATA_IOV) {
-		memcpy(ptr, (void *)(op->req.data.buf + *off), num_bytes);
+		memcpy(ptr, (void *)(op->req.data.buf + read_off), num_bytes);
 	} else if (op->req.data.type == AOP_DATA_FILE) {
 		ssize_t ret;
-		ret = pread(op->req.data.file.fd, ptr, num_bytes, *off);
+		ret = pread(op->req.data.file.fd, ptr, num_bytes, read_off);
 		if (ret != num_bytes) {
 			printf("failed to read from file\n");
 			return -1;
 		}
 	}
-	*off += num_bytes;
+	op->req.data.off += num_bytes;
 	return num_bytes;
 }
 
@@ -187,7 +185,7 @@ curl_write_alloc_std(struct azure_op *op)
 			return -ENOMEM;
 		}
 		op->rsp.data.len = clen;
-		op->rsp.data.iov.off = 0;
+		op->rsp.data.off = 0;
 		op->rsp.data.type = AOP_DATA_IOV;
 		break;
 	case AOP_DATA_IOV:
@@ -200,7 +198,7 @@ curl_write_alloc_std(struct azure_op *op)
 		break;
 	case AOP_DATA_FILE:
 		op->rsp.data.len = clen;
-		/* TODO, could preallocate entire file */
+		/* TODO, could fallocate entire file */
 		break;
 	default:
 		assert(true);
@@ -234,33 +232,32 @@ curl_write_std(struct azure_op *op,
 	       uint64_t num_bytes)
 {
 	int ret;
+	uint64_t write_off = op->rsp.data.base_off + op->rsp.data.off;
 
 	switch (op->rsp.data.type) {
 	case AOP_DATA_IOV:
-		if (op->rsp.data.iov.off + num_bytes > op->rsp.data.len) {
+		if (write_off + num_bytes > op->rsp.data.len) {
 			printf("fatal: curl_write_cb buffer exceeded, "
 			       "len %lu off %lu io_sz %lu\n",
-			       op->rsp.data.len, op->rsp.data.iov.off, num_bytes);
+			       op->rsp.data.len, write_off, num_bytes);
 			return -E2BIG;
 		}
-		memcpy((void *)(op->rsp.data.buf + op->rsp.data.iov.off), data,
-		       num_bytes);
-		op->rsp.data.iov.off += num_bytes;
+		memcpy((void *)(op->rsp.data.buf + write_off), data, num_bytes);
+		op->rsp.data.off += num_bytes;
 		break;
 	case AOP_DATA_FILE:
-		if (op->rsp.data.file.off + num_bytes > op->rsp.data.len) {
+		if (write_off + num_bytes > op->rsp.data.len) {
 			printf("fatal: curl_write_cb file exceeded, "
 			       "len %lu off %lu io_sz %lu\n",
-			       op->rsp.data.len, op->rsp.data.iov.off, num_bytes);
+			       op->rsp.data.len, write_off, num_bytes);
 			return -E2BIG;
 		}
-		ret = pwrite(op->rsp.data.file.fd, data, num_bytes,
-			     op->rsp.data.file.off);
+		ret = pwrite(op->rsp.data.file.fd, data, num_bytes, write_off);
 		if (ret != num_bytes) {
 			printf("file write io failed: %s\n", strerror(errno));
 			return -EBADF;
 		}
-		op->rsp.data.file.off += num_bytes;
+		op->rsp.data.off += num_bytes;
 		break;
 	case AOP_DATA_NONE:
 	default:

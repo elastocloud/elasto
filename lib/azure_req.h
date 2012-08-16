@@ -171,18 +171,22 @@ struct azure_rsp_error {
 	uint64_t off;
 };
 
+/*
+ * @base_off is the base offset into the input/output
+ * buffer. i.e. @iov.base_off + @off = read/write offset
+ */
 struct azure_op_data {
 	enum azure_op_data_type type;
 	uint8_t *buf;
 	uint64_t len;
+	uint64_t off;
+	uint64_t base_off;
 	union {
 		struct {
 			/* @buf is allocated io buffer of size @len */
-			uint64_t off;
 		} iov;
 		struct {
 			/* @buf is io file path, file is @len bytes in size */
-			uint64_t off;
 			int fd;
 		} file;
 	};

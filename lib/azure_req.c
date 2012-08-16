@@ -184,7 +184,7 @@ azure_rsp_mgmt_get_sa_keys_process(struct azure_op *op)
 	assert(op->rsp.data.type == AOP_DATA_IOV);
 
 	/* parse response */
-	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.iov.off,
+	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		goto err_out;
@@ -382,7 +382,7 @@ azure_rsp_ctnr_list_process(struct azure_op *op)
 	assert(op->rsp.data.type == AOP_DATA_IOV);
 
 	/* parse response */
-	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.iov.off,
+	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		goto err_out;
@@ -736,7 +736,7 @@ azure_rsp_blob_list_process(struct azure_op *op)
 	assert(op->rsp.data.type == AOP_DATA_IOV);
 
 	/* parse response */
-	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.iov.off,
+	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		goto err_out;
