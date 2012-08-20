@@ -186,10 +186,11 @@ curl_write_alloc_std(struct azure_op *op)
 		}
 		op->rsp.data.len = clen;
 		op->rsp.data.off = 0;
+		op->rsp.data.base_off = 0;
 		op->rsp.data.type = AOP_DATA_IOV;
 		break;
 	case AOP_DATA_IOV:
-		if (clen > op->rsp.data.len) {
+		if (clen + op->rsp.data.base_off > op->rsp.data.len) {
 			printf("preallocated rsp buf not large enough - "
 			       "alloced=%lu, clen=%lu\n",
 			       op->rsp.data.len, clen);
@@ -197,7 +198,7 @@ curl_write_alloc_std(struct azure_op *op)
 		}
 		break;
 	case AOP_DATA_FILE:
-		op->rsp.data.len = clen;
+		op->rsp.data.len = clen + op->rsp.data.base_off;
 		/* TODO, could fallocate entire file */
 		break;
 	default:
@@ -243,7 +244,6 @@ curl_write_std(struct azure_op *op,
 			return -E2BIG;
 		}
 		memcpy((void *)(op->rsp.data.buf + write_off), data, num_bytes);
-		op->rsp.data.off += num_bytes;
 		break;
 	case AOP_DATA_FILE:
 		if (write_off + num_bytes > op->rsp.data.len) {
@@ -257,7 +257,6 @@ curl_write_std(struct azure_op *op,
 			printf("file write io failed: %s\n", strerror(errno));
 			return -EBADF;
 		}
-		op->rsp.data.off += num_bytes;
 		break;
 	case AOP_DATA_NONE:
 	default:
@@ -265,6 +264,7 @@ curl_write_std(struct azure_op *op,
 		assert(true);
 		break;
 	}
+	op->rsp.data.off += num_bytes;
 	return 0;
 }
 
