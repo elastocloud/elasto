@@ -134,29 +134,30 @@ curl_read_cb(char *ptr,
 	uint64_t num_bytes = (size * nmemb);
 	uint64_t read_off;
 
-	if ((op->req.data.type != AOP_DATA_IOV)
-	 && (op->req.data.type != AOP_DATA_FILE)) {
+	if ((op->req.data == NULL)
+	 || ((op->req.data->type != AOP_DATA_IOV)
+	      && (op->req.data->type != AOP_DATA_FILE))) {
 		return -1;	/* unsupported */
 	}
-	read_off = op->req.data.base_off + op->req.data.off;
-	if (read_off + num_bytes > op->req.data.len) {
+	read_off = op->req.data->base_off + op->req.data->off;
+	if (read_off + num_bytes > op->req.data->len) {
 		printf("curl_read_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu, capping\n",
-		       op->req.data.len, read_off, num_bytes);
-		num_bytes = op->req.data.len - read_off;
+		       op->req.data->len, read_off, num_bytes);
+		num_bytes = op->req.data->len - read_off;
 	}
 
-	if (op->req.data.type == AOP_DATA_IOV) {
-		memcpy(ptr, (void *)(op->req.data.buf + read_off), num_bytes);
-	} else if (op->req.data.type == AOP_DATA_FILE) {
+	if (op->req.data->type == AOP_DATA_IOV) {
+		memcpy(ptr, (void *)(op->req.data->buf + read_off), num_bytes);
+	} else if (op->req.data->type == AOP_DATA_FILE) {
 		ssize_t ret;
-		ret = pread(op->req.data.file.fd, ptr, num_bytes, read_off);
+		ret = pread(op->req.data->file.fd, ptr, num_bytes, read_off);
 		if (ret != num_bytes) {
 			printf("failed to read from file\n");
 			return -1;
 		}
 	}
-	op->req.data.off += num_bytes;
+	op->req.data->off += num_bytes;
 	return num_bytes;
 }
 
@@ -176,29 +177,26 @@ static int
 curl_write_alloc_std(struct azure_op *op)
 {
 	uint64_t clen = op->rsp.clen;
-	switch (op->rsp.data.type) {
-	case AOP_DATA_NONE:
+
+	if (op->rsp.data == NULL) {
+		int ret;
 		/* requester wants us to allocate a recv iov */
 		/* TODO check clen isn't too huge */
-		op->rsp.data.buf = malloc(clen);
-		if (op->rsp.data.buf == NULL) {
-			return -ENOMEM;
-		}
-		op->rsp.data.len = clen;
-		op->rsp.data.off = 0;
-		op->rsp.data.base_off = 0;
-		op->rsp.data.type = AOP_DATA_IOV;
-		break;
+		ret = azure_op_data_iov_new(NULL, clen, 0, true, &op->rsp.data);
+		return ret;
+	}
+
+	switch (op->rsp.data->type) {
 	case AOP_DATA_IOV:
-		if (clen + op->rsp.data.base_off > op->rsp.data.len) {
+		if (clen + op->rsp.data->base_off > op->rsp.data->len) {
 			printf("preallocated rsp buf not large enough - "
 			       "alloced=%lu, clen=%lu\n",
-			       op->rsp.data.len, clen);
+			       op->rsp.data->len, clen);
 			return -E2BIG;
 		}
 		break;
 	case AOP_DATA_FILE:
-		op->rsp.data.len = clen + op->rsp.data.base_off;
+		op->rsp.data->len = clen + op->rsp.data->base_off;
 		/* TODO, could fallocate entire file */
 		break;
 	default:
@@ -233,38 +231,39 @@ curl_write_std(struct azure_op *op,
 	       uint64_t num_bytes)
 {
 	int ret;
-	uint64_t write_off = op->rsp.data.base_off + op->rsp.data.off;
+	uint64_t write_off = op->rsp.data->base_off + op->rsp.data->off;
 
-	switch (op->rsp.data.type) {
+	/* rsp buffer must have been allocated */
+	assert(op->rsp.data != NULL);
+
+	switch (op->rsp.data->type) {
 	case AOP_DATA_IOV:
-		if (write_off + num_bytes > op->rsp.data.len) {
+		if (write_off + num_bytes > op->rsp.data->len) {
 			printf("fatal: curl_write_cb buffer exceeded, "
 			       "len %lu off %lu io_sz %lu\n",
-			       op->rsp.data.len, write_off, num_bytes);
+			       op->rsp.data->len, write_off, num_bytes);
 			return -E2BIG;
 		}
-		memcpy((void *)(op->rsp.data.buf + write_off), data, num_bytes);
+		memcpy((void *)(op->rsp.data->buf + write_off), data, num_bytes);
 		break;
 	case AOP_DATA_FILE:
-		if (write_off + num_bytes > op->rsp.data.len) {
+		if (write_off + num_bytes > op->rsp.data->len) {
 			printf("fatal: curl_write_cb file exceeded, "
 			       "len %lu off %lu io_sz %lu\n",
-			       op->rsp.data.len, write_off, num_bytes);
+			       op->rsp.data->len, write_off, num_bytes);
 			return -E2BIG;
 		}
-		ret = pwrite(op->rsp.data.file.fd, data, num_bytes, write_off);
+		ret = pwrite(op->rsp.data->file.fd, data, num_bytes, write_off);
 		if (ret != num_bytes) {
 			printf("file write io failed: %s\n", strerror(errno));
 			return -EBADF;
 		}
 		break;
-	case AOP_DATA_NONE:
 	default:
-		/* rsp buffer must have been allocated */
 		assert(true);
 		break;
 	}
-	op->rsp.data.off += num_bytes;
+	op->rsp.data->off += num_bytes;
 	return 0;
 }
 
@@ -345,14 +344,19 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_fail_cb);
 	} else if (strcmp(op->method, REQ_METHOD_PUT) == 0) {
+		if (op->req.data == NULL) {
+			/* no data to put */
+			return -EINVAL;
+		}
 		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 1);
 		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE,
-				 op->req.data.len);
+				 op->req.data->len);
 		curl_easy_setopt(aconn->curl, CURLOPT_READDATA, op);
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_read_cb);
 		/* must be set for PUT, TODO ensure not already set */
-		ret = asprintf(&hdr_str, "Content-Length: %lu", op->req.data.len);
+		ret = asprintf(&hdr_str, "Content-Length: %lu",
+			       op->req.data->len);
 		if (ret < 0) {
 			return -ENOMEM;
 		}

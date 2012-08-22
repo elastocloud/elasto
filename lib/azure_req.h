@@ -217,7 +217,7 @@ struct azure_op {
 			struct azure_req_block_list_put block_list_put;
 			struct azure_req_blob_del blob_del;
 		};
-		struct azure_op_data data;
+		struct azure_op_data *data;
 	} req;
 
 	struct {
@@ -240,9 +240,27 @@ struct azure_op {
 		};
 		uint64_t clen;
 		uint64_t write_cbs;
-		struct azure_op_data data;
+		struct azure_op_data *data;
 	} rsp;
 };
+
+void
+azure_op_data_destroy(struct azure_op_data **data);
+
+int
+azure_op_data_file_new(char *path,
+		       uint64_t file_len,
+		       uint64_t base_off,
+		       int open_flags,
+		       mode_t create_mode,
+		       struct azure_op_data **data);
+
+int
+azure_op_data_iov_new(uint8_t *buf,
+		      uint64_t buf_len,
+		      uint64_t base_off,
+		      bool buf_alloc,
+		      struct azure_op_data **data);
 
 int
 azure_op_mgmt_get_sa_keys(const char *sub_id,

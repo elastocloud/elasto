@@ -79,6 +79,92 @@ azure_op_mgmt_url_check_sa_availability(const char *sub_id, const char *service_
 }
 #endif
 
+void
+azure_op_data_destroy(struct azure_op_data **data)
+{
+	struct azure_op_data *adata = *data;
+	if (adata == NULL)
+		return;
+	free(adata->buf);
+	if (adata->type == AOP_DATA_FILE)
+		close(adata->file.fd);
+	free(adata);
+	*data = NULL;
+}
+
+/*
+ * allocate a file based data structure, opening the underlying file
+ */
+int
+azure_op_data_file_new(char *path,
+		       uint64_t file_len,
+		       uint64_t base_off,
+		       int open_flags,
+		       mode_t create_mode,
+		       struct azure_op_data **data)
+{
+	struct azure_op_data *adata;
+
+	adata = malloc(sizeof(*adata));
+	if (adata == NULL)
+		return -ENOMEM;
+
+	adata->type = AOP_DATA_FILE;
+	if (open_flags | O_CREAT)
+		adata->file.fd = open(path, open_flags, create_mode);
+	else
+		adata->file.fd = open(path, open_flags);
+
+	if (adata->file.fd == -1) {
+		free(adata);
+		return -errno;
+	}
+	adata->buf = (uint8_t *)path;
+	adata->len = file_len;
+	adata->off = 0;
+	adata->base_off = base_off;
+	*data = adata;
+
+	return 0;
+}
+
+/*
+ * allocate an iov based data structure
+ * if @buf_alloc is set then allocate @buf_len, ignoring @buf and @base_off
+ */
+int
+azure_op_data_iov_new(uint8_t *buf,
+		      uint64_t buf_len,
+		      uint64_t base_off,
+		      bool buf_alloc,
+		      struct azure_op_data **data)
+{
+	struct azure_op_data *adata;
+
+	adata = malloc(sizeof(*adata));
+	if (adata == NULL)
+		return -ENOMEM;
+
+	adata->type = AOP_DATA_IOV;
+	if (buf_alloc) {
+		assert(buf_len > 0);
+		adata->buf = malloc(buf_len);
+		if (adata->buf == NULL) {
+			free(adata);
+			return -ENOMEM;
+		}
+		adata->base_off = 0;
+	} else {
+		adata->buf = buf;
+		adata->base_off = base_off;
+	}
+	adata->len = buf_len;
+	adata->off = 0;
+	*data = adata;
+
+	return 0;
+}
+
 static char *
 gen_date_str(void)
 {
@@ -181,11 +267,11 @@ azure_rsp_mgmt_get_sa_keys_process(struct azure_op *op)
 	xmlXPathContext *xp_ctx;
 
 	assert(op->opcode == AOP_MGMT_GET_SA_KEYS);
-	assert(op->rsp.data.type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == AOP_DATA_IOV);
 
 	/* parse response */
-	assert(op->rsp.data.base_off == 0);
-	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.off,
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(false, op->rsp.data->buf, op->rsp.data->off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		goto err_out;
@@ -303,13 +389,10 @@ azure_op_ctnr_list(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	op->rsp.data.buf = malloc(1024 * 1024);	/* XXX determine best size */
-	if (op->rsp.data.buf == NULL) {
-		ret = -ENOMEM;
+	ret = azure_op_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	if (ret < 0) {
 		goto err_url_free;
 	}
-	op->rsp.data.len = (1024 * 1024);
-	op->rsp.data.type = AOP_DATA_IOV;
 
 	ret = azure_op_ctnr_list_fill_hdr(op);
 	if (ret < 0) {
@@ -321,7 +404,7 @@ azure_op_ctnr_list(const char *account,
 	return 0;
 
 err_buf_free:
-	free(op->rsp.data.buf);
+	azure_op_data_destroy(&op->rsp.data);
 err_url_free:
 	free(op->url);
 err_acc_free:
@@ -380,11 +463,11 @@ azure_rsp_ctnr_list_process(struct azure_op *op)
 	struct azure_ctnr *ctnr_n;
 
 	assert(op->opcode == AOP_CONTAINER_LIST);
-	assert(op->rsp.data.type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == AOP_DATA_IOV);
 
 	/* parse response */
-	assert(op->rsp.data.base_off == 0);
-	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.off,
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(false, op->rsp.data->buf, op->rsp.data->off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		goto err_out;
@@ -613,13 +696,10 @@ azure_op_blob_list(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	op->rsp.data.buf = malloc(1024 * 1024);	/* XXX determine best size */
-	if (op->rsp.data.buf == NULL) {
-		ret = -ENOMEM;
+	ret = azure_op_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	if (ret < 0) {
 		goto err_url_free;
 	}
-	op->rsp.data.len = (1024 * 1024);
-	op->rsp.data.type = AOP_DATA_IOV;
 
 	ret = azure_op_blob_list_fill_hdr(op);
 	if (ret < 0) {
@@ -631,7 +711,7 @@ azure_op_blob_list(const char *account,
 	return 0;
 
 err_buf_free:
-	free(op->rsp.data.buf);
+	azure_op_data_destroy(&op->rsp.data);
 err_url_free:
 	free(op->url);
 err_ctnr_free:
@@ -735,11 +815,11 @@ azure_rsp_blob_list_process(struct azure_op *op)
 	struct azure_blob *blob_n;
 
 	assert(op->opcode == AOP_BLOB_LIST);
-	assert(op->rsp.data.type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == AOP_DATA_IOV);
 
 	/* parse response */
-	assert(op->rsp.data.base_off == 0);
-	ret = azure_xml_slurp(false, op->rsp.data.buf, op->rsp.data.off,
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(false, op->rsp.data->buf, op->rsp.data->off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
 		goto err_out;
@@ -900,19 +980,20 @@ azure_op_blob_put(const char *account,
 		assert(buf == NULL);	/* block only */
 	} else if (data_type == AOP_DATA_IOV) {
 		bl_put_req->type = BLOB_TYPE_BLOCK;
-		op->req.data.type = AOP_DATA_IOV;
-		op->req.data.buf = buf;
-		op->req.data.len = len;
-	} else if (data_type == AOP_DATA_FILE) {
-		bl_put_req->type = BLOB_TYPE_BLOCK;
-		op->req.data.type = AOP_DATA_FILE;
-		op->req.data.file.fd = open((char *)buf, O_RDONLY);
-		if (op->req.data.file.fd < 0) {
-			ret = -errno;
+
+		ret = azure_op_data_iov_new(buf, len, 0, false, &op->req.data);
+		if (ret < 0) {
 			goto err_free_bname;
 		}
-		op->req.data.buf = buf;
-		op->req.data.len = len;
+
+	} else if (data_type == AOP_DATA_FILE) {
+		bl_put_req->type = BLOB_TYPE_BLOCK;
+
+		ret = azure_op_data_file_new((char *)buf, len, 0, O_RDONLY, 0,
+					     &op->req.data);
+		if (ret < 0) {
+			goto err_free_bname;
+		}
 	}
 
 	op->method = REQ_METHOD_PUT;
@@ -936,8 +1017,11 @@ azure_op_blob_put(const char *account,
 err_free_url:
 	free(op->url);
 err_data_close:
-	if (op->req.data.type == AOP_DATA_FILE)
-		close(op->req.data.file.fd);
+	/* should not free data.buf given by the caller on error */
+	if (op->req.data != NULL) {
+		op->req.data->buf = NULL;
+		azure_op_data_destroy(&op->req.data);
+	}
 err_free_bname:
 	free(bl_put_req->bname);
 err_free_container:
@@ -1083,7 +1167,6 @@ azure_op_blob_get(const char *account,
 		get_req->len = len;
 	}
 
-	op->rsp.data.type = data_type;
 	switch (data_type) {
 	case AOP_DATA_NONE:
 		/* recv buffer allocated when data arrives */
@@ -1092,19 +1175,21 @@ azure_op_blob_get(const char *account,
 	case AOP_DATA_IOV:
 		/* caller request data is stuffed into this buffer */
 		assert(buf != NULL);
-		op->rsp.data.buf = buf;
-		op->rsp.data.len = len;
+		ret = azure_op_data_iov_new(buf, len, 0, false, &op->rsp.data);
+		if (ret < 0) {
+			goto err_bname_free;
+		}
 		break;
 	case AOP_DATA_FILE:
 		/* file name is stored in buf */
 		assert(buf != NULL);
-		op->rsp.data.file.fd = open((char *)buf, O_CREAT | O_WRONLY,
-					S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
-		if (op->rsp.data.file.fd < 0) {
-			ret = -errno;
+		ret = azure_op_data_file_new((char *)buf, len, 0,
+					     O_CREAT | O_WRONLY,
+					  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH,
+					     &op->rsp.data);
+		if (ret < 0) {
 			goto err_bname_free;
 		}
-		op->rsp.data.buf = buf;
 		break;
 	default:
 		assert(true);	/* unsupported */
@@ -1132,9 +1217,11 @@ azure_op_blob_get(const char *account,
 err_url_free:
 	free(op->url);
 err_data_close:
-	if (op->req.data.type == AOP_DATA_FILE)
-		close(op->req.data.file.fd);
-	op->rsp.data.buf = NULL;
+	/* should not free data.buf given by the caller on error */
+	if (op->rsp.data != NULL) {
+		op->rsp.data->buf = NULL;
+		azure_op_data_destroy(&op->rsp.data);
+	}
 err_bname_free:
 	free(get_req->bname);
 err_ctnr_free:
@@ -1278,9 +1365,10 @@ azure_op_page_put(const char *account,
 		pg_put_req->clear_data = true;
 	} else {
 		pg_put_req->clear_data = false;
-		op->req.data.type = AOP_DATA_IOV;
-		op->req.data.buf = buf;
-		op->req.data.len = len;
+		ret = azure_op_data_iov_new(buf, len, 0, false, &op->req.data);
+		if (ret < 0) {
+			goto err_free_bname;
+		}
 	}
 
 	op->method = REQ_METHOD_PUT;
@@ -1289,7 +1377,7 @@ azure_op_page_put(const char *account,
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_free_bname;
+		goto err_data_close;
 	}
 
 	/* mandatory headers */
@@ -1303,6 +1391,12 @@ azure_op_page_put(const char *account,
 	return 0;
 err_free_url:
 	free(op->url);
+err_data_close:
+	/* should not free data.buf given by the caller on error */
+	if (op->req.data != NULL) {
+		op->req.data->buf = NULL;
+		azure_op_data_destroy(&op->req.data);
+	}
 err_free_bname:
 	free(pg_put_req->bname);
 err_free_container:
@@ -1426,18 +1520,17 @@ azure_op_block_put(const char *account,
 		goto err_bname_free;
 	}
 
-	op->req.data.type = data_type;
 	if (data_type == AOP_DATA_IOV) {
-		op->req.data.buf = buf;
-		op->req.data.len = len;
-	} else if (data_type == AOP_DATA_FILE) {
-		op->req.data.file.fd = open((char *)buf, O_RDONLY);
-		if (op->req.data.file.fd < 0) {
-			ret = -errno;
+		ret = azure_op_data_iov_new(buf, len, 0, false, &op->req.data);
+		if (ret < 0) {
 			goto err_id_free;
 		}
-		op->req.data.buf = buf;
-		op->req.data.len = len;
+	} else if (data_type == AOP_DATA_FILE) {
+		ret = azure_op_data_file_new((char *)buf, len, 0, O_RDONLY, 0,
+					     &op->req.data);
+		if (ret < 0) {
+			goto err_id_free;
+		}
 	}
 
 	ret = base64_html_encode(blk_id, strlen(blk_id), &b64_blk_id);
@@ -1468,8 +1561,11 @@ azure_op_block_put(const char *account,
 err_url_free:
 	free(op->url);
 err_data_close:
-	if (op->req.data.type == AOP_DATA_FILE)
-		close(op->req.data.file.fd);
+	/* should not free data.buf given by the caller on error */
+	if (op->req.data != NULL) {
+		op->req.data->buf = NULL;
+		azure_op_data_destroy(&op->req.data);
+	}
 err_id_free:
 	free(blk_put_req->blk_id);
 err_bname_free:
@@ -1538,7 +1634,7 @@ err_out:
 
 static int
 azure_op_block_list_put_fill_body(struct list_head *blks,
-				  struct azure_op_data *req_data)
+				  struct azure_op_data **req_data)
 {
 	int ret;
 	xmlTextWriter *writer;
@@ -1614,15 +1710,13 @@ azure_op_block_list_put_fill_body(struct list_head *blks,
 		goto err_writer_free;
 	}
 
-	req_data->len = xmlBufferLength(xbuf);
+	ret = azure_op_data_iov_new(NULL, xmlBufferLength(xbuf), 0, true,
+				    req_data);
 	/* XXX could use xmlBufferDetach to avoid the memcpy? */
-	req_data->buf = malloc(req_data->len);
-	if (req_data->buf == NULL) {
-		ret = -ENOMEM;
+	if (ret < 0) {
 		goto err_writer_free;
 	}
-	memcpy(req_data->buf, xmlBufferContent(xbuf), req_data->len);
-	req_data->type = AOP_DATA_IOV;
+	memcpy((*req_data)->buf, xmlBufferContent(xbuf), (*req_data)->len);
 
 	ret = 0;
 err_writer_free:
@@ -1875,9 +1969,7 @@ err_out:
 static void
 azure_req_free(struct azure_op *op)
 {
-	free(op->req.data.buf);
-	if (op->req.data.type == AOP_DATA_FILE)
-		close(op->req.data.file.fd);
+	azure_op_data_destroy(&op->req.data);
 
 	switch (op->opcode) {
 	case AOP_MGMT_GET_SA_KEYS:
@@ -1919,9 +2011,7 @@ azure_req_free(struct azure_op *op)
 static void
 azure_rsp_free(struct azure_op *op)
 {
-	free(op->rsp.data.buf);
-	if (op->rsp.data.type == AOP_DATA_FILE)
-		close(op->rsp.data.file.fd);
+	azure_op_data_destroy(&op->rsp.data);
 
 	if (op->rsp.is_error) {
 		/* error response only, no aop data */
@@ -2007,4 +2097,3 @@ azure_rsp_process(struct azure_op *op)
 
 	return ret;
 }
-

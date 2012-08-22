@@ -143,7 +143,8 @@ cli_get_handle(struct azure_conn *aconn,
 	ret = 0;
 err_op_free:
 	/* data buffer contains cli_args->get.local_path */
-	op.rsp.data.buf = NULL;
+	if (op.rsp.data)
+		op.rsp.data->buf = NULL;
 	azure_op_free(&op);
 err_out:
 	return ret;
