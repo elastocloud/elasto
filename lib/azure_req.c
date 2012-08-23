@@ -1467,16 +1467,14 @@ azure_op_block_put(const char *account,
 		   const char *container,
 		   const char *bname,
 		   const char *blk_id,
-		   enum azure_op_data_type data_type,
-		   uint8_t *buf,
-		   uint64_t len,
+		   struct azure_op_data *data,
 		   struct azure_op *op)
 {
 	int ret;
 	struct azure_req_block_put *blk_put_req;
 	char *b64_blk_id;
 
-	if (data_type == AOP_DATA_NONE) {
+	if ((data == NULL) || (data->type == AOP_DATA_NONE)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -1488,7 +1486,7 @@ azure_op_block_put(const char *account,
 		ret = -EINVAL;
 		goto err_out;
 	}
-	if (len > BLOB_BLOCK_MAX) {
+	if (data->len > BLOB_BLOCK_MAX) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -1520,18 +1518,8 @@ azure_op_block_put(const char *account,
 		goto err_bname_free;
 	}
 
-	if (data_type == AOP_DATA_IOV) {
-		ret = azure_op_data_iov_new(buf, len, 0, false, &op->req.data);
-		if (ret < 0) {
-			goto err_id_free;
-		}
-	} else if (data_type == AOP_DATA_FILE) {
-		ret = azure_op_data_file_new((char *)buf, len, 0, O_RDONLY, 0,
-					     &op->req.data);
-		if (ret < 0) {
-			goto err_id_free;
-		}
-	}
+	op->req.data = data;
+	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	ret = base64_html_encode(blk_id, strlen(blk_id), &b64_blk_id);
 	if (ret < 0) {
@@ -1547,7 +1535,7 @@ azure_op_block_put(const char *account,
 	free(b64_blk_id);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_data_close;
+		goto err_id_free;
 	}
 
 	ret = azure_op_block_put_fill_hdr(op);
@@ -1561,11 +1549,7 @@ azure_op_block_put(const char *account,
 err_url_free:
 	free(op->url);
 err_data_close:
-	/* should not free data.buf given by the caller on error */
-	if (op->req.data != NULL) {
-		op->req.data->buf = NULL;
-		azure_op_data_destroy(&op->req.data);
-	}
+	op->req.data = NULL;
 err_id_free:
 	free(blk_put_req->blk_id);
 err_bname_free:

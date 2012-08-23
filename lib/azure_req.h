@@ -315,9 +315,7 @@ azure_op_block_put(const char *account,
 		   const char *container,
 		   const char *bname,
 		   const char *blk_id,
-		   enum azure_op_data_type data_type,
-		   uint8_t *buf,
-		   uint64_t len,
+		   struct azure_op_data *data,
 		   struct azure_op *op);
 
 int
