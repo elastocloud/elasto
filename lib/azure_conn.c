@@ -140,7 +140,7 @@ curl_read_cb(char *ptr,
 		return -1;	/* unsupported */
 	}
 	read_off = op->req.data->base_off + op->req.data->off;
-	if (read_off + num_bytes > op->req.data->len) {
+	if (op->req.data->off + num_bytes > op->req.data->len) {
 		printf("curl_read_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu, capping\n",
 		       op->req.data->len, read_off, num_bytes);
@@ -344,19 +344,14 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_fail_cb);
 	} else if (strcmp(op->method, REQ_METHOD_PUT) == 0) {
-		if (op->req.data == NULL) {
-			/* no data to put */
-			return -EINVAL;
-		}
+		uint64_t len = (op->req.data ? op->req.data->len : 0);
+		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE, len);
 		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 1);
-		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE,
-				 op->req.data->len);
 		curl_easy_setopt(aconn->curl, CURLOPT_READDATA, op);
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_read_cb);
 		/* must be set for PUT, TODO ensure not already set */
-		ret = asprintf(&hdr_str, "Content-Length: %lu",
-			       op->req.data->len);
+		ret = asprintf(&hdr_str, "Content-Length: %lu", len);
 		if (ret < 0) {
 			return -ENOMEM;
 		}
