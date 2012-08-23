@@ -140,6 +140,7 @@ struct azure_rsp_block_put {
 };
 
 enum azure_block_state {
+	BLOCK_STATE_UNSENT = 0,
 	BLOCK_STATE_COMMITED,
 	BLOCK_STATE_UNCOMMITED,
 	BLOCK_STATE_LATEST,
