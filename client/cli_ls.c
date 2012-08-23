@@ -110,7 +110,11 @@ cli_ls_ctnr_handle(struct azure_conn *aconn,
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op.rsp.is_error && (op.rsp.err_code == 404)) {
+		printf("Container %s Not Found\n", ctnr_name);
+		ret = -ENOENT;
+		goto err_op_free;
+	} else if (op.rsp.is_error) {
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
 		goto err_op_free;
@@ -144,6 +148,14 @@ cli_ls_handle(struct azure_conn *aconn,
 	struct azure_op op;
 	int ret;
 
+	if (cli_args->ls.ctnr_name != NULL) {
+		/* list specific container */
+		ret = cli_ls_ctnr_handle(aconn, cli_args->blob_acc,
+					 cli_args->ls.ctnr_name);
+		return ret;
+	}
+
+	/* list all containers */
 	memset(&op, 0, sizeof(op));
 	ret = azure_op_ctnr_list(cli_args->blob_acc, &op);
 	if (ret < 0) {
@@ -168,29 +180,12 @@ cli_ls_handle(struct azure_conn *aconn,
 
 	ctnr_exists = false;
 	list_for_each(&op.rsp.ctnr_list.ctnrs, ctnr, list) {
-		if (cli_args->ls.ctnr_name == NULL) {
 			/* list all containers */
 			printf("\t%s/\n", ctnr->name);
 			ctnr_exists = true;
-		} else if (strcmp(ctnr->name, cli_args->ls.ctnr_name) == 0) {
-			ret = cli_ls_ctnr_handle(aconn, cli_args->blob_acc,
-						 ctnr->name);
-			if (ret < 0) {
-				goto err_op_free;
-			}
-			ctnr_exists = true;
-			break;
-		}
 	}
 	if (!ctnr_exists) {
-		if (cli_args->ls.ctnr_name == NULL) {
-			printf("No Containers Found\n");
-		} else {
-			printf("Container %s Not Found\n",
-			       cli_args->ls.ctnr_name);
-			ret = -ENOENT;
-			goto err_op_free;
-		}
+		printf("No Containers Found\n");
 	}
 
 	ret = 0;
