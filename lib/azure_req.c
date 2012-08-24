@@ -788,6 +788,8 @@ azure_rsp_blob_iter_process(xmlXPathContext *xp_ctx,
 	}
 	iblob->is_page = (strcmp(type, BLOB_TYPE_PAGE) == 0);
 	*blob = iblob;
+	free(len);
+	free(type);
 
 	return 0;
 
@@ -1782,6 +1784,294 @@ err_account_free:
 err_out:
 	return ret;
 }
+
+static void
+azure_req_block_list_get_free(struct azure_req_block_list_get *blk_list_get_req)
+{
+	free(blk_list_get_req->account);
+	free(blk_list_get_req->container);
+	free(blk_list_get_req->bname);
+}
+static void
+azure_rsp_block_list_get_free(struct azure_rsp_block_list_get *blk_list_get_rsp)
+{
+	struct azure_block *blk;
+	struct azure_block *blk_n;
+	list_for_each_safe(&blk_list_get_rsp->blks, blk, blk_n, list) {
+		free(blk->id);
+		free(blk);
+	}
+}
+
+static int
+azure_op_block_list_get_fill_hdr(struct azure_op *op)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* different to the version in management */
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					  "x-ms-version: 2009-09-19");
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* common headers and signature added later */
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+/* request a list of all committed and uncommited blocks for @bname */
+int
+azure_op_block_list_get(const char *account,
+			const char *container,
+			const char *bname,
+			struct azure_op *op)
+{
+	int ret;
+	struct azure_req_block_list_get *blk_list_get_req;
+
+	op->opcode = AOP_BLOCK_LIST_GET;
+	blk_list_get_req = &op->req.block_list_get;
+
+	blk_list_get_req->account = strdup(account);
+	if (blk_list_get_req->account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	blk_list_get_req->container = strdup(container);
+	if (blk_list_get_req->container == NULL) {
+		ret = -ENOMEM;
+		goto err_account_free;
+	}
+
+	blk_list_get_req->bname = strdup(bname);
+	if (blk_list_get_req->bname == NULL) {
+		ret = -ENOMEM;
+		goto err_container_free;
+	}
+
+	op->method = REQ_METHOD_GET;
+	ret = asprintf(&op->url,
+		       "https://%s.blob.core.windows.net"
+		       "/%s/%s?comp=blocklist&blocklisttype=all",
+		       account, container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_bname_free;
+	}
+
+	/* Response does not include a content-length header, alloc buf here */
+	ret = azure_op_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	ret = azure_op_block_list_get_fill_hdr(op);
+	if (ret < 0)
+		goto err_buf_free;
+
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+err_buf_free:
+	azure_op_data_destroy(&op->rsp.data);
+err_url_free:
+	free(op->url);
+err_bname_free:
+	free(blk_list_get_req->bname);
+err_container_free:
+	free(blk_list_get_req->container);
+err_account_free:
+	free(blk_list_get_req->account);
+err_out:
+	return ret;
+}
+
+/*
+ * process a single block list get iteration at @iter, return -ENOENT if no
+ * such iteration exists
+ */
+static int
+azure_rsp_blk_iter_process(xmlXPathContext *xp_ctx,
+			   enum azure_block_state state,
+			   int iter,
+			   struct azure_block **blk_ret)
+{
+	int ret;
+	char *q_base;
+	char *query;
+	char *name;
+	char *size;
+	struct azure_block *blk;
+
+	if (state == BLOCK_STATE_COMMITED) {
+		ret = asprintf(&q_base,
+			       "//BlockList/CommittedBlocks/Block[%d]", iter);
+	} else if (state == BLOCK_STATE_UNCOMMITED) {
+		ret = asprintf(&q_base,
+			       "//BlockList/UncommittedBlocks/Block[%d]", iter);
+	} else {
+		assert(true);	/* invalid */
+	}
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	ret = asprintf(&query, "%s/Name", q_base);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_qbase_free;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &name);
+	free(query);
+	if (ret < 0) {
+		goto err_qbase_free;	/* -ENOENT = all processed */
+	}
+
+	ret = asprintf(&query, "%s/Size", q_base);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_name_free;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &size);
+	free(query);
+	if (ret < 0) {
+		goto err_name_free;
+	}
+
+	blk = malloc(sizeof(*blk));
+	if (blk == NULL) {
+		ret = -ENOMEM;
+		goto err_size_free;
+	}
+	blk->state = state;
+	blk->id = malloc(strlen(name));
+	if (blk->id == NULL) {
+		ret = -ENOMEM;
+		goto err_blk_free;
+	}
+	ret = base64_decode(name, blk->id);
+	if (ret < 0) {
+		ret = -EIO;
+		goto err_id_free;
+	}
+	/* zero terminate */
+	blk->id[ret] = '\0';
+	blk->len = strtoll(size, &query, 10);
+	if (query == size) {
+		printf("unsupported block size response\n");
+		ret = -EINVAL;
+		goto err_id_free;
+	}
+	*blk_ret = blk;
+	free(size);
+	free(name);
+	free(q_base);
+
+	return 0;
+
+err_id_free:
+	free(blk->id);
+err_blk_free:
+	free(blk);
+err_size_free:
+	free(size);
+err_name_free:
+	free(name);
+err_qbase_free:
+	free(q_base);
+err_out:
+	return ret;
+}
+
+static int
+azure_rsp_block_list_get_process(struct azure_op *op)
+{
+	int ret;
+	int i;
+	struct azure_rsp_block_list_get *blk_list_get_rsp;
+	xmlDoc *xp_doc;
+	xmlXPathContext *xp_ctx;
+	struct azure_block *blk;
+	struct azure_block *blk_n;
+
+	assert(op->opcode == AOP_BLOCK_LIST_GET);
+	assert(op->rsp.data->type == AOP_DATA_IOV);
+
+	/* parse response */
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(false, op->rsp.data->buf, op->rsp.data->off,
+			      &xp_doc, &xp_ctx);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	blk_list_get_rsp = &op->rsp.block_list_get;
+
+	list_head_init(&blk_list_get_rsp->blks);
+	for (i = 1; i <= 5000; i++) {
+		ret = azure_rsp_blk_iter_process(xp_ctx, BLOCK_STATE_COMMITED,
+						 i, &blk);
+		if (ret == -ENOENT) {
+			break;
+		} else if (ret < 0) {
+			goto err_blks_free;
+		}
+		list_add_tail(&blk_list_get_rsp->blks, &blk->list);
+		blk_list_get_rsp->num_blks++;
+	}
+	for (i = 1; i <= 5000; i++) {
+		ret = azure_rsp_blk_iter_process(xp_ctx, BLOCK_STATE_UNCOMMITED,
+						 i, &blk);
+		if (ret == -ENOENT) {
+			break;
+		} else if (ret < 0) {
+			goto err_blks_free;
+		}
+		list_add_tail(&blk_list_get_rsp->blks, &blk->list);
+		blk_list_get_rsp->num_blks++;
+	}
+	xmlXPathFreeContext(xp_ctx);
+	xmlFreeDoc(xp_doc);
+	return 0;
+
+err_blks_free:
+	list_for_each_safe(&blk_list_get_rsp->blks, blk, blk_n, list) {
+		free(blk->id);
+		free(blk);
+	}
+	xmlXPathFreeContext(xp_ctx);
+	xmlFreeDoc(xp_doc);
+err_out:
+	return ret;
+}
+
 static void
 azure_req_blob_del_free(struct azure_req_blob_del *bl_del_req)
 {
@@ -1985,6 +2275,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_BLOCK_LIST_PUT:
 		azure_req_block_list_put_free(&op->req.block_list_put);
 		break;
+	case AOP_BLOCK_LIST_GET:
+		azure_req_block_list_get_free(&op->req.block_list_get);
+		break;
 	case AOP_BLOB_DEL:
 		azure_req_blob_del_free(&op->req.blob_del);
 		break;
@@ -2014,6 +2307,9 @@ azure_rsp_free(struct azure_op *op)
 		break;
 	case AOP_BLOB_LIST:
 		azure_rsp_blob_list_free(&op->rsp.blob_list);
+		break;
+	case AOP_BLOCK_LIST_GET:
+		azure_rsp_block_list_get_free(&op->rsp.block_list_get);
 		break;
 	case AOP_CONTAINER_CREATE:
 	case AOP_BLOB_PUT:
@@ -2065,6 +2361,9 @@ azure_rsp_process(struct azure_op *op)
 		break;
 	case AOP_BLOB_LIST:
 		ret = azure_rsp_blob_list_process(op);
+		break;
+	case AOP_BLOCK_LIST_GET:
+		ret = azure_rsp_block_list_get_process(op);
 		break;
 	case AOP_CONTAINER_CREATE:
 	case AOP_BLOB_PUT:

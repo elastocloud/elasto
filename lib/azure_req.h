@@ -26,6 +26,7 @@ enum azure_opcode {
 	AOP_PAGE_PUT,
 	AOP_BLOCK_PUT,
 	AOP_BLOCK_LIST_PUT,
+	AOP_BLOCK_LIST_GET,
 	AOP_BLOB_DEL,
 };
 
@@ -150,12 +151,23 @@ struct azure_block {
 	struct list_node list;
 	enum azure_block_state state;
 	char *id;
+	uint64_t len;
 };
 struct azure_req_block_list_put {
 	char *account;
 	char *container;
 	char *bname;
 	struct list_head *blks;
+};
+
+struct azure_req_block_list_get {
+	char *account;
+	char *container;
+	char *bname;
+};
+struct azure_rsp_block_list_get {
+	int num_blks;
+	struct list_head blks;
 };
 
 struct azure_req_blob_del {
@@ -216,6 +228,7 @@ struct azure_op {
 			struct azure_req_page_put page_put;
 			struct azure_req_block_put block_put;
 			struct azure_req_block_list_put block_list_put;
+			struct azure_req_block_list_get block_list_get;
 			struct azure_req_blob_del blob_del;
 		};
 		uint64_t read_cbs;
@@ -230,6 +243,7 @@ struct azure_op {
 			struct azure_rsp_mgmt_get_sa_keys mgmt_get_sa_keys;
 			struct azure_rsp_ctnr_list ctnr_list;
 			struct azure_rsp_blob_list blob_list;
+			struct azure_rsp_block_list_get block_list_get;
 			/*
 			 * No response specific data handled yet:
 			 * struct azure_rsp_ctnr_create ctnr_create;
@@ -325,6 +339,12 @@ azure_op_block_list_put(const char *account,
 			const char *container,
 			const char *bname,
 			struct list_head *blks,
+			struct azure_op *op);
+
+int
+azure_op_block_list_get(const char *account,
+			const char *container,
+			const char *bname,
 			struct azure_op *op);
 
 int
