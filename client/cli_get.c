@@ -113,11 +113,10 @@ cli_get_handle(struct azure_conn *aconn,
 		goto err_out;
 	}
 	memset(&op, 0, sizeof(op));
-	printf("getting %zd from %s to container %s blob %s\n",
-	       st.st_size,
-	       cli_args->get.local_path,
+	printf("getting container %s blob %s for %s\n",
 	       cli_args->get.ctnr_name,
-	       cli_args->get.blob_name);
+	       cli_args->get.blob_name,
+	       cli_args->get.local_path);
 
 	ret = azure_op_blob_get(cli_args->blob_acc,
 				cli_args->get.ctnr_name,
