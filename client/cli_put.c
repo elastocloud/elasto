@@ -191,6 +191,8 @@ cli_put_blocks(struct azure_conn *aconn,
 		blks_put++;
 	}
 	assert(blks_put == num_blks);
+	/* don't free the args filename */
+	op_data->buf = NULL;
 	azure_op_data_destroy(&op_data);
 
 	return 0;
