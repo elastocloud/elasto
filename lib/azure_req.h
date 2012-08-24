@@ -147,15 +147,15 @@ enum azure_block_state {
 };
 
 struct azure_block {
+	struct list_node list;
 	enum azure_block_state state;
 	char *id;
-	struct list_node list;
 };
 struct azure_req_block_list_put {
 	char *account;
 	char *container;
 	char *bname;
-	struct list_head blks;
+	struct list_head *blks;
 };
 
 struct azure_req_blob_del {

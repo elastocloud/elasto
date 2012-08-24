@@ -1570,10 +1570,11 @@ azure_req_block_list_put_free(struct azure_req_block_list_put *blk_list_put_req)
 	free(blk_list_put_req->account);
 	free(blk_list_put_req->container);
 	free(blk_list_put_req->bname);
-	list_for_each_safe(&blk_list_put_req->blks, blk, blk_n, list) {
+	list_for_each_safe(blk_list_put_req->blks, blk, blk_n, list) {
 		free(blk->id);
 		free(blk);
 	}
+	free(blk_list_put_req->blks);
 }
 
 static int
@@ -1694,6 +1695,7 @@ azure_op_block_list_put_fill_body(struct list_head *blks,
 		goto err_writer_free;
 	}
 
+	/* XXX valgrind complains in curl_read_cb if buffer len is unaligned */
 	ret = azure_op_data_iov_new(NULL, xmlBufferLength(xbuf), 0, true,
 				    req_data);
 	/* XXX could use xmlBufferDetach to avoid the memcpy? */
@@ -1763,7 +1765,7 @@ azure_op_block_list_put(const char *account,
 	if (ret < 0)
 		goto err_url_free;
 
-	blk_list_put_req->blks = *blks;
+	blk_list_put_req->blks = blks;
 
 	/* the connection layer must sign this request before sending */
 	op->sign = true;

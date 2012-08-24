@@ -109,11 +109,12 @@ static int
 cli_put_blocks(struct azure_conn *aconn,
 	       struct cli_args *cli_args,
 	       uint64_t size,
-	       struct list_head *blks)
+	       struct list_head **blks_ret)
 {
 	int num_blks = (size / BLOB_BLOCK_MAX) + ((size % BLOB_BLOCK_MAX) != 0);
 	int ret;
 	struct azure_op_data *op_data;
+	struct list_head *blks;
 	struct azure_block *blk;
 	struct azure_block *blk_n;
 	uint64_t bytes_put = 0;
@@ -134,6 +135,14 @@ cli_put_blocks(struct azure_conn *aconn,
 				     &op_data);
 	if (ret < 0) {
 		return ret;
+	}
+
+	blks = malloc(sizeof(*blks));
+	if (blks == NULL) {
+		/* don't free the args filename */
+		op_data->buf = NULL;
+		azure_op_data_destroy(&op_data);
+		return -ENOMEM;
 	}
 
 	list_head_init(blks);
@@ -194,18 +203,21 @@ cli_put_blocks(struct azure_conn *aconn,
 	/* don't free the args filename */
 	op_data->buf = NULL;
 	azure_op_data_destroy(&op_data);
+	*blks_ret = blks;
 
 	return 0;
 
 err_op_free:
+	/* don't free the args filename */
+	op_data->buf = NULL;
 	azure_op_free(&op);
 err_blks_free:
 	list_for_each_safe(blks, blk, blk_n, list) {
 		free(blk->id);
 		free(blk);
 	}
-	return ret;
 
+	return ret;
 }
 
 int
@@ -265,7 +277,7 @@ cli_put_handle(struct azure_conn *aconn,
 			goto err_out;
 		}
 	} else {
-		struct list_head blks;
+		struct list_head *blks;
 		ret = cli_put_blocks(aconn, cli_args, st.st_size, &blks);
 		if (ret < 0) {
 			goto err_out;
@@ -273,7 +285,7 @@ cli_put_handle(struct azure_conn *aconn,
 		ret = azure_op_block_list_put(cli_args->blob_acc,
 					      cli_args->put.ctnr_name,
 					      cli_args->put.blob_name,
-					      &blks, &op);
+					      blks, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
