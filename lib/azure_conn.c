@@ -347,21 +347,12 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 				 curl_fail_cb);
 	} else if (strcmp(op->method, REQ_METHOD_PUT) == 0) {
 		uint64_t len = (op->req.data ? op->req.data->len : 0);
+		/* INFILESIZE_LARGE sets Content-Length hdr */
 		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE, len);
 		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 1);
 		curl_easy_setopt(aconn->curl, CURLOPT_READDATA, op);
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_read_cb);
-		/* must be set for PUT, TODO ensure not already set */
-		ret = asprintf(&hdr_str, "Content-Length: %lu", len);
-		if (ret < 0) {
-			return -ENOMEM;
-		}
-		op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-		free(hdr_str);
-		if (op->http_hdr == NULL) {
-			return -ENOMEM;
-		}
 	}
 
 	if (op->sign) {
@@ -388,9 +379,6 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 	}
 
 	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, op->http_hdr);
-
-	/* TODO remove this later */
-	curl_easy_setopt(aconn->curl, CURLOPT_VERBOSE, 1);
 
 	return 0;	/* FIXME detect curl_easy_setopt errors */
 }
@@ -444,6 +432,8 @@ azure_conn_init(const char *pem_file,
 		return -ENOMEM;
 	}
 
+	/* TODO remove this later */
+	curl_easy_setopt(aconn->curl, CURLOPT_VERBOSE, 1);
 //	curl_easy_setopt(aconn->curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(aconn->curl, CURLOPT_SSLCERTTYPE, "PEM");
 	curl_easy_setopt(aconn->curl, CURLOPT_SSLCERT, pem_file);
