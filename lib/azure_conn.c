@@ -139,12 +139,14 @@ curl_read_cb(char *ptr,
 	      && (op->req.data->type != AOP_DATA_FILE))) {
 		return -1;	/* unsupported */
 	}
+
+	op->req.read_cbs++;
 	read_off = op->req.data->base_off + op->req.data->off;
 	if (op->req.data->off + num_bytes > op->req.data->len) {
 		printf("curl_read_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu, capping\n",
-		       op->req.data->len, read_off, num_bytes);
-		num_bytes = op->req.data->len - read_off;
+		       op->req.data->len, op->req.data->off, num_bytes);
+		num_bytes = op->req.data->len - op->req.data->off;
 	}
 
 	if (op->req.data->type == AOP_DATA_IOV) {

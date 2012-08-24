@@ -218,6 +218,7 @@ struct azure_op {
 			struct azure_req_block_list_put block_list_put;
 			struct azure_req_blob_del blob_del;
 		};
+		uint64_t read_cbs;
 		struct azure_op_data *data;
 	} req;
 
