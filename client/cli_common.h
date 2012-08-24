@@ -33,6 +33,7 @@ struct cli_args {
 	union {
 		struct {
 			char *ctnr_name;
+			char *blob_name;
 		} ls;
 		struct {
 			char *local_path;
@@ -50,6 +51,12 @@ struct cli_args {
 		} del;
 	};
 };
+
+int
+cli_args_azure_path_parse(const char *progname,
+			  const char *apath,
+			  char **ctnr_r,
+			  char **blob_r);
 
 void
 cli_args_usage(const char *progname,

@@ -57,7 +57,7 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_LS,
 		.name = "ls",
-		.help = "[container]",
+		.help = "[container[/blob]]",
 		.arg_min = 0,
 		.arg_max = 1,
 		.args_parse = &cli_ls_args_parse,
@@ -134,6 +134,85 @@ cli_cmd_lookup(const char *name)
 			return cmd;
 	}
 	return NULL;
+}
+
+/*
+ * parse and azure path in the format:
+ *	/container/blob
+ * return NULL for any components that do not exist, otherwise strdup.
+ * handle corner cases such as double or missing '/'.
+ */
+int
+cli_args_azure_path_parse(const char *progname,
+			  const char *apath,
+			  char **ctnr_r,
+			  char **blob_r)
+{
+	int ret;
+	char *s;
+	char *ctnr_name = NULL;
+	char *blob_name = NULL;
+
+	if (apath == NULL) {
+		cli_args_usage(progname, "Empty remote path");
+		return -EINVAL;
+	}
+
+	s = (char *)apath;
+	while (*s == '/')
+		s++;
+
+	if (*s == '\0') {
+		/* empty or leading slashes only */
+		goto done;
+	}
+
+	ctnr_name = strdup(s);
+	if (ctnr_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	s = strchr(ctnr_name, '/');
+	if (s == NULL) {
+		/* ctnr only */
+		goto done;
+	}
+
+	*(s++) = '\0';	/* null term for ctnr */
+	while (*s == '/')
+		s++;
+
+	if (*s == '\0') {
+		/* container + slashes only */
+		goto done;
+	}
+
+	blob_name = strdup(s);
+	if (blob_name == NULL) {
+		ret = -ENOMEM;
+		goto err_ctnr_free;
+	}
+
+	s = strchr(blob_name, '/');
+	if (s != NULL) {
+		/* blob has a trailing slash */
+		cli_args_usage(progname,
+			"Invalid remote path: blob has trailing garbage");
+		ret = -EINVAL;
+		goto err_blob_free;
+	}
+done:
+	*ctnr_r = ctnr_name;
+	*blob_r = blob_name;
+	return 0;
+
+err_blob_free:
+	free(blob_name);
+err_ctnr_free:
+	free(ctnr_name);
+err_out:
+	return ret;
 }
 
 static int
