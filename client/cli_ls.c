@@ -41,9 +41,10 @@ void
 cli_ls_args_free(struct cli_args *cli_args)
 {
 	free(cli_args->ls.ctnr_name);
+	free(cli_args->ls.blob_name);
 }
 
-/* ls [container] */
+/* ls [container[/blob]] */
 int
 cli_ls_args_parse(const char *progname,
 		   int argc,
@@ -53,34 +54,76 @@ cli_ls_args_parse(const char *progname,
 	int ret;
 
 	if (argc == 2) {
-		char *s;
-		int len;
-		cli_args->ls.ctnr_name = strdup(argv[1]);
-		if (cli_args->ls.ctnr_name == NULL) {
-			ret = -ENOMEM;
+		ret = cli_args_azure_path_parse(progname, argv[1],
+						&cli_args->ls.ctnr_name,
+						&cli_args->ls.blob_name);
+		if (ret < 0)
 			goto err_out;
-		}
-		s = strchr(cli_args->ls.ctnr_name, '/');
-		if (s != NULL) {
-			len = strlen(cli_args->ls.ctnr_name);
-			if ((s == cli_args->ls.ctnr_name)
-			 || (s != cli_args->ls.ctnr_name + len - 1)) {
-				ret = -EINVAL;
-				goto err_ctnr_free;
-			}
-			/* remove a trailing slash */
-			*s = '\0';
-		}
 	} else {
 		cli_args->ls.ctnr_name = NULL;
+		cli_args->ls.blob_name = NULL;
 	}
 
-
 	cli_args->cmd = CLI_CMD_LS;
-	return 0;
+	ret = 0;
 
-err_ctnr_free:
-	free(cli_args->ls.ctnr_name);
+err_out:
+	return ret;
+}
+
+static int
+cli_ls_blob_handle(struct azure_conn *aconn,
+		   const char *acc_name,
+		   const char *ctnr_name,
+		   const char *blob_name)
+{
+	struct azure_op op;
+	struct azure_block *blk;
+	int ret;
+
+	memset(&op, 0, sizeof(op));
+	ret = azure_op_block_list_get(acc_name, ctnr_name, blob_name, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_conn_send_op(aconn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error && (op.rsp.err_code == 404)) {
+		printf("Blob %s Not Found\n", blob_name);
+		ret = -ENOENT;
+		goto err_op_free;
+	} else if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	if (op.rsp.block_list_get.num_blks == 0) {
+		printf("Blob %s does not have any associated blocks\n",
+		       blob_name);
+		ret = 0;
+		goto err_op_free;
+	}
+
+	printf("Blob %s has %d associated blocks (^ = uncommitted)\n",
+	       blob_name, op.rsp.block_list_get.num_blks);
+	list_for_each(&op.rsp.block_list_get.blks, blk, list) {
+		printf("%lu\t%s%s\n",
+		       blk->len, blk->id,
+		       (blk->state == BLOCK_STATE_UNCOMMITED ? "^" : ""));
+	}
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
 err_out:
 	return ret;
 }
@@ -148,7 +191,13 @@ cli_ls_handle(struct azure_conn *aconn,
 	struct azure_op op;
 	int ret;
 
-	if (cli_args->ls.ctnr_name != NULL) {
+	if (cli_args->ls.blob_name != NULL) {
+		/* list blocks for a specific blob */
+		ret = cli_ls_blob_handle(aconn, cli_args->blob_acc,
+					 cli_args->ls.ctnr_name,
+					 cli_args->ls.blob_name);
+		return ret;
+	} else if (cli_args->ls.ctnr_name != NULL) {
 		/* list specific container */
 		ret = cli_ls_ctnr_handle(aconn, cli_args->blob_acc,
 					 cli_args->ls.ctnr_name);
