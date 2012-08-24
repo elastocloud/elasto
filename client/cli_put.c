@@ -58,7 +58,6 @@ cli_put_args_parse(const char *progname,
 		   struct cli_args *cli_args)
 {
 	int ret;
-	char *s;
 
 	cli_args->put.local_path = strdup(argv[1]);
 	if (cli_args->put.local_path == NULL) {
@@ -66,29 +65,16 @@ cli_put_args_parse(const char *progname,
 		goto err_out;
 	}
 
-	cli_args->put.ctnr_name = strdup(argv[2]);
-	if (cli_args->put.ctnr_name == NULL) {
-		ret = -ENOMEM;
+	ret = cli_args_azure_path_parse(progname, argv[2],
+					&cli_args->put.ctnr_name,
+					&cli_args->put.blob_name);
+	if (ret < 0)
 		goto err_local_free;
-	}
 
-	s = strchr(cli_args->put.ctnr_name, '/');
-	if ((s == NULL) || (s == cli_args->put.ctnr_name)) {
-		cli_args_usage(progname,
-		    "Invalid remote path, must be <container>/<blob>");
-		ret = -EINVAL;
-		goto err_ctnr_free;
-	}
-	*(s++) = '\0';	/* null term for cntnr */
-	if (*s == '\0') {
-		/* zero len blob name */
-		cli_args_usage(progname, NULL);
-		ret = -EINVAL;
-		goto err_ctnr_free;
-	}
-	cli_args->put.blob_name = strdup(s);
 	if (cli_args->put.blob_name == NULL) {
-		ret = -ENOMEM;
+		cli_args_usage(progname,
+			"Invalid remote path, must be <container>/<blob>");
+		ret = -EINVAL;
 		goto err_ctnr_free;
 	}
 
