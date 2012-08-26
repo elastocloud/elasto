@@ -41,6 +41,7 @@
 void
 cli_ls_args_free(struct cli_args *cli_args)
 {
+	free(cli_args->ls.blob_acc);
 	free(cli_args->ls.ctnr_name);
 	free(cli_args->ls.blob_name);
 }
@@ -64,12 +65,11 @@ cli_ls_args_parse(const char *progname,
 
 		if (cli_args->ls.blob_acc == NULL) {
 			cli_args_usage(progname,
-	"Invalid remote path, must be <account>[/<container>[/<blob>]]");
+	"Invalid remote path, must be [<account>[/<container>[/<blob>]]]");
 			ret = -EINVAL;
 			goto err_out;
 		}
 	} else {
-		/* XXX currently blocked by cmd definition */
 		cli_args->ls.blob_acc = NULL;
 		cli_args->ls.ctnr_name = NULL;
 		cli_args->ls.blob_name = NULL;
@@ -180,7 +180,7 @@ cli_ls_ctnr_handle(struct azure_conn *aconn,
 		goto err_op_free;
 	}
 
-	printf("Contents of %s (*= page blob)\n", ctnr_name);
+	printf("Contents of container %s (*= page blob)\n", ctnr_name);
 	list_for_each(&op.rsp.blob_list.blobs, blob, list) {
 		printf("%lu\t%s%s\n",
 		       blob->len, blob->name,
@@ -193,38 +193,17 @@ err_out:
 	return ret;
 }
 
-int
-cli_ls_handle(struct azure_conn *aconn,
-	       struct cli_args *cli_args)
+static int
+cli_ls_acc_handle(struct azure_conn *aconn,
+		  const char *acc_name)
 {
+	struct azure_op op;
 	struct azure_ctnr *ctnr;
 	bool ctnr_exists;
-	struct azure_op op;
 	int ret;
 
-	ret = cli_sign_conn_setup(aconn,
-				  cli_args->ls.blob_acc,
-				  cli_args->sub_id);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	if (cli_args->ls.blob_name != NULL) {
-		/* list blocks for a specific blob */
-		ret = cli_ls_blob_handle(aconn, cli_args->ls.blob_acc,
-					 cli_args->ls.ctnr_name,
-					 cli_args->ls.blob_name);
-		return ret;
-	} else if (cli_args->ls.ctnr_name != NULL) {
-		/* list specific container */
-		ret = cli_ls_ctnr_handle(aconn, cli_args->ls.blob_acc,
-					 cli_args->ls.ctnr_name);
-		return ret;
-	}
-
-	/* list all containers */
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_ctnr_list(cli_args->ls.blob_acc, &op);
+	ret = azure_op_ctnr_list(acc_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -246,6 +225,7 @@ cli_ls_handle(struct azure_conn *aconn,
 	}
 
 	ctnr_exists = false;
+	printf("Containers under account %s\n", acc_name);
 	list_for_each(&op.rsp.ctnr_list.ctnrs, ctnr, list) {
 			/* list all containers */
 			printf("\t%s/\n", ctnr->name);
@@ -258,6 +238,105 @@ cli_ls_handle(struct azure_conn *aconn,
 	ret = 0;
 err_op_free:
 	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
+static int
+cli_ls_sub_handle(struct azure_conn *aconn,
+		  const char *sub_id)
+{
+	struct azure_op op;
+	struct azure_account *acc;
+	int ret;
+
+	memset(&op, 0, sizeof(op));
+	ret = azure_op_acc_list(sub_id, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_conn_send_op(aconn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	if (op.rsp.acc_list.num_accs == 0) {
+		printf("No storage accounts for subscription %s\n", sub_id);
+		ret = 0;
+		goto err_op_free;
+	}
+
+	printf("Accounts for subscription %s:\n", sub_id);
+	list_for_each(&op.rsp.acc_list.accs, acc, list) {
+			printf("\t%s\n", acc->name);
+			if (acc->desc != NULL)
+				printf("\t\tdescription = %s\n", acc->desc);
+			if (acc->affin_grp != NULL)
+				printf("\t\taffinity group = %s\n", acc->affin_grp);
+			if (acc->location != NULL)
+				printf("\t\tlocation = %s\n", acc->location);
+	}
+
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
+int
+cli_ls_handle(struct azure_conn *aconn,
+	       struct cli_args *cli_args)
+{
+	int ret;
+
+	if ((cli_args->ls.blob_name == NULL)
+	 && (cli_args->ls.ctnr_name == NULL)
+	 && (cli_args->ls.blob_acc == NULL)) {
+		/* list accounts for subscription, signing setup not needed */
+		ret = cli_ls_sub_handle(aconn, cli_args->sub_id);
+		return ret;
+	}
+
+	ret = cli_sign_conn_setup(aconn,
+				  cli_args->ls.blob_acc,
+				  cli_args->sub_id);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (cli_args->ls.blob_name != NULL) {
+		/* list blocks for a specific blob */
+		ret = cli_ls_blob_handle(aconn, cli_args->ls.blob_acc,
+					 cli_args->ls.ctnr_name,
+					 cli_args->ls.blob_name);
+		return ret;
+	} else if (cli_args->ls.ctnr_name != NULL) {
+		/* list specific container */
+		ret = cli_ls_ctnr_handle(aconn, cli_args->ls.blob_acc,
+					 cli_args->ls.ctnr_name);
+		return ret;
+	} else if (cli_args->ls.blob_acc != NULL) {
+		/* list all containers for account */
+		ret = cli_ls_acc_handle(aconn, cli_args->ls.blob_acc);
+		return ret;
+	}
+
+	return ret;
+
+	ret = 0;
 err_out:
 	return ret;
 }

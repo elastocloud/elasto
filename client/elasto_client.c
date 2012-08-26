@@ -57,8 +57,8 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_LS,
 		.name = "ls",
-		.help = "<account>/[container[/blob]]",
-		.arg_min = 1,
+		.help = "[<account>/[container[/blob]]]",
+		.arg_min = 0,
 		.arg_max = 1,
 		.args_parse = &cli_ls_args_parse,
 		.handle = &cli_ls_handle,
