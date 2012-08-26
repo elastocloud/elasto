@@ -26,26 +26,28 @@ enum cli_cmd {
 
 struct cli_args {
 	char *ps_file;
-	char *blob_acc;
-	char *blob_loc;
-	bool blob_geo;
+	char *sub_id;
 	enum cli_cmd cmd;
 	union {
 		struct {
+			char *blob_acc;
 			char *ctnr_name;
 			char *blob_name;
 		} ls;
 		struct {
 			char *local_path;
+			char *blob_acc;
 			char *ctnr_name;
 			char *blob_name;
 		} put;
 		struct {
+			char *blob_acc;
 			char *ctnr_name;
 			char *blob_name;
 			char *local_path;
 		} get;
 		struct {
+			char *blob_acc;
 			char *ctnr_name;
 			char *blob_name;
 		} del;
@@ -55,6 +57,7 @@ struct cli_args {
 int
 cli_args_azure_path_parse(const char *progname,
 			  const char *apath,
+			  char **acc_r,
 			  char **ctnr_r,
 			  char **blob_r);
 

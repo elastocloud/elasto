@@ -211,8 +211,8 @@ azure_op_mgmt_get_sa_keys_fill_hdr(struct azure_op *op)
 
 int
 azure_op_mgmt_get_sa_keys(const char *sub_id,
-			   const char *service_name,
-			   struct azure_op *op)
+			  const char *service_name,
+			  struct azure_op *op)
 {
 	int ret;
 	struct azure_req_mgmt_get_sa_keys *get_sa_keys_req;

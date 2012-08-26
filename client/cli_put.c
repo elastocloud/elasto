@@ -37,6 +37,7 @@
 #include "lib/azure_conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
+#include "cli_sign.h"
 #include "cli_put.h"
 
 /* split any blob over 10MB into separate blocks */
@@ -66,6 +67,7 @@ cli_put_args_parse(const char *progname,
 	}
 
 	ret = cli_args_azure_path_parse(progname, argv[2],
+					&cli_args->put.blob_acc,
 					&cli_args->put.ctnr_name,
 					&cli_args->put.blob_name);
 	if (ret < 0)
@@ -73,7 +75,7 @@ cli_put_args_parse(const char *progname,
 
 	if (cli_args->put.blob_name == NULL) {
 		cli_args_usage(progname,
-			"Invalid remote path, must be <container>/<blob>");
+		   "Invalid remote path, must be <account>/<container>/<blob>");
 		ret = -EINVAL;
 		goto err_ctnr_free;
 	}
@@ -156,7 +158,7 @@ cli_put_blocks(struct azure_conn *aconn,
 
 		list_add_tail(blks, &blk->list);
 
-		ret = azure_op_block_put(cli_args->blob_acc,
+		ret = azure_op_block_put(cli_args->put.blob_acc,
 					 cli_args->put.ctnr_name,
 					 cli_args->put.blob_name,
 					 blk->id,
@@ -214,13 +216,20 @@ cli_put_handle(struct azure_conn *aconn,
 	struct azure_op op;
 	int ret;
 
+	ret = cli_sign_conn_setup(aconn,
+				  cli_args->put.blob_acc,
+				  cli_args->sub_id);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	ret = stat(cli_args->put.local_path, &st);
 	if (ret < 0) {
 		printf("failed to stat %s\n", cli_args->put.local_path);
 		goto err_out;
 	}
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_ctnr_create(cli_args->blob_acc,
+	ret = azure_op_ctnr_create(cli_args->put.blob_acc,
 				   cli_args->put.ctnr_name, &op);
 	if (ret < 0) {
 		goto err_out;
@@ -253,7 +262,7 @@ cli_put_handle(struct azure_conn *aconn,
 	       cli_args->put.blob_name);
 
 	if (st.st_size < BLOCK_THRESHOLD) {
-		ret = azure_op_blob_put(cli_args->blob_acc,
+		ret = azure_op_blob_put(cli_args->put.blob_acc,
 					cli_args->put.ctnr_name,
 					cli_args->put.blob_name,
 					AOP_DATA_FILE,
@@ -268,7 +277,7 @@ cli_put_handle(struct azure_conn *aconn,
 		if (ret < 0) {
 			goto err_out;
 		}
-		ret = azure_op_block_list_put(cli_args->blob_acc,
+		ret = azure_op_block_list_put(cli_args->put.blob_acc,
 					      cli_args->put.ctnr_name,
 					      cli_args->put.blob_name,
 					      blks, &op);

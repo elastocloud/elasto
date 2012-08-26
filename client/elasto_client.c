@@ -57,8 +57,8 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_LS,
 		.name = "ls",
-		.help = "[container[/blob]]",
-		.arg_min = 0,
+		.help = "<account>/[container[/blob]]",
+		.arg_min = 1,
 		.arg_max = 1,
 		.args_parse = &cli_ls_args_parse,
 		.handle = &cli_ls_handle,
@@ -67,7 +67,7 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_PUT,
 		.name = "put",
-		.help = "<local path> <container>/<blob>",
+		.help = "<local path> <account>/<container>/<blob>",
 		.arg_min = 2,
 		.arg_max = 2,
 		.args_parse = &cli_put_args_parse,
@@ -77,7 +77,7 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_GET,
 		.name = "get",
-		.help = "<container>/<blob> <local path>",
+		.help = "<account>/<container>/<blob> <local path>",
 		.arg_min = 2,
 		.arg_max = 2,
 		.args_parse = &cli_get_args_parse,
@@ -87,7 +87,7 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_DEL,
 		.name = "del",
-		.help = "<container>/<blob>",
+		.help = "<account><container>/<blob>",
 		.arg_min = 1,
 		.arg_max = 1,
 		.args_parse = &cli_del_args_parse,
@@ -110,13 +110,8 @@ cli_args_usage(const char *progname,
 		fprintf(stderr, "%s\n\n", msg);
 	}
 	fprintf(stderr, "Usage: %s -s publish_settings "
-				  "-a storage_account "
-				  "[-l storage_location] [-g] "
 				  "<cmd> <cmd args>\n\n"
 		"-s publish_settings:	Azure PublishSettings file\n"
-		"-a storage_account:	Storage account, created if needed\n"
-		"-l storage_location:	Storage geographic location\n"
-		"-g:			Enable geographic redundancy\n\n"
 		"Commands:\n", progname);
 
 	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
@@ -138,18 +133,20 @@ cli_cmd_lookup(const char *name)
 
 /*
  * parse and azure path in the format:
- *	/container/blob
+ *	/account/container/blob
  * return NULL for any components that do not exist, otherwise strdup.
  * handle corner cases such as double or missing '/'.
  */
 int
 cli_args_azure_path_parse(const char *progname,
 			  const char *apath,
+			  char **acc_r,
 			  char **ctnr_r,
 			  char **blob_r)
 {
 	int ret;
 	char *s;
+	char *acc_name = NULL;
 	char *ctnr_name = NULL;
 	char *blob_name = NULL;
 
@@ -167,10 +164,31 @@ cli_args_azure_path_parse(const char *progname,
 		goto done;
 	}
 
+	acc_name = strdup(s);
+	if (acc_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	s = strchr(acc_name, '/');
+	if (s == NULL) {
+		/* account only */
+		goto done;
+	}
+
+	*(s++) = '\0';	/* null term for acc */
+	while (*s == '/')
+		s++;
+
+	if (*s == '\0') {
+		/* account + slashes only */
+		goto done;
+	}
+
 	ctnr_name = strdup(s);
 	if (ctnr_name == NULL) {
 		ret = -ENOMEM;
-		goto err_out;
+		goto err_acc_free;
 	}
 
 	s = strchr(ctnr_name, '/');
@@ -203,6 +221,7 @@ cli_args_azure_path_parse(const char *progname,
 		goto err_blob_free;
 	}
 done:
+	*acc_r = acc_name;
 	*ctnr_r = ctnr_name;
 	*blob_r = blob_name;
 	return 0;
@@ -211,6 +230,8 @@ err_blob_free:
 	free(blob_name);
 err_ctnr_free:
 	free(ctnr_name);
+err_acc_free:
+	free(acc_name);
 err_out:
 	return ret;
 }
@@ -261,6 +282,15 @@ err_out:
 	return ret;
 }
 
+static void
+cli_args_free(const struct cli_cmd_spec *cmd,
+	      struct cli_args *cli_args)
+{
+	cmd->args_free(cli_args);
+	free(cli_args->sub_id);
+	free(cli_args->ps_file);
+}
+
 static int
 cli_args_parse(int argc,
 	       char * const *argv,
@@ -272,11 +302,8 @@ cli_args_parse(int argc,
 	extern char *optarg;
 	extern int optind;
 	char *pub_settings = NULL;
-	char *store_acc = NULL;
-	char *store_loc = NULL;	/* not yet supported */
-	bool store_geo = false;	/* not yet supported */
 
-	while ((opt = getopt(argc, argv, "s:a:l:g")) != -1) {
+	while ((opt = getopt(argc, argv, "s:")) != -1) {
 		switch (opt) {
 		case 's':
 			pub_settings = strdup(optarg);
@@ -285,23 +312,6 @@ cli_args_parse(int argc,
 				goto err_out;
 			}
 			break;
-		case 'a':
-			store_acc = strdup(optarg);
-			if (store_acc == NULL) {
-				ret = -ENOMEM;
-				goto err_out;
-			}
-			break;
-		case 'l':
-			store_loc = strdup(optarg);
-			if (store_loc == NULL) {
-				ret = -ENOMEM;
-				goto err_out;
-			}
-			break;
-		case 'g':
-			store_geo = true;
-			break;
 		default: /* '?' */
 			cli_args_usage(argv[0], NULL);
 			ret = -EINVAL;
@@ -309,8 +319,9 @@ cli_args_parse(int argc,
 			break;
 		}
 	}
-	if ((pub_settings == NULL) || (store_acc == NULL)) {
-		cli_args_usage(argv[0], NULL);
+	if (pub_settings == NULL) {
+		cli_args_usage(argv[0],
+			       "Azure PublishSettings file is required");
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -322,13 +333,10 @@ cli_args_parse(int argc,
 	}
 
 	cli_args->ps_file = pub_settings;
-	cli_args->blob_acc = store_acc;
 
 	return 0;
 err_out:
 	free(pub_settings);
-	free(store_acc);
-	free(store_loc);
 
 	return ret;
 }
@@ -339,9 +347,7 @@ main(int argc, char * const *argv)
 	struct cli_args cli_args;
 	const struct cli_cmd_spec *cmd;
 	struct azure_conn aconn;
-	struct azure_op op;
 	char *pem_file;
-	char *sub_id;
 	char *sub_name;
 	int ret;
 
@@ -358,9 +364,8 @@ main(int argc, char * const *argv)
 	}
 	azure_xml_subsys_init();
 
-	memset(&op, 0, sizeof(op));
-
-	ret = azure_ssl_pubset_process(cli_args.ps_file, &pem_file, &sub_id, &sub_name);
+	ret = azure_ssl_pubset_process(cli_args.ps_file, &pem_file,
+				       &cli_args.sub_id, &sub_name);
 	if (ret < 0) {
 		goto err_global_clean;
 	}
@@ -369,59 +374,24 @@ main(int argc, char * const *argv)
 	if (ret < 0) {
 		goto err_sub_info_free;
 	}
+	/* @aconn signing not yet setup, done later with cli_sign_conn_setup */
 
-	ret = azure_op_mgmt_get_sa_keys(sub_id, cli_args.blob_acc, &op);
+	ret = cmd->handle(&aconn, &cli_args);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_op(&aconn, &op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = azure_rsp_process(&op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op.rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
-		goto err_op_free;
-	}
-
-	printf("primary key: %s\n"
-	       "secondary key: %s\n",
-	       op.rsp.mgmt_get_sa_keys.primary,
-	       op.rsp.mgmt_get_sa_keys.secondary);
-
-	ret = azure_conn_sign_setkey(&aconn, cli_args.blob_acc,
-				     op.rsp.mgmt_get_sa_keys.primary);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	/* op freed later */
-	ret = cmd->handle(&aconn, &cli_args);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
 	ret = 0;
-err_op_free:
-	azure_op_free(&op);
 err_conn_free:
 	azure_conn_free(&aconn);
 err_sub_info_free:
 	free(pem_file);
-	free(sub_id);
 	free(sub_name);
 err_global_clean:
 	azure_xml_subsys_deinit();
 	azure_conn_subsys_deinit();
 err_args_free:
-	cmd->args_free(&cli_args);
+	cli_args_free(cmd, &cli_args);
 err_out:
 	return ret;
 }
