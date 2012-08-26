@@ -300,6 +300,236 @@ err_out:
 }
 
 static void
+azure_req_acc_list_free(struct azure_req_acc_list *acc_list_req)
+{
+	free(acc_list_req->sub_id);
+}
+
+static void
+azure_acc_free(struct azure_account **pacc)
+{
+	struct azure_account *acc = *pacc;
+
+	free(acc->name);
+	free(acc->url);
+	free(acc->affin_grp);
+	free(acc->location);
+	free(acc->desc);
+	free(acc);
+}
+
+static void
+azure_rsp_acc_list_free(struct azure_rsp_acc_list *acc_list_rsp)
+{
+	struct azure_account *acc;
+	struct azure_account *acc_n;
+
+	list_for_each_safe(&acc_list_rsp->accs, acc, acc_n, list) {
+		azure_acc_free(&acc);
+	}
+}
+
+static int
+azure_op_acc_list_fill_hdr(struct azure_op *op)
+{
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					  "x-ms-version: 2012-03-01");
+	if (op->http_hdr == NULL) {
+		return -ENOMEM;
+	}
+	return 0;
+}
+
+int
+azure_op_acc_list(const char *sub_id,
+		  struct azure_op *op)
+{
+	int ret;
+	struct azure_req_acc_list *acc_list_req;
+
+	/* TODO input validation */
+
+	op->opcode = AOP_ACC_LIST;
+	acc_list_req = &op->req.acc_list;
+
+	acc_list_req->sub_id = strdup(sub_id);
+	if (acc_list_req->sub_id == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	op->method = REQ_METHOD_GET;
+	ret = asprintf(&op->url, "https://management.core.windows.net/"
+		       "%s/services/storageservices",
+		       sub_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_sub_free;
+	}
+
+	ret = azure_op_acc_list_fill_hdr(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_sub_free:
+	free(acc_list_req->sub_id);
+err_out:
+	return ret;
+}
+
+static int
+azure_rsp_acc_iter_process(xmlXPathContext *xp_ctx,
+			   int iter,
+			   struct azure_account **acc_ret)
+{
+	int ret;
+	struct azure_account *acc;
+	char *query;
+
+	acc = malloc(sizeof(*acc));
+	if (acc == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(acc, 0, sizeof(*acc));
+
+	ret = asprintf(&query,
+		       "//def:StorageServices/def:StorageService[%d]/"
+		       "def:ServiceName", iter);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->name);
+	free(query);
+	if (ret < 0) {
+		goto err_acc_free;
+	}
+
+	ret = asprintf(&query,
+		       "//def:StorageServices/def:StorageService[%d]/def:Url",
+		       iter);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_name_free;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->url);
+	free(query);
+	if (ret < 0) {
+		goto err_name_free;
+	}
+
+
+	ret = asprintf(&query,
+		       "//def:StorageServices/def:StorageService[%d]/"
+		       "def:StorageServiceProperties/def:Description", iter);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_url_free;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->desc);
+	free(query);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_url_free;
+	}
+
+	ret = asprintf(&query,
+		       "//def:StorageServices/def:StorageService[%d]/"
+		       "def:StorageServiceProperties/def:AffinityGroup", iter);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_desc_free;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->affin_grp);
+	free(query);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_desc_free;
+	}
+
+	ret = asprintf(&query,
+		       "//def:StorageServices/def:StorageService[%d]/"
+		       "def:StorageServiceProperties/def:Location", iter);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_affin_free;
+	}
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->location);
+	free(query);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_affin_free;
+	}
+	*acc_ret = acc;
+
+	return 0;
+
+err_affin_free:
+	free(acc->affin_grp);
+err_desc_free:
+	free(acc->desc);
+err_url_free:
+	free(acc->url);
+err_name_free:
+	free(acc->name);
+err_acc_free:
+	free(acc);
+err_out:
+	return ret;
+}
+
+static int
+azure_rsp_acc_list_process(struct azure_op *op)
+{
+	int ret;
+	struct azure_rsp_acc_list *acc_list_rsp;
+	xmlDoc *xp_doc;
+	xmlXPathContext *xp_ctx;
+	int i;
+	struct azure_account *acc;
+	struct azure_account *acc_n;
+
+	assert(op->opcode == AOP_ACC_LIST);
+	assert(op->rsp.data->type == AOP_DATA_IOV);
+
+	/* parse response */
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(false, op->rsp.data->buf, op->rsp.data->off,
+			      &xp_doc, &xp_ctx);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	acc_list_rsp = &op->rsp.acc_list;
+
+	list_head_init(&acc_list_rsp->accs);
+	for (i = 1; i <= 5000; i++) {
+		ret = azure_rsp_acc_iter_process(xp_ctx, i, &acc);
+		if (ret == -ENOENT) {
+			break;
+		} else if (ret < 0) {
+			goto err_accs_free;
+		}
+		list_add_tail(&acc_list_rsp->accs, &acc->list);
+		acc_list_rsp->num_accs++;
+	}
+	xmlXPathFreeContext(xp_ctx);
+	xmlFreeDoc(xp_doc);
+	return 0;
+
+err_accs_free:
+	list_for_each_safe(&acc_list_rsp->accs, acc, acc_n, list) {
+		azure_acc_free(&acc);
+	}
+	xmlXPathFreeContext(xp_ctx);
+	xmlFreeDoc(xp_doc);
+err_out:
+	return ret;
+}
+
+static void
 azure_req_ctnr_list_free(struct azure_req_ctnr_list *ctnr_list_req)
 {
 	free(ctnr_list_req->account);
@@ -2249,6 +2479,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_ACC_KEYS_GET:
 		azure_req_acc_keys_get_free(&op->req.acc_keys_get);
 		break;
+	case AOP_ACC_LIST:
+		azure_req_acc_list_free(&op->req.acc_list);
+		break;
 	case AOP_CONTAINER_LIST:
 		azure_req_ctnr_list_free(&op->req.ctnr_list);
 		break;
@@ -2299,6 +2532,9 @@ azure_rsp_free(struct azure_op *op)
 	switch (op->opcode) {
 	case AOP_ACC_KEYS_GET:
 		azure_rsp_acc_keys_get_free(&op->rsp.acc_keys_get);
+		break;
+	case AOP_ACC_LIST:
+		azure_rsp_acc_list_free(&op->rsp.acc_list);
 		break;
 	case AOP_CONTAINER_LIST:
 		azure_rsp_ctnr_list_free(&op->rsp.ctnr_list);
@@ -2353,6 +2589,9 @@ azure_rsp_process(struct azure_op *op)
 	switch (op->opcode) {
 	case AOP_ACC_KEYS_GET:
 		ret = azure_rsp_acc_keys_get_process(op);
+		break;
+	case AOP_ACC_LIST:
+		ret = azure_rsp_acc_list_process(op);
 		break;
 	case AOP_CONTAINER_LIST:
 		ret = azure_rsp_ctnr_list_process(op);
