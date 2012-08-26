@@ -38,47 +38,6 @@
 #include "azure_xml.h"
 #include "azure_req.h"
 
-#if 0
-char *
-azure_op_mgmt_url_list_sas(const char *sub_id)
-{
-	char *url;
-	int ret;
-	ret = asprintf(&url, "https://management.core.windows.net/"
-		       "%s/services/storageservices",
-		       sub_id);
-	if (ret < 0)
-		return NULL;
-	return url;
-}
-
-char *
-azure_op_mgmt_url_get_sa_props(const char *sub_id, const char *service_name)
-{
-	char *url;
-	int ret;
-	ret = asprintf(&url, "https://management.core.windows.net/"
-		       "%s/services/storageservices/%s",
-		       sub_id, service_name);
-	if (ret < 0)
-		return NULL;
-	return url;
-}
-
-char *
-azure_op_mgmt_url_check_sa_availability(const char *sub_id, const char *service_name)
-{
-	char *url;
-	int ret;
-	ret = asprintf(&url, "https://management.core.windows.net/"
-		       "%s/services/storageservices/operations/isavailable/%s",
-		       sub_id, service_name);
-	if (ret < 0)
-		return NULL;
-	return url;
-}
-#endif
-
 void
 azure_op_data_destroy(struct azure_op_data **data)
 {
