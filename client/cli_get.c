@@ -41,12 +41,12 @@
 void
 cli_get_args_free(struct cli_args *cli_args)
 {
+	free(cli_args->get.blob_acc);
 	free(cli_args->get.ctnr_name);
 	free(cli_args->get.blob_name);
 	free(cli_args->get.local_path);
 }
 
-/* get <container>/<blob> <src> */
 int
 cli_get_args_parse(const char *progname,
 		   int argc,

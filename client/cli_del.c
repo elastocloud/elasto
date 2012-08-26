@@ -41,11 +41,11 @@
 void
 cli_del_args_free(struct cli_args *cli_args)
 {
+	free(cli_args->del.blob_acc);
 	free(cli_args->del.ctnr_name);
 	free(cli_args->del.blob_name);
 }
 
-/* del <container>/<blob> */
 int
 cli_del_args_parse(const char *progname,
 		   int argc,

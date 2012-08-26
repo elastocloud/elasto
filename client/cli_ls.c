@@ -46,7 +46,6 @@ cli_ls_args_free(struct cli_args *cli_args)
 	free(cli_args->ls.blob_name);
 }
 
-/* ls [container[/blob]] */
 int
 cli_ls_args_parse(const char *progname,
 		   int argc,

@@ -47,11 +47,11 @@ void
 cli_put_args_free(struct cli_args *cli_args)
 {
 	free(cli_args->put.local_path);
+	free(cli_args->put.blob_acc);
 	free(cli_args->put.ctnr_name);
 	free(cli_args->put.blob_name);
 }
 
-/* put <src> <container>/<blob> */
 int
 cli_put_args_parse(const char *progname,
 		   int argc,
