@@ -184,22 +184,20 @@ gen_date_str(void)
 }
 
 static void
-azure_req_mgmt_get_sa_keys_free(
-		struct azure_req_mgmt_get_sa_keys *mgmt_get_sa_keys_req)
+azure_req_acc_keys_get_free(struct azure_req_acc_keys_get *acc_keys_get_req)
 {
-	free(mgmt_get_sa_keys_req->sub_id);
-	free(mgmt_get_sa_keys_req->service_name);
+	free(acc_keys_get_req->sub_id);
+	free(acc_keys_get_req->service_name);
 }
 static void
-azure_rsp_mgmt_get_sa_keys_free(
-		struct azure_rsp_mgmt_get_sa_keys *mgmt_get_sa_keys_rsp)
+azure_rsp_acc_keys_get_free(struct azure_rsp_acc_keys_get *acc_keys_get_rsp)
 {
-	free(mgmt_get_sa_keys_rsp->primary);
-	free(mgmt_get_sa_keys_rsp->secondary);
+	free(acc_keys_get_rsp->primary);
+	free(acc_keys_get_rsp->secondary);
 }
 
 static int
-azure_op_mgmt_get_sa_keys_fill_hdr(struct azure_op *op)
+azure_op_acc_keys_get_fill_hdr(struct azure_op *op)
 {
 	op->http_hdr = curl_slist_append(op->http_hdr,
 					  "x-ms-version: 2012-03-01");
@@ -210,26 +208,26 @@ azure_op_mgmt_get_sa_keys_fill_hdr(struct azure_op *op)
 }
 
 int
-azure_op_mgmt_get_sa_keys(const char *sub_id,
-			  const char *service_name,
-			  struct azure_op *op)
+azure_op_acc_keys_get(const char *sub_id,
+		      const char *service_name,
+		      struct azure_op *op)
 {
 	int ret;
-	struct azure_req_mgmt_get_sa_keys *get_sa_keys_req;
+	struct azure_req_acc_keys_get *acc_keys_get_req;
 
 	/* TODO input validation */
 
-	op->opcode = AOP_MGMT_GET_SA_KEYS;
-	get_sa_keys_req = &op->req.mgmt_get_sa_keys;
+	op->opcode = AOP_ACC_KEYS_GET;
+	acc_keys_get_req = &op->req.acc_keys_get;
 
 	/* we may not need to keep these, as they're only used in the URL */
-	get_sa_keys_req->sub_id = strdup(sub_id);
-	if (get_sa_keys_req->sub_id == NULL) {
+	acc_keys_get_req->sub_id = strdup(sub_id);
+	if (acc_keys_get_req->sub_id == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	get_sa_keys_req->service_name = strdup(service_name);
-	if (get_sa_keys_req->service_name == NULL) {
+	acc_keys_get_req->service_name = strdup(service_name);
+	if (acc_keys_get_req->service_name == NULL) {
 		ret = -ENOMEM;
 		goto err_free_sub;
 	}
@@ -242,7 +240,7 @@ azure_op_mgmt_get_sa_keys(const char *sub_id,
 		goto err_free_svc;
 	}
 
-	ret = azure_op_mgmt_get_sa_keys_fill_hdr(op);
+	ret = azure_op_acc_keys_get_fill_hdr(op);
 	if (ret < 0) {
 		goto err_free_url;
 	}
@@ -251,22 +249,22 @@ azure_op_mgmt_get_sa_keys(const char *sub_id,
 err_free_url:
 	free(op->url);
 err_free_svc:
-	free(get_sa_keys_req->service_name);
+	free(acc_keys_get_req->service_name);
 err_free_sub:
-	free(get_sa_keys_req->sub_id);
+	free(acc_keys_get_req->sub_id);
 err_out:
 	return ret;
 }
 
 static int
-azure_rsp_mgmt_get_sa_keys_process(struct azure_op *op)
+azure_rsp_acc_keys_get_process(struct azure_op *op)
 {
 	int ret;
-	struct azure_rsp_mgmt_get_sa_keys *get_sa_keys_rsp;
+	struct azure_rsp_acc_keys_get *acc_keys_get_rsp;
 	xmlDoc *xp_doc;
 	xmlXPathContext *xp_ctx;
 
-	assert(op->opcode == AOP_MGMT_GET_SA_KEYS);
+	assert(op->opcode == AOP_ACC_KEYS_GET);
 	assert(op->rsp.data->type == AOP_DATA_IOV);
 
 	/* parse response */
@@ -277,19 +275,19 @@ azure_rsp_mgmt_get_sa_keys_process(struct azure_op *op)
 		goto err_out;
 	}
 
-	get_sa_keys_rsp = &op->rsp.mgmt_get_sa_keys;
+	acc_keys_get_rsp = &op->rsp.acc_keys_get;
 
 	ret = azure_xml_get_path(xp_ctx,
 		"//def:StorageService/def:StorageServiceKeys/def:Primary",
-		NULL, &get_sa_keys_rsp->primary);
+		NULL, &acc_keys_get_rsp->primary);
 	if (ret < 0) {
 		goto err_xml_free;
 	}
 	ret = azure_xml_get_path(xp_ctx,
 		"//def:StorageService/def:StorageServiceKeys/def:Secondary",
-		NULL, &get_sa_keys_rsp->secondary);
+		NULL, &acc_keys_get_rsp->secondary);
 	if (ret < 0) {
-		free(get_sa_keys_rsp->primary);
+		free(acc_keys_get_rsp->primary);
 		goto err_xml_free;
 	}
 	ret = 0;
@@ -2248,8 +2246,8 @@ azure_req_free(struct azure_op *op)
 	azure_op_data_destroy(&op->req.data);
 
 	switch (op->opcode) {
-	case AOP_MGMT_GET_SA_KEYS:
-		azure_req_mgmt_get_sa_keys_free(&op->req.mgmt_get_sa_keys);
+	case AOP_ACC_KEYS_GET:
+		azure_req_acc_keys_get_free(&op->req.acc_keys_get);
 		break;
 	case AOP_CONTAINER_LIST:
 		azure_req_ctnr_list_free(&op->req.ctnr_list);
@@ -2299,8 +2297,8 @@ azure_rsp_free(struct azure_op *op)
 	}
 
 	switch (op->opcode) {
-	case AOP_MGMT_GET_SA_KEYS:
-		azure_rsp_mgmt_get_sa_keys_free(&op->rsp.mgmt_get_sa_keys);
+	case AOP_ACC_KEYS_GET:
+		azure_rsp_acc_keys_get_free(&op->rsp.acc_keys_get);
 		break;
 	case AOP_CONTAINER_LIST:
 		azure_rsp_ctnr_list_free(&op->rsp.ctnr_list);
@@ -2353,8 +2351,8 @@ azure_rsp_process(struct azure_op *op)
 	}
 
 	switch (op->opcode) {
-	case AOP_MGMT_GET_SA_KEYS:
-		ret = azure_rsp_mgmt_get_sa_keys_process(op);
+	case AOP_ACC_KEYS_GET:
+		ret = azure_rsp_acc_keys_get_process(op);
 		break;
 	case AOP_CONTAINER_LIST:
 		ret = azure_rsp_ctnr_list_process(op);

@@ -152,7 +152,7 @@ main(int argc, char * const *argv)
 		goto err_sub_info_free;
 	}
 
-	ret = azure_op_mgmt_get_sa_keys(sub_id, blob_acc, &op);
+	ret = azure_op_acc_keys_get(sub_id, blob_acc, &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
@@ -175,11 +175,11 @@ main(int argc, char * const *argv)
 
 	printf("primary key: %s\n"
 	       "secondary key: %s\n",
-	       op.rsp.mgmt_get_sa_keys.primary,
-	       op.rsp.mgmt_get_sa_keys.secondary);
+	       op.rsp.acc_keys_get.primary,
+	       op.rsp.acc_keys_get.secondary);
 
 	ret = azure_conn_sign_setkey(&aconn, blob_acc,
-				     op.rsp.mgmt_get_sa_keys.primary);
+				     op.rsp.acc_keys_get.primary);
 	if (ret < 0) {
 		goto err_op_free;
 	}

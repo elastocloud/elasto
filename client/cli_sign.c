@@ -46,7 +46,7 @@ cli_sign_conn_setup(struct azure_conn *aconn,
 	struct azure_op op;
 
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_mgmt_get_sa_keys(sub_id, blob_acc, &op);
+	ret = azure_op_acc_keys_get(sub_id, blob_acc, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -69,11 +69,11 @@ cli_sign_conn_setup(struct azure_conn *aconn,
 
 	printf("primary key: %s\n"
 	       "secondary key: %s\n",
-	       op.rsp.mgmt_get_sa_keys.primary,
-	       op.rsp.mgmt_get_sa_keys.secondary);
+	       op.rsp.acc_keys_get.primary,
+	       op.rsp.acc_keys_get.secondary);
 
 	ret = azure_conn_sign_setkey(aconn, blob_acc,
-				     op.rsp.mgmt_get_sa_keys.primary);
+				     op.rsp.acc_keys_get.primary);
 	if (ret < 0) {
 		goto err_op_free;
 	}

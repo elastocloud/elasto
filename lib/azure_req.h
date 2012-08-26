@@ -17,7 +17,7 @@
 #define _AZURE_REQ_H_
 
 enum azure_opcode {
-	AOP_MGMT_GET_SA_KEYS = 1,
+	AOP_ACC_KEYS_GET = 1,
 	AOP_CONTAINER_LIST,
 	AOP_CONTAINER_CREATE,
 	AOP_BLOB_LIST,
@@ -36,11 +36,11 @@ enum azure_op_data_type {
 	AOP_DATA_FILE,
 };
 
-struct azure_req_mgmt_get_sa_keys {
+struct azure_req_acc_keys_get {
 	char *sub_id;
 	char *service_name;
 };
-struct azure_rsp_mgmt_get_sa_keys {
+struct azure_rsp_acc_keys_get {
 	char *primary;
 	char *secondary;
 };
@@ -219,7 +219,7 @@ struct azure_op {
 
 	struct {
 		union {
-			struct azure_req_mgmt_get_sa_keys mgmt_get_sa_keys;
+			struct azure_req_acc_keys_get acc_keys_get;
 			struct azure_req_ctnr_list ctnr_list;
 			struct azure_req_ctnr_create ctnr_create;
 			struct azure_req_blob_list blob_list;
@@ -240,7 +240,7 @@ struct azure_op {
 		int32_t err_code;
 		union {
 			struct azure_rsp_error err;
-			struct azure_rsp_mgmt_get_sa_keys mgmt_get_sa_keys;
+			struct azure_rsp_acc_keys_get acc_keys_get;
 			struct azure_rsp_ctnr_list ctnr_list;
 			struct azure_rsp_blob_list blob_list;
 			struct azure_rsp_block_list_get block_list_get;
@@ -279,7 +279,7 @@ azure_op_data_iov_new(uint8_t *buf,
 		      struct azure_op_data **data);
 
 int
-azure_op_mgmt_get_sa_keys(const char *sub_id,
+azure_op_acc_keys_get(const char *sub_id,
 			  const char *service_name,
 			  struct azure_op *op);
 
