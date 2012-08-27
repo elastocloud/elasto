@@ -303,7 +303,7 @@ cli_args_parse(int argc,
 	extern int optind;
 	char *pub_settings = NULL;
 
-	while ((opt = getopt(argc, argv, "s:")) != -1) {
+	while ((opt = getopt(argc, argv, "s:?")) != -1) {
 		switch (opt) {
 		case 's':
 			pub_settings = strdup(optarg);
