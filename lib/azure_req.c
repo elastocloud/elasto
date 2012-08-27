@@ -269,7 +269,7 @@ azure_acc_free(struct azure_account **pacc)
 {
 	struct azure_account *acc = *pacc;
 
-	free(acc->name);
+	free(acc->svc_name);
 	free(acc->url);
 	free(acc->affin_grp);
 	free(acc->location);
@@ -363,7 +363,7 @@ azure_rsp_acc_iter_process(xmlXPathContext *xp_ctx,
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->name);
+	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->svc_name);
 	free(query);
 	if (ret < 0) {
 		goto err_acc_free;
@@ -432,7 +432,7 @@ err_desc_free:
 err_url_free:
 	free(acc->url);
 err_name_free:
-	free(acc->name);
+	free(acc->svc_name);
 err_acc_free:
 	free(acc);
 err_out:

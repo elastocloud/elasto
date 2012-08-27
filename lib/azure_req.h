@@ -49,7 +49,7 @@ struct azure_rsp_acc_keys_get {
 /* azure storage account descriptor */
 struct azure_account {
 	struct list_node list;
-	char *name;
+	char *svc_name;
 	char *url;
 	char *desc;
 	char *affin_grp;

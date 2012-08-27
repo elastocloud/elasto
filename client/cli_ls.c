@@ -279,7 +279,7 @@ cli_ls_sub_handle(struct azure_conn *aconn,
 
 	printf("Accounts for subscription %s:\n", sub_id);
 	list_for_each(&op.rsp.acc_list.accs, acc, list) {
-			printf("\t%s\n", acc->name);
+			printf("\t%s\n", acc->svc_name);
 			if (acc->desc != NULL)
 				printf("\t\tdescription = %s\n", acc->desc);
 			if (acc->affin_grp != NULL)
