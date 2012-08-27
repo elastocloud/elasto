@@ -221,9 +221,30 @@ cli_args_azure_path_parse(const char *progname,
 		goto err_blob_free;
 	}
 done:
-	*acc_r = acc_name;
-	*ctnr_r = ctnr_name;
-	*blob_r = blob_name;
+	if ((acc_r == NULL) && (acc_name != NULL)) {
+		cli_args_usage(progname,
+			"Invalid remote path: unexpected account component");
+		ret = -EINVAL;
+		goto err_blob_free;
+	} else if (acc_r != NULL) {
+		*acc_r = acc_name;
+	}
+	if ((ctnr_r == NULL) && (ctnr_name != NULL)) {
+		cli_args_usage(progname,
+			"Invalid remote path: unexpected container component");
+		ret = -EINVAL;
+		goto err_blob_free;
+	} else if (ctnr_r != NULL) {
+		*ctnr_r = ctnr_name;
+	}
+	if ((blob_r == NULL) && (blob_name != NULL)) {
+		cli_args_usage(progname,
+			"Invalid remote path: unexpected blob component");
+		ret = -EINVAL;
+		goto err_blob_free;
+	} else if (blob_r != NULL) {
+		*blob_r = blob_name;
+	}
 	return 0;
 
 err_blob_free:
