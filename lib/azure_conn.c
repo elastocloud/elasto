@@ -345,7 +345,8 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE, 0);
 		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
 				 curl_fail_cb);
-	} else if (strcmp(op->method, REQ_METHOD_PUT) == 0) {
+	} else if ((strcmp(op->method, REQ_METHOD_PUT) == 0)
+				|| (strcmp(op->method, REQ_METHOD_POST) == 0)) {
 		uint64_t len = (op->req.data ? op->req.data->len : 0);
 		/* INFILESIZE_LARGE sets Content-Length hdr */
 		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE, len);

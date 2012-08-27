@@ -229,6 +229,7 @@ struct azure_op_data {
 #define REQ_METHOD_GET		"GET"
 #define REQ_METHOD_PUT		"PUT"
 #define REQ_METHOD_DELETE	"DELETE"
+#define REQ_METHOD_POST		"POST"
 struct azure_op {
 	struct azure_conn *aconn;
 	enum azure_opcode opcode;
