@@ -7,8 +7,10 @@ def options(opt):
 def configure(conf):
 	print("configure!")
 	conf.load('compiler_c')
-#	conf.check(lib=['curl','xml2'], cflags=['-Wall','-g'])
 	conf.env.CFLAGS = ['-Wall','-g']
+	conf.check(lib='curl')
+	conf.check(lib='xml2')
+	conf.check(lib='crypto')
 	conf.recurse('ccan')
 	conf.recurse('lib')
 	conf.recurse('client')
