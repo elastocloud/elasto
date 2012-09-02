@@ -99,7 +99,8 @@ struct cli_cmd_spec {
 		.id = CLI_CMD_CREATE,
 		.name = "create",
 		.help = "-l <label> -d <desc> -L <location> "
-			"-A <affinity group> <account>",
+			"-A <affinity group> <account>\n"
+			"\t\t<account>/<container>",
 		.arg_min = 1,
 		.arg_max = 7,
 		.args_parse = &cli_create_args_parse,

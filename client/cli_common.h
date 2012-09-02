@@ -54,6 +54,7 @@ struct cli_args {
 		} del;
 		struct {
 			char *blob_acc;
+			char *ctnr_name;
 			char *label;
 			char *desc;
 			char *affin_grp;

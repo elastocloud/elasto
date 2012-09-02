@@ -48,6 +48,46 @@ cli_create_args_free(struct cli_args *cli_args)
 	free(cli_args->create.location);
 }
 
+static int
+cli_create_args_validate(const char *progname,
+			 struct cli_args *cli_args)
+{
+	if (cli_args->create.blob_acc == NULL) {
+		cli_args_usage(progname,
+			       "Create must include an <account> argument");
+		return -EINVAL;
+	}
+
+	if (cli_args->create.ctnr_name != NULL) {
+		/* container creation */
+		if ((cli_args->create.label != NULL)
+		 || (cli_args->create.desc != NULL)
+		 || (cli_args->create.location != NULL)
+		 || (cli_args->create.affin_grp != NULL)) {
+			cli_args_usage(progname,
+				       "container creation does take "
+				       "-l, -d, -A or -L arguments");
+			return -EINVAL;
+		}
+		return 0;
+	}
+
+	if (cli_args->create.label == NULL) {
+		cli_args_usage(progname,
+			       "Account creation requires a <label> argument");
+		return -EINVAL;
+	}
+	if ((cli_args->create.location == NULL)
+	 && (cli_args->create.affin_grp == NULL)) {
+		cli_args_usage(progname,
+			       "Create must specify either a <location> or "
+			       "<affinity group>");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 int
 cli_create_args_parse(const char *progname,
 		   int argc,
@@ -92,40 +132,22 @@ cli_create_args_parse(const char *progname,
 			}
 			break;
 		default: /* '?' */
-			cli_args_usage(progname, NULL);
+			cli_args_usage(progname, "invalid create argument");
 			ret = -EINVAL;
 			goto err_args_free;
 			break;
 		}
 	}
 
-	if (cli_args->create.label == NULL) {
-		cli_args_usage(progname,
-			       "Create must include a <label> argument");
-		ret = -EINVAL;
-		goto err_args_free;
-	}
-	if ((cli_args->create.location == NULL)
-	 && (cli_args->create.affin_grp == NULL)) {
-		cli_args_usage(progname,
-			       "Create must specify either a <location> or "
-			       "<affinity group>");
-		ret = -EINVAL;
-		goto err_args_free;
-	}
-
 	ret = cli_args_azure_path_parse(progname, argv[optind],
 					&cli_args->create.blob_acc,
-					NULL, NULL);
+					&cli_args->create.ctnr_name, NULL);
 	if (ret < 0)
 		goto err_args_free;
 
-	if (cli_args->create.blob_acc == NULL) {
-		cli_args_usage(progname,
-			       "Create must include an <account> argument");
-		ret = -EINVAL;
+	ret = cli_create_args_validate(progname, cli_args);
+	if (ret < 0)
 		goto err_args_free;
-	}
 
 	cli_args->cmd = CLI_CMD_CREATE;
 	return 0;
@@ -136,8 +158,8 @@ err_args_free:
 }
 
 int
-cli_create_handle(struct azure_conn *aconn,
-	       struct cli_args *cli_args)
+cli_create_handle_acc(struct azure_conn *aconn,
+		      struct cli_args *cli_args)
 {
 	struct azure_op op;
 	int ret;
@@ -174,5 +196,67 @@ cli_create_handle(struct azure_conn *aconn,
 err_op_free:
 	azure_op_free(&op);
 err_out:
+	return ret;
+}
+
+int
+cli_create_handle_ctnr(struct azure_conn *aconn,
+		       struct cli_args *cli_args)
+{
+	struct azure_op op;
+	int ret;
+
+	ret = cli_sign_conn_setup(aconn,
+				  cli_args->create.blob_acc,
+				  cli_args->sub_id);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	memset(&op, 0, sizeof(op));
+	ret = azure_op_ctnr_create(cli_args->create.blob_acc,
+				   cli_args->create.ctnr_name,
+				   &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_conn_send_op(aconn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
+int
+cli_create_handle(struct azure_conn *aconn,
+		  struct cli_args *cli_args)
+{
+	int ret;
+
+	if (cli_args->create.ctnr_name != NULL) {
+		/* container creation */
+		ret = cli_create_handle_ctnr(aconn, cli_args);
+	} else {
+		/* account creation */
+		ret = cli_create_handle_acc(aconn, cli_args);
+	}
+
 	return ret;
 }

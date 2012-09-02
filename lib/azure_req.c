@@ -971,8 +971,8 @@ err_out:
 
 int
 azure_op_ctnr_create(const char *account,
-		      const char *ctnr,
-		      struct azure_op *op)
+		     const char *ctnr,
+		     struct azure_op *op)
 {
 
 	int ret;
