@@ -22,6 +22,7 @@ enum cli_cmd {
 	CLI_CMD_PUT,
 	CLI_CMD_GET,
 	CLI_CMD_DEL,
+	CLI_CMD_CREATE,
 };
 
 struct cli_args {
@@ -51,6 +52,13 @@ struct cli_args {
 			char *ctnr_name;
 			char *blob_name;
 		} del;
+		struct {
+			char *blob_acc;
+			char *label;
+			char *desc;
+			char *affin_grp;
+			char *location;
+		} create;
 	};
 };
 

@@ -39,6 +39,7 @@
 #include "cli_put.h"
 #include "cli_get.h"
 #include "cli_del.h"
+#include "cli_create.h"
 
 struct cli_cmd_spec {
 	enum cli_cmd id;
@@ -87,12 +88,23 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_DEL,
 		.name = "del",
-		.help = "<account><container>/<blob>",
+		.help = "<account>/<container>/<blob>",
 		.arg_min = 1,
 		.arg_max = 1,
 		.args_parse = &cli_del_args_parse,
 		.handle = &cli_del_handle,
 		.args_free = &cli_del_args_free,
+	},
+	{
+		.id = CLI_CMD_CREATE,
+		.name = "create",
+		.help = "-l <label> -d <desc> -L <location> "
+			"-A <affinity group> <account>",
+		.arg_min = 1,
+		.arg_max = 7,
+		.args_parse = &cli_create_args_parse,
+		.handle = &cli_create_handle,
+		.args_free = &cli_create_args_free,
 	},
 	{
 		/* must be last entry */

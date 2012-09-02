@@ -6,7 +6,7 @@ def configure(conf):
 	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 
 def build(bld):
-	bld.program(source='elasto_client.c cli_ls.c cli_put.c cli_get.c cli_del.c cli_sign.c',
+	bld.program(source='elasto_client.c cli_ls.c cli_put.c cli_get.c cli_del.c cli_sign.c cli_create.c',
 		    target='elasto_cli',
 		    lib=['curl','xml2','crypto'],
 		    use=['ccan','elasto'],
