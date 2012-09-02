@@ -2401,6 +2401,15 @@ azure_rsp_error_process(struct azure_op *op)
 		return 0;
 	}
 
+	if (op->rsp.err.off == 0) {
+		/* no error description XML attached */
+		op->rsp.err.msg = strdup("no error description");
+		if (op->rsp.err.msg == NULL) {
+			return -ENOMEM;
+		}
+		return 0;
+	}
+
 	ret = azure_xml_slurp(false, op->rsp.err.buf, op->rsp.err.off,
 			      &xp_doc, &xp_ctx);
 	if (ret < 0) {
@@ -2410,7 +2419,7 @@ azure_rsp_error_process(struct azure_op *op)
 	ret = azure_xml_get_path(xp_ctx, "/Error/Message", NULL,
 				 &op->rsp.err.msg);
 	if (ret == -ENOENT) {
-		/* no error description XML attached */
+		/* data attached, but no error description XML */
 		op->rsp.err.msg = strdup("no error description");
 		if (op->rsp.err.msg == NULL) {
 			ret = -ENOMEM;
