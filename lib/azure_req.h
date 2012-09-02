@@ -22,6 +22,7 @@ enum azure_opcode {
 	AOP_ACC_CREATE,
 	AOP_CONTAINER_LIST,
 	AOP_CONTAINER_CREATE,
+	AOP_CONTAINER_DEL,
 	AOP_BLOB_LIST,
 	AOP_BLOB_PUT,
 	AOP_BLOB_GET,
@@ -90,6 +91,11 @@ struct azure_rsp_ctnr_list {
 struct azure_req_ctnr_create {
 	char *account;
 	char *ctnr;
+};
+
+struct azure_req_ctnr_del {
+	char *account;
+	char *container;
 };
 
 struct azure_blob {
@@ -253,6 +259,7 @@ struct azure_op {
 			struct azure_req_acc_create acc_create;
 			struct azure_req_ctnr_list ctnr_list;
 			struct azure_req_ctnr_create ctnr_create;
+			struct azure_req_ctnr_del ctnr_del;
 			struct azure_req_blob_list blob_list;
 			struct azure_req_blob_put blob_put;
 			struct azure_req_blob_get blob_get;
@@ -279,6 +286,7 @@ struct azure_op {
 			/*
 			 * No response specific data handled yet:
 			 * struct azure_rsp_ctnr_create ctnr_create;
+			 * struct azure_rsp_ctnr_del ctnr_del;
 			 * struct azure_rsp_blob_put blob_put;
 			 * struct azure_rsp_blob_get blob_get;
 			 * struct azure_rsp_page_put page_put;
@@ -336,6 +344,11 @@ int
 azure_op_ctnr_create(const char *account,
 		     const char *ctnr,
 		     struct azure_op *op);
+
+int
+azure_op_ctnr_del(const char *account,
+		   const char *container,
+		   struct azure_op *op);
 
 int
 azure_op_blob_list(const char *account,

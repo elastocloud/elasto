@@ -1018,6 +1018,104 @@ err_out:
 }
 
 static void
+azure_req_ctnr_del_free(struct azure_req_ctnr_del *ctnr_del_req)
+{
+	free(ctnr_del_req->account);
+	free(ctnr_del_req->container);
+}
+
+static int
+azure_op_ctnr_del_fill_hdr(struct azure_op *op)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	/* different to the version in management */
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					 "x-ms-version: 2009-09-19");
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+int
+azure_op_ctnr_del(const char *account,
+		   const char *container,
+		   struct azure_op *op)
+{
+	int ret;
+	struct azure_req_ctnr_del *ctnr_del_req;
+
+	op->opcode = AOP_CONTAINER_DEL;
+	ctnr_del_req = &op->req.ctnr_del;
+
+	ctnr_del_req->account = strdup(account);
+	if (ctnr_del_req->account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	ctnr_del_req->container = strdup(container);
+	if (ctnr_del_req->container == NULL) {
+		ret = -ENOMEM;
+		goto err_free_account;
+	}
+
+	op->method = REQ_METHOD_DELETE;
+	ret = asprintf(&op->url,
+		       "https://%s.blob.core.windows.net/%s?restype=container",
+		       account, container);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_free_container;
+	}
+
+	/* mandatory headers */
+	ret = azure_op_ctnr_del_fill_hdr(op);
+	if (ret < 0)
+		goto err_free_url;
+
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+err_free_url:
+	free(op->url);
+err_free_container:
+	free(ctnr_del_req->container);
+err_free_account:
+	free(ctnr_del_req->account);
+err_out:
+	return ret;
+}
+
+static void
 azure_req_blob_list_free(struct azure_req_blob_list *blob_list_req)
 {
 	free(blob_list_req->account);
@@ -2687,6 +2785,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_CONTAINER_CREATE:
 		azure_req_ctnr_create_free(&op->req.ctnr_create);
 		break;
+	case AOP_CONTAINER_DEL:
+		azure_req_ctnr_del_free(&op->req.ctnr_del);
+		break;
 	case AOP_BLOB_LIST:
 		azure_req_blob_list_free(&op->req.blob_list);
 		break;
@@ -2745,6 +2846,7 @@ azure_rsp_free(struct azure_op *op)
 		azure_rsp_block_list_get_free(&op->rsp.block_list_get);
 		break;
 	case AOP_CONTAINER_CREATE:
+	case AOP_CONTAINER_DEL:
 	case AOP_BLOB_PUT:
 	case AOP_BLOB_GET:
 	case AOP_PAGE_PUT:
@@ -2802,6 +2904,7 @@ azure_rsp_process(struct azure_op *op)
 		ret = azure_rsp_block_list_get_process(op);
 		break;
 	case AOP_CONTAINER_CREATE:
+	case AOP_CONTAINER_DEL:
 	case AOP_BLOB_PUT:
 	case AOP_BLOB_GET:
 	case AOP_PAGE_PUT:
