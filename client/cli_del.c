@@ -61,13 +61,14 @@ cli_del_args_parse(const char *progname,
 	if (ret < 0)
 		goto err_out;
 
-	if (cli_args->del.blob_name == NULL) {
+	if (cli_args->del.ctnr_name == NULL) {
 		cli_args_usage(progname,
-		   "Invalid remote path, must be <account>/<container>/<blob>");
+			       "Invalid remote path, must be "
+			       "<account>/<container>[/<blob>]");
 		ret = -EINVAL;
 		goto err_ctnr_free;
 	}
-	/* blob_name implies we also have a ctnr */
+	/* ctnr_name implies we also have a ctnr */
 
 	cli_args->cmd = CLI_CMD_DEL;
 	return 0;
@@ -93,9 +94,15 @@ cli_del_handle(struct azure_conn *aconn,
 	}
 
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_blob_del(cli_args->del.blob_acc,
-				cli_args->del.ctnr_name,
-				cli_args->del.blob_name, &op);
+	if (cli_args->del.blob_name == NULL) {
+		/* remove container */
+		ret = azure_op_ctnr_del(cli_args->del.blob_acc,
+					cli_args->del.ctnr_name, &op);
+	} else {
+		ret = azure_op_blob_del(cli_args->del.blob_acc,
+					cli_args->del.ctnr_name,
+					cli_args->del.blob_name, &op);
+	}
 	if (ret < 0) {
 		goto err_out;
 	}
