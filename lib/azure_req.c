@@ -720,6 +720,82 @@ err_out:
 }
 
 static void
+azure_req_acc_del_free(struct azure_req_acc_del *acc_del_req)
+{
+	free(acc_del_req->sub_id);
+	free(acc_del_req->account);
+}
+
+static int
+azure_op_acc_del_fill_hdr(struct azure_op *op)
+{
+	int ret;
+
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					 "x-ms-version: 2011-06-01");
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+int
+azure_op_acc_del(const char *sub_id,
+		 const char *account,
+		 struct azure_op *op)
+{
+	int ret;
+	struct azure_req_acc_del *acc_del_req;
+
+	op->opcode = AOP_ACC_DEL;
+	acc_del_req = &op->req.acc_del;
+
+
+	acc_del_req->sub_id = strdup(sub_id);
+	if (acc_del_req->sub_id == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	acc_del_req->account = strdup(account);
+	if (acc_del_req->account == NULL) {
+		ret = -ENOMEM;
+		goto err_sub_free;
+	}
+
+	op->method = REQ_METHOD_DELETE;
+	ret = asprintf(&op->url,
+		       "https://management.core.windows.net/%s"
+		       "/services/storageservices/%s",
+		       sub_id, account);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	/* mandatory headers */
+	ret = azure_op_acc_del_fill_hdr(op);
+	if (ret < 0)
+		goto err_url_free;
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_acc_free:
+	free(acc_del_req->account);
+err_sub_free:
+	free(acc_del_req->sub_id);
+err_out:
+	return ret;
+}
+
+static void
 azure_req_ctnr_list_free(struct azure_req_ctnr_list *ctnr_list_req)
 {
 	free(ctnr_list_req->account);
@@ -2779,6 +2855,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_ACC_LIST:
 		azure_req_acc_list_free(&op->req.acc_list);
 		break;
+	case AOP_ACC_DEL:
+		azure_req_acc_del_free(&op->req.acc_del);
+		break;
 	case AOP_CONTAINER_LIST:
 		azure_req_ctnr_list_free(&op->req.ctnr_list);
 		break;
@@ -2845,6 +2924,7 @@ azure_rsp_free(struct azure_op *op)
 	case AOP_BLOCK_LIST_GET:
 		azure_rsp_block_list_get_free(&op->rsp.block_list_get);
 		break;
+	case AOP_ACC_DEL:
 	case AOP_CONTAINER_CREATE:
 	case AOP_CONTAINER_DEL:
 	case AOP_BLOB_PUT:
@@ -2903,6 +2983,7 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_BLOCK_LIST_GET:
 		ret = azure_rsp_block_list_get_process(op);
 		break;
+	case AOP_ACC_DEL:
 	case AOP_CONTAINER_CREATE:
 	case AOP_CONTAINER_DEL:
 	case AOP_BLOB_PUT:
