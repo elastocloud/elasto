@@ -19,6 +19,7 @@
 enum azure_opcode {
 	AOP_ACC_KEYS_GET = 1,
 	AOP_ACC_LIST,
+	AOP_ACC_CREATE,
 	AOP_CONTAINER_LIST,
 	AOP_CONTAINER_CREATE,
 	AOP_BLOB_LIST,
@@ -50,6 +51,7 @@ struct azure_rsp_acc_keys_get {
 struct azure_account {
 	struct list_node list;
 	char *svc_name;
+	char *label;
 	char *url;
 	char *desc;
 	char *affin_grp;
@@ -64,6 +66,11 @@ struct azure_req_acc_list {
 struct azure_rsp_acc_list {
 	int num_accs;
 	struct list_head accs;
+};
+
+struct azure_req_acc_create {
+	char *sub_id;
+	struct azure_account acc;
 };
 
 struct azure_ctnr {
@@ -243,6 +250,7 @@ struct azure_op {
 		union {
 			struct azure_req_acc_keys_get acc_keys_get;
 			struct azure_req_acc_list acc_list;
+			struct azure_req_acc_create acc_create;
 			struct azure_req_ctnr_list ctnr_list;
 			struct azure_req_ctnr_create ctnr_create;
 			struct azure_req_blob_list blob_list;
@@ -310,6 +318,15 @@ azure_op_acc_keys_get(const char *sub_id,
 int
 azure_op_acc_list(const char *sub_id,
 		  struct azure_op *op);
+
+int
+azure_op_acc_create(const char *sub_id,
+		    const char *svc_name,
+		    const char *label,
+		    const char *desc,
+		    const char *affin_grp,
+		    const char *location,
+		    struct azure_op *op);
 
 int
 azure_op_ctnr_list(const char *account,

@@ -488,6 +488,237 @@ err_out:
 	return ret;
 }
 
+static int
+azure_op_acc_create_fill_hdr(struct azure_op *op)
+{
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					 "x-ms-version: 2012-03-01");
+	if (op->http_hdr == NULL) {
+		return -ENOMEM;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr,
+			"Content-Type: application/xml; charset=utf-8");
+	if (op->http_hdr == NULL) {
+		return -ENOMEM;
+	}
+	return 0;
+}
+
+static int
+azure_op_acc_create_fill_body(struct azure_account *acc,
+			      struct azure_op_data **req_data)
+{
+	int ret;
+	xmlTextWriter *writer;
+	xmlBuffer *xbuf;
+	char *b64_label;
+
+	xbuf = xmlBufferCreate();
+	if (xbuf == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	writer = xmlNewTextWriterMemory(xbuf, 0);
+	if (writer == NULL) {
+		ret = -ENOMEM;
+		goto err_xbuf_free;
+	}
+
+	ret = xmlTextWriterStartDocument(writer, "1.0", "utf-8", NULL);
+	if (ret < 0) {
+		ret = -EIO;
+		goto err_writer_free;
+	}
+
+	ret = xmlTextWriterStartElement(writer,
+					BAD_CAST "CreateStorageServiceInput");
+	if (ret < 0) {
+		ret = -EIO;
+		goto err_writer_free;
+	}
+
+	ret = xmlTextWriterWriteAttribute(writer, BAD_CAST "xmlns",
+			BAD_CAST "http://schemas.microsoft.com/windowsazure");
+	if (ret < 0) {
+		ret = -EIO;
+		goto err_writer_free;
+	}
+
+	ret = xmlTextWriterWriteFormatElement(writer, BAD_CAST "ServiceName",
+					      "%s", acc->svc_name);
+	if (ret < 0) {
+		ret = -EBADF;
+		goto err_writer_free;
+	}
+
+	ret = base64_encode(acc->label, strlen(acc->label), &b64_label);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_writer_free;
+	}
+	ret = xmlTextWriterWriteFormatElement(writer, BAD_CAST "Label",
+					     "%s", b64_label);
+	free(b64_label);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_writer_free;
+	}
+
+	if (acc->desc != NULL) {
+		ret = xmlTextWriterWriteFormatElement(writer,
+						      BAD_CAST "Description",
+						      "%s", acc->desc);
+		if (ret < 0) {
+			ret = -EBADF;
+			goto err_writer_free;
+		}
+	}
+	if (acc->affin_grp != NULL) {
+		ret = xmlTextWriterWriteFormatElement(writer,
+						      BAD_CAST "AffinityGroup",
+						      "%s", acc->affin_grp);
+		if (ret < 0) {
+			ret = -EBADF;
+			goto err_writer_free;
+		}
+	}
+	if (acc->location != NULL) {
+		ret = xmlTextWriterWriteFormatElement(writer,
+						      BAD_CAST "Location",
+						      "%s", acc->location);
+		if (ret < 0) {
+			ret = -EBADF;
+			goto err_writer_free;
+		}
+	}
+
+	ret = xmlTextWriterEndElement(writer);
+	if (ret < 0) {
+		ret = -EBADF;
+		goto err_writer_free;
+	}
+
+	ret = xmlTextWriterEndDocument(writer);
+	if (ret < 0) {
+		ret = -EBADF;
+		goto err_writer_free;
+	}
+
+	ret = azure_op_data_iov_new(NULL, xmlBufferLength(xbuf), 0, true,
+				    req_data);
+	/* XXX could use xmlBufferDetach to avoid the memcpy? */
+	if (ret < 0) {
+		goto err_writer_free;
+	}
+	memcpy((*req_data)->buf, xmlBufferContent(xbuf), (*req_data)->len);
+
+	ret = 0;
+err_writer_free:
+	xmlFreeTextWriter(writer);
+err_xbuf_free:
+	xmlBufferFree(xbuf);
+err_out:
+	return ret;
+}
+
+int
+azure_op_acc_create(const char *sub_id,
+		    const char *svc_name,
+		    const char *label,
+		    const char *desc,
+		    const char *affin_grp,
+		    const char *location,
+		    struct azure_op *op)
+{
+	int ret;
+	struct azure_req_acc_create *acc_create_req;
+
+	if ((sub_id == NULL) || (svc_name == NULL) || (label == NULL)) {
+		return -EINVAL;
+	} else if ((affin_grp == NULL) && (location == NULL)) {
+		return -EINVAL;
+	}
+
+	op->opcode = AOP_ACC_CREATE;
+	acc_create_req = &op->req.acc_create;
+
+	acc_create_req->sub_id = strdup(sub_id);
+	if (acc_create_req->sub_id == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	acc_create_req->acc.svc_name = strdup(svc_name);
+	if (acc_create_req->acc.svc_name == NULL) {
+		ret = -ENOMEM;
+		goto err_sub_free;
+	}
+	acc_create_req->acc.label = strdup(label);
+	if (acc_create_req->acc.label == NULL) {
+		ret = -ENOMEM;
+		goto err_svc_name_free;
+	}
+
+	if (desc != NULL) {
+		acc_create_req->acc.desc = strdup(desc);
+		if (acc_create_req->acc.desc == NULL) {
+			ret = -ENOMEM;
+			goto err_label_free;
+		}
+	}
+	if (affin_grp != NULL) {
+		acc_create_req->acc.affin_grp = strdup(affin_grp);
+		if (acc_create_req->acc.affin_grp == NULL) {
+			ret = -ENOMEM;
+			goto err_desc_free;
+		}
+	} else {
+		assert(location != NULL);
+		acc_create_req->acc.location = strdup(location);
+		if (acc_create_req->acc.location == NULL) {
+			ret = -ENOMEM;
+			goto err_desc_free;
+		}
+	}
+
+	op->method = REQ_METHOD_POST;
+	ret = asprintf(&op->url, "https://management.core.windows.net/"
+		       "%s/services/storageservices",
+		       sub_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_loc_free;
+	}
+
+	ret = azure_op_acc_create_fill_hdr(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	ret = azure_op_acc_create_fill_body(&acc_create_req->acc,
+					    &op->req.data);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_loc_free:
+	free(acc_create_req->acc.location);
+	free(acc_create_req->acc.affin_grp);
+err_desc_free:
+	free(acc_create_req->acc.desc);
+err_label_free:
+	free(acc_create_req->acc.label);
+err_svc_name_free:
+	free(acc_create_req->acc.svc_name);
+err_sub_free:
+	free(acc_create_req->sub_id);
+err_out:
+	return ret;
+}
+
 static void
 azure_req_ctnr_list_free(struct azure_req_ctnr_list *ctnr_list_req)
 {
