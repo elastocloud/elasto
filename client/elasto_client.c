@@ -34,6 +34,7 @@
 #include "lib/azure_req.h"
 #include "lib/azure_conn.h"
 #include "lib/azure_ssl.h"
+#include "linenoise.h"
 #include "cli_common.h"
 #include "cli_ls.h"
 #include "cli_put.h"
@@ -320,7 +321,8 @@ static void
 cli_args_free(const struct cli_cmd_spec *cmd,
 	      struct cli_args *cli_args)
 {
-	cmd->args_free(cli_args);
+	if (cmd != NULL)
+		cmd->args_free(cli_args);
 	free(cli_args->sub_id);
 	free(cli_args->ps_file);
 }
@@ -359,6 +361,13 @@ cli_args_parse(int argc,
 		ret = -EINVAL;
 		goto err_out;
 	}
+	cli_args->ps_file = pub_settings;
+
+	if (argc - optind == 0) {
+		/* no cmd string */
+		*cmd_spec = NULL;
+		return 0;
+	}
 
 	ret = cli_cmd_parse(argv[0], argc - optind, &argv[optind],
 			    cli_args, cmd_spec);
@@ -366,13 +375,76 @@ cli_args_parse(int argc,
 		goto err_out;
 	}
 
-	cli_args->ps_file = pub_settings;
 
 	return 0;
 err_out:
 	free(pub_settings);
 
 	return ret;
+}
+
+static void
+cli_cmd_line_completion(const char *line,
+			struct linenoiseCompletions *lcs)
+{
+	struct cli_cmd_spec *cmd;
+
+	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
+		if (!strncmp(cmd->name, line, strlen(line)))
+			linenoiseAddCompletion(lcs, cmd->name);
+	}
+}
+
+#define ARGS_MAX 20
+int
+cli_cmd_line_run(struct azure_conn *aconn,
+		 struct cli_args *cli_args,
+		 char *line)
+{
+	int ret;
+	int argc = 0;
+	char *argv[ARGS_MAX];
+	char *token;
+	const struct cli_cmd_spec *cmd;
+
+	/* add to history before tokenising */
+	linenoiseHistoryAdd(line);
+	linenoiseHistorySave(".elasto_history");
+
+	token = strtok(line, " ");
+	while (token && (argc < ARGS_MAX)) {
+		argv[argc++] = token;
+		token = strtok(NULL, " ");
+	}
+	ret = cli_cmd_parse("elasto_client", argc, argv,
+			    cli_args, &cmd);
+	if (ret < 0) {
+		return ret;
+	}
+	ret = cmd->handle(aconn, cli_args);
+	if (ret < 0) {
+		return ret;
+	}
+	cmd->args_free(cli_args);
+}
+
+
+static int
+cli_cmd_line_start(struct azure_conn *aconn,
+		   struct cli_args *cli_args)
+{
+	char *line;
+
+	linenoiseSetCompletionCallback(cli_cmd_line_completion);
+	linenoiseHistoryLoad(".elasto_history");
+	while((line = linenoise("elasto> ")) != NULL) {
+		if (line[0] != '\0') {
+			cli_cmd_line_run(aconn, cli_args, line);
+			/* ignore errors */
+		}
+		free(line);
+	}
+	return 0;
 }
 
 int
@@ -410,7 +482,11 @@ main(int argc, char * const *argv)
 	}
 	/* @aconn signing not yet setup, done later with cli_sign_conn_setup */
 
-	ret = cmd->handle(&aconn, &cli_args);
+	if (cmd == NULL) {
+		ret = cli_cmd_line_start(&aconn, &cli_args);
+	} else {
+		ret = cmd->handle(&aconn, &cli_args);
+	}
 	if (ret < 0) {
 		goto err_conn_free;
 	}
