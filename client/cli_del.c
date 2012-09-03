@@ -61,14 +61,13 @@ cli_del_args_parse(const char *progname,
 	if (ret < 0)
 		goto err_out;
 
-	if (cli_args->del.ctnr_name == NULL) {
+	if (cli_args->del.blob_acc == NULL) {
 		cli_args_usage(progname,
 			       "Invalid remote path, must be "
-			       "<account>/<container>[/<blob>]");
+			       "<account>[/<container>[/<blob>]]");
 		ret = -EINVAL;
 		goto err_ctnr_free;
 	}
-	/* ctnr_name implies we also have a ctnr */
 
 	cli_args->cmd = CLI_CMD_DEL;
 	return 0;
@@ -79,30 +78,17 @@ err_out:
 	return ret;
 }
 
-int
-cli_del_handle(struct azure_conn *aconn,
-	       struct cli_args *cli_args)
+static int
+cli_del_acc_handle(struct azure_conn *aconn,
+		   const char *sub_id,
+		   const char *acc_name)
 {
 	struct azure_op op;
 	int ret;
 
-	ret = cli_sign_conn_setup(aconn,
-				  cli_args->del.blob_acc,
-				  cli_args->sub_id);
-	if (ret < 0) {
-		goto err_out;
-	}
-
 	memset(&op, 0, sizeof(op));
-	if (cli_args->del.blob_name == NULL) {
-		/* remove container */
-		ret = azure_op_ctnr_del(cli_args->del.blob_acc,
-					cli_args->del.ctnr_name, &op);
-	} else {
-		ret = azure_op_blob_del(cli_args->del.blob_acc,
-					cli_args->del.ctnr_name,
-					cli_args->del.blob_name, &op);
-	}
+	ret = azure_op_acc_del(sub_id,
+			       acc_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -126,6 +112,119 @@ cli_del_handle(struct azure_conn *aconn,
 	ret = 0;
 err_op_free:
 	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
+static int
+cli_del_blob_handle(struct azure_conn *aconn,
+		   const char *acc_name,
+		   const char *ctnr_name,
+		   const char *blob_name)
+{
+	struct azure_op op;
+	int ret;
+
+	memset(&op, 0, sizeof(op));
+	ret = azure_op_blob_del(acc_name,
+				ctnr_name,
+				blob_name, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_conn_send_op(aconn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
+static int
+cli_del_ctnr_handle(struct azure_conn *aconn,
+		    const char *acc_name,
+		    const char *ctnr_name)
+{
+	struct azure_op op;
+	int ret;
+
+	memset(&op, 0, sizeof(op));
+
+	ret = azure_op_ctnr_del(acc_name,
+				ctnr_name, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_conn_send_op(aconn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
+int
+cli_del_handle(struct azure_conn *aconn,
+	       struct cli_args *cli_args)
+{
+	int ret;
+
+	if ((cli_args->del.blob_name == NULL)
+	 && (cli_args->del.ctnr_name == NULL)) {
+		/* delete account for subscription, signing setup not needed */
+		ret = cli_del_acc_handle(aconn, cli_args->sub_id,
+					 cli_args->del.blob_acc);
+		return ret;
+	}
+
+	ret = cli_sign_conn_setup(aconn,
+				  cli_args->del.blob_acc,
+				  cli_args->sub_id);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (cli_args->del.blob_name != NULL) {
+		ret = cli_del_blob_handle(aconn, cli_args->del.blob_acc,
+					  cli_args->del.ctnr_name,
+					  cli_args->del.blob_name);
+	} else {
+		ret = cli_del_ctnr_handle(aconn, cli_args->del.blob_acc,
+					  cli_args->del.ctnr_name);
+	}
+
 err_out:
 	return ret;
 }
