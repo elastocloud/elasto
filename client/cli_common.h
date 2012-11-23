@@ -29,32 +29,22 @@ struct cli_args {
 	char *ps_file;
 	char *sub_id;
 	enum cli_cmd cmd;
+	/* mostly common to all */
+	char *blob_acc;
+	char *ctnr_name;
+	char *blob_name;
 	union {
 		struct {
-			char *blob_acc;
-			char *ctnr_name;
-			char *blob_name;
 		} ls;
 		struct {
 			char *local_path;
-			char *blob_acc;
-			char *ctnr_name;
-			char *blob_name;
 		} put;
 		struct {
-			char *blob_acc;
-			char *ctnr_name;
-			char *blob_name;
 			char *local_path;
 		} get;
 		struct {
-			char *blob_acc;
-			char *ctnr_name;
-			char *blob_name;
 		} del;
 		struct {
-			char *blob_acc;
-			char *ctnr_name;
 			char *label;
 			char *desc;
 			char *affin_grp;

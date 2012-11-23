@@ -41,9 +41,9 @@
 void
 cli_ls_args_free(struct cli_args *cli_args)
 {
-	free(cli_args->ls.blob_acc);
-	free(cli_args->ls.ctnr_name);
-	free(cli_args->ls.blob_name);
+	free(cli_args->blob_acc);
+	free(cli_args->ctnr_name);
+	free(cli_args->blob_name);
 }
 
 int
@@ -56,22 +56,22 @@ cli_ls_args_parse(const char *progname,
 
 	if (argc == 2) {
 		ret = cli_args_azure_path_parse(progname, argv[1],
-						&cli_args->ls.blob_acc,
-						&cli_args->ls.ctnr_name,
-						&cli_args->ls.blob_name);
+						&cli_args->blob_acc,
+						&cli_args->ctnr_name,
+						&cli_args->blob_name);
 		if (ret < 0)
 			goto err_out;
 
-		if (cli_args->ls.blob_acc == NULL) {
+		if (cli_args->blob_acc == NULL) {
 			cli_args_usage(progname,
 	"Invalid remote path, must be [<account>[/<container>[/<blob>]]]");
 			ret = -EINVAL;
 			goto err_out;
 		}
 	} else {
-		cli_args->ls.blob_acc = NULL;
-		cli_args->ls.ctnr_name = NULL;
-		cli_args->ls.blob_name = NULL;
+		cli_args->blob_acc = NULL;
+		cli_args->ctnr_name = NULL;
+		cli_args->blob_name = NULL;
 	}
 
 	cli_args->cmd = CLI_CMD_LS;
@@ -301,35 +301,35 @@ cli_ls_handle(struct azure_conn *aconn,
 {
 	int ret;
 
-	if ((cli_args->ls.blob_name == NULL)
-	 && (cli_args->ls.ctnr_name == NULL)
-	 && (cli_args->ls.blob_acc == NULL)) {
+	if ((cli_args->blob_name == NULL)
+	 && (cli_args->ctnr_name == NULL)
+	 && (cli_args->blob_acc == NULL)) {
 		/* list accounts for subscription, signing setup not needed */
 		ret = cli_ls_sub_handle(aconn, cli_args->sub_id);
 		return ret;
 	}
 
 	ret = cli_sign_conn_setup(aconn,
-				  cli_args->ls.blob_acc,
+				  cli_args->blob_acc,
 				  cli_args->sub_id);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	if (cli_args->ls.blob_name != NULL) {
+	if (cli_args->blob_name != NULL) {
 		/* list blocks for a specific blob */
-		ret = cli_ls_blob_handle(aconn, cli_args->ls.blob_acc,
-					 cli_args->ls.ctnr_name,
-					 cli_args->ls.blob_name);
+		ret = cli_ls_blob_handle(aconn, cli_args->blob_acc,
+					 cli_args->ctnr_name,
+					 cli_args->blob_name);
 		return ret;
-	} else if (cli_args->ls.ctnr_name != NULL) {
+	} else if (cli_args->ctnr_name != NULL) {
 		/* list specific container */
-		ret = cli_ls_ctnr_handle(aconn, cli_args->ls.blob_acc,
-					 cli_args->ls.ctnr_name);
+		ret = cli_ls_ctnr_handle(aconn, cli_args->blob_acc,
+					 cli_args->ctnr_name);
 		return ret;
-	} else if (cli_args->ls.blob_acc != NULL) {
+	} else if (cli_args->blob_acc != NULL) {
 		/* list all containers for account */
-		ret = cli_ls_acc_handle(aconn, cli_args->ls.blob_acc);
+		ret = cli_ls_acc_handle(aconn, cli_args->blob_acc);
 		return ret;
 	}
 
