@@ -325,6 +325,7 @@ cli_args_free(const struct cli_cmd_spec *cmd,
 		cmd->args_free(cli_args);
 	free(cli_args->sub_id);
 	free(cli_args->ps_file);
+	free(cli_args->pem_file);
 }
 
 static int
@@ -455,7 +456,6 @@ main(int argc, char * const *argv)
 	struct cli_args cli_args;
 	const struct cli_cmd_spec *cmd;
 	struct azure_conn aconn;
-	char *pem_file;
 	char *sub_name;
 	int ret;
 
@@ -472,13 +472,13 @@ main(int argc, char * const *argv)
 	}
 	azure_xml_subsys_init();
 
-	ret = azure_ssl_pubset_process(cli_args.ps_file, &pem_file,
+	ret = azure_ssl_pubset_process(cli_args.ps_file, &cli_args.pem_file,
 				       &cli_args.sub_id, &sub_name);
 	if (ret < 0) {
 		goto err_global_clean;
 	}
 
-	ret = azure_conn_init(pem_file, NULL, &aconn);
+	ret = azure_conn_init(cli_args.pem_file, NULL, &aconn);
 	if (ret < 0) {
 		goto err_sub_info_free;
 	}
@@ -497,7 +497,6 @@ main(int argc, char * const *argv)
 err_conn_free:
 	azure_conn_free(&aconn);
 err_sub_info_free:
-	free(pem_file);
 	free(sub_name);
 err_global_clean:
 	azure_xml_subsys_deinit();

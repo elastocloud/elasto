@@ -27,6 +27,7 @@ enum cli_cmd {
 
 struct cli_args {
 	char *ps_file;
+	char *pem_file;
 	char *sub_id;
 	enum cli_cmd cmd;
 	/* mostly common to all */
