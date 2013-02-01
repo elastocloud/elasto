@@ -199,6 +199,11 @@ cli_del_handle(struct azure_conn *aconn,
 {
 	int ret;
 
+	ret = azure_conn_init(cli_args->pem_file, NULL, aconn);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	if ((cli_args->blob_name == NULL)
 	 && (cli_args->ctnr_name == NULL)) {
 		/* delete account for subscription, signing setup not needed */

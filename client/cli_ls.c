@@ -299,6 +299,11 @@ cli_ls_handle(struct azure_conn *aconn,
 {
 	int ret;
 
+	ret = azure_conn_init(cli_args->pem_file, NULL, aconn);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	if ((cli_args->blob_name == NULL)
 	 && (cli_args->ctnr_name == NULL)
 	 && (cli_args->blob_acc == NULL)) {
@@ -330,8 +335,6 @@ cli_ls_handle(struct azure_conn *aconn,
 		ret = cli_ls_acc_handle(aconn, cli_args->blob_acc);
 		return ret;
 	}
-
-	return ret;
 
 	ret = 0;
 err_out:

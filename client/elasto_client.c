@@ -476,12 +476,6 @@ main(int argc, char * const *argv)
 		goto err_global_clean;
 	}
 
-	ret = azure_conn_init(cli_args.pem_file, NULL, &aconn);
-	if (ret < 0) {
-		goto err_sub_info_free;
-	}
-	/* @aconn signing not yet setup, done later with cli_sign_conn_setup */
-
 	if (cmd == NULL) {
 		ret = cli_cmd_line_start(&aconn, &cli_args);
 	} else {
@@ -494,7 +488,6 @@ main(int argc, char * const *argv)
 	ret = 0;
 err_conn_free:
 	azure_conn_free(&aconn);
-err_sub_info_free:
 	free(sub_name);
 err_global_clean:
 	azure_xml_subsys_deinit();

@@ -214,6 +214,11 @@ cli_put_handle(struct azure_conn *aconn,
 	struct azure_op op;
 	int ret;
 
+	ret = azure_conn_init(cli_args->pem_file, NULL, aconn);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	ret = cli_sign_conn_setup(aconn,
 				  cli_args->blob_acc,
 				  cli_args->sub_id);
