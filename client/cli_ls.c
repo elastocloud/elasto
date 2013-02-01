@@ -294,12 +294,12 @@ err_out:
 }
 
 int
-cli_ls_handle(struct azure_conn *aconn,
-	       struct cli_args *cli_args)
+cli_ls_handle(struct cli_args *cli_args)
 {
+	struct azure_conn *aconn;
 	int ret;
 
-	ret = azure_conn_init(cli_args->pem_file, NULL, aconn);
+	ret = azure_conn_init(cli_args->pem_file, NULL, &aconn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -309,6 +309,7 @@ cli_ls_handle(struct azure_conn *aconn,
 	 && (cli_args->blob_acc == NULL)) {
 		/* list accounts for subscription, signing setup not needed */
 		ret = cli_ls_sub_handle(aconn, cli_args->sub_id);
+		azure_conn_free(aconn);
 		return ret;
 	}
 
@@ -316,7 +317,7 @@ cli_ls_handle(struct azure_conn *aconn,
 				  cli_args->blob_acc,
 				  cli_args->sub_id);
 	if (ret < 0) {
-		goto err_out;
+		goto err_conn_free;
 	}
 
 	if (cli_args->blob_name != NULL) {
@@ -324,19 +325,21 @@ cli_ls_handle(struct azure_conn *aconn,
 		ret = cli_ls_blob_handle(aconn, cli_args->blob_acc,
 					 cli_args->ctnr_name,
 					 cli_args->blob_name);
-		return ret;
 	} else if (cli_args->ctnr_name != NULL) {
 		/* list specific container */
 		ret = cli_ls_ctnr_handle(aconn, cli_args->blob_acc,
 					 cli_args->ctnr_name);
-		return ret;
 	} else if (cli_args->blob_acc != NULL) {
 		/* list all containers for account */
 		ret = cli_ls_acc_handle(aconn, cli_args->blob_acc);
-		return ret;
+	}
+	if (ret < 0) {
+		goto err_conn_free;
 	}
 
 	ret = 0;
+err_conn_free:
+	azure_conn_free(aconn);
 err_out:
 	return ret;
 }

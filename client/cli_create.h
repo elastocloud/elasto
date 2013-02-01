@@ -24,7 +24,6 @@ cli_create_args_parse(const char *progname,
 		      struct cli_args *cli_args);
 
 int
-cli_create_handle(struct azure_conn *aconn,
-		  struct cli_args *cli_args);
+cli_create_handle(struct cli_args *cli_args);
 
 #endif /* ifdef _CLI_CREATE_H_ */

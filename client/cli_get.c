@@ -85,14 +85,14 @@ err_out:
 }
 
 int
-cli_get_handle(struct azure_conn *aconn,
-	       struct cli_args *cli_args)
+cli_get_handle(struct cli_args *cli_args)
 {
+	struct azure_conn *aconn;
 	struct stat st;
 	struct azure_op op;
 	int ret;
 
-	ret = azure_conn_init(cli_args->pem_file, NULL, aconn);
+	ret = azure_conn_init(cli_args->pem_file, NULL, &aconn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -101,14 +101,14 @@ cli_get_handle(struct azure_conn *aconn,
 				  cli_args->blob_acc,
 				  cli_args->sub_id);
 	if (ret < 0) {
-		goto err_out;
+		goto err_conn_free;
 	}
 
 	ret = stat(cli_args->get.local_path, &st);
 	if (ret == 0) {
 		printf("destination already exists at %s\n",
 		       cli_args->get.local_path);
-		goto err_out;
+		goto err_conn_free;
 	}
 	memset(&op, 0, sizeof(op));
 	printf("getting container %s blob %s for %s\n",
@@ -124,7 +124,7 @@ cli_get_handle(struct azure_conn *aconn,
 				(uint8_t *)cli_args->get.local_path,
 				0, 0, &op);
 	if (ret < 0) {
-		goto err_out;
+		goto err_conn_free;
 	}
 
 	ret = azure_conn_send_op(aconn, &op);
@@ -143,6 +143,8 @@ err_op_free:
 	if (op.rsp.data)
 		op.rsp.data->buf = NULL;
 	azure_op_free(&op);
+err_conn_free:
+	azure_conn_free(aconn);
 err_out:
 	return ret;
 }

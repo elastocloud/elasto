@@ -50,8 +50,7 @@ struct cli_cmd_spec {
 			  int argc,
 			  char * const *argv,
 			  struct cli_args *cli_args);
-	int (*handle)(struct azure_conn *,
-		      struct cli_args *);
+	int (*handle)(struct cli_args *);
 	void (*args_free)(struct cli_args *);
 } cli_cmd_specs[] = {
 	{
@@ -395,9 +394,8 @@ cli_cmd_line_completion(const char *line,
 }
 
 #define ARGS_MAX 20
-int
-cli_cmd_line_run(struct azure_conn *aconn,
-		 struct cli_args *cli_args,
+static int
+cli_cmd_line_run(struct cli_args *cli_args,
 		 char *line)
 {
 	int ret;
@@ -420,7 +418,7 @@ cli_cmd_line_run(struct azure_conn *aconn,
 	if (ret < 0) {
 		return ret;
 	}
-	ret = cmd->handle(aconn, cli_args);
+	ret = cmd->handle(cli_args);
 	if (ret < 0) {
 		return ret;
 	}
@@ -431,8 +429,7 @@ cli_cmd_line_run(struct azure_conn *aconn,
 
 
 static int
-cli_cmd_line_start(struct azure_conn *aconn,
-		   struct cli_args *cli_args)
+cli_cmd_line_start(struct cli_args *cli_args)
 {
 	char *line;
 
@@ -440,7 +437,7 @@ cli_cmd_line_start(struct azure_conn *aconn,
 	linenoiseHistoryLoad(".elasto_history");
 	while((line = linenoise("elasto> ")) != NULL) {
 		if (line[0] != '\0') {
-			cli_cmd_line_run(aconn, cli_args, line);
+			cli_cmd_line_run(cli_args, line);
 			/* ignore errors */
 		}
 		free(line);
@@ -453,7 +450,6 @@ main(int argc, char * const *argv)
 {
 	struct cli_args cli_args;
 	const struct cli_cmd_spec *cmd;
-	struct azure_conn aconn;
 	char *sub_name;
 	int ret;
 
@@ -477,17 +473,16 @@ main(int argc, char * const *argv)
 	}
 
 	if (cmd == NULL) {
-		ret = cli_cmd_line_start(&aconn, &cli_args);
+		ret = cli_cmd_line_start(&cli_args);
 	} else {
-		ret = cmd->handle(&aconn, &cli_args);
+		ret = cmd->handle(&cli_args);
 	}
 	if (ret < 0) {
-		goto err_conn_free;
+		goto err_sub_free;
 	}
 
 	ret = 0;
-err_conn_free:
-	azure_conn_free(&aconn);
+err_sub_free:
 	free(sub_name);
 err_global_clean:
 	azure_xml_subsys_deinit();

@@ -424,10 +424,16 @@ azure_conn_send_op(struct azure_conn *aconn,
 int
 azure_conn_init(const char *pem_file,
 		const char *pem_pw,
-		struct azure_conn *aconn)
+		struct azure_conn **aconn_out)
 {
+	struct azure_conn *aconn = malloc(sizeof(*aconn));
+	if (aconn == NULL) {
+		return -ENOMEM;
+	}
+
 	aconn->curl = curl_easy_init();
 	if (aconn->curl == NULL) {
+		free(aconn);
 		return -ENOMEM;
 	}
 
@@ -442,6 +448,7 @@ azure_conn_init(const char *pem_file,
 		curl_easy_setopt(aconn->curl, CURLOPT_KEYPASSWD, pem_pw);
 	}
 	memset(&aconn->sign, 0, sizeof(aconn->sign));
+	*aconn_out = aconn;
 
 	return 0;
 }
@@ -454,6 +461,7 @@ azure_conn_free(struct azure_conn *aconn)
 		free(aconn->sign.key);
 		free(aconn->sign.account);
 	}
+	free(aconn);
 }
 
 int

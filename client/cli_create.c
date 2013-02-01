@@ -155,14 +155,14 @@ err_args_free:
 	return ret;
 }
 
-int
-cli_create_handle_acc(struct azure_conn *aconn,
-		      struct cli_args *cli_args)
+static int
+cli_create_handle_acc(struct cli_args *cli_args)
 {
+	struct azure_conn *aconn;
 	struct azure_op op;
 	int ret;
 
-	ret = azure_conn_init(cli_args->pem_file, NULL, aconn);
+	ret = azure_conn_init(cli_args->pem_file, NULL, &aconn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -176,7 +176,7 @@ cli_create_handle_acc(struct azure_conn *aconn,
 				  cli_args->create.location,
 				  &op);
 	if (ret < 0) {
-		goto err_out;
+		goto err_conn_free;
 	}
 
 	ret = azure_conn_send_op(aconn, &op);
@@ -198,18 +198,20 @@ cli_create_handle_acc(struct azure_conn *aconn,
 	ret = 0;
 err_op_free:
 	azure_op_free(&op);
+err_conn_free:
+	azure_conn_free(aconn);
 err_out:
 	return ret;
 }
 
-int
-cli_create_handle_ctnr(struct azure_conn *aconn,
-		       struct cli_args *cli_args)
+static int
+cli_create_handle_ctnr(struct cli_args *cli_args)
 {
+	struct azure_conn *aconn;
 	struct azure_op op;
 	int ret;
 
-	ret = azure_conn_init(cli_args->pem_file, NULL, aconn);
+	ret = azure_conn_init(cli_args->pem_file, NULL, &aconn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -218,7 +220,7 @@ cli_create_handle_ctnr(struct azure_conn *aconn,
 				  cli_args->blob_acc,
 				  cli_args->sub_id);
 	if (ret < 0) {
-		goto err_out;
+		goto err_conn_free;
 	}
 
 	memset(&op, 0, sizeof(op));
@@ -226,7 +228,7 @@ cli_create_handle_ctnr(struct azure_conn *aconn,
 				   cli_args->ctnr_name,
 				   &op);
 	if (ret < 0) {
-		goto err_out;
+		goto err_conn_free;
 	}
 
 	ret = azure_conn_send_op(aconn, &op);
@@ -248,22 +250,23 @@ cli_create_handle_ctnr(struct azure_conn *aconn,
 	ret = 0;
 err_op_free:
 	azure_op_free(&op);
+err_conn_free:
+	azure_conn_free(aconn);
 err_out:
 	return ret;
 }
 
 int
-cli_create_handle(struct azure_conn *aconn,
-		  struct cli_args *cli_args)
+cli_create_handle(struct cli_args *cli_args)
 {
 	int ret;
 
 	if (cli_args->ctnr_name != NULL) {
 		/* container creation */
-		ret = cli_create_handle_ctnr(aconn, cli_args);
+		ret = cli_create_handle_ctnr(cli_args);
 	} else {
 		/* account creation */
-		ret = cli_create_handle_acc(aconn, cli_args);
+		ret = cli_create_handle_acc(cli_args);
 	}
 
 	return ret;

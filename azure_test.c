@@ -114,7 +114,7 @@ err_out:
 int
 main(int argc, char * const *argv)
 {
-	struct azure_conn aconn;
+	struct azure_conn *aconn;
 	struct azure_op op;
 	char *ps_file;
 	char *pem_file;
@@ -155,7 +155,7 @@ main(int argc, char * const *argv)
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_op(&aconn, &op);
+	ret = azure_conn_send_op(aconn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -176,7 +176,7 @@ main(int argc, char * const *argv)
 	       op.rsp.acc_keys_get.primary,
 	       op.rsp.acc_keys_get.secondary);
 
-	ret = azure_conn_sign_setkey(&aconn, blob_acc,
+	ret = azure_conn_sign_setkey(aconn, blob_acc,
 				     op.rsp.acc_keys_get.primary);
 	if (ret < 0) {
 		goto err_op_free;
@@ -189,7 +189,7 @@ main(int argc, char * const *argv)
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_op(&aconn, &op);
+	ret = azure_conn_send_op(aconn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -226,7 +226,7 @@ main(int argc, char * const *argv)
 		 * < HTTP/1.1 409 The specified container already exists.
 		 */
 
-		ret = azure_conn_send_op(&aconn, &op);
+		ret = azure_conn_send_op(aconn, &op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -253,7 +253,7 @@ main(int argc, char * const *argv)
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_op(&aconn, &op);
+	ret = azure_conn_send_op(aconn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -277,7 +277,7 @@ main(int argc, char * const *argv)
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_op(&aconn, &op);
+	ret = azure_conn_send_op(aconn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -300,7 +300,7 @@ main(int argc, char * const *argv)
 err_op_free:
 	azure_op_free(&op);
 err_conn_free:
-	azure_conn_free(&aconn);
+	azure_conn_free(aconn);
 err_sub_info_free:
 	free(pem_file);
 	free(sub_id);

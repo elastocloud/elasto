@@ -24,7 +24,6 @@ cli_get_args_parse(const char *progname,
 		   struct cli_args *cli_args);
 
 int
-cli_get_handle(struct azure_conn *aconn,
-	       struct cli_args *cli_args);
+cli_get_handle(struct cli_args *cli_args);
 
 #endif /* ifdef _CLI_GET_H_ */

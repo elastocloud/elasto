@@ -24,7 +24,6 @@ cli_del_args_parse(const char *progname,
 		   struct cli_args *cli_args);
 
 int
-cli_del_handle(struct azure_conn *aconn,
-	       struct cli_args *cli_args);
+cli_del_handle(struct cli_args *cli_args);
 
 #endif /* ifdef _CLI_DEL_H_ */

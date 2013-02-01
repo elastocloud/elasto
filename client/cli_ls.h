@@ -24,7 +24,6 @@ cli_ls_args_parse(const char *progname,
 		  struct cli_args *cli_args);
 
 int
-cli_ls_handle(struct azure_conn *aconn,
-	       struct cli_args *cli_args);
+cli_ls_handle(struct cli_args *cli_args);
 
 #endif /* ifdef _CLI_LS_H_ */

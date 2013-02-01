@@ -207,14 +207,14 @@ err_blks_free:
 }
 
 int
-cli_put_handle(struct azure_conn *aconn,
-	       struct cli_args *cli_args)
+cli_put_handle(struct cli_args *cli_args)
 {
+	struct azure_conn *aconn;
 	struct stat st;
 	struct azure_op op;
 	int ret;
 
-	ret = azure_conn_init(cli_args->pem_file, NULL, aconn);
+	ret = azure_conn_init(cli_args->pem_file, NULL, &aconn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -223,19 +223,19 @@ cli_put_handle(struct azure_conn *aconn,
 				  cli_args->blob_acc,
 				  cli_args->sub_id);
 	if (ret < 0) {
-		goto err_out;
+		goto err_conn_free;
 	}
 
 	ret = stat(cli_args->put.local_path, &st);
 	if (ret < 0) {
 		printf("failed to stat %s\n", cli_args->put.local_path);
-		goto err_out;
+		goto err_conn_free;
 	}
 	memset(&op, 0, sizeof(op));
 	ret = azure_op_ctnr_create(cli_args->blob_acc,
 				   cli_args->ctnr_name, &op);
 	if (ret < 0) {
-		goto err_out;
+		goto err_conn_free;
 	}
 
 	ret = azure_conn_send_op(aconn, &op);
@@ -272,20 +272,20 @@ cli_put_handle(struct azure_conn *aconn,
 					(uint8_t *)cli_args->put.local_path,
 					st.st_size, &op);
 		if (ret < 0) {
-			goto err_out;
+			goto err_conn_free;
 		}
 	} else {
 		struct list_head *blks;
 		ret = cli_put_blocks(aconn, cli_args, st.st_size, &blks);
 		if (ret < 0) {
-			goto err_out;
+			goto err_conn_free;
 		}
 		ret = azure_op_block_list_put(cli_args->blob_acc,
 					      cli_args->ctnr_name,
 					      cli_args->blob_name,
 					      blks, &op);
 		if (ret < 0) {
-			goto err_out;
+			goto err_conn_free;
 		}
 	}
 
@@ -305,6 +305,8 @@ err_op_free:
 	if (op.req.data)
 		op.req.data->buf = NULL;
 	azure_op_free(&op);
+err_conn_free:
+	azure_conn_free(aconn);
 err_out:
 	return ret;
 }

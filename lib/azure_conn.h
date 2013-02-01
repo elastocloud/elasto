@@ -35,7 +35,7 @@ azure_conn_send_op(struct azure_conn *aconn,
 int
 azure_conn_init(const char *pem_file,
 		const char *pem_pw,
-		struct azure_conn *aconn);
+		struct azure_conn **aconn);
 
 void
 azure_conn_free(struct azure_conn *aconn);
