@@ -2,3 +2,4 @@ build/
 .waf-*
 .lock-wafbuild
 cscope.out
+.elasto_history

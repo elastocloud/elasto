@@ -426,6 +426,8 @@ cli_cmd_line_run(struct azure_conn *aconn,
 		return ret;
 	}
 	cmd->args_free(cli_args);
+
+	return 0;
 }
 
 
