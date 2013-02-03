@@ -25,6 +25,7 @@
 #include <curl/curl.h>
 
 #include "ccan/list/list.h"
+#include "dbg.h"
 #include "base64.h"
 #include "azure_req.h"
 #include "azure_sign.h"
@@ -61,6 +62,7 @@ azure_conn_sign_setkey(struct azure_conn *aconn,
 		goto err_acc_free;
 	}
 	aconn->sign.key_len = ret;
+	dbg(1, "set account %s signing key: %s\n", account, key_b64);
 
 	return 0;
 
@@ -141,7 +143,7 @@ curl_read_cb(char *ptr,
 	op->req.read_cbs++;
 	read_off = op->req.data->base_off + op->req.data->off;
 	if (op->req.data->off + num_bytes > op->req.data->len) {
-		printf("curl_read_cb buffer exceeded, "
+		dbg(3, "curl_read_cb buffer exceeded, "
 		       "len %lu off %lu io_sz %lu, capping\n",
 		       op->req.data->len, op->req.data->off, num_bytes);
 		num_bytes = op->req.data->len - op->req.data->off;
@@ -153,7 +155,7 @@ curl_read_cb(char *ptr,
 		ssize_t ret;
 		ret = pread(op->req.data->file.fd, ptr, num_bytes, read_off);
 		if (ret != num_bytes) {
-			printf("failed to read from file\n");
+			dbg(0, "failed to read from file\n");
 			return -1;
 		}
 	}
@@ -189,7 +191,7 @@ curl_write_alloc_std(struct azure_op *op)
 	switch (op->rsp.data->type) {
 	case AOP_DATA_IOV:
 		if (clen + op->rsp.data->base_off > op->rsp.data->len) {
-			printf("preallocated rsp buf not large enough - "
+			dbg(0, "preallocated rsp buf not large enough - "
 			       "alloced=%lu, clen=%lu\n",
 			       op->rsp.data->len, clen);
 			return -E2BIG;
@@ -213,7 +215,7 @@ curl_write_err(struct azure_op *op,
 	       uint64_t num_bytes)
 {
 	if (op->rsp.err.off + num_bytes > op->rsp.err.len) {
-		printf("fatal: error rsp buffer exceeded, "
+		dbg(0, "fatal: error rsp buffer exceeded, "
 		       "len %lu off %lu io_sz %lu\n",
 		       op->rsp.err.len, op->rsp.err.off, num_bytes);
 		return -E2BIG;
@@ -239,7 +241,7 @@ curl_write_std(struct azure_op *op,
 	switch (op->rsp.data->type) {
 	case AOP_DATA_IOV:
 		if (write_off + num_bytes > op->rsp.data->len) {
-			printf("fatal: curl_write_cb buffer exceeded, "
+			dbg(0, "fatal: curl_write_cb buffer exceeded, "
 			       "len %lu off %lu io_sz %lu\n",
 			       op->rsp.data->len, write_off, num_bytes);
 			return -E2BIG;
@@ -248,14 +250,14 @@ curl_write_std(struct azure_op *op,
 		break;
 	case AOP_DATA_FILE:
 		if (write_off + num_bytes > op->rsp.data->len) {
-			printf("fatal: curl_write_cb file exceeded, "
+			dbg(0, "fatal: curl_write_cb file exceeded, "
 			       "len %lu off %lu io_sz %lu\n",
 			       op->rsp.data->len, write_off, num_bytes);
 			return -E2BIG;
 		}
 		ret = pwrite(op->rsp.data->file.fd, data, num_bytes, write_off);
 		if (ret != num_bytes) {
-			printf("file write io failed: %s\n", strerror(errno));
+			dbg(0, "file write io failed: %s\n", strerror(errno));
 			return -EBADF;
 		}
 		break;
@@ -284,7 +286,7 @@ curl_write_cb(char *ptr,
 		cc = curl_easy_getinfo(op->aconn->curl, CURLINFO_RESPONSE_CODE,
 				       &ret_code);
 		if (cc != CURLE_OK) {
-			printf("could not get response code in write cb\n");
+			dbg(0, "could not get response code in write cb\n");
 			return -1;
 		}
 
@@ -297,7 +299,7 @@ curl_write_cb(char *ptr,
 			ret = curl_write_alloc_std(op);
 		}
 		if (ret < 0) {
-			printf("failed to allocate response buffer\n");
+			dbg(0, "failed to allocate response buffer\n");
 			return -1;
 		}
 
@@ -320,7 +322,7 @@ curl_fail_cb(char *ptr,
 	     size_t nmemb,
 	     void *userdata)
 {
-	printf("Failure: server body data when not expected!\n");
+	dbg(0, "Failure: server body data when not expected!\n");
 	return 0;
 }
 
@@ -361,7 +363,7 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 					  aconn->sign.key, aconn->sign.key_len,
 					  op, &op->sig_src, &sig_str);
 		if (ret < 0) {
-			printf("signing failed: %s\n", strerror(-ret));
+			dbg(0, "signing failed: %s\n", strerror(-ret));
 			return ret;
 		}
 		ret = asprintf(&hdr_str, "Authorization: SharedKeyLite %s:%s",
@@ -399,7 +401,7 @@ azure_conn_send_op(struct azure_conn *aconn,
 	/* dispatch */
 	res = curl_easy_perform(aconn->curl);
 	if (res != CURLE_OK) {
-		printf("curl_easy_perform() failed: %s\n",
+		dbg(0, "curl_easy_perform() failed: %s\n",
 		       curl_easy_strerror(res));
 		curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, NULL);
 		op->aconn = NULL;

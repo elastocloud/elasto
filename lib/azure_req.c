@@ -32,6 +32,7 @@
 #include <libxml/xmlwriter.h>
 
 #include "ccan/list/list.h"
+#include "dbg.h"
 #include "base64.h"
 #include "azure_xml.h"
 #include "azure_req.h"
@@ -247,6 +248,8 @@ azure_rsp_acc_keys_get_process(struct azure_op *op)
 		free(acc_keys_get_rsp->primary);
 		goto err_xml_free;
 	}
+	dbg(5, "primary key: %s, secondary key: %s\n",
+	    acc_keys_get_rsp->primary, acc_keys_get_rsp->secondary);
 	ret = 0;
 
 err_xml_free:
@@ -1372,7 +1375,7 @@ azure_rsp_blob_iter_process(xmlXPathContext *xp_ctx,
 	iblob->name = name;
 	iblob->len = strtoll(len, &query, 10);
 	if (query == len) {
-		printf("unsupported blob length response\n");
+		dbg(0, "unsupported blob length response\n");
 		ret = -EINVAL;
 		goto err_blob_free;
 	}
@@ -2575,7 +2578,7 @@ azure_rsp_blk_iter_process(xmlXPathContext *xp_ctx,
 	blk->id[ret] = '\0';
 	blk->len = strtoll(size, &query, 10);
 	if (query == size) {
-		printf("unsupported block size response\n");
+		dbg(0, "unsupported block size response\n");
 		ret = -EINVAL;
 		goto err_id_free;
 	}
@@ -2831,7 +2834,7 @@ azure_rsp_error_process(struct azure_op *op)
 	} else if (ret < 0) {
 		goto err_xml_free;
 	}
-	printf("got error msg: %s\n", op->rsp.err.msg);
+	dbg(0, "got error msg: %s\n", op->rsp.err.msg);
 	ret = 0;
 
 err_xml_free:

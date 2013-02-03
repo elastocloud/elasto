@@ -21,6 +21,8 @@
 #include <libxml/xpath.h>
 #include <libxml/xpathInternals.h>
 
+#include "dbg.h"
+
 int
 azure_xml_slurp(bool is_file,
 		const uint8_t *buf,
@@ -38,7 +40,7 @@ azure_xml_slurp(bool is_file,
 		xdoc = xmlParseMemory((char *)buf, buf_len);
 	}
 	if (xdoc == NULL) {
-		printf("unable to parse in-memory XML\n");
+		dbg(0, "unable to parse in-memory XML\n");
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -46,20 +48,20 @@ azure_xml_slurp(bool is_file,
 	/* Create xpath evaluation context */
 	xpath_ctx = xmlXPathNewContext(xdoc);
 	if (xpath_ctx == NULL) {
-		printf("unable to create XPath context\n");
+		dbg(0, "unable to create XPath context\n");
 		ret = -ENOMEM;
 		goto err_free_doc;
 	}
 
 	if (xmlXPathRegisterNs(xpath_ctx, (xmlChar *)"def",
 			(xmlChar *)"http://schemas.microsoft.com/windowsazure") != 0) {
-		printf("Unable to register NS: def\n");
+		dbg(0, "Unable to register NS: def\n");
 		ret = -EINVAL;
 		goto err_free_xpctx;
 	}
 	if (xmlXPathRegisterNs(xpath_ctx, (xmlChar *)"i",
 			(xmlChar *)"http://www.w3.org/2001/XMLSchema-instance") != 0) {
-		printf("Unable to register NS: i\n");
+		dbg(0, "Unable to register NS: i\n");
 		ret = -EINVAL;
 		goto err_free_xpctx;
 	}
@@ -90,18 +92,18 @@ azure_xml_get_path(xmlXPathContext *xp_ctx,
 	/* Evaluate xpath expression */
 	xp_obj = xmlXPathEval((const xmlChar *)xp_expr, xp_ctx);
 	if (xp_obj == NULL) {
-		printf("Unable to evaluate xpath expression \"%s\"\n",
+		dbg(0, "Unable to evaluate xpath expression \"%s\"\n",
 		       xp_expr);
 		return -ENOENT;
 	}
 
 	if (xp_obj->nodesetval == NULL) {
-		printf("null nodesetval\n");
+		dbg(2, "null nodesetval\n");
 		ret = -ENOENT;
 		goto err_xp_obj;
 	}
 	if (xp_obj->nodesetval->nodeNr == 0) {
-		printf("empty nodesetval\n");
+		dbg(2, "empty nodesetval\n");
 		ret = -ENOENT;
 		goto err_xp_obj;
 	}

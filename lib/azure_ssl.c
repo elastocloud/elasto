@@ -31,6 +31,7 @@
 #include <openssl/pkcs12.h>
 
 #include "ccan/list/list.h"
+#include "dbg.h"
 #include "base64.h"
 #include "azure_xml.h"
 #include "azure_req.h"
@@ -66,7 +67,7 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 
 	p12 = d2i_PKCS12_bio(bmem, NULL);
 	if (p12 == NULL) {
-		printf("Error reading PKCS#12 data\n");
+		dbg(0, "Error reading PKCS#12 data\n");
 		ret = -EBADF;
 		goto err_bio_free;
 	}
@@ -82,7 +83,7 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 	/* write output pem */
 	fp = fopen(pem_file, "w");
 	if (fp == NULL) {
-		printf("Error opening file %s\n", pem_file);
+		dbg(0, "Error opening file %s\n", pem_file);
 		ret = -errno;
 		goto err_pkey_free;
 	}
@@ -156,7 +157,7 @@ azure_ssl_pubset_process(const char *ps_file,
 		"//PublishData/PublishProfile/Subscription", "Id",
 		&sid);
 	if (ret < 0) {
-		printf("Failed to read Azure Subscription ID from %s\n",
+		dbg(0, "Failed to read Azure Subscription ID from %s\n",
 		       ps_file);
 		goto err_xml_free;
 	}
@@ -165,7 +166,7 @@ azure_ssl_pubset_process(const char *ps_file,
 		"//PublishData/PublishProfile/Subscription", "Name",
 		&sname);
 	if (ret < 0) {
-		printf("Failed to read Azure Subscription Name from %s\n",
+		dbg(0, "Failed to read Azure Subscription Name from %s\n",
 		       ps_file);
 		goto err_sid_free;
 	}
@@ -174,7 +175,7 @@ azure_ssl_pubset_process(const char *ps_file,
 		"//PublishData/PublishProfile", "ManagementCertificate",
 		&mcert_b64);
 	if (ret < 0) {
-		printf("Failed to read Azure ManagementCertificate from %s\n",
+		dbg(0, "Failed to read Azure ManagementCertificate from %s\n",
 		       ps_file);
 		goto err_sname_free;
 	}

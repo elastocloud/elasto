@@ -65,11 +65,6 @@ cli_sign_conn_setup(struct azure_conn *aconn,
 		goto err_op_free;
 	}
 
-	printf("primary key: %s\n"
-	       "secondary key: %s\n",
-	       op.rsp.acc_keys_get.primary,
-	       op.rsp.acc_keys_get.secondary);
-
 	ret = azure_conn_sign_setkey(aconn, blob_acc,
 				     op.rsp.acc_keys_get.primary);
 	if (ret < 0) {
