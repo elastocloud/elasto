@@ -32,6 +32,7 @@
 #include "lib/azure_req.h"
 #include "lib/azure_conn.h"
 #include "lib/azure_ssl.h"
+#include "lib/dbg.h"
 #include "linenoise.h"
 #include "cli_common.h"
 #include "cli_ls.h"
@@ -120,9 +121,10 @@ cli_args_usage(const char *progname,
 	if (msg != NULL) {
 		fprintf(stderr, "%s\n\n", msg);
 	}
-	fprintf(stderr, "Usage: %s -s publish_settings "
-				  "<cmd> <cmd args>\n\n"
-		"-s publish_settings:	Azure PublishSettings file\n"
+	fprintf(stderr, "Usage: %s [options] <cmd> <cmd args>\n\n"
+		"Options:\n"
+		"-s publish_settings:	Azure PublishSettings file (required)\n"
+		"-d log_level:		Log debug messages (default: 0)\n\n"
 		"Commands:\n", progname);
 
 	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
@@ -337,7 +339,8 @@ cli_args_parse(int argc,
 	extern int optind;
 	char *pub_settings = NULL;
 
-	while ((opt = getopt(argc, argv, "s:?")) != -1) {
+	while ((opt = getopt(argc, argv, "s:d:?")) != -1) {
+		uint32_t debug_level;
 		switch (opt) {
 		case 's':
 			pub_settings = strdup(optarg);
@@ -345,6 +348,10 @@ cli_args_parse(int argc,
 				ret = -ENOMEM;
 				goto err_out;
 			}
+			break;
+		case 'd':
+			debug_level = (uint32_t)strtol(optarg, NULL, 10);
+			dbg_level_set(debug_level);
 			break;
 		default: /* '?' */
 			cli_args_usage(argv[0], NULL);
