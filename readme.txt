@@ -64,3 +64,12 @@ PublishSettings file is given with the -s argument. E.g.
 Run the elasto_cli without arguments for a list of available commands
 and corresponding usage.
 
+
+Alternatives
+------------
+
+Deltacloud: Provides an API that abstracts differences between clouds.
+
+libs3: A C Library API for Amazon S3.
+
+fog: Ruby cloud services library.
