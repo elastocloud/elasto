@@ -26,4 +26,7 @@ extern uint32_t dbg_level;
 void
 dbg_level_set(uint32_t level);
 
+uint32_t
+dbg_level_get(void);
+
 #endif /* ifdef _DBG_H_ */

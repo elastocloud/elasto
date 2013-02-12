@@ -428,6 +428,7 @@ azure_conn_init(const char *pem_file,
 		const char *pem_pw,
 		struct azure_conn **aconn_out)
 {
+	uint32_t debug_level;
 	struct azure_conn *aconn = malloc(sizeof(*aconn));
 	if (aconn == NULL) {
 		return -ENOMEM;
@@ -439,9 +440,11 @@ azure_conn_init(const char *pem_file,
 		return -ENOMEM;
 	}
 
-	/* TODO remove this later */
-	curl_easy_setopt(aconn->curl, CURLOPT_VERBOSE, 1);
-//	curl_easy_setopt(aconn->curl, CURLOPT_TCP_NODELAY, 1);
+	debug_level = dbg_level_get();
+	if (debug_level > 2) {
+		curl_easy_setopt(aconn->curl, CURLOPT_VERBOSE, 1);
+	}
+	curl_easy_setopt(aconn->curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(aconn->curl, CURLOPT_SSLCERTTYPE, "PEM");
 	curl_easy_setopt(aconn->curl, CURLOPT_SSLCERT, pem_file);
 	curl_easy_setopt(aconn->curl, CURLOPT_SSLKEYTYPE, "PEM");

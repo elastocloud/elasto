@@ -33,3 +33,9 @@ dbg_level_set(uint32_t level)
 	dbg_level = level;
 }
 
+uint32_t
+dbg_level_get(void)
+{
+	return dbg_level;
+}
+
