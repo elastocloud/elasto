@@ -122,7 +122,9 @@ cli_get_handle(struct cli_args *cli_args)
 				false,
 				AOP_DATA_FILE,
 				(uint8_t *)cli_args->get.local_path,
-				0, 0, &op);
+				0, 0,
+				cli_args->insecure_http,
+				&op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}

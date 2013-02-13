@@ -248,6 +248,7 @@ main(int argc, char * const *argv)
 	ret = azure_op_blob_put(blob_acc, blob_container, blob_name,
 				false, (uint8_t *)strdup("hello world"),
 				sizeof("hello world"),
+				false,
 				&op);
 	if (ret < 0) {
 		goto err_conn_free;
@@ -272,7 +273,7 @@ main(int argc, char * const *argv)
 	azure_op_free(&op);
 
 	ret = azure_op_blob_get(blob_acc, blob_container, blob_name,
-				false, AOP_DATA_NONE, NULL, 0, 0, &op);
+				false, AOP_DATA_NONE, NULL, 0, 0, false, &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}

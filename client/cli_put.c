@@ -160,7 +160,9 @@ cli_put_blocks(struct azure_conn *aconn,
 					 cli_args->ctnr_name,
 					 cli_args->blob_name,
 					 blk->id,
-					 op_data, &op);
+					 op_data,
+					 cli_args->insecure_http,
+					 &op);
 		if (ret < 0) {
 			goto err_blks_free;
 		}
@@ -270,7 +272,9 @@ cli_put_handle(struct cli_args *cli_args)
 					cli_args->blob_name,
 					AOP_DATA_FILE,
 					(uint8_t *)cli_args->put.local_path,
-					st.st_size, &op);
+					st.st_size,
+					cli_args->insecure_http,
+					&op);
 		if (ret < 0) {
 			goto err_conn_free;
 		}

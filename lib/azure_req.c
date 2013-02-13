@@ -1536,6 +1536,7 @@ azure_op_blob_put(const char *account,
 		   enum azure_op_data_type data_type,
 		   uint8_t *buf,
 		   uint64_t len,
+		   bool insecure_http,
 		   struct azure_op *op)
 {
 	int ret;
@@ -1593,7 +1594,8 @@ azure_op_blob_put(const char *account,
 
 	op->method = REQ_METHOD_PUT;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net/%s/%s",
+		       "%s://%s.blob.core.windows.net/%s/%s",
+		       (insecure_http ? "http" : "https"),
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1715,6 +1717,7 @@ azure_op_blob_get(const char *account,
 		  uint8_t *buf,
 		  uint64_t off,
 		  uint64_t len,
+		  bool insecure_http,
 		  struct azure_op *op)
 {
 	int ret;
@@ -1793,7 +1796,8 @@ azure_op_blob_get(const char *account,
 
 	op->method = REQ_METHOD_GET;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net/%s/%s",
+		       "%s://%s.blob.core.windows.net/%s/%s",
+		       (insecure_http ? "http" : "https"),
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1911,12 +1915,13 @@ err_out:
  */
 int
 azure_op_page_put(const char *account,
-		   const char *container,
-		   const char *bname,
-		   uint8_t *buf,
-		   uint64_t off,
-		   uint64_t len,
-		   struct azure_op *op)
+		  const char *container,
+		  const char *bname,
+		  uint8_t *buf,
+		  uint64_t off,
+		  uint64_t len,
+		  bool insecure_http,
+		  struct azure_op *op)
 {
 	int ret;
 	struct azure_req_page_put *pg_put_req;
@@ -1968,7 +1973,8 @@ azure_op_page_put(const char *account,
 
 	op->method = REQ_METHOD_PUT;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net/%s/%s",
+		       "%s://%s.blob.core.windows.net/%s/%s",
+		       (insecure_http ? "http" : "https"),
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -2063,6 +2069,7 @@ azure_op_block_put(const char *account,
 		   const char *bname,
 		   const char *blk_id,
 		   struct azure_op_data *data,
+		   bool insecure_http,
 		   struct azure_op *op)
 {
 	int ret;
@@ -2124,8 +2131,9 @@ azure_op_block_put(const char *account,
 
 	op->method = REQ_METHOD_PUT;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net"
+		       "%s://%s.blob.core.windows.net"
 		       "/%s/%s?comp=block&blockid=%s",
+		       (insecure_http ? "http" : "https"),
 		       account, container, bname, b64_blk_id);
 	free(b64_blk_id);
 	if (ret < 0) {

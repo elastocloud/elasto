@@ -373,6 +373,7 @@ azure_op_blob_put(const char *account,
 		  enum azure_op_data_type data_type,
 		  uint8_t *buf,
 		  uint64_t len,
+		  bool insecure_http,
 		  struct azure_op *op);
 
 int
@@ -384,6 +385,7 @@ azure_op_blob_get(const char *account,
 		  uint8_t *buf,
 		  uint64_t off,
 		  uint64_t len,
+		  bool insecure_http,
 		  struct azure_op *op);
 
 int
@@ -393,6 +395,7 @@ azure_op_page_put(const char *account,
 		  uint8_t *buf,
 		  uint64_t off,
 		  uint64_t len,
+		  bool insecure_http,
 		  struct azure_op *op);
 
 int
@@ -401,6 +404,7 @@ azure_op_block_put(const char *account,
 		   const char *bname,
 		   const char *blk_id,
 		   struct azure_op_data *data,
+		   bool insecure_http,
 		   struct azure_op *op);
 
 int
