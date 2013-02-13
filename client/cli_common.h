@@ -27,6 +27,7 @@ struct cli_args {
 	char *ps_file;
 	char *pem_file;
 	char *sub_id;
+	bool insecure_http;
 	enum cli_cmd cmd;
 	/* mostly common to all */
 	char *blob_acc;

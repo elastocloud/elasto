@@ -124,7 +124,9 @@ cli_args_usage(const char *progname,
 	fprintf(stderr, "Usage: %s [options] <cmd> <cmd args>\n\n"
 		"Options:\n"
 		"-s publish_settings:	Azure PublishSettings file (required)\n"
-		"-d log_level:		Log debug messages (default: 0)\n\n"
+		"-d log_level:		Log debug messages (default: 0)\n"
+		"-i			Insecure, use HTTP where possible "
+					"(default: HTTPS only)\n\n"
 		"Commands:\n", progname);
 
 	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
@@ -339,7 +341,9 @@ cli_args_parse(int argc,
 	extern int optind;
 	char *pub_settings = NULL;
 
-	while ((opt = getopt(argc, argv, "s:d:?")) != -1) {
+	cli_args->insecure_http = false;
+
+	while ((opt = getopt(argc, argv, "s:d:?i")) != -1) {
 		uint32_t debug_level;
 		switch (opt) {
 		case 's':
@@ -352,6 +356,9 @@ cli_args_parse(int argc,
 		case 'd':
 			debug_level = (uint32_t)strtol(optarg, NULL, 10);
 			dbg_level_set(debug_level);
+			break;
+		case 'i':
+			cli_args->insecure_http = true;
 			break;
 		default: /* '?' */
 			cli_args_usage(argv[0], NULL);
