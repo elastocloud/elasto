@@ -505,6 +505,9 @@ azure_op_acc_create_fill_hdr(struct azure_op *op)
 	return 0;
 }
 
+/*
+ * The order of the elements in the request body is significant!
+ */
 static int
 azure_op_acc_create_fill_body(struct azure_account *acc,
 			      struct azure_op_data **req_data)
@@ -553,6 +556,16 @@ azure_op_acc_create_fill_body(struct azure_account *acc,
 		goto err_writer_free;
 	}
 
+	if (acc->desc != NULL) {
+		ret = xmlTextWriterWriteFormatElement(writer,
+						      BAD_CAST "Description",
+						      "%s", acc->desc);
+		if (ret < 0) {
+			ret = -EBADF;
+			goto err_writer_free;
+		}
+	}
+
 	ret = base64_encode(acc->label, strlen(acc->label), &b64_label);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -566,15 +579,6 @@ azure_op_acc_create_fill_body(struct azure_account *acc,
 		goto err_writer_free;
 	}
 
-	if (acc->desc != NULL) {
-		ret = xmlTextWriterWriteFormatElement(writer,
-						      BAD_CAST "Description",
-						      "%s", acc->desc);
-		if (ret < 0) {
-			ret = -EBADF;
-			goto err_writer_free;
-		}
-	}
 	if (acc->affin_grp != NULL) {
 		ret = xmlTextWriterWriteFormatElement(writer,
 						      BAD_CAST "AffinityGroup",
@@ -613,6 +617,8 @@ azure_op_acc_create_fill_body(struct azure_account *acc,
 		goto err_writer_free;
 	}
 	memcpy((*req_data)->buf, xmlBufferContent(xbuf), (*req_data)->len);
+	dbg(4, "sending account creation req data: %s\n",
+	    (char *)(*req_data)->buf);
 
 	ret = 0;
 err_writer_free:
