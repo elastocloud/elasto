@@ -29,7 +29,6 @@
 #include <libxml/tree.h>
 #include <libxml/parser.h>
 #include <libxml/xpath.h>
-#include <libxml/xmlwriter.h>
 
 #include "ccan/list/list.h"
 #include "dbg.h"
@@ -510,125 +509,87 @@ azure_op_acc_create_fill_hdr(struct azure_op *op)
  */
 static int
 azure_op_acc_create_fill_body(struct azure_account *acc,
-			      struct azure_op_data **req_data)
+			      struct azure_op_data **req_data_out)
 {
 	int ret;
-	xmlTextWriter *writer;
-	xmlBuffer *xbuf;
 	char *b64_label;
+	char *xml_data;
+	int buf_remain;
+	struct azure_op_data *req_data;
 
-	xbuf = xmlBufferCreate();
-	if (xbuf == NULL) {
+	/* 2k buf, should be strlen calculated */
+	buf_remain = 2048;
+	ret = azure_op_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
-	}
-
-	writer = xmlNewTextWriterMemory(xbuf, 0);
-	if (writer == NULL) {
-		ret = -ENOMEM;
-		goto err_xbuf_free;
-	}
-
-	ret = xmlTextWriterStartDocument(writer, "1.0", "utf-8", NULL);
-	if (ret < 0) {
-		ret = -EIO;
-		goto err_writer_free;
-	}
-
-	ret = xmlTextWriterStartElement(writer,
-					BAD_CAST "CreateStorageServiceInput");
-	if (ret < 0) {
-		ret = -EIO;
-		goto err_writer_free;
-	}
-
-	ret = xmlTextWriterWriteAttribute(writer, BAD_CAST "xmlns",
-			BAD_CAST "http://schemas.microsoft.com/windowsazure");
-	if (ret < 0) {
-		ret = -EIO;
-		goto err_writer_free;
-	}
-
-	ret = xmlTextWriterWriteFormatElement(writer, BAD_CAST "ServiceName",
-					      "%s", acc->svc_name);
-	if (ret < 0) {
-		ret = -EBADF;
-		goto err_writer_free;
-	}
-
-	if (acc->desc != NULL) {
-		ret = xmlTextWriterWriteFormatElement(writer,
-						      BAD_CAST "Description",
-						      "%s", acc->desc);
-		if (ret < 0) {
-			ret = -EBADF;
-			goto err_writer_free;
-		}
 	}
 
 	ret = base64_encode(acc->label, strlen(acc->label), &b64_label);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_writer_free;
+		goto err_buf_free;
 	}
-	ret = xmlTextWriterWriteFormatElement(writer, BAD_CAST "Label",
-					     "%s", b64_label);
-	free(b64_label);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_writer_free;
+
+	xml_data = (char *)req_data->buf;
+	ret = snprintf(xml_data, buf_remain,
+		       "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+		       "<CreateStorageServiceInput "
+			  "xmlns=\"http://schemas.microsoft.com/windowsazure\">"
+				"<ServiceName>%s</ServiceName>"
+				"<Description>%s</Description>"
+				"<Label>%s</Label>",
+		       acc->svc_name,
+		       (acc->desc ? acc->desc : ""),
+		       b64_label);
+	if ((ret < 0) || (ret >= buf_remain)) {
+		/* truncated or error */
+		ret = -E2BIG;
+		goto err_buf_free;
 	}
+
+	xml_data += ret;
+	buf_remain -= ret;
 
 	if (acc->affin_grp != NULL) {
-		ret = xmlTextWriterWriteFormatElement(writer,
-						      BAD_CAST "AffinityGroup",
-						      "%s", acc->affin_grp);
-		if (ret < 0) {
-			ret = -EBADF;
-			goto err_writer_free;
-		}
-	}
-	if (acc->location != NULL) {
-		ret = xmlTextWriterWriteFormatElement(writer,
-						      BAD_CAST "Location",
-						      "%s", acc->location);
-		if (ret < 0) {
-			ret = -EBADF;
-			goto err_writer_free;
-		}
+		ret = snprintf(xml_data, buf_remain,
+					"<AffinityGroup>%s</AffinityGroup>"
+			       "</CreateStorageServiceInput>",
+			       acc->affin_grp);
+
+	} else {
+		ret = snprintf(xml_data, buf_remain,
+					"<Location>%s</Location>"
+			       "</CreateStorageServiceInput>",
+			       acc->location);
 	}
 
-	ret = xmlTextWriterEndElement(writer);
-	if (ret < 0) {
-		ret = -EBADF;
-		goto err_writer_free;
+	if ((ret < 0) || (ret >= buf_remain)) {
+		/* truncated or error */
+		ret = -E2BIG;
+		goto err_buf_free;
 	}
 
-	ret = xmlTextWriterEndDocument(writer);
-	if (ret < 0) {
-		ret = -EBADF;
-		goto err_writer_free;
-	}
+	xml_data += ret;
+	buf_remain -= ret;
 
-	ret = azure_op_data_iov_new(NULL, xmlBufferLength(xbuf), 0, true,
-				    req_data);
-	/* XXX could use xmlBufferDetach to avoid the memcpy? */
-	if (ret < 0) {
-		goto err_writer_free;
-	}
-	memcpy((*req_data)->buf, xmlBufferContent(xbuf), (*req_data)->len);
+	/* truncate buffer to what was written */
+	req_data->len = req_data->len - buf_remain;
+
 	dbg(4, "sending account creation req data: %s\n",
-	    (char *)(*req_data)->buf);
+	    (char *)req_data->buf);
+	*req_data_out = req_data;
 
-	ret = 0;
-err_writer_free:
-	xmlFreeTextWriter(writer);
-err_xbuf_free:
-	xmlBufferFree(xbuf);
+	return 0;
+err_buf_free:
+	azure_op_data_destroy(&req_data);
 err_out:
 	return ret;
 }
 
+/*
+ * either @affin_grp or @location must be set, but not both.
+ */
 int
 azure_op_acc_create(const char *sub_id,
 		    const char *svc_name,
@@ -674,6 +635,7 @@ azure_op_acc_create(const char *sub_id,
 		}
 	}
 	if (affin_grp != NULL) {
+		assert(location == NULL);
 		acc_create_req->acc.affin_grp = strdup(affin_grp);
 		if (acc_create_req->acc.affin_grp == NULL) {
 			ret = -ENOMEM;
@@ -2228,36 +2190,34 @@ err_out:
 
 static int
 azure_op_block_list_put_fill_body(struct list_head *blks,
-				  struct azure_op_data **req_data)
+				  struct azure_op_data **req_data_out)
 {
 	int ret;
-	xmlTextWriter *writer;
-	xmlBuffer *xbuf;
 	struct azure_block *blk;
+	char *xml_data;
+	int buf_remain;
+	struct azure_op_data *req_data;
 
-	xbuf = xmlBufferCreate();
-	if (xbuf == NULL) {
+	/* 2k buf, should be listlen calculated */
+	buf_remain = 2048;
+	ret = azure_op_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
-	writer = xmlNewTextWriterMemory(xbuf, 0);
-	if (writer == NULL) {
-		ret = -ENOMEM;
-		goto err_xbuf_free;
+	xml_data = (char *)req_data->buf;
+	ret = snprintf(xml_data, buf_remain,
+		       "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+		       "<BlockList>");
+	if ((ret < 0) || (ret >= buf_remain)) {
+		/* truncated or error */
+		ret = -E2BIG;
+		goto err_buf_free;
 	}
 
-	ret = xmlTextWriterStartDocument(writer, "1.0", "utf-8", NULL);
-	if (ret < 0) {
-		ret = -EIO;
-		goto err_writer_free;
-	}
-
-	ret = xmlTextWriterStartElement(writer, BAD_CAST "BlockList");
-	if (ret < 0) {
-		ret = -EIO;
-		goto err_writer_free;
-	}
+	xml_data += ret;
+	buf_remain -= ret;
 
 	list_for_each(blks, blk, list) {
 		const char *state;
@@ -2275,49 +2235,46 @@ azure_op_block_list_put_fill_body(struct list_head *blks,
 			break;
 		default:
 			ret = -EINVAL;
-			goto err_writer_free;
+			goto err_buf_free;
 			break;
 		}
 		ret = base64_encode(blk->id, strlen(blk->id), &b64_id);
 		if (ret < 0) {
 			ret = -ENOMEM;
-			goto err_writer_free;
+			goto err_buf_free;
 		}
-		ret = xmlTextWriterWriteFormatElement(writer, BAD_CAST state,
-						     "%s", b64_id);
+		ret = snprintf(xml_data, buf_remain,
+			       "<%s>%s</%s>", state, b64_id, state);
 		free(b64_id);
-		if (ret < 0) {
-			ret = -ENOMEM;
-			goto err_writer_free;
+		if ((ret < 0) || (ret >= buf_remain)) {
+			ret = -E2BIG;
+			goto err_buf_free;
 		}
+
+		xml_data += ret;
+		buf_remain -= ret;
 	}
 
-	ret = xmlTextWriterEndElement(writer);
-	if (ret < 0) {
-		ret = -EBADF;
-		goto err_writer_free;
+	ret = snprintf(xml_data, buf_remain,
+		       "</BlockList>");
+	if ((ret < 0) || (ret >= buf_remain)) {
+		ret = -E2BIG;
+		goto err_buf_free;
 	}
 
-	ret = xmlTextWriterEndDocument(writer);
-	if (ret < 0) {
-		ret = -EBADF;
-		goto err_writer_free;
-	}
+	xml_data += ret;
+	buf_remain -= ret;
 
-	/* XXX valgrind complains in curl_read_cb if buffer len is unaligned */
-	ret = azure_op_data_iov_new(NULL, xmlBufferLength(xbuf), 0, true,
-				    req_data);
-	/* XXX could use xmlBufferDetach to avoid the memcpy? */
-	if (ret < 0) {
-		goto err_writer_free;
-	}
-	memcpy((*req_data)->buf, xmlBufferContent(xbuf), (*req_data)->len);
+	/* truncate buffer to what was written */
+	req_data->len = req_data->len - buf_remain;
 
-	ret = 0;
-err_writer_free:
-	xmlFreeTextWriter(writer);
-err_xbuf_free:
-	xmlBufferFree(xbuf);
+	dbg(4, "sending account creation req data: %s\n",
+	    (char *)req_data->buf);
+	*req_data_out = req_data;
+
+	return 0;
+err_buf_free:
+	azure_op_data_destroy(&req_data);
 err_out:
 	return ret;
 }
