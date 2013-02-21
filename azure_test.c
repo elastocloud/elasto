@@ -22,9 +22,7 @@
 #include <unistd.h>
 
 #include <curl/curl.h>
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-#include <libxml/xpath.h>
+#include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
@@ -136,7 +134,6 @@ main(int argc, char * const *argv)
 	if (ret < 0) {
 		goto err_acc_free;
 	}
-	azure_xml_subsys_init();
 
 	memset(&op, 0, sizeof(op));
 
@@ -307,7 +304,6 @@ err_sub_info_free:
 	free(sub_id);
 	free(sub_name);
 err_global_clean:
-	azure_xml_subsys_deinit();
 	azure_conn_subsys_deinit();
 err_acc_free:
 	free(ps_file);

@@ -26,9 +26,7 @@
 #include <unistd.h>
 
 #include <curl/curl.h>
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-#include <libxml/xpath.h>
+#include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
 #include "dbg.h"
@@ -217,43 +215,48 @@ static int
 azure_rsp_acc_keys_get_process(struct azure_op *op)
 {
 	int ret;
+	apr_status_t rv;
 	struct azure_rsp_acc_keys_get *acc_keys_get_rsp;
-	xmlDoc *xp_doc;
-	xmlXPathContext *xp_ctx;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
 
 	assert(op->opcode == AOP_ACC_KEYS_GET);
 	assert(op->rsp.data->type == AOP_DATA_IOV);
 
-	/* parse response */
-	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(false, op->rsp.data->buf, op->rsp.data->off,
-			      &xp_doc, &xp_ctx);
-	if (ret < 0) {
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
 		goto err_out;
+	}
+
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+			      &xdoc);
+	if (ret < 0) {
+		goto err_pool_free;
 	}
 
 	acc_keys_get_rsp = &op->rsp.acc_keys_get;
 
-	ret = azure_xml_get_path(xp_ctx,
-		"//def:StorageService/def:StorageServiceKeys/def:Primary",
-		NULL, &acc_keys_get_rsp->primary);
+	ret = azure_xml_path_get(xdoc->root,
+				 "/StorageService/StorageServiceKeys/Primary",
+				 &acc_keys_get_rsp->primary);
 	if (ret < 0) {
-		goto err_xml_free;
+		goto err_pool_free;
 	}
-	ret = azure_xml_get_path(xp_ctx,
-		"//def:StorageService/def:StorageServiceKeys/def:Secondary",
-		NULL, &acc_keys_get_rsp->secondary);
+	ret = azure_xml_path_get(xdoc->root,
+				 "/StorageService/StorageServiceKeys/Secondary",
+				 &acc_keys_get_rsp->secondary);
 	if (ret < 0) {
 		free(acc_keys_get_rsp->primary);
-		goto err_xml_free;
+		goto err_pool_free;
 	}
 	dbg(5, "primary key: %s, secondary key: %s\n",
 	    acc_keys_get_rsp->primary, acc_keys_get_rsp->secondary);
 	ret = 0;
 
-err_xml_free:
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+err_pool_free:
+	apr_pool_destroy(pool);
 err_out:
 	return ret;
 }
@@ -341,13 +344,11 @@ err_out:
 }
 
 static int
-azure_rsp_acc_iter_process(xmlXPathContext *xp_ctx,
-			   int iter,
+azure_rsp_acc_iter_process(struct apr_xml_elem *xel,
 			   struct azure_account **acc_ret)
 {
 	int ret;
 	struct azure_account *acc;
-	char *query;
 
 	acc = malloc(sizeof(*acc));
 	if (acc == NULL) {
@@ -356,68 +357,30 @@ azure_rsp_acc_iter_process(xmlXPathContext *xp_ctx,
 	}
 	memset(acc, 0, sizeof(*acc));
 
-	ret = asprintf(&query,
-		       "//def:StorageServices/def:StorageService[%d]/"
-		       "def:ServiceName", iter);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_acc_free;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->svc_name);
-	free(query);
+	ret = azure_xml_path_get(xel, "ServiceName", &acc->svc_name);
 	if (ret < 0) {
 		goto err_acc_free;
 	}
 
-	ret = asprintf(&query,
-		       "//def:StorageServices/def:StorageService[%d]/def:Url",
-		       iter);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_name_free;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->url);
-	free(query);
+	ret = azure_xml_path_get(xel, "Url", &acc->url);
 	if (ret < 0) {
 		goto err_name_free;
 	}
 
-
-	ret = asprintf(&query,
-		       "//def:StorageServices/def:StorageService[%d]/"
-		       "def:StorageServiceProperties/def:Description", iter);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_url_free;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->desc);
-	free(query);
+	ret = azure_xml_path_get(xel, "StorageServiceProperties/Description",
+				 &acc->desc);
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_url_free;
 	}
 
-	ret = asprintf(&query,
-		       "//def:StorageServices/def:StorageService[%d]/"
-		       "def:StorageServiceProperties/def:AffinityGroup", iter);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_desc_free;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->affin_grp);
-	free(query);
+	ret = azure_xml_path_get(xel, "StorageServiceProperties/AffinityGroup",
+				 &acc->affin_grp);
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_desc_free;
 	}
 
-	ret = asprintf(&query,
-		       "//def:StorageServices/def:StorageService[%d]/"
-		       "def:StorageServiceProperties/def:Location", iter);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_affin_free;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &acc->location);
-	free(query);
+	ret = azure_xml_path_get(xel, "StorageServiceProperties/Location",
+				 &acc->location);
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_affin_free;
 	}
@@ -443,47 +406,62 @@ static int
 azure_rsp_acc_list_process(struct azure_op *op)
 {
 	int ret;
+	apr_status_t rv;
 	struct azure_rsp_acc_list *acc_list_rsp;
-	xmlDoc *xp_doc;
-	xmlXPathContext *xp_ctx;
-	int i;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
+	struct apr_xml_elem *xel;
 	struct azure_account *acc;
 	struct azure_account *acc_n;
 
 	assert(op->opcode == AOP_ACC_LIST);
 	assert(op->rsp.data->type == AOP_DATA_IOV);
 
-	/* parse response */
-	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(false, op->rsp.data->buf, op->rsp.data->off,
-			      &xp_doc, &xp_ctx);
-	if (ret < 0) {
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
 		goto err_out;
 	}
 
-	acc_list_rsp = &op->rsp.acc_list;
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+			      &xdoc);
+	if (ret < 0) {
+		goto err_pool_free;
+	}
 
+	acc_list_rsp = &op->rsp.acc_list;
 	list_head_init(&acc_list_rsp->accs);
-	for (i = 1; i <= 5000; i++) {
-		ret = azure_rsp_acc_iter_process(xp_ctx, i, &acc);
-		if (ret == -ENOENT) {
-			break;
-		} else if (ret < 0) {
+
+	/* get the first, if present */
+	ret = azure_xml_path_el_get(xdoc->root,
+				    "/StorageServices/StorageService", &xel);
+	if (ret == -ENOENT) {
+		goto done;
+	} else if (ret < 0) {
+		goto err_pool_free;
+	}
+
+	while ((xel != NULL) && (strcmp(xel->name, "StorageService") == 0)) {
+		ret = azure_rsp_acc_iter_process(xel->first_child, &acc);
+		if (ret < 0) {
 			goto err_accs_free;
 		}
 		list_add_tail(&acc_list_rsp->accs, &acc->list);
 		acc_list_rsp->num_accs++;
+
+		xel = xel->next;
 	}
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+done:
+	apr_pool_destroy(pool);
 	return 0;
 
 err_accs_free:
 	list_for_each_safe(&acc_list_rsp->accs, acc, acc_n, list) {
 		azure_acc_free(&acc);
 	}
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+err_pool_free:
+	apr_pool_destroy(pool);
 err_out:
 	return ret;
 }
@@ -877,39 +855,28 @@ err_out:
 }
 
 static int
-azure_rsp_ctnr_iter_process(xmlXPathContext *xp_ctx,
-			    int iter,
+azure_rsp_ctnr_iter_process(struct apr_xml_elem *xel,
 			    struct azure_ctnr **ctnr)
 {
 	int ret;
-	char *query;
-	char *name;
 	struct azure_ctnr *ictnr;
-
-	ret = asprintf(&query, "//Containers/Container[%d]/Name",
-		       iter);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &name);
-	free(query);
-	if (ret < 0) {
-		goto err_out;	/* -ENOENT = all processed */
-	}
 
 	ictnr = malloc(sizeof(*ictnr));
 	if (ictnr == NULL) {
 		ret = -ENOMEM;
-		goto err_name_free;
+		goto err_out;
 	}
-	ictnr->name = name;
-	*ctnr = ictnr;
 
+	ret = azure_xml_path_get(xel, "Name", &ictnr->name);
+	if (ret < 0) {
+		goto err_ctnr_free;
+	}
+
+	*ctnr = ictnr;
 	return 0;
 
-err_name_free:
-	free(name);
+err_ctnr_free:
+	free(ictnr);
 err_out:
 	return ret;
 }
@@ -918,44 +885,58 @@ static int
 azure_rsp_ctnr_list_process(struct azure_op *op)
 {
 	int ret;
-	int i;
+	apr_status_t rv;
 	struct azure_rsp_ctnr_list *ctnr_list_rsp;
-	xmlDoc *xp_doc;
-	xmlXPathContext *xp_ctx;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
+	struct apr_xml_elem *xel;
 	struct azure_ctnr *ctnr;
 	struct azure_ctnr *ctnr_n;
 
 	assert(op->opcode == AOP_CONTAINER_LIST);
 	assert(op->rsp.data->type == AOP_DATA_IOV);
 
-	/* parse response */
-	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(false, op->rsp.data->buf, op->rsp.data->off,
-			      &xp_doc, &xp_ctx);
-	if (ret < 0) {
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
 		goto err_out;
 	}
 
-	ctnr_list_rsp = &op->rsp.ctnr_list;
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+			      &xdoc);
+	if (ret < 0) {
+		goto err_pool_free;
+	}
 
+	ctnr_list_rsp = &op->rsp.ctnr_list;
 	list_head_init(&ctnr_list_rsp->ctnrs);
+
+	/* get the first container, if present */
+	ret = azure_xml_path_el_get(xdoc->root,
+				    "/EnumerationResults/Containers/Container",
+				    &xel);
+	if (ret == -ENOENT) {
+		goto done;
+	} else if (ret < 0) {
+		goto err_pool_free;
+	}
+
 	/*
 	 * Returns up to 5000 records (maxresults default),
-	 * start at 1 for W3C xpath standard
 	 */
-	for (i = 1; i <= 5000; i++) {
-		ret = azure_rsp_ctnr_iter_process(xp_ctx, i, &ctnr);
-		if (ret == -ENOENT) {
-			break;
-		} else if (ret < 0) {
+	while ((xel != NULL) && (strcmp(xel->name, "Container") == 0)) {
+		ret = azure_rsp_ctnr_iter_process(xel->first_child, &ctnr);
+		if (ret < 0) {
 			goto err_ctnrs_free;
 		}
 		list_add_tail(&ctnr_list_rsp->ctnrs, &ctnr->list);
 		ctnr_list_rsp->num_ctnrs++;
-	}
 
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+		xel = xel->next;
+	}
+done:
+	apr_pool_destroy(pool);
 	return 0;
 
 err_ctnrs_free:
@@ -963,8 +944,8 @@ err_ctnrs_free:
 		free(ctnr->name);
 		free(ctnr);
 	}
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+err_pool_free:
+	apr_pool_destroy(pool);
 err_out:
 	return ret;
 }
@@ -1288,80 +1269,54 @@ err_out:
  * iteration exists
  */
 static int
-azure_rsp_blob_iter_process(xmlXPathContext *xp_ctx,
-			    int iter,
+azure_rsp_blob_iter_process(struct apr_xml_elem *xel,
 			    struct azure_blob **blob)
 {
 	int ret;
-	char *query;
-	char *name;
 	char *len;
+	char *len_end;
 	char *type;
 	struct azure_blob *iblob;
-
-	ret = asprintf(&query, "//EnumerationResults/Blobs/Blob[%d]/Name",
-		       iter);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &name);
-	free(query);
-	if (ret < 0) {
-		goto err_out;	/* -ENOENT = all processed */
-	}
-	ret = asprintf(&query, "//EnumerationResults/Blobs/Blob[%d]"
-			       "/Properties/Content-Length",
-		       iter);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_name_free;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &len);
-	free(query);
-	if (ret < 0) {
-		goto err_name_free;
-	}
-	ret = asprintf(&query, "//EnumerationResults/Blobs/Blob[%d]"
-			       "/Properties/BlobType",
-		       iter);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_len_free;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &type);
-	free(query);
-	if (ret < 0) {
-		goto err_len_free;
-	}
 
 	iblob = malloc(sizeof(*iblob));
 	if (iblob == NULL) {
 		ret = -ENOMEM;
-		goto err_type_free;
+		goto err_out;
 	}
-	iblob->name = name;
-	iblob->len = strtoll(len, &query, 10);
-	if (query == len) {
-		dbg(0, "unsupported blob length response\n");
-		ret = -EINVAL;
+
+	ret = azure_xml_path_get(xel, "Name", &iblob->name);
+	if (ret < 0) {
 		goto err_blob_free;
 	}
+
+	ret = azure_xml_path_get(xel, "Properties/Content-Length", &len);
+	if (ret < 0) {
+		goto err_name_free;
+	}
+	iblob->len = strtoll(len, &len_end, 10);
+	if (len_end == len) {
+		dbg(0, "unsupported blob length response\n");
+		ret = -EINVAL;
+		goto err_len_free;
+	}
+
+	ret = azure_xml_path_get(xel, "Properties/BlobType", &type);
+	if (ret < 0) {
+		goto err_len_free;
+	}
 	iblob->is_page = (strcmp(type, BLOB_TYPE_PAGE) == 0);
+
 	*blob = iblob;
 	free(len);
 	free(type);
-
 	return 0;
 
-err_blob_free:
-	free(blob);
-err_type_free:
-	free(type);
 err_len_free:
 	free(len);
 err_name_free:
-	free(name);
+	free(iblob->name);
+err_blob_free:
+	free(iblob);
 err_out:
 	return ret;
 }
@@ -1370,39 +1325,54 @@ static int
 azure_rsp_blob_list_process(struct azure_op *op)
 {
 	int ret;
-	int i;
+	apr_status_t rv;
 	struct azure_rsp_blob_list *blob_list_rsp;
-	xmlDoc *xp_doc;
-	xmlXPathContext *xp_ctx;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
+	struct apr_xml_elem *xel;
 	struct azure_blob *blob;
 	struct azure_blob *blob_n;
 
 	assert(op->opcode == AOP_BLOB_LIST);
 	assert(op->rsp.data->type == AOP_DATA_IOV);
 
-	/* parse response */
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
+		goto err_out;
+	}
+
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(false, op->rsp.data->buf, op->rsp.data->off,
-			      &xp_doc, &xp_ctx);
+	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+			      &xdoc);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	blob_list_rsp = &op->rsp.blob_list;
-
 	list_head_init(&blob_list_rsp->blobs);
-	for (i = 1; i <= 5000; i++) {
-		ret = azure_rsp_blob_iter_process(xp_ctx, i, &blob);
-		if (ret == -ENOENT) {
-			break;
-		} else if (ret < 0) {
+
+	/* get the first blob, if present */
+	ret = azure_xml_path_el_get(xdoc->root,
+				    "/EnumerationResults/Blobs/Blob", &xel);
+	if (ret == -ENOENT) {
+		goto done;
+	} else if (ret < 0) {
+		goto err_pool_free;
+	}
+
+	while ((xel != NULL) && (strcmp(xel->name, "Blob") == 0)) {
+		ret = azure_rsp_blob_iter_process(xel->first_child, &blob);
+		if (ret < 0) {
 			goto err_blobs_free;
 		}
 		list_add_tail(&blob_list_rsp->blobs, &blob->list);
 		blob_list_rsp->num_blobs++;
+
+		xel = xel->next;
 	}
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+done:
+	apr_pool_destroy(pool);
 	return 0;
 
 err_blobs_free:
@@ -1410,8 +1380,8 @@ err_blobs_free:
 		free(blob->name);
 		free(blob);
 	}
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+err_pool_free:
+	apr_pool_destroy(pool);
 err_out:
 	return ret;
 }
@@ -2481,64 +2451,30 @@ err_out:
  * such iteration exists
  */
 static int
-azure_rsp_blk_iter_process(xmlXPathContext *xp_ctx,
+azure_rsp_blk_iter_process(struct apr_xml_elem *xel,
 			   enum azure_block_state state,
-			   int iter,
 			   struct azure_block **blk_ret)
 {
 	int ret;
-	char *q_base;
-	char *query;
 	char *name;
 	char *size;
+	char *size_end;
 	struct azure_block *blk;
-
-	if (state == BLOCK_STATE_COMMITED) {
-		ret = asprintf(&q_base,
-			       "//BlockList/CommittedBlocks/Block[%d]", iter);
-	} else if (state == BLOCK_STATE_UNCOMMITED) {
-		ret = asprintf(&q_base,
-			       "//BlockList/UncommittedBlocks/Block[%d]", iter);
-	} else {
-		assert(true);	/* invalid */
-	}
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	ret = asprintf(&query, "%s/Name", q_base);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_qbase_free;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &name);
-	free(query);
-	if (ret < 0) {
-		goto err_qbase_free;	/* -ENOENT = all processed */
-	}
-
-	ret = asprintf(&query, "%s/Size", q_base);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_name_free;
-	}
-	ret = azure_xml_get_path(xp_ctx, query, NULL, &size);
-	free(query);
-	if (ret < 0) {
-		goto err_name_free;
-	}
 
 	blk = malloc(sizeof(*blk));
 	if (blk == NULL) {
 		ret = -ENOMEM;
-		goto err_size_free;
+		goto err_out;
 	}
-	blk->state = state;
+
+	ret = azure_xml_path_get(xel, "Name", &name);
+	if (ret < 0) {
+		goto err_blk_free;
+	}
 	blk->id = malloc(strlen(name));
 	if (blk->id == NULL) {
 		ret = -ENOMEM;
-		goto err_blk_free;
+		goto err_name_free;
 	}
 	ret = base64_decode(name, blk->id);
 	if (ret < 0) {
@@ -2547,29 +2483,33 @@ azure_rsp_blk_iter_process(xmlXPathContext *xp_ctx,
 	}
 	/* zero terminate */
 	blk->id[ret] = '\0';
-	blk->len = strtoll(size, &query, 10);
-	if (query == size) {
+
+	ret = azure_xml_path_get(xel, "Size", &size);
+	if (ret < 0) {
+		goto err_name_free;
+	}
+	blk->len = strtoll(size, &size_end, 10);
+	if (size_end == size) {
 		dbg(0, "unsupported block size response\n");
 		ret = -EINVAL;
-		goto err_id_free;
+		goto err_size_free;
 	}
+
+	blk->state = state;
 	*blk_ret = blk;
 	free(size);
 	free(name);
-	free(q_base);
 
 	return 0;
 
-err_id_free:
-	free(blk->id);
-err_blk_free:
-	free(blk);
 err_size_free:
 	free(size);
+err_id_free:
+	free(blk->id);
 err_name_free:
 	free(name);
-err_qbase_free:
-	free(q_base);
+err_blk_free:
+	free(blk);
 err_out:
 	return ret;
 }
@@ -2578,51 +2518,75 @@ static int
 azure_rsp_block_list_get_process(struct azure_op *op)
 {
 	int ret;
-	int i;
+	apr_status_t rv;
 	struct azure_rsp_block_list_get *blk_list_get_rsp;
-	xmlDoc *xp_doc;
-	xmlXPathContext *xp_ctx;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
+	struct apr_xml_elem *xel;
 	struct azure_block *blk;
 	struct azure_block *blk_n;
 
 	assert(op->opcode == AOP_BLOCK_LIST_GET);
 	assert(op->rsp.data->type == AOP_DATA_IOV);
 
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
+		goto err_out;
+	}
+
 	/* parse response */
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(false, op->rsp.data->buf, op->rsp.data->off,
-			      &xp_doc, &xp_ctx);
+	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+			      &xdoc);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	blk_list_get_rsp = &op->rsp.block_list_get;
-
 	list_head_init(&blk_list_get_rsp->blks);
-	for (i = 1; i <= 5000; i++) {
-		ret = azure_rsp_blk_iter_process(xp_ctx, BLOCK_STATE_COMMITED,
-						 i, &blk);
-		if (ret == -ENOENT) {
-			break;
-		} else if (ret < 0) {
+
+	xel = NULL;
+	ret = azure_xml_path_el_get(xdoc->root,
+				    "/BlockList/CommittedBlocks/Block", &xel);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_pool_free;
+	}
+
+	while ((xel != NULL) && (strcmp(xel->name, "Block") == 0)) {
+		ret = azure_rsp_blk_iter_process(xel->first_child,
+						 BLOCK_STATE_COMMITED,
+						 &blk);
+		if (ret < 0) {
 			goto err_blks_free;
 		}
 		list_add_tail(&blk_list_get_rsp->blks, &blk->list);
 		blk_list_get_rsp->num_blks++;
+
+		xel = xel->next;
 	}
-	for (i = 1; i <= 5000; i++) {
-		ret = azure_rsp_blk_iter_process(xp_ctx, BLOCK_STATE_UNCOMMITED,
-						 i, &blk);
-		if (ret == -ENOENT) {
-			break;
-		} else if (ret < 0) {
+
+	xel = NULL;
+	ret = azure_xml_path_el_get(xdoc->root,
+				    "BlockList/UncommittedBlocks/Block", &xel);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_pool_free;
+	}
+
+	while ((xel != NULL) && (strcmp(xel->name, "Block") == 0)) {
+		ret = azure_rsp_blk_iter_process(xel->first_child,
+						 BLOCK_STATE_UNCOMMITED,
+						 &blk);
+		if (ret < 0) {
 			goto err_blks_free;
 		}
 		list_add_tail(&blk_list_get_rsp->blks, &blk->list);
 		blk_list_get_rsp->num_blks++;
+
+		xel = xel->next;
 	}
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+
+	apr_pool_destroy(pool);
 	return 0;
 
 err_blks_free:
@@ -2630,8 +2594,8 @@ err_blks_free:
 		free(blk->id);
 		free(blk);
 	}
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+err_pool_free:
+	apr_pool_destroy(pool);
 err_out:
 	return ret;
 }
@@ -2771,8 +2735,9 @@ static int
 azure_rsp_error_process(struct azure_op *op)
 {
 	int ret;
-	xmlDoc *xp_doc;
-	xmlXPathContext *xp_ctx;
+	apr_status_t rv;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
 
 	if (op->rsp.err_code == 0) {
 		return 0;
@@ -2787,30 +2752,35 @@ azure_rsp_error_process(struct azure_op *op)
 		return 0;
 	}
 
-	ret = azure_xml_slurp(false, op->rsp.err.buf, op->rsp.err.off,
-			      &xp_doc, &xp_ctx);
-	if (ret < 0) {
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
 		goto err_out;
 	}
 
-	ret = azure_xml_get_path(xp_ctx, "/Error/Message", NULL,
+	ret = azure_xml_slurp(pool, false, op->rsp.err.buf, op->rsp.err.off,
+			      &xdoc);
+	if (ret < 0) {
+		goto err_pool_free;
+	}
+
+	ret = azure_xml_path_get(xdoc->root, "/Error/Message",
 				 &op->rsp.err.msg);
 	if (ret == -ENOENT) {
 		/* data attached, but no error description XML */
 		op->rsp.err.msg = strdup("no error description");
 		if (op->rsp.err.msg == NULL) {
 			ret = -ENOMEM;
-			goto err_xml_free;
+			goto err_pool_free;
 		}
 	} else if (ret < 0) {
-		goto err_xml_free;
+		goto err_pool_free;
 	}
 	dbg(0, "got error msg: %s\n", op->rsp.err.msg);
 	ret = 0;
 
-err_xml_free:
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+err_pool_free:
+	apr_pool_destroy(pool);
 err_out:
 	return ret;
 }

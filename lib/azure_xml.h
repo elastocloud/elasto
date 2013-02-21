@@ -15,21 +15,24 @@
 #define _AZURE_XML_H_
 
 int
-azure_xml_slurp(bool is_file,
+azure_xml_slurp(apr_pool_t *pool,
+		bool is_file,
 		const uint8_t *buf,
 		uint64_t buf_len,
-		xmlDoc **xp_doc,
-		xmlXPathContext **xp_ctx);
+		struct apr_xml_doc **xdoc_out);
 
 int
-azure_xml_get_path(xmlXPathContext *xp_ctx,
+azure_xml_path_get(struct apr_xml_elem *xel_parent,
 		   const char *xp_expr,
-		   const char *xp_attr,
-		   char **content);
+		   char **value);
 
-void
-azure_xml_subsys_init(void);
+int
+azure_xml_path_el_get(struct apr_xml_elem *xel_parent,
+		      const char *xp_expr,
+		      struct apr_xml_elem **xel_child_out);
 
-void
-azure_xml_subsys_deinit(void);
+int
+azure_xml_attr_get(struct apr_xml_elem *xel,
+		   const char *key,
+		   char **value);
 #endif /* _AZURE_XML_H_ */

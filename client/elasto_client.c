@@ -23,9 +23,8 @@
 #include <sys/stat.h>
 
 #include <curl/curl.h>
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-#include <libxml/xpath.h>
+#include <apr-1/apr_general.h>
+#include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
@@ -466,6 +465,7 @@ main(int argc, char * const *argv)
 	const struct cli_cmd_spec *cmd;
 	char *sub_name;
 	int ret;
+	apr_status_t rv;
 
 	memset(&cli_args, 0, sizeof(cli_args));
 
@@ -474,11 +474,16 @@ main(int argc, char * const *argv)
 		goto err_out;
 	}
 
-	ret = azure_conn_subsys_init();
-	if (ret < 0) {
+	rv = apr_initialize();
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
 		goto err_args_free;
 	}
-	azure_xml_subsys_init();
+
+	ret = azure_conn_subsys_init();
+	if (ret < 0) {
+		goto err_apr_deinit;
+	}
 
 	ret = azure_ssl_pubset_process(cli_args.ps_file, &cli_args.pem_file,
 				       &cli_args.sub_id, &sub_name);
@@ -499,8 +504,9 @@ main(int argc, char * const *argv)
 err_sub_free:
 	free(sub_name);
 err_global_clean:
-	azure_xml_subsys_deinit();
 	azure_conn_subsys_deinit();
+err_apr_deinit:
+	apr_terminate();
 err_args_free:
 	cli_args_free(cmd, &cli_args);
 err_out:

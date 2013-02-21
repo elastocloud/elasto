@@ -25,9 +25,7 @@
 #include <fcntl.h>
 
 #include <curl/curl.h>
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-#include <libxml/xpath.h>
+#include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"

@@ -23,9 +23,8 @@
 #include <libgen.h>
 
 #include <curl/curl.h>
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-#include <libxml/xpath.h>
+#include <apr-1/apr_general.h>
+#include <apr-1/apr_xml.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <openssl/pkcs12.h>
@@ -133,8 +132,10 @@ azure_ssl_pubset_process(const char *ps_file,
 			 char **sub_name)
 {
 	int ret;
-	xmlDoc *xp_doc;
-	xmlXPathContext *xp_ctx;
+	int rv;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
+	struct apr_xml_elem *xel;
 	char *ps_path;
 	char *pem_file_path;
 	char *sid;
@@ -147,36 +148,54 @@ azure_ssl_pubset_process(const char *ps_file,
 		goto err_out;
 	}
 
-	ret = azure_xml_slurp(true, (uint8_t *)ps_file, strlen(ps_file),
-			      &xp_doc, &xp_ctx);
-	if (ret < 0) {
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
 		goto err_ps_free;
 	}
 
-	ret = azure_xml_get_path(xp_ctx,
-		"//PublishData/PublishProfile/Subscription", "Id",
-		&sid);
+	ret = azure_xml_slurp(pool, true, (uint8_t *)ps_file, strlen(ps_file),
+			      &xdoc);
 	if (ret < 0) {
-		dbg(0, "Failed to read Azure Subscription ID from %s\n",
-		       ps_file);
-		goto err_xml_free;
+		goto err_pool_free;
 	}
 
-	ret = azure_xml_get_path(xp_ctx,
-		"//PublishData/PublishProfile/Subscription", "Name",
-		&sname);
+	ret = azure_xml_path_el_get(xdoc->root,
+				    "/PublishData/PublishProfile/Subscription",
+				    &xel);
+	if (ret < 0) {
+		dbg(0, "Failed to find Azure Subscription data in %s\n",
+		    ps_file);
+		goto err_pool_free;
+	}
+
+	ret = azure_xml_attr_get(xel, "Id", &sid);
+	if (ret < 0) {
+		dbg(0, "Failed to read Azure Subscription ID from %s\n",
+		    ps_file);
+		goto err_pool_free;
+	}
+
+
+	ret = azure_xml_attr_get(xel, "Name", &sname);
 	if (ret < 0) {
 		dbg(0, "Failed to read Azure Subscription Name from %s\n",
-		       ps_file);
+		    ps_file);
 		goto err_sid_free;
 	}
 
-	ret = azure_xml_get_path(xp_ctx,
-		"//PublishData/PublishProfile", "ManagementCertificate",
-		&mcert_b64);
+	ret = azure_xml_path_el_get(xdoc->root,
+				    "/PublishData/PublishProfile", &xel);
+	if (ret < 0) {
+		dbg(0, "Failed to find Azure Subscription data in %s\n",
+		    ps_file);
+		goto err_sname_free;
+	}
+
+	ret = azure_xml_attr_get(xel, "ManagementCertificate", &mcert_b64);
 	if (ret < 0) {
 		dbg(0, "Failed to read Azure ManagementCertificate from %s\n",
-		       ps_file);
+		    ps_file);
 		goto err_sname_free;
 	}
 
@@ -195,8 +214,7 @@ azure_ssl_pubset_process(const char *ps_file,
 	*pem_file = pem_file_path;
 	*sub_id = sid;
 	*sub_name = sname;
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+	apr_pool_destroy(pool);
 	free(ps_path);
 
 	return 0;
@@ -208,9 +226,8 @@ err_sname_free:
 	free(sname);
 err_sid_free:
 	free(sid);
-err_xml_free:
-	xmlXPathFreeContext(xp_ctx);
-	xmlFreeDoc(xp_doc);
+err_pool_free:
+	apr_pool_destroy(pool);
 err_ps_free:
 	free(ps_path);
 err_out:

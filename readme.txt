@@ -15,8 +15,8 @@ Building
 
 Elasto uses the Waf build framework - http://code.google.com/p/waf/
 
-libcurl, libxml2 and openssl (libcrypto) development libraries are
-required for building.
+libcurl, libapr, libapr-util and openssl (libcrypto) development
+libraries are required for building.
 
 To compile the library and client, run the following from the top of the
 elasto source tree:

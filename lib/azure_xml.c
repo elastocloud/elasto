@@ -11,135 +11,184 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
 
-#include <libxml/tree.h>
-#include <libxml/parser.h>
-#include <libxml/xpath.h>
-#include <libxml/xpathInternals.h>
+#include <apr-1/apr_xml.h>
 
 #include "dbg.h"
 
 int
-azure_xml_slurp(bool is_file,
+azure_xml_slurp(apr_pool_t *pool,
+		bool is_file,
 		const uint8_t *buf,
 		uint64_t buf_len,
-		xmlDoc **xp_doc,
-		xmlXPathContext **xp_ctx)
+		struct apr_xml_doc **xdoc_out)
 {
 	int ret;
-	xmlDoc *xdoc;
-	xmlXPathContext *xpath_ctx;
+	apr_status_t rv;
+	struct apr_xml_parser *xparser;
+	struct apr_xml_doc *xdoc;
 
 	if (is_file) {
-		xdoc = xmlParseFile((char *)buf);
+		apr_file_t *afd;
+		rv = apr_file_open(&afd, (const char *)buf, APR_FOPEN_READ,
+				   APR_OS_DEFAULT, pool);
+		if (rv != APR_SUCCESS) {
+			ret = -APR_TO_OS_ERROR(rv);
+			goto err_out;
+		}
+
+		rv = apr_xml_parse_file(pool, &xparser, &xdoc, afd, 1024);
+		apr_file_close(afd);
+		if (rv != APR_SUCCESS) {
+			ret = -APR_TO_OS_ERROR(rv);
+			goto err_out;
+		}
 	} else {
-		xdoc = xmlParseMemory((char *)buf, buf_len);
-	}
-	if (xdoc == NULL) {
-		dbg(0, "unable to parse in-memory XML\n");
-		ret = -EINVAL;
-		goto err_out;
+		xparser = apr_xml_parser_create(pool);
+		if (xparser == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+
+		rv = apr_xml_parser_feed(xparser, (const char *)buf, buf_len);
+		if (rv != APR_SUCCESS) {
+			ret = -APR_TO_OS_ERROR(rv);
+			goto err_out;
+		}
+
+		rv = apr_xml_parser_done(xparser, &xdoc);
+		if (rv != APR_SUCCESS) {
+			ret = -APR_TO_OS_ERROR(rv);
+			goto err_out;
+		}
 	}
 
-	/* Create xpath evaluation context */
-	xpath_ctx = xmlXPathNewContext(xdoc);
-	if (xpath_ctx == NULL) {
-		dbg(0, "unable to create XPath context\n");
-		ret = -ENOMEM;
-		goto err_free_doc;
-	}
-
-	if (xmlXPathRegisterNs(xpath_ctx, (xmlChar *)"def",
-			(xmlChar *)"http://schemas.microsoft.com/windowsazure") != 0) {
-		dbg(0, "Unable to register NS: def\n");
-		ret = -EINVAL;
-		goto err_free_xpctx;
-	}
-	if (xmlXPathRegisterNs(xpath_ctx, (xmlChar *)"i",
-			(xmlChar *)"http://www.w3.org/2001/XMLSchema-instance") != 0) {
-		dbg(0, "Unable to register NS: i\n");
-		ret = -EINVAL;
-		goto err_free_xpctx;
-	}
-
-	*xp_doc = xdoc;
-	*xp_ctx = xpath_ctx;
+	*xdoc_out = xdoc;
 
 	return 0;
 
-err_free_xpctx:
-	xmlXPathFreeContext(xpath_ctx);
-err_free_doc:
-	xmlFreeDoc(xdoc);
+err_out:
+	dbg(0, "failed to slurp xml\n");
+	return ret;
+}
+
+/* find element at the same level as @xel */
+static int
+azure_xml_elem_lev_find(struct apr_xml_elem *xel,
+			const char *name,
+			struct apr_xml_elem **xel_found_out)
+{
+	while ((xel != NULL) && (strcmp(xel->name, name) != 0)) {
+		xel = xel->next;
+	}
+
+	if (xel == NULL) {
+		return -ENOENT;
+	}
+
+	*xel_found_out = xel;
+	return 0;
+}
+
+/*
+ * Evaluate basic xpath expression:
+ *	/grandparent/parent/child
+ */
+int
+azure_xml_path_el_get(struct apr_xml_elem *xel_parent,
+		      const char *xp_expr,
+		      struct apr_xml_elem **xel_child_out)
+{
+	int ret;
+	char *component;
+	struct apr_xml_elem *xel;
+	struct apr_xml_elem *xel_next;
+	char *expr = strdup(xp_expr);
+
+	if (expr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	component = strtok(expr, "/");
+	xel_next = xel_parent;
+	while ((component != NULL) && (xel_next != NULL)) {
+		/* check for index */
+		ret = azure_xml_elem_lev_find(xel_next, component, &xel);
+		if (ret < 0) {
+			dbg(4, "could not find %s xpath component of %s\n",
+			    component, xp_expr);
+			goto err_expr_free;
+		}
+		xel_next = xel->first_child;
+		component = strtok(NULL, "/");
+	}
+
+	dbg(4, "found %s xpath\n", xp_expr);
+	*xel_child_out = xel;
+
+	ret = 0;
+err_expr_free:
+	free(expr);
 err_out:
 	return ret;
 }
 
+/* get value at corresponding xpath */
 int
-azure_xml_get_path(xmlXPathContext *xp_ctx,
+azure_xml_path_get(struct apr_xml_elem *xel_parent,
 		   const char *xp_expr,
-		   const char *xp_attr,
-		   char **content)
+		   char **value)
 {
 	int ret;
-	xmlXPathObject *xp_obj;
-	xmlChar *ctnt;
+	struct apr_xml_elem *xel;
 
-	/* Evaluate xpath expression */
-	xp_obj = xmlXPathEval((const xmlChar *)xp_expr, xp_ctx);
-	if (xp_obj == NULL) {
-		dbg(0, "Unable to evaluate xpath expression \"%s\"\n",
-		       xp_expr);
+	ret = azure_xml_path_el_get(xel_parent, xp_expr, &xel);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (xel->first_cdata.first == NULL) {
+		/* no value */
+		*value = NULL;
+		return 0;
+	}
+
+	*value = strdup(xel->first_cdata.first->text);
+	if (*value == NULL) {
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+int
+azure_xml_attr_get(struct apr_xml_elem *xel,
+		   const char *key,
+		   char **value)
+{
+	struct apr_xml_attr *attr;
+
+	attr = xel->attr;
+
+	while ((attr != NULL) && (strcmp(key, attr->name) != 0)) {
+		attr = attr->next;
+	}
+
+	if (attr == NULL) {
+		dbg(4, "could not find attr with key %s\n", key);
 		return -ENOENT;
 	}
 
-	if (xp_obj->nodesetval == NULL) {
-		dbg(2, "null nodesetval\n");
-		ret = -ENOENT;
-		goto err_xp_obj;
-	}
-	if (xp_obj->nodesetval->nodeNr == 0) {
-		dbg(2, "empty nodesetval\n");
-		ret = -ENOENT;
-		goto err_xp_obj;
+	*value = strdup(attr->value);
+	if (*value == NULL) {
+		return -ENOMEM;
 	}
 
-	if (xp_attr != NULL) {
-		ctnt = xmlGetProp(xp_obj->nodesetval->nodeTab[0],
-				  (const xmlChar *)xp_attr);
-	} else {
-		ctnt = xmlNodeGetContent(xp_obj->nodesetval->nodeTab[0]);
-	}
-	if (ctnt == NULL) {
-		ret = -ENOMEM;
-		goto err_xp_obj;
-	}
-
-	*content = strdup((char *)ctnt);
-	xmlFree(ctnt);
-	if (*content == NULL) {
-		ret = -ENOMEM;
-		goto err_xp_obj;
-	}
-
-	ret = 0;
-err_xp_obj:
-	xmlXPathFreeObject(xp_obj);
-	return ret;
-}
-
-void
-azure_xml_subsys_init(void)
-{
-	xmlInitParser();
-}
-
-void
-azure_xml_subsys_deinit(void)
-{
-	xmlCleanupParser();
+	return 0;
 }

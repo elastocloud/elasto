@@ -9,7 +9,8 @@ def configure(conf):
 	conf.load('compiler_c')
 	conf.env.CFLAGS = ['-Wall','-g']
 	conf.check(lib='curl')
-	conf.check(lib='xml2')
+	conf.check(lib='apr-1')
+	conf.check(lib='aprutil-1')
 	conf.check(lib='crypto')
 	conf.recurse('ccan')
 	conf.recurse('lib')
@@ -22,5 +23,5 @@ def build(bld):
 	bld.recurse('client')
 	bld.program(source='azure_test.c',
 		    target='azure_test',
-		    lib=['curl','xml2','crypto'],
+		    lib=['curl','apr-1','aprutil-1','crypto'],
 		    use=['ccan','elasto'])
