@@ -466,6 +466,13 @@ err_out:
 	return ret;
 }
 
+static void
+azure_req_acc_create_free(struct azure_req_acc_create *acc_create_req)
+{
+	free(acc_create_req->sub_id);
+	azure_acc_free(&acc_create_req->acc);
+}
+
 static int
 azure_op_acc_create_fill_hdr(struct azure_op *op)
 {
@@ -594,35 +601,42 @@ azure_op_acc_create(const char *sub_id,
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	acc_create_req->acc.svc_name = strdup(svc_name);
-	if (acc_create_req->acc.svc_name == NULL) {
+
+	acc_create_req->acc = malloc(sizeof(*acc_create_req->acc));
+	if (acc_create_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_sub_free;
 	}
-	acc_create_req->acc.label = strdup(label);
-	if (acc_create_req->acc.label == NULL) {
+
+	acc_create_req->acc->svc_name = strdup(svc_name);
+	if (acc_create_req->acc->svc_name == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+	acc_create_req->acc->label = strdup(label);
+	if (acc_create_req->acc->label == NULL) {
 		ret = -ENOMEM;
 		goto err_svc_name_free;
 	}
 
 	if (desc != NULL) {
-		acc_create_req->acc.desc = strdup(desc);
-		if (acc_create_req->acc.desc == NULL) {
+		acc_create_req->acc->desc = strdup(desc);
+		if (acc_create_req->acc->desc == NULL) {
 			ret = -ENOMEM;
 			goto err_label_free;
 		}
 	}
 	if (affin_grp != NULL) {
 		assert(location == NULL);
-		acc_create_req->acc.affin_grp = strdup(affin_grp);
-		if (acc_create_req->acc.affin_grp == NULL) {
+		acc_create_req->acc->affin_grp = strdup(affin_grp);
+		if (acc_create_req->acc->affin_grp == NULL) {
 			ret = -ENOMEM;
 			goto err_desc_free;
 		}
 	} else {
 		assert(location != NULL);
-		acc_create_req->acc.location = strdup(location);
-		if (acc_create_req->acc.location == NULL) {
+		acc_create_req->acc->location = strdup(location);
+		if (acc_create_req->acc->location == NULL) {
 			ret = -ENOMEM;
 			goto err_desc_free;
 		}
@@ -642,7 +656,7 @@ azure_op_acc_create(const char *sub_id,
 		goto err_url_free;
 	}
 
-	ret = azure_op_acc_create_fill_body(&acc_create_req->acc,
+	ret = azure_op_acc_create_fill_body(acc_create_req->acc,
 					    &op->req.data);
 	if (ret < 0) {
 		goto err_url_free;
@@ -652,14 +666,16 @@ azure_op_acc_create(const char *sub_id,
 err_url_free:
 	free(op->url);
 err_loc_free:
-	free(acc_create_req->acc.location);
-	free(acc_create_req->acc.affin_grp);
+	free(acc_create_req->acc->location);
+	free(acc_create_req->acc->affin_grp);
 err_desc_free:
-	free(acc_create_req->acc.desc);
+	free(acc_create_req->acc->desc);
 err_label_free:
-	free(acc_create_req->acc.label);
+	free(acc_create_req->acc->label);
 err_svc_name_free:
-	free(acc_create_req->acc.svc_name);
+	free(acc_create_req->acc->svc_name);
+err_acc_free:
+	free(acc_create_req->acc);
 err_sub_free:
 	free(acc_create_req->sub_id);
 err_out:
@@ -2796,6 +2812,9 @@ azure_req_free(struct azure_op *op)
 		break;
 	case AOP_ACC_LIST:
 		azure_req_acc_list_free(&op->req.acc_list);
+		break;
+	case AOP_ACC_CREATE:
+		azure_req_acc_create_free(&op->req.acc_create);
 		break;
 	case AOP_ACC_DEL:
 		azure_req_acc_del_free(&op->req.acc_del);
