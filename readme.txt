@@ -68,8 +68,17 @@ and corresponding usage.
 Alternatives
 ------------
 
-Deltacloud: Provides an API that abstracts differences between clouds.
+Deltacloud:	Provides an API that abstracts differences between clouds.
+		http://deltacloud.apache.org/
 
-libs3: A C Library API for Amazon S3.
+libs3:		A C Library API for Amazon S3.
+		http://libs3.ischo.com.s3.amazonaws.com/index.html
 
-fog: Ruby cloud services library.
+fog:		Ruby cloud services library.
+		http://fog.io/
+
+rest-client-c:	Object-oriented REST client in C.
+		http://code.google.com/p/rest-client-c/
+
+atmos-c:	C library for EMC Atmos cloud storage.
+		http://code.google.com/p/atmos-c/
