@@ -327,6 +327,7 @@ cli_args_free(const struct cli_cmd_spec *cmd,
 	if (cmd != NULL)
 		cmd->args_free(cli_args);
 	if (cli_args->type == CLI_TYPE_AZURE) {
+		free(cli_args->az.sub_name);
 		free(cli_args->az.sub_id);
 		free(cli_args->az.ps_file);
 		free(cli_args->az.pem_file);
@@ -504,7 +505,6 @@ main(int argc, char * const *argv)
 {
 	struct cli_args cli_args;
 	const struct cli_cmd_spec *cmd;
-	char *sub_name;
 	int ret;
 	apr_status_t rv;
 
@@ -530,7 +530,7 @@ main(int argc, char * const *argv)
 		ret = azure_ssl_pubset_process(cli_args.az.ps_file,
 					       &cli_args.az.pem_file,
 					       &cli_args.az.sub_id,
-					       &sub_name);
+					       &cli_args.az.sub_name);
 		if (ret < 0) {
 			goto err_global_clean;
 		}
@@ -542,12 +542,10 @@ main(int argc, char * const *argv)
 		ret = cmd->handle(&cli_args);
 	}
 	if (ret < 0) {
-		goto err_sub_free;
+		goto err_global_clean;
 	}
 
 	ret = 0;
-err_sub_free:
-	free(sub_name);
 err_global_clean:
 	azure_conn_subsys_deinit();
 err_apr_deinit:

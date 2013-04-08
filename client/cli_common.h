@@ -34,6 +34,7 @@ struct cli_args {
 		struct {
 			char *ps_file;
 			char *pem_file;
+			char *sub_name;
 			char *sub_id;
 		} az;
 		struct {
