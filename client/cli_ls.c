@@ -297,7 +297,7 @@ cli_ls_handle(struct cli_args *cli_args)
 	struct azure_conn *aconn;
 	int ret;
 
-	ret = azure_conn_init(cli_args->pem_file, NULL, &aconn);
+	ret = azure_conn_init(cli_args->az.pem_file, NULL, &aconn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -306,14 +306,14 @@ cli_ls_handle(struct cli_args *cli_args)
 	 && (cli_args->ctnr_name == NULL)
 	 && (cli_args->blob_acc == NULL)) {
 		/* list accounts for subscription, signing setup not needed */
-		ret = cli_ls_sub_handle(aconn, cli_args->sub_id);
+		ret = cli_ls_sub_handle(aconn, cli_args->az.sub_id);
 		azure_conn_free(aconn);
 		return ret;
 	}
 
 	ret = cli_sign_conn_setup(aconn,
 				  cli_args->blob_acc,
-				  cli_args->sub_id);
+				  cli_args->az.sub_id);
 	if (ret < 0) {
 		goto err_conn_free;
 	}

@@ -160,13 +160,13 @@ cli_create_handle_acc(struct cli_args *cli_args)
 	struct azure_op op;
 	int ret;
 
-	ret = azure_conn_init(cli_args->pem_file, NULL, &aconn);
+	ret = azure_conn_init(cli_args->az.pem_file, NULL, &aconn);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_acc_create(cli_args->sub_id,
+	ret = azure_op_acc_create(cli_args->az.sub_id,
 				  cli_args->blob_acc,
 				  cli_args->create.label,
 				  cli_args->create.desc,
@@ -209,14 +209,14 @@ cli_create_handle_ctnr(struct cli_args *cli_args)
 	struct azure_op op;
 	int ret;
 
-	ret = azure_conn_init(cli_args->pem_file, NULL, &aconn);
+	ret = azure_conn_init(cli_args->az.pem_file, NULL, &aconn);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	ret = cli_sign_conn_setup(aconn,
 				  cli_args->blob_acc,
-				  cli_args->sub_id);
+				  cli_args->az.sub_id);
 	if (ret < 0) {
 		goto err_conn_free;
 	}

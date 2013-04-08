@@ -214,14 +214,14 @@ cli_put_handle(struct cli_args *cli_args)
 	struct azure_op op;
 	int ret;
 
-	ret = azure_conn_init(cli_args->pem_file, NULL, &aconn);
+	ret = azure_conn_init(cli_args->az.pem_file, NULL, &aconn);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	ret = cli_sign_conn_setup(aconn,
 				  cli_args->blob_acc,
-				  cli_args->sub_id);
+				  cli_args->az.sub_id);
 	if (ret < 0) {
 		goto err_conn_free;
 	}

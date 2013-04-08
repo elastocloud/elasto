@@ -123,7 +123,8 @@ cli_args_usage(const char *progname,
 	fprintf(stderr,
 "Usage: %s [options] <cmd> <cmd args>\n\n"
 "Options:\n"
-"-s publish_settings:	Azure PublishSettings file (required)\n"
+"-s publish_settings:	Azure PublishSettings file\n"
+"-k s3_key_id,secret:	Amazon S3 access key ID and secret access key duo\n"
 "-d log_level:		Log debug messages (default: 0)\n"
 "-i			Insecure, use HTTP where possible "
 "(default: HTTPS only)\n\n"
@@ -325,9 +326,14 @@ cli_args_free(const struct cli_cmd_spec *cmd,
 {
 	if (cmd != NULL)
 		cmd->args_free(cli_args);
-	free(cli_args->sub_id);
-	free(cli_args->ps_file);
-	free(cli_args->pem_file);
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		free(cli_args->az.sub_id);
+		free(cli_args->az.ps_file);
+		free(cli_args->az.pem_file);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		free(cli_args->s3.key_id);
+		free(cli_args->s3.secret);
+	}
 }
 
 static int
@@ -341,15 +347,35 @@ cli_args_parse(int argc,
 	extern char *optarg;
 	extern int optind;
 	char *pub_settings = NULL;
+	char *s3_id = NULL;
+	char *s3_secret = NULL;
 
 	cli_args->insecure_http = false;
 
-	while ((opt = getopt(argc, argv, "s:d:?i")) != -1) {
+	while ((opt = getopt(argc, argv, "s:k:d:?i")) != -1) {
 		uint32_t debug_level;
+		char *sep;
 		switch (opt) {
 		case 's':
 			pub_settings = strdup(optarg);
 			if (pub_settings == NULL) {
+				ret = -ENOMEM;
+				goto err_out;
+			}
+			break;
+		case 'k':
+			s3_id = strdup(optarg);
+			if (s3_id == NULL) {
+				ret = -ENOMEM;
+				goto err_out;
+			}
+			sep = strchr(optarg, ',');
+			if ((sep == NULL) || (strlen(sep) <= 1)) {
+				ret = -EINVAL;
+				goto err_out;
+			}
+			s3_secret = strdup(sep + 1);
+			if (s3_secret == NULL) {
 				ret = -ENOMEM;
 				goto err_out;
 			}
@@ -368,13 +394,24 @@ cli_args_parse(int argc,
 			break;
 		}
 	}
-	if (pub_settings == NULL) {
+	if (((pub_settings == NULL) && (s3_id == NULL))
+	 || ((pub_settings != NULL) && (s3_id != NULL))) {
 		cli_args_usage(argv[0],
-			       "Azure PublishSettings file is required");
+			       "Either an Azure PublishSettings file, or "
+			       "Amazon S3 key-duo is required");
 		ret = -EINVAL;
 		goto err_out;
 	}
-	cli_args->ps_file = pub_settings;
+
+	if (pub_settings != NULL) {
+		cli_args->type = CLI_TYPE_AZURE;
+		cli_args->az.ps_file = pub_settings;
+	} else {
+		assert(s3_id != NULL);
+		cli_args->type = CLI_TYPE_S3;
+		cli_args->s3.key_id = s3_id;
+		cli_args->s3.secret = s3_secret;
+	}
 
 	if (argc - optind == 0) {
 		/* no cmd string */
@@ -392,6 +429,8 @@ cli_args_parse(int argc,
 	return 0;
 err_out:
 	free(pub_settings);
+	free(s3_id);
+	free(s3_secret);
 
 	return ret;
 }
@@ -487,10 +526,14 @@ main(int argc, char * const *argv)
 		goto err_apr_deinit;
 	}
 
-	ret = azure_ssl_pubset_process(cli_args.ps_file, &cli_args.pem_file,
-				       &cli_args.sub_id, &sub_name);
-	if (ret < 0) {
-		goto err_global_clean;
+	if (cli_args.type == CLI_TYPE_AZURE) {
+		ret = azure_ssl_pubset_process(cli_args.az.ps_file,
+					       &cli_args.az.pem_file,
+					       &cli_args.az.sub_id,
+					       &sub_name);
+		if (ret < 0) {
+			goto err_global_clean;
+		}
 	}
 
 	if (cmd == NULL) {

@@ -23,10 +23,24 @@ enum cli_cmd {
 	CLI_CMD_CREATE,
 };
 
+enum cli_type {
+	CLI_TYPE_AZURE = 1,
+	CLI_TYPE_S3,
+};
+
 struct cli_args {
-	char *ps_file;
-	char *pem_file;
-	char *sub_id;
+	enum cli_type type;
+	union {
+		struct {
+			char *ps_file;
+			char *pem_file;
+			char *sub_id;
+		} az;
+		struct {
+			char *key_id;
+			char *secret;
+		} s3;
+	};
 	bool insecure_http;
 	enum cli_cmd cmd;
 	/* mostly common to all */
