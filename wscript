@@ -21,7 +21,3 @@ def build(bld):
 	bld.recurse('ccan')
 	bld.recurse('lib')
 	bld.recurse('client')
-	bld.program(source='azure_test.c',
-		    target='azure_test',
-		    lib=['curl','apr-1','aprutil-1','crypto'],
-		    use=['ccan','elasto'])
