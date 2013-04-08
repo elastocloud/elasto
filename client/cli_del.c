@@ -197,7 +197,11 @@ cli_del_handle(struct cli_args *cli_args)
 	struct elasto_conn *econn;
 	int ret;
 
-	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+	} else {
+		ret = -ENOTSUP;
+	}
 	if (ret < 0) {
 		goto err_out;
 	}
