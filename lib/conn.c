@@ -463,6 +463,7 @@ elasto_conn_init_az(const char *pem_file,
 	if (ret < 0) {
 		return ret;
 	}
+	econn->type = CONN_TYPE_AZURE;
 	curl_easy_setopt(econn->curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(econn->curl, CURLOPT_SSLCERTTYPE, "PEM");
 	curl_easy_setopt(econn->curl, CURLOPT_SSLCERT, pem_file);
@@ -471,6 +472,22 @@ elasto_conn_init_az(const char *pem_file,
 	if (pem_pw) {
 		curl_easy_setopt(econn->curl, CURLOPT_KEYPASSWD, pem_pw);
 	}
+	*econn_out = econn;
+
+	return 0;
+}
+
+int
+elasto_conn_init_s3(struct elasto_conn **econn_out)
+{
+	struct elasto_conn *econn;
+	int ret;
+
+	ret = elasto_conn_init_common(&econn);
+	if (ret < 0) {
+		return ret;
+	}
+	econn->type = CONN_TYPE_S3;
 	*econn_out = econn;
 
 	return 0;

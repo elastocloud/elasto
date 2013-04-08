@@ -14,7 +14,13 @@
 #ifndef _AZURE_CONN_H_
 #define _AZURE_CONN_H_
 
+enum elasto_conn_type {
+	CONN_TYPE_AZURE = 1,
+	CONN_TYPE_S3,
+};
+
 struct elasto_conn {
+	enum elasto_conn_type type;
 	CURL *curl;
 	struct {
 		char *account;
@@ -36,6 +42,9 @@ int
 elasto_conn_init_az(const char *pem_file,
 		    const char *pem_pw,
 		    struct elasto_conn **econn);
+
+int
+elasto_conn_init_s3(struct elasto_conn **econn);
 
 void
 elasto_conn_free(struct elasto_conn *econn);
