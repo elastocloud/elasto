@@ -358,7 +358,10 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 
 	if (op->sign) {
 		char *sig_str;
-		assert(aconn->sign.key != NULL);
+		if (aconn->sign.key == NULL) {
+			dbg(0, "op requires signing, but conn key not set\n");
+			return -EINVAL;
+		}
 		ret = azure_sign_gen_lite(aconn->sign.account,
 					  aconn->sign.key, aconn->sign.key_len,
 					  op, &op->sig_src, &sig_str);
