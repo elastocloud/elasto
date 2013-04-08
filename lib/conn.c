@@ -426,10 +426,8 @@ elasto_conn_send_op(struct elasto_conn *econn,
 	return 0;
 }
 
-int
-elasto_conn_init_az(const char *pem_file,
-		    const char *pem_pw,
-		    struct elasto_conn **econn_out)
+static int
+elasto_conn_init_common(struct elasto_conn **econn_out)
 {
 	uint32_t debug_level;
 	struct elasto_conn *econn = malloc(sizeof(*econn));
@@ -447,6 +445,24 @@ elasto_conn_init_az(const char *pem_file,
 	if (debug_level > 2) {
 		curl_easy_setopt(econn->curl, CURLOPT_VERBOSE, 1);
 	}
+	memset(&econn->sign, 0, sizeof(econn->sign));
+	*econn_out = econn;
+
+	return 0;
+}
+
+int
+elasto_conn_init_az(const char *pem_file,
+		    const char *pem_pw,
+		    struct elasto_conn **econn_out)
+{
+	struct elasto_conn *econn;
+	int ret;
+
+	ret = elasto_conn_init_common(&econn);
+	if (ret < 0) {
+		return ret;
+	}
 	curl_easy_setopt(econn->curl, CURLOPT_TCP_NODELAY, 1);
 	curl_easy_setopt(econn->curl, CURLOPT_SSLCERTTYPE, "PEM");
 	curl_easy_setopt(econn->curl, CURLOPT_SSLCERT, pem_file);
@@ -455,7 +471,6 @@ elasto_conn_init_az(const char *pem_file,
 	if (pem_pw) {
 		curl_easy_setopt(econn->curl, CURLOPT_KEYPASSWD, pem_pw);
 	}
-	memset(&econn->sign, 0, sizeof(econn->sign));
 	*econn_out = econn;
 
 	return 0;
