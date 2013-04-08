@@ -120,13 +120,15 @@ cli_args_usage(const char *progname,
 	if (msg != NULL) {
 		fprintf(stderr, "%s\n\n", msg);
 	}
-	fprintf(stderr, "Usage: %s [options] <cmd> <cmd args>\n\n"
-		"Options:\n"
-		"-s publish_settings:	Azure PublishSettings file (required)\n"
-		"-d log_level:		Log debug messages (default: 0)\n"
-		"-i			Insecure, use HTTP where possible "
-					"(default: HTTPS only)\n\n"
-		"Commands:\n", progname);
+	fprintf(stderr,
+"Usage: %s [options] <cmd> <cmd args>\n\n"
+"Options:\n"
+"-s publish_settings:	Azure PublishSettings file (required)\n"
+"-d log_level:		Log debug messages (default: 0)\n"
+"-i			Insecure, use HTTP where possible "
+"(default: HTTPS only)\n\n"
+"Commands:\n",
+		progname);
 
 	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
 		fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->help);
