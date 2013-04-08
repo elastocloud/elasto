@@ -248,7 +248,7 @@ struct azure_op_data {
 #define REQ_METHOD_DELETE	"DELETE"
 #define REQ_METHOD_POST		"POST"
 struct azure_op {
-	struct azure_conn *aconn;
+	struct elasto_conn *econn;
 	enum azure_opcode opcode;
 	struct curl_slist *http_hdr;
 	bool sign;

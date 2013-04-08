@@ -28,7 +28,7 @@
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
 #include "lib/azure_req.h"
-#include "lib/azure_conn.h"
+#include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
 #include "cli_sign.h"
@@ -75,7 +75,7 @@ err_out:
 }
 
 static int
-cli_del_acc_handle(struct azure_conn *aconn,
+cli_del_acc_handle(struct elasto_conn *econn,
 		   const char *sub_id,
 		   const char *acc_name)
 {
@@ -89,7 +89,7 @@ cli_del_acc_handle(struct azure_conn *aconn,
 		goto err_out;
 	}
 
-	ret = azure_conn_send_op(aconn, &op);
+	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -113,7 +113,7 @@ err_out:
 }
 
 static int
-cli_del_blob_handle(struct azure_conn *aconn,
+cli_del_blob_handle(struct elasto_conn *econn,
 		   const char *acc_name,
 		   const char *ctnr_name,
 		   const char *blob_name)
@@ -129,7 +129,7 @@ cli_del_blob_handle(struct azure_conn *aconn,
 		goto err_out;
 	}
 
-	ret = azure_conn_send_op(aconn, &op);
+	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -153,7 +153,7 @@ err_out:
 }
 
 static int
-cli_del_ctnr_handle(struct azure_conn *aconn,
+cli_del_ctnr_handle(struct elasto_conn *econn,
 		    const char *acc_name,
 		    const char *ctnr_name)
 {
@@ -168,7 +168,7 @@ cli_del_ctnr_handle(struct azure_conn *aconn,
 		goto err_out;
 	}
 
-	ret = azure_conn_send_op(aconn, &op);
+	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -194,10 +194,10 @@ err_out:
 int
 cli_del_handle(struct cli_args *cli_args)
 {
-	struct azure_conn *aconn;
+	struct elasto_conn *econn;
 	int ret;
 
-	ret = azure_conn_init(cli_args->az.pem_file, NULL, &aconn);
+	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -205,13 +205,13 @@ cli_del_handle(struct cli_args *cli_args)
 	if ((cli_args->blob_name == NULL)
 	 && (cli_args->ctnr_name == NULL)) {
 		/* delete account for subscription, signing setup not needed */
-		ret = cli_del_acc_handle(aconn, cli_args->az.sub_id,
+		ret = cli_del_acc_handle(econn, cli_args->az.sub_id,
 					 cli_args->blob_acc);
-		azure_conn_free(aconn);
+		elasto_conn_free(econn);
 		return ret;
 	}
 
-	ret = cli_sign_conn_setup(aconn,
+	ret = cli_sign_conn_setup(econn,
 				  cli_args->blob_acc,
 				  cli_args->az.sub_id);
 	if (ret < 0) {
@@ -219,16 +219,16 @@ cli_del_handle(struct cli_args *cli_args)
 	}
 
 	if (cli_args->blob_name != NULL) {
-		ret = cli_del_blob_handle(aconn, cli_args->blob_acc,
+		ret = cli_del_blob_handle(econn, cli_args->blob_acc,
 					  cli_args->ctnr_name,
 					  cli_args->blob_name);
 	} else {
-		ret = cli_del_ctnr_handle(aconn, cli_args->blob_acc,
+		ret = cli_del_ctnr_handle(econn, cli_args->blob_acc,
 					  cli_args->ctnr_name);
 	}
 
 err_conn_free:
-	azure_conn_free(aconn);
+	elasto_conn_free(econn);
 err_out:
 	return ret;
 }

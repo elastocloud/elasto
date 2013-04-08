@@ -29,7 +29,7 @@
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
 #include "lib/azure_req.h"
-#include "lib/azure_conn.h"
+#include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "lib/dbg.h"
 #include "linenoise.h"
@@ -521,7 +521,7 @@ main(int argc, char * const *argv)
 		goto err_args_free;
 	}
 
-	ret = azure_conn_subsys_init();
+	ret = elasto_conn_subsys_init();
 	if (ret < 0) {
 		goto err_apr_deinit;
 	}
@@ -547,7 +547,7 @@ main(int argc, char * const *argv)
 
 	ret = 0;
 err_global_clean:
-	azure_conn_subsys_deinit();
+	elasto_conn_subsys_deinit();
 err_apr_deinit:
 	apr_terminate();
 err_args_free:

@@ -15,7 +15,7 @@
 #define _CLI_SIGN_H_
 
 int
-cli_sign_conn_setup(struct azure_conn *aconn,
+cli_sign_conn_setup(struct elasto_conn *econn,
 		    const char *blob_acc,
 		    const char *sub_id);
 

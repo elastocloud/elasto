@@ -7,7 +7,7 @@ def configure(conf):
 
 def build(bld):
 	bld.stlib(source='''azure_xml.c azure_req.c azure_sign.c base64.c
-			    azure_conn.c azure_ssl.c dbg.c''',
+			    conn.c azure_ssl.c dbg.c''',
 		  target='elasto',
 		  lib=['curl','xml2','crypto'],
 		  use=['ccan'],

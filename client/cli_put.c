@@ -30,7 +30,7 @@
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
 #include "lib/azure_req.h"
-#include "lib/azure_conn.h"
+#include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
 #include "cli_sign.h"
@@ -90,7 +90,7 @@ err_out:
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 
 static int
-cli_put_blocks(struct azure_conn *aconn,
+cli_put_blocks(struct elasto_conn *econn,
 	       struct cli_args *cli_args,
 	       uint64_t size,
 	       struct list_head **blks_ret)
@@ -165,7 +165,7 @@ cli_put_blocks(struct azure_conn *aconn,
 			goto err_blks_free;
 		}
 
-		ret = azure_conn_send_op(aconn, &op);
+		ret = elasto_conn_send_op(econn, &op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -209,17 +209,17 @@ err_blks_free:
 int
 cli_put_handle(struct cli_args *cli_args)
 {
-	struct azure_conn *aconn;
+	struct elasto_conn *econn;
 	struct stat st;
 	struct azure_op op;
 	int ret;
 
-	ret = azure_conn_init(cli_args->az.pem_file, NULL, &aconn);
+	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = cli_sign_conn_setup(aconn,
+	ret = cli_sign_conn_setup(econn,
 				  cli_args->blob_acc,
 				  cli_args->az.sub_id);
 	if (ret < 0) {
@@ -238,7 +238,7 @@ cli_put_handle(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_op(aconn, &op);
+	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -278,7 +278,7 @@ cli_put_handle(struct cli_args *cli_args)
 		}
 	} else {
 		struct list_head *blks;
-		ret = cli_put_blocks(aconn, cli_args, st.st_size, &blks);
+		ret = cli_put_blocks(econn, cli_args, st.st_size, &blks);
 		if (ret < 0) {
 			goto err_conn_free;
 		}
@@ -291,7 +291,7 @@ cli_put_handle(struct cli_args *cli_args)
 		}
 	}
 
-	ret = azure_conn_send_op(aconn, &op);
+	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -308,7 +308,7 @@ err_op_free:
 		op.req.data->buf = NULL;
 	azure_op_free(&op);
 err_conn_free:
-	azure_conn_free(aconn);
+	elasto_conn_free(econn);
 err_out:
 	return ret;
 }

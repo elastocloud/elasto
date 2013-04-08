@@ -14,7 +14,7 @@
 #ifndef _AZURE_CONN_H_
 #define _AZURE_CONN_H_
 
-struct azure_conn {
+struct elasto_conn {
 	CURL *curl;
 	struct {
 		char *account;
@@ -24,26 +24,26 @@ struct azure_conn {
 };
 
 int
-azure_conn_sign_setkey(struct azure_conn *aconn,
+elasto_conn_sign_setkey(struct elasto_conn *econn,
 		       const char *account,
 		       const char *key_b64);
 
 int
-azure_conn_send_op(struct azure_conn *aconn,
+elasto_conn_send_op(struct elasto_conn *econn,
 		    struct azure_op *op);
 
 int
-azure_conn_init(const char *pem_file,
-		const char *pem_pw,
-		struct azure_conn **aconn);
+elasto_conn_init_az(const char *pem_file,
+		    const char *pem_pw,
+		    struct elasto_conn **econn);
 
 void
-azure_conn_free(struct azure_conn *aconn);
+elasto_conn_free(struct elasto_conn *econn);
 
 int
-azure_conn_subsys_init(void);
+elasto_conn_subsys_init(void);
 
 void
-azure_conn_subsys_deinit(void);
+elasto_conn_subsys_deinit(void);
 
 #endif /* ifdef _AZURE_CONN_H_ */

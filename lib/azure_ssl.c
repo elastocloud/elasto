@@ -34,7 +34,7 @@
 #include "base64.h"
 #include "azure_xml.h"
 #include "azure_req.h"
-#include "azure_conn.h"
+#include "conn.h"
 
 static int
 azure_ssl_pem_write(char *mcert_b64, char *pem_file)

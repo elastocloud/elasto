@@ -27,7 +27,7 @@
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
 #include "lib/azure_req.h"
-#include "lib/azure_conn.h"
+#include "lib/conn.h"
 #include "lib/azure_ssl.h"
 
 static void
@@ -112,7 +112,7 @@ err_out:
 int
 main(int argc, char * const *argv)
 {
-	struct azure_conn *aconn;
+	struct elasto_conn *econn;
 	struct azure_op op;
 	char *ps_file;
 	char *pem_file;
@@ -130,7 +130,7 @@ main(int argc, char * const *argv)
 		goto err_out;
 	}
 
-	ret = azure_conn_subsys_init();
+	ret = elasto_conn_subsys_init();
 	if (ret < 0) {
 		goto err_acc_free;
 	}
@@ -142,7 +142,7 @@ main(int argc, char * const *argv)
 		goto err_global_clean;
 	}
 
-	ret = azure_conn_init(pem_file, NULL, &aconn);
+	ret = elasto_conn_init_az(pem_file, NULL, &econn);
 	if (ret < 0) {
 		goto err_sub_info_free;
 	}
@@ -152,7 +152,7 @@ main(int argc, char * const *argv)
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_op(aconn, &op);
+	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -173,7 +173,7 @@ main(int argc, char * const *argv)
 	       op.rsp.acc_keys_get.primary,
 	       op.rsp.acc_keys_get.secondary);
 
-	ret = azure_conn_sign_setkey(aconn, blob_acc,
+	ret = elasto_conn_sign_setkey(econn, blob_acc,
 				     op.rsp.acc_keys_get.primary);
 	if (ret < 0) {
 		goto err_op_free;
@@ -186,7 +186,7 @@ main(int argc, char * const *argv)
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_op(aconn, &op);
+	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -223,7 +223,7 @@ main(int argc, char * const *argv)
 		 * < HTTP/1.1 409 The specified container already exists.
 		 */
 
-		ret = azure_conn_send_op(aconn, &op);
+		ret = elasto_conn_send_op(econn, &op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -251,7 +251,7 @@ main(int argc, char * const *argv)
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_op(aconn, &op);
+	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -275,7 +275,7 @@ main(int argc, char * const *argv)
 		goto err_conn_free;
 	}
 
-	ret = azure_conn_send_op(aconn, &op);
+	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -298,13 +298,13 @@ main(int argc, char * const *argv)
 err_op_free:
 	azure_op_free(&op);
 err_conn_free:
-	azure_conn_free(aconn);
+	elasto_conn_free(econn);
 err_sub_info_free:
 	free(pem_file);
 	free(sub_id);
 	free(sub_name);
 err_global_clean:
-	azure_conn_subsys_deinit();
+	elasto_conn_subsys_deinit();
 err_acc_free:
 	free(ps_file);
 	free(blob_acc);

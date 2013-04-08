@@ -29,48 +29,48 @@
 #include "base64.h"
 #include "azure_req.h"
 #include "azure_sign.h"
-#include "azure_conn.h"
+#include "conn.h"
 
-/* convert base64 encoded key to binary and store in @aconn */
+/* convert base64 encoded key to binary and store in @econn */
 int
-azure_conn_sign_setkey(struct azure_conn *aconn,
-		       const char *account,
-		       const char *key_b64)
+elasto_conn_sign_setkey(struct elasto_conn *econn,
+			const char *account,
+			const char *key_b64)
 {
 	int ret;
 
-	if (aconn->sign.key_len > 0) {
-		free(aconn->sign.key);
-		free(aconn->sign.account);
-		aconn->sign.key_len = 0;
+	if (econn->sign.key_len > 0) {
+		free(econn->sign.key);
+		free(econn->sign.account);
+		econn->sign.key_len = 0;
 	}
-	aconn->sign.key = malloc(strlen(key_b64));
-	if (aconn->sign.key == NULL) {
+	econn->sign.key = malloc(strlen(key_b64));
+	if (econn->sign.key == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
-	aconn->sign.account = strdup(account);
-	if (aconn->sign.account == NULL) {
+	econn->sign.account = strdup(account);
+	if (econn->sign.account == NULL) {
 		ret = -ENOMEM;
 		goto err_key_free;
 	}
 
-	ret = base64_decode(key_b64, aconn->sign.key);
+	ret = base64_decode(key_b64, econn->sign.key);
 	if (ret < 0) {
 		ret = -EINVAL;
 		goto err_acc_free;
 	}
-	aconn->sign.key_len = ret;
+	econn->sign.key_len = ret;
 	dbg(1, "set account %s signing key: %s\n", account, key_b64);
 
 	return 0;
 
 err_acc_free:
-	free(aconn->sign.account);
+	free(econn->sign.account);
 err_key_free:
-	free(aconn->sign.key);
-	aconn->sign.key_len = 0;
+	free(econn->sign.key);
+	econn->sign.key_len = 0;
 err_out:
 	return ret;
 }
@@ -283,7 +283,7 @@ curl_write_cb(char *ptr,
 		CURLcode cc;
 		int ret_code;
 		/* should already have the http response code by the time we get here */
-		cc = curl_easy_getinfo(op->aconn->curl, CURLINFO_RESPONSE_CODE,
+		cc = curl_easy_getinfo(op->econn->curl, CURLINFO_RESPONSE_CODE,
 				       &ret_code);
 		if (cc != CURLE_OK) {
 			dbg(0, "could not get response code in write cb\n");
@@ -328,49 +328,49 @@ curl_fail_cb(char *ptr,
 
 /* a bit ugly, the signature src string is stored in @op for debugging */
 static int
-azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
+elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
 {
 	int ret;
 	char *hdr_str = NULL;
 
-	curl_easy_setopt(aconn->curl, CURLOPT_CUSTOMREQUEST, op->method);
-	curl_easy_setopt(aconn->curl, CURLOPT_URL, op->url);
-	curl_easy_setopt(aconn->curl, CURLOPT_HEADERFUNCTION, curl_hdr_cb);
-	curl_easy_setopt(aconn->curl, CURLOPT_HEADERDATA, op);
-	curl_easy_setopt(aconn->curl, CURLOPT_WRITEDATA, op);
-	curl_easy_setopt(aconn->curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
+	curl_easy_setopt(econn->curl, CURLOPT_CUSTOMREQUEST, op->method);
+	curl_easy_setopt(econn->curl, CURLOPT_URL, op->url);
+	curl_easy_setopt(econn->curl, CURLOPT_HEADERFUNCTION, curl_hdr_cb);
+	curl_easy_setopt(econn->curl, CURLOPT_HEADERDATA, op);
+	curl_easy_setopt(econn->curl, CURLOPT_WRITEDATA, op);
+	curl_easy_setopt(econn->curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	if (strcmp(op->method, REQ_METHOD_GET) == 0) {
-		curl_easy_setopt(aconn->curl, CURLOPT_HTTPGET, 1);
-		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 0);
-		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE, 0);
-		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
+		curl_easy_setopt(econn->curl, CURLOPT_HTTPGET, 1);
+		curl_easy_setopt(econn->curl, CURLOPT_UPLOAD, 0);
+		curl_easy_setopt(econn->curl, CURLOPT_INFILESIZE_LARGE, 0);
+		curl_easy_setopt(econn->curl, CURLOPT_READFUNCTION,
 				 curl_fail_cb);
 	} else if ((strcmp(op->method, REQ_METHOD_PUT) == 0)
 				|| (strcmp(op->method, REQ_METHOD_POST) == 0)) {
 		uint64_t len = (op->req.data ? op->req.data->len : 0);
 		/* INFILESIZE_LARGE sets Content-Length hdr */
-		curl_easy_setopt(aconn->curl, CURLOPT_INFILESIZE_LARGE, len);
-		curl_easy_setopt(aconn->curl, CURLOPT_UPLOAD, 1);
-		curl_easy_setopt(aconn->curl, CURLOPT_READDATA, op);
-		curl_easy_setopt(aconn->curl, CURLOPT_READFUNCTION,
+		curl_easy_setopt(econn->curl, CURLOPT_INFILESIZE_LARGE, len);
+		curl_easy_setopt(econn->curl, CURLOPT_UPLOAD, 1);
+		curl_easy_setopt(econn->curl, CURLOPT_READDATA, op);
+		curl_easy_setopt(econn->curl, CURLOPT_READFUNCTION,
 				 curl_read_cb);
 	}
 
 	if (op->sign) {
 		char *sig_str;
-		if (aconn->sign.key == NULL) {
+		if (econn->sign.key == NULL) {
 			dbg(0, "op requires signing, but conn key not set\n");
 			return -EINVAL;
 		}
-		ret = azure_sign_gen_lite(aconn->sign.account,
-					  aconn->sign.key, aconn->sign.key_len,
+		ret = azure_sign_gen_lite(econn->sign.account,
+					  econn->sign.key, econn->sign.key_len,
 					  op, &op->sig_src, &sig_str);
 		if (ret < 0) {
 			dbg(0, "signing failed: %s\n", strerror(-ret));
 			return ret;
 		}
 		ret = asprintf(&hdr_str, "Authorization: SharedKeyLite %s:%s",
-			       aconn->sign.account, sig_str);
+			       econn->sign.account, sig_str);
 		free(sig_str);
 		if (ret < 0) {
 			return -ENOMEM;
@@ -382,98 +382,98 @@ azure_conn_send_prepare(struct azure_conn *aconn, struct azure_op *op)
 		}
 	}
 
-	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, op->http_hdr);
+	curl_easy_setopt(econn->curl, CURLOPT_HTTPHEADER, op->http_hdr);
 
 	return 0;	/* FIXME detect curl_easy_setopt errors */
 }
 
 int
-azure_conn_send_op(struct azure_conn *aconn,
+elasto_conn_send_op(struct elasto_conn *econn,
 		   struct azure_op *op)
 {
 	int ret;
 	CURLcode res;
 
-	op->aconn = aconn;
-	ret = azure_conn_send_prepare(aconn, op);
+	op->econn = econn;
+	ret = elasto_conn_send_prepare(econn, op);
 	if (ret < 0) {
-		op->aconn = NULL;
+		op->econn = NULL;
 		return ret;
 	}
 
 	/* dispatch */
-	res = curl_easy_perform(aconn->curl);
+	res = curl_easy_perform(econn->curl);
 	if (res != CURLE_OK) {
 		dbg(0, "curl_easy_perform() failed: %s\n",
 		       curl_easy_strerror(res));
-		curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, NULL);
-		op->aconn = NULL;
+		curl_easy_setopt(econn->curl, CURLOPT_HTTPHEADER, NULL);
+		op->econn = NULL;
 		return -EBADF;
 	}
 
 	if (op->rsp.write_cbs == 0) {
 		/* write callback already sets this, otherwise still needed */
-		curl_easy_getinfo(aconn->curl, CURLINFO_RESPONSE_CODE,
+		curl_easy_getinfo(econn->curl, CURLINFO_RESPONSE_CODE,
 				  &op->rsp.err_code);
 		op->rsp.is_error = azure_rsp_is_error(op->opcode,
 						      op->rsp.err_code);
 	}
 
 	/* reset headers, so that op->http_hdr can be freed */
-	curl_easy_setopt(aconn->curl, CURLOPT_HTTPHEADER, NULL);
-	op->aconn = NULL;
+	curl_easy_setopt(econn->curl, CURLOPT_HTTPHEADER, NULL);
+	op->econn = NULL;
 
 	return 0;
 }
 
 int
-azure_conn_init(const char *pem_file,
-		const char *pem_pw,
-		struct azure_conn **aconn_out)
+elasto_conn_init_az(const char *pem_file,
+		    const char *pem_pw,
+		    struct elasto_conn **econn_out)
 {
 	uint32_t debug_level;
-	struct azure_conn *aconn = malloc(sizeof(*aconn));
-	if (aconn == NULL) {
+	struct elasto_conn *econn = malloc(sizeof(*econn));
+	if (econn == NULL) {
 		return -ENOMEM;
 	}
 
-	aconn->curl = curl_easy_init();
-	if (aconn->curl == NULL) {
-		free(aconn);
+	econn->curl = curl_easy_init();
+	if (econn->curl == NULL) {
+		free(econn);
 		return -ENOMEM;
 	}
 
 	debug_level = dbg_level_get();
 	if (debug_level > 2) {
-		curl_easy_setopt(aconn->curl, CURLOPT_VERBOSE, 1);
+		curl_easy_setopt(econn->curl, CURLOPT_VERBOSE, 1);
 	}
-	curl_easy_setopt(aconn->curl, CURLOPT_TCP_NODELAY, 1);
-	curl_easy_setopt(aconn->curl, CURLOPT_SSLCERTTYPE, "PEM");
-	curl_easy_setopt(aconn->curl, CURLOPT_SSLCERT, pem_file);
-	curl_easy_setopt(aconn->curl, CURLOPT_SSLKEYTYPE, "PEM");
-	curl_easy_setopt(aconn->curl, CURLOPT_SSLKEY, pem_file);
+	curl_easy_setopt(econn->curl, CURLOPT_TCP_NODELAY, 1);
+	curl_easy_setopt(econn->curl, CURLOPT_SSLCERTTYPE, "PEM");
+	curl_easy_setopt(econn->curl, CURLOPT_SSLCERT, pem_file);
+	curl_easy_setopt(econn->curl, CURLOPT_SSLKEYTYPE, "PEM");
+	curl_easy_setopt(econn->curl, CURLOPT_SSLKEY, pem_file);
 	if (pem_pw) {
-		curl_easy_setopt(aconn->curl, CURLOPT_KEYPASSWD, pem_pw);
+		curl_easy_setopt(econn->curl, CURLOPT_KEYPASSWD, pem_pw);
 	}
-	memset(&aconn->sign, 0, sizeof(aconn->sign));
-	*aconn_out = aconn;
+	memset(&econn->sign, 0, sizeof(econn->sign));
+	*econn_out = econn;
 
 	return 0;
 }
 
 void
-azure_conn_free(struct azure_conn *aconn)
+elasto_conn_free(struct elasto_conn *econn)
 {
-	curl_easy_cleanup(aconn->curl);
-	if (aconn->sign.key_len > 0) {
-		free(aconn->sign.key);
-		free(aconn->sign.account);
+	curl_easy_cleanup(econn->curl);
+	if (econn->sign.key_len > 0) {
+		free(econn->sign.key);
+		free(econn->sign.account);
 	}
-	free(aconn);
+	free(econn);
 }
 
 int
-azure_conn_subsys_init(void)
+elasto_conn_subsys_init(void)
 {
 	CURLcode res;
 
@@ -487,7 +487,7 @@ azure_conn_subsys_init(void)
 }
 
 void
-azure_conn_subsys_deinit(void)
+elasto_conn_subsys_deinit(void)
 {
 	curl_global_cleanup();
 	azure_sign_deinit();

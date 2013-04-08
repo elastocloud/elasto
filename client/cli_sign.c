@@ -28,13 +28,13 @@
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
 #include "lib/azure_req.h"
-#include "lib/azure_conn.h"
+#include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
 
 
 int
-cli_sign_conn_setup(struct azure_conn *aconn,
+cli_sign_conn_setup(struct elasto_conn *econn,
 		    const char *blob_acc,
 		    const char *sub_id)
 {
@@ -47,7 +47,7 @@ cli_sign_conn_setup(struct azure_conn *aconn,
 		goto err_out;
 	}
 
-	ret = azure_conn_send_op(aconn, &op);
+	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -63,7 +63,7 @@ cli_sign_conn_setup(struct azure_conn *aconn,
 		goto err_op_free;
 	}
 
-	ret = azure_conn_sign_setkey(aconn, blob_acc,
+	ret = elasto_conn_sign_setkey(econn, blob_acc,
 				     op.rsp.acc_keys_get.primary);
 	if (ret < 0) {
 		goto err_op_free;
