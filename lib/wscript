@@ -6,7 +6,7 @@ def configure(conf):
 	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 
 def build(bld):
-	bld.stlib(source='''azure_xml.c azure_req.c azure_sign.c base64.c
+	bld.stlib(source='''azure_xml.c azure_req.c sign.c base64.c
 			    conn.c azure_ssl.c dbg.c''',
 		  target='elasto',
 		  lib=['curl','xml2','crypto'],

@@ -11,11 +11,11 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
-#ifndef _AZURE_SIGN_H_
-#define _AZURE_SIGN_H_
+#ifndef _SIGN_H_
+#define _SIGN_H_
 
 int
-azure_sign_gen_lite(const char *account,
+sign_gen_lite_azure(const char *account,
 		    const uint8_t *key,
 		    int key_len,
 		    struct azure_op *op,
@@ -23,9 +23,9 @@ azure_sign_gen_lite(const char *account,
 		    char **sig_str);
 
 void
-azure_sign_init(void);
+sign_init(void);
 
 void
-azure_sign_deinit(void);
+sign_deinit(void);
 
-#endif /* _AZURE_SIGN_H_ */
+#endif /* _SIGN_H_ */

@@ -28,7 +28,7 @@
 #include "dbg.h"
 #include "base64.h"
 #include "azure_req.h"
-#include "azure_sign.h"
+#include "sign.h"
 #include "conn.h"
 
 /* convert base64 encoded key to binary and store in @econn */
@@ -362,7 +362,7 @@ elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
 			dbg(0, "op requires signing, but conn key not set\n");
 			return -EINVAL;
 		}
-		ret = azure_sign_gen_lite(econn->sign.account,
+		ret = sign_gen_lite_azure(econn->sign.account,
 					  econn->sign.key, econn->sign.key_len,
 					  op, &op->sig_src, &sig_str);
 		if (ret < 0) {
@@ -513,7 +513,7 @@ elasto_conn_subsys_init(void)
 	if (res != CURLE_OK)
 		return -ENOMEM;
 
-	azure_sign_init();
+	sign_init();
 
 	return 0;
 }
@@ -522,5 +522,5 @@ void
 elasto_conn_subsys_deinit(void)
 {
 	curl_global_cleanup();
-	azure_sign_deinit();
+	sign_deinit();
 }

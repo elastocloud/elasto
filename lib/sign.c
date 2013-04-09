@@ -27,7 +27,7 @@
 #include "ccan/list/list.h"
 #include "base64.h"
 #include "azure_req.h"
-#include "azure_sign.h"
+#include "sign.h"
 
 static int
 hmac_sha256(const uint8_t *key, int key_len,
@@ -287,7 +287,7 @@ canon_rsc_gen_lite(const char *account,
 
 /* generate base64 encoded signature string for @op */
 int
-azure_sign_gen_lite(const char *account,
+sign_gen_lite_azure(const char *account,
 		    const uint8_t *key,
 		    int key_len,
 		    struct azure_op *op,
@@ -358,14 +358,14 @@ err_out:
 }
 
 void
-azure_sign_init(void)
+sign_init(void)
 {
 	ENGINE_load_builtin_engines();
 	ENGINE_register_all_complete();
 }
 
 void
-azure_sign_deinit(void)
+sign_deinit(void)
 {
 	ENGINE_cleanup();
 }
