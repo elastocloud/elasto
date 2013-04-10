@@ -22,6 +22,13 @@ sign_gen_lite_azure(const char *account,
 		    char **sig_src,
 		    char **sig_str);
 
+int
+sign_gen_s3(const uint8_t *secret,
+	    int secret_len,
+	    struct azure_op *op,
+	    char **sig_src,
+	    char **sig_str);
+
 void
 sign_init(void);
 

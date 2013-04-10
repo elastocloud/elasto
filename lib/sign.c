@@ -27,6 +27,7 @@
 #include "ccan/list/list.h"
 #include "base64.h"
 #include "azure_req.h"
+#include "dbg.h"
 #include "sign.h"
 
 static int
@@ -36,7 +37,14 @@ hmac_sha(const EVP_MD *type, const uint8_t *key, int key_len,
 {
 	HMAC_CTX ctx;
 	uint8_t *md_buf;
-	unsigned int len = 32;
+	unsigned int len;
+
+	if (type == EVP_sha1()) {
+		len = 20;
+	} else {
+		/* assume sha256 */
+		len = 32;
+	}
 
 	md_buf = malloc(len);
 	if (md_buf == NULL)
@@ -169,6 +177,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 			hdr_trim_ws(hdr_array[i]);
 			hdr_str_len += (strlen(hdr_array[i])
 					   + 1);	/* newline */
+			dbg(6, "got vendor hdr: %s\n", hdr_array[i]);
 			i++;
 		} else if (strncasecmp(l->data, "Content-Type",
 				       sizeof("Content-Type") - 1) == 0) {
@@ -182,6 +191,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 				ret = -ENOMEM;
 				goto err_array_free;
 			}
+			dbg(6, "got Content-Type hdr: %s\n", ctype);
 		} else if (strncasecmp(l->data, "Content-MD5",
 				       sizeof("Content-MD5") - 1) == 0) {
 			for (s = strchr(l->data, ':');
@@ -194,6 +204,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 				ret = -ENOMEM;
 				goto err_array_free;
 			}
+			dbg(6, "got Content-MD5 hdr: %s\n", md5);
 		} else if (strncasecmp(l->data, "Date",
 				       sizeof("Date") - 1) == 0) {
 			for (s = strchr(l->data, ':');
@@ -206,6 +217,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 				ret = -ENOMEM;
 				goto err_array_free;
 			}
+			dbg(6, "got Date hdr: %s\n", date);
 		}
 	}
 	count = i;
@@ -397,6 +409,360 @@ err_rsc_free:
 	free(canon_rsc);
 err_hdrs_free:
 	free(canon_hdrs);
+err_out:
+	return ret;
+}
+
+/*
+ * @slash_after_hostname points to the first forward slash after the hostname
+ */
+static char *
+canon_rsc_path_get(const char *slash_after_hostname)
+{
+	char *q;
+	char *path_part;
+
+	/* up-to but not including the query string. */
+	q = strchr(slash_after_hostname, '?');
+	if (q == NULL) {
+		path_part = strdup(slash_after_hostname);
+	} else {
+		path_part = strndup(slash_after_hostname,
+				    (q - slash_after_hostname));
+	}
+	return path_part;
+}
+
+/*
+ * @slash_url_host points to the last forward slash after the protocol string
+ */
+static char *
+canon_rsc_bucket_get(const char *slash_url_host)
+{
+	char *d;
+	char *bucket = NULL;
+
+	/* find the first dot, up to which may be the bucket name */
+	d = strchr(slash_url_host, '.');
+	assert(d != NULL);
+	/* FIXME URL assumption, use a #def at least */
+	if (strncmp(d, ".s3.", sizeof(".s3.") - 1) == 0) {
+		/*
+		 * There is a bucket name before the aws hostname, ensure the
+		 * required '/' prefix is included in the bucket string.
+		 */
+		bucket = strndup(slash_url_host, (d - slash_url_host));
+	} else {
+		bucket = strdup("");
+	}
+	return bucket;
+}
+
+/*
+ * The list of sub-resources that must be included when constructing the
+ * CanonicalizedResource Element are:
+ */
+#define CANON_RSC_SUB_MAX 15
+static char *s3_sub_resources[CANON_RSC_SUB_MAX] = {"acl", "lifecycle",
+						    "location", "logging",
+						    "notification",
+						    "partNumber", "policy",
+						    "requestPayment", "torrent",
+						    "uploadId", "uploads",
+						    "versionId", "versioning",
+						    "versions", "website"};
+/*
+ * @sub_rsc may include trailing resources (after '&'), or values (after '=').
+ * @sub_rsc_single_out: single resource string returned on success
+ * @value_out: value for resource string, including '=' prefix
+ *
+ * @return: -ENOMEM on alloc failure
+ *	    -ENOENT if sub-resource should not be considered for the signature
+ *	    0 if sub-resource is valid for the signature calculation, fill _outs
+ */
+static int
+canon_rsc_sub_included(const char *sub_rsc,
+		       char **sub_rsc_single_out,
+		       char **value_out)
+{
+	int i;
+	char *eq = strchr(sub_rsc, '=');
+	char *amp = strchr(sub_rsc, '&');
+	char *sep = NULL;
+	char *sub_rsc_single;
+	char *value_str = NULL;
+
+	if (amp == NULL) {
+		/* no element afterwards, '=' is separator if present */
+		sep = eq;
+	} else {
+		/* element afterwards, '=' is separator only if before '&' */
+		if ((eq != NULL) && (eq < amp)) {
+			sep = eq;
+		} else {
+			sep = amp;
+		}
+	}
+
+	if (sep == NULL) {
+		sub_rsc_single = strdup(sub_rsc);
+	} else {
+		if (sep == eq) {
+			/* save value for later */
+			if (amp == NULL) {
+				value_str = strdup(eq);
+			} else {
+				value_str = strndup(eq, amp - eq);
+			}
+			if (value_str == NULL) {
+				return -ENOMEM;
+			}
+		}
+		sub_rsc_single = strndup(sub_rsc, sep - sub_rsc);
+	}
+	if (sub_rsc_single == NULL) {
+		free(value_str);
+		return -ENOMEM;
+	}
+
+	assert(sizeof(s3_sub_resources) == CANON_RSC_SUB_MAX);
+
+	for (i = 0; i < sizeof(s3_sub_resources); i++) {
+		if (strcmp(sub_rsc_single, s3_sub_resources[i]) == 0) {
+			*sub_rsc_single_out = sub_rsc_single;
+			*value_out = value_str;
+			return 0;
+		}
+	}
+	free(sub_rsc_single);
+	free(value_str);
+	return -ENOENT;
+}
+
+/*
+ * @question_after_path points to the question mark after the hostname and path
+ */
+static char *
+canon_rsc_sub_get(const char *question_after_path)
+{
+	const char *a = question_after_path + 1;
+	char *s;
+	int i;
+	int j;
+	int total_bytes;
+	char *sub_rsc[CANON_RSC_SUB_MAX];
+	char *sub_rsc_sorted;
+	int ret;
+
+	total_bytes = 0;
+	i = 0;
+	while ((a != NULL) && (*a != '\0')) {
+		char *sub_rsc_key = NULL;
+		char *sub_rsc_value = NULL;
+
+		ret = canon_rsc_sub_included(a, &sub_rsc_key, &sub_rsc_value);
+		if (ret == -ENOMEM) {
+			goto err_cleanup;
+		} else if (ret == 0) {
+			ret = asprintf(&sub_rsc[i], "%s%s\n", sub_rsc_key,
+				       (sub_rsc_value ? sub_rsc_value : ""));
+			free(sub_rsc_key);
+			free(sub_rsc_value);
+			if (ret < 0) {
+				goto err_cleanup;
+			}
+			total_bytes += ret;
+			i++;
+		}
+		a = strchr(a, '&');
+	}
+
+	if (i == 0) {
+		return strdup("");
+	}
+
+	/* +i for '&' separators, +2 for '?' prefix and nullterm */
+	sub_rsc_sorted = malloc(total_bytes + i + 2);
+	if (sub_rsc_sorted == NULL) {
+		goto err_cleanup;
+	}
+
+	/* sub-resources must be lexicographically sorted by name... */
+	qsort(sub_rsc, i, sizeof(char *), str_cmp_lexi);
+	s = sub_rsc_sorted;
+	for (j = 0; j < i; j++) {
+		size_t len = strlen(sub_rsc[j]);
+		if (j == 0) {
+			*s = '?';
+			s++;
+		} else {
+			/* ...and separated by '&'. e.g. ?acl&versionId=value */
+			*s = '&';
+			s++;
+		}
+		strncpy(s, sub_rsc[j], len);
+		free(sub_rsc[j]);
+		s += len;
+	}
+
+	return sub_rsc_sorted;
+
+err_cleanup:
+	for (j = 0; j < i; j++) {
+		free(sub_rsc[j]);
+	}
+	return NULL;
+}
+
+static char *
+canon_rsc_gen_s3(const char *url)
+{
+	int ret;
+	char *s;
+	char *bucket = NULL;
+	char *path_part = NULL;
+	char *sub_rsc_part = NULL;
+	char *rsc_str = NULL;
+
+	s = strstr(url, "://");
+	assert(s != NULL);
+	s += sizeof("://") - 1;
+
+	bucket = canon_rsc_bucket_get(s - 1);
+	if (bucket == NULL) {
+		dbg(0, "error generating resource bucket string");
+		goto err_out;
+	}
+
+	dbg(4, "got resource bucket: \"%s\"\n", bucket);
+
+	/* find the first forward slash after the protocol */
+	s = strchrnul(s, '/');
+	if (s != NULL) {
+		path_part = canon_rsc_path_get(s);
+		if (path_part == NULL) {
+			dbg(0, "error generating resource path string\n");
+			goto err_bucket_free;
+		}
+		dbg(4, "got resource path: \"%s\"\n", path_part);
+	}
+
+	/* find the sub-resource */
+	s = strchr(url, '?');
+	if (s != NULL) {
+		sub_rsc_part = canon_rsc_sub_get(s);
+		if (sub_rsc_part == NULL) {
+			dbg(0, "error generating sub resource path string\n");
+			goto err_path_free;
+		}
+		dbg(4, "got sub-resource string: \"%s\"\n", sub_rsc_part);
+	}
+
+	/* TODO handle query string parameters! */
+
+	ret = asprintf(&rsc_str, "%s%s%s", bucket,
+		       (path_part ? path_part : "/"),
+		       (sub_rsc_part ? sub_rsc_part : ""));
+	if (ret < 0) {
+		rsc_str = NULL;
+		goto err_sub_rsc_free;
+	}
+	dbg(3, "final signing resource string: \"%s\"\n", rsc_str);
+
+err_sub_rsc_free:
+	free(sub_rsc_part);
+err_path_free:
+	free(path_part);
+err_bucket_free:
+	free(bucket);
+err_out:
+	return rsc_str;
+}
+
+int
+sign_gen_s3(const uint8_t *secret,
+	    int secret_len,
+	    struct azure_op *op,
+	    char **sig_src,
+	    char **sig_str)
+{
+	int ret;
+	char *canon_hdrs = NULL;
+	char *content_type = NULL;
+	char *content_md5 = NULL;
+	char *date = NULL;
+	char *canon_rsc;
+	char *str_to_sign = NULL;
+	size_t str_to_sign_len;
+	uint8_t *md;
+	int md_len;
+	char *md_b64;
+
+	canon_rsc = canon_rsc_gen_s3(op->url);
+	if (canon_rsc == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	ret = canon_hdrs_gen(op->http_hdr, HDR_PREFIX_S3, &canon_hdrs,
+			     &content_type, &content_md5, &date);
+	if (ret < 0) {
+		dbg(0, "failed to generate canon hdrs: %s\n",
+		    strerror(-ret));
+		goto err_rsc_free;
+	}
+
+	ret = asprintf(&str_to_sign,
+		       "%s\n"	/* VERB */
+		       "%s\n"	/* Content-MD5 */
+		       "%s\n"	/* Content-Type */
+		       "%s\n"	/* Date */
+		       "%s"	/* CanonicalizedHeaders */
+		       "%s",	/* CanonicalizedResource */
+		       op->method,
+		       content_md5 ? content_md5 : "",
+		       content_type ? content_type : "",
+		       date ? date : "",
+		       canon_hdrs, canon_rsc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_hdrs_free;
+	}
+	dbg(4, "str to sign is: \"%s\"\n", str_to_sign);
+
+	str_to_sign_len = ret;
+	assert(ret == strlen(str_to_sign));
+
+	ret = hmac_sha(EVP_sha1(), secret, secret_len,
+		       (uint8_t *)str_to_sign, str_to_sign_len,
+		       &md, &md_len);
+	if (ret < 0) {
+		dbg(0, "failed to generate sha\n");
+		goto err_str_free;
+	}
+
+	ret = base64_encode(md, md_len, &md_b64);
+	if (ret < 0) {
+		dbg(0, "failed to encode digenst\n");
+		ret = -EINVAL;
+		goto err_md_free;
+	}
+	*sig_str = md_b64;
+	*sig_src = str_to_sign;
+	str_to_sign = NULL;
+	ret = 0;
+
+err_md_free:
+	free(md);
+err_str_free:
+	free(str_to_sign);
+err_hdrs_free:
+	free(canon_hdrs);
+	free(content_type);
+	free(content_md5);
+	free(date);
+err_rsc_free:
+	free(canon_rsc);
 err_out:
 	return ret;
 }
