@@ -176,13 +176,13 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 	}
 
 	i = 0;
+	count = 0;
 	for (l = http_hdr; l != NULL; l = l->next) {
 		if (strncasecmp(l->data, hdr_vendor_pfx,
 				strlen(hdr_vendor_pfx)) == 0) {
 			bool is_vd;
 			hdr_array[i] = strdup(l->data);
 			if (hdr_array[i] == NULL) {
-				count = i;
 				ret = -ENOMEM;
 				goto err_array_free;
 			}
@@ -209,6 +209,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 					   + 1);	/* newline */
 			dbg(6, "got vendor hdr: %s\n", hdr_array[i]);
 			i++;
+			count = i;
 		} else if (strncasecmp(l->data, "Content-Type",
 				       sizeof("Content-Type") - 1) == 0) {
 			for (s = strchr(l->data, ':');
@@ -253,7 +254,6 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 			dbg(6, "got Date hdr: %s\n", date);
 		}
 	}
-	count = i;
 	if (count == 0) {
 		free(hdr_array);
 		hdr_str = strdup("");
