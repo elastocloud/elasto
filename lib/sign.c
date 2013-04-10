@@ -93,6 +93,18 @@ hdr_trim_ws(char *hdr)
 	memmove(s + 1, colon, strlen(colon) + 1);
 }
 
+/*
+ * Both Azure and S3 allow for "x-ms-date:" and "x-amz-date:" headers
+ * respectively, as opposed to the standard HTTP Date header.
+ */
+static bool
+hdr_is_vendor_date(const char *hdr,
+		   const char *hdr_vendor_pfx)
+{
+	const char *hdr_sfx = hdr + strlen(hdr_vendor_pfx);
+	return (strncmp(hdr_sfx, "date:", sizeof("date:") - 1) == 0);
+}
+
 static int
 str_cmp_lexi(const void *p1, const void *p2)
 {
@@ -167,6 +179,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 	for (l = http_hdr; l != NULL; l = l->next) {
 		if (strncasecmp(l->data, hdr_vendor_pfx,
 				strlen(hdr_vendor_pfx)) == 0) {
+			bool is_vd;
 			hdr_array[i] = strdup(l->data);
 			if (hdr_array[i] == NULL) {
 				count = i;
@@ -175,6 +188,23 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 			}
 			hdr_tolower(hdr_array[i]);
 			hdr_trim_ws(hdr_array[i]);
+			is_vd = hdr_is_vendor_date(hdr_array[i],
+						   hdr_vendor_pfx);
+			if (is_vd) {
+				if (date != NULL) {
+					dbg(3, "Date already set by standard "
+					    "header!\n");
+					free(date);
+				}
+				date = strdup(strchr(hdr_array[i], ':') + 1);
+				if (date == NULL) {
+					ret = -ENOMEM;
+					goto err_array_free;
+				}
+				dbg(6, "vendor date hdr trumps HTTP date\n");
+				free(hdr_array[i]);
+				continue;
+			}
 			hdr_str_len += (strlen(hdr_array[i])
 					   + 1);	/* newline */
 			dbg(6, "got vendor hdr: %s\n", hdr_array[i]);
@@ -207,11 +237,14 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 			dbg(6, "got Content-MD5 hdr: %s\n", md5);
 		} else if (strncasecmp(l->data, "Date",
 				       sizeof("Date") - 1) == 0) {
+			if (date != NULL) {
+				dbg(3, "Date already set by vendor header!\n");
+				continue;
+			}
 			for (s = strchr(l->data, ':');
 			     s && ((*s == ' ' ) || (*s == ':'));
 			     s++);
 			assert(s != NULL);
-			assert(date == NULL);
 			date = strdup(s);
 			if (date == NULL) {
 				ret = -ENOMEM;
