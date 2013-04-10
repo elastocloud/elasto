@@ -54,21 +54,21 @@ hmac_sha256(const uint8_t *key, int key_len,
 }
 
 static void
-ms_hdr_tolower(char *ms_hdr)
+hdr_tolower(char *hdr)
 {
 	char *colon;
-	colon = strchr(ms_hdr, ':');
+	colon = strchr(hdr, ':');
 	assert(colon != NULL);
-	for (; ms_hdr < colon; ms_hdr++)
-		*ms_hdr = tolower(*ms_hdr);
+	for (; hdr < colon; hdr++)
+		*hdr = tolower(*hdr);
 }
 
 static void
-ms_hdr_trim_ws(char *ms_hdr)
+hdr_trim_ws(char *hdr)
 {
 	char *colon;
 	char *s;
-	colon = strchr(ms_hdr, ':');
+	colon = strchr(hdr, ':');
 	assert(colon != NULL);
 
 	/* trim after the colon */
@@ -81,7 +81,7 @@ ms_hdr_trim_ws(char *ms_hdr)
 
 	/* trim before the colon */
 	for (s = colon - 1; *s == ' '; s--);
-	assert(s >= ms_hdr);
+	assert(s >= hdr);
 	memmove(s + 1, colon, strlen(colon) + 1);
 }
 
@@ -92,12 +92,13 @@ str_cmp_lexi(const void *p1, const void *p2)
 }
 
 /*
+ * http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
  * http://msdn.microsoft.com/en-us/library/windowsazure/dd179428
  * To construct the CanonicalizedHeaders portion of the signature string,
  * follow these steps:
  *
- * Retrieve all headers for the resource that begin with x-ms-, including the
- * x-ms-date header.
+ * Retrieve all headers for the resource that begin with @hdr_vendor_pfx -
+ * 'x-ms-' for Azure, 'x-amz-' for S3.
  *
  * Convert each HTTP header name to lowercase.
  *
@@ -114,18 +115,23 @@ str_cmp_lexi(const void *p1, const void *p2)
  */
 static int
 canon_hdrs_gen(struct curl_slist *http_hdr,
-	       char **canon_hdrs,
-	       char **content_type)
+	       const char *hdr_vendor_pfx,
+	       char **canon_hdrs_out,
+	       char **content_type_out,
+	       char **content_md5_out,
+	       char **date_out)
 {
 	struct curl_slist *l;
 	int count = 0;
 	int i;
 	int ret;
-	char **ms_hdr_array;
-	char *ms_hdr_str;
+	char **hdr_array;
+	char *hdr_str;
 	char *ctype = NULL;
+	char *md5 = NULL;
+	char *date = NULL;
 	char *s;
-	int ms_hdr_str_len = 0;
+	int hdr_str_len = 0;
 
 	for (l = http_hdr; l != NULL; l = l->next) {
 		/*
@@ -135,36 +141,37 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 		count++;
 	}
 	if (count == 0) {
-		ms_hdr_str = strdup("");
-		if (ms_hdr_str == NULL) {
+		hdr_str = strdup("");
+		if (hdr_str == NULL) {
 			ret = -ENOMEM;
 			goto err_out;
 		}
 		goto out_empty;
 	}
 
-	ms_hdr_array = malloc(count * sizeof(char *));
-	if (ms_hdr_array == NULL) {
+	hdr_array = malloc(count * sizeof(char *));
+	if (hdr_array == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
 	i = 0;
 	for (l = http_hdr; l != NULL; l = l->next) {
-		if (strncasecmp(l->data, "x-ms-", sizeof("x-ms-") - 1) == 0) {
-			ms_hdr_array[i] = strdup(l->data);
-			if (ms_hdr_array[i] == NULL) {
+		if (strncasecmp(l->data, hdr_vendor_pfx,
+				strlen(hdr_vendor_pfx)) == 0) {
+			hdr_array[i] = strdup(l->data);
+			if (hdr_array[i] == NULL) {
 				count = i;
 				ret = -ENOMEM;
 				goto err_array_free;
 			}
-			ms_hdr_tolower(ms_hdr_array[i]);
-			ms_hdr_trim_ws(ms_hdr_array[i]);
-			ms_hdr_str_len += (strlen(ms_hdr_array[i])
+			hdr_tolower(hdr_array[i]);
+			hdr_trim_ws(hdr_array[i]);
+			hdr_str_len += (strlen(hdr_array[i])
 					   + 1);	/* newline */
 			i++;
 		} else if (strncasecmp(l->data, "Content-Type",
-				       sizeof("Content-Type") -1) == 0) {
+				       sizeof("Content-Type") - 1) == 0) {
 			for (s = strchr(l->data, ':');
 			     s && ((*s == ' ' ) || (*s == ':'));
 			     s++);
@@ -175,47 +182,81 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 				ret = -ENOMEM;
 				goto err_array_free;
 			}
+		} else if (strncasecmp(l->data, "Content-MD5",
+				       sizeof("Content-MD5") - 1) == 0) {
+			for (s = strchr(l->data, ':');
+			     s && ((*s == ' ' ) || (*s == ':'));
+			     s++);
+			assert(s != NULL);
+			assert(md5 == NULL);
+			md5 = strdup(s);
+			if (md5 == NULL) {
+				ret = -ENOMEM;
+				goto err_array_free;
+			}
+		} else if (strncasecmp(l->data, "Date",
+				       sizeof("Date") - 1) == 0) {
+			for (s = strchr(l->data, ':');
+			     s && ((*s == ' ' ) || (*s == ':'));
+			     s++);
+			assert(s != NULL);
+			assert(date == NULL);
+			date = strdup(s);
+			if (date == NULL) {
+				ret = -ENOMEM;
+				goto err_array_free;
+			}
 		}
 	}
 	count = i;
 	if (count == 0) {
-		free(ms_hdr_array);
-		ms_hdr_str = strdup("");
-		if (ms_hdr_str == NULL) {
+		free(hdr_array);
+		hdr_str = strdup("");
+		if (hdr_str == NULL) {
 			ret = -ENOMEM;
 			goto err_out;
 		}
 		goto out_empty;
 	}
 
-	qsort(ms_hdr_array, count, sizeof(char *), str_cmp_lexi);
+	qsort(hdr_array, count, sizeof(char *), str_cmp_lexi);
 
-	ms_hdr_str = malloc(ms_hdr_str_len + 1);
-	if (ms_hdr_str == NULL) {
+	/* TODO combine duplicate headers and "Unfold" long headers! */
+
+	hdr_str = malloc(hdr_str_len + 1);
+	if (hdr_str == NULL) {
 		ret = -ENOMEM;
 		goto err_array_free;
 	}
 
-	s = ms_hdr_str;
+	s = hdr_str;
 	for (i = 0; i < count; i++) {
-		int len = strlen(ms_hdr_array[i]);
-		memcpy(s, ms_hdr_array[i], len);
+		int len = strlen(hdr_array[i]);
+		memcpy(s, hdr_array[i], len);
 		*(s + len) = '\n';
 		s += (len + 1);
-		free(ms_hdr_array[i]);
+		free(hdr_array[i]);
 	}
 	*s = '\0';
-	free(ms_hdr_array);
+	free(hdr_array);
 out_empty:
-	*canon_hdrs = ms_hdr_str;
-	*content_type = ctype;
+	*canon_hdrs_out = hdr_str;
+	if (content_type_out != NULL)
+		*content_type_out = ctype;
+	if (content_md5_out != NULL)
+		*content_md5_out = md5;
+	if (date_out != NULL)
+		*date_out = date;
 
 	return 0;
 
 err_array_free:
+	free(ctype);
+	free(md5);
+	free(date);
 	for (i = 0; i < count; i++)
-		free(ms_hdr_array[i]);
-	free(ms_hdr_array);
+		free(hdr_array[i]);
+	free(hdr_array);
 err_out:
 	return ret;
 }
@@ -286,6 +327,8 @@ canon_rsc_gen_lite(const char *account,
 }
 
 /* generate base64 encoded signature string for @op */
+#define HDR_PREFIX_AZ "x-ms-"
+#define HDR_PREFIX_S3 "x-amz-"
 int
 sign_gen_lite_azure(const char *account,
 		    const uint8_t *key,
@@ -303,7 +346,8 @@ sign_gen_lite_azure(const char *account,
 	int md_len;
 	char *md_b64;
 
-	ret = canon_hdrs_gen(op->http_hdr, &canon_hdrs, &content_type);
+	ret = canon_hdrs_gen(op->http_hdr, HDR_PREFIX_AZ, &canon_hdrs,
+			     &content_type, NULL, NULL);
 	if (ret < 0) {
 		goto err_out;
 	}
