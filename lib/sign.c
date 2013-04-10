@@ -30,9 +30,9 @@
 #include "sign.h"
 
 static int
-hmac_sha256(const uint8_t *key, int key_len,
-	    const uint8_t *msg, int msg_len,
-	    uint8_t **md, int *md_len)
+hmac_sha(const EVP_MD *type, const uint8_t *key, int key_len,
+	 const uint8_t *msg, int msg_len,
+	 uint8_t **md, int *md_len)
 {
 	HMAC_CTX ctx;
 	uint8_t *md_buf;
@@ -43,7 +43,7 @@ hmac_sha256(const uint8_t *key, int key_len,
 		return -ENOMEM;
 
 	HMAC_CTX_init(&ctx);
-	HMAC_Init_ex(&ctx, key, key_len, EVP_sha256(), NULL);
+	HMAC_Init_ex(&ctx, key, key_len, type, NULL);
 	HMAC_Update(&ctx, msg, msg_len);
 	HMAC_Final(&ctx, md_buf, &len);
 	HMAC_CTX_cleanup(&ctx);
@@ -373,9 +373,9 @@ sign_gen_lite_azure(const char *account,
 		goto err_rsc_free;
 	}
 
-	ret = hmac_sha256(key, key_len,
-			  (uint8_t *)str_to_sign, strlen(str_to_sign),
-			  &md, &md_len);
+	ret = hmac_sha(EVP_sha256(), key, key_len,
+		       (uint8_t *)str_to_sign, strlen(str_to_sign),
+		       &md, &md_len);
 	if (ret < 0) {
 		goto err_str_free;
 	}
