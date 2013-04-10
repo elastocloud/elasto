@@ -111,6 +111,17 @@ str_cmp_lexi(const void *p1, const void *p2)
 	return strcmp(*(char * const *)p1, *(char * const *)p2);
 }
 
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+static int
+hdr_key_lexi_cmp(const void *p1, const void *p2)
+{
+	const char *str1 = *(char * const *)p1;
+	const char *str2 = *(char * const *)p2;
+	size_t str1_key_len = strchr(str1, ':') - str1;
+	size_t str2_key_len = strchr(str2, ':') - str2;
+	return strncmp(str1, str2, min(str1_key_len, str2_key_len));
+}
+
 /*
  * http://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html
  * http://msdn.microsoft.com/en-us/library/windowsazure/dd179428
@@ -264,9 +275,9 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 		goto out_empty;
 	}
 
-	qsort(hdr_array, count, sizeof(char *), str_cmp_lexi);
+	qsort(hdr_array, count, sizeof(char *), hdr_key_lexi_cmp);
 
-	/* TODO combine duplicate headers and "Unfold" long headers! */
+	/* TODO "Unfold" long headers! */
 
 	hdr_str = malloc(hdr_str_len + 1);
 	if (hdr_str == NULL) {
