@@ -145,6 +145,33 @@ cm_sign_s3_fetch(void **state)
 	assert_string_equal(sig_str, "c2WLPFtWHVgbEmeEG93a4cG37dM=");
 }
 
+static void
+cm_sign_s3_object_del(void **state)
+{
+	int ret;
+	struct azure_op op;
+	char *sig_src = NULL;
+	char *sig_str = NULL;
+
+	memset(&op, 0, sizeof(op));
+	op.method = REQ_METHOD_DELETE;
+	op.url = "https://s3.amazonaws.com/johnsmith/photos/puppy.jpg";
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"User-Agent: dotnet");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"Date: Tue, 27 Mar 2007 21:20:27 +0000");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"x-amz-date: Tue, 27 Mar 2007 21:20:26 +0000");
+
+	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+			  sizeof(S3_SECRET) - 1,
+			  &op,
+			  &sig_src,
+			  &sig_str);
+	assert_int_equal(ret, 0);
+	assert_string_equal(sig_str, "lx3byBScXR6KzyMaifNkardMwNk=");
+}
+
 int
 main(void)
 {
@@ -154,6 +181,7 @@ main(void)
 		unit_test(cm_sign_s3_object_put),
 		unit_test(cm_sign_s3_list),
 		unit_test(cm_sign_s3_fetch),
+		unit_test(cm_sign_s3_object_del),
 	};
 
 	dbg_level_set(10);
