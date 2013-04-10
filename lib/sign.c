@@ -462,15 +462,16 @@ canon_rsc_bucket_get(const char *slash_url_host)
  * The list of sub-resources that must be included when constructing the
  * CanonicalizedResource Element are:
  */
-#define CANON_RSC_SUB_MAX 15
-static char *s3_sub_resources[CANON_RSC_SUB_MAX] = {"acl", "lifecycle",
-						    "location", "logging",
-						    "notification",
-						    "partNumber", "policy",
-						    "requestPayment", "torrent",
-						    "uploadId", "uploads",
-						    "versionId", "versioning",
-						    "versions", "website"};
+static char *s3_sub_resources[] = {"acl", "lifecycle",
+				   "location", "logging",
+				   "notification",
+				   "partNumber", "policy",
+				   "requestPayment", "torrent",
+				   "uploadId", "uploads",
+				   "versionId", "versioning",
+				   "versions", "website"};
+#define CANON_RSC_SUB_MAX \
+	(sizeof(s3_sub_resources) / sizeof(s3_sub_resources[0]))
 /*
  * @sub_rsc may include trailing resources (after '&'), or values (after '=').
  * @sub_rsc_single_out: single resource string returned on success
@@ -525,15 +526,15 @@ canon_rsc_sub_included(const char *sub_rsc,
 		return -ENOMEM;
 	}
 
-	assert(sizeof(s3_sub_resources) == CANON_RSC_SUB_MAX);
-
-	for (i = 0; i < sizeof(s3_sub_resources); i++) {
+	for (i = 0; i < CANON_RSC_SUB_MAX; i++) {
 		if (strcmp(sub_rsc_single, s3_sub_resources[i]) == 0) {
+			dbg(4, "sub rsc \"%s\" valid for signature\n", sub_rsc_single);
 			*sub_rsc_single_out = sub_rsc_single;
 			*value_out = value_str;
 			return 0;
 		}
 	}
+	dbg(4, "sub rsc \"%s\" ignored for signature\n", sub_rsc_single);
 	free(sub_rsc_single);
 	free(value_str);
 	return -ENOENT;
@@ -545,7 +546,7 @@ canon_rsc_sub_included(const char *sub_rsc,
 static char *
 canon_rsc_sub_get(const char *question_after_path)
 {
-	const char *a = question_after_path + 1;
+	const char *a;
 	char *s;
 	int i;
 	int j;
@@ -556,7 +557,8 @@ canon_rsc_sub_get(const char *question_after_path)
 
 	total_bytes = 0;
 	i = 0;
-	while ((a != NULL) && (*a != '\0')) {
+	a = question_after_path;
+	while (*(++a) != '\0') {
 		char *sub_rsc_key = NULL;
 		char *sub_rsc_value = NULL;
 
@@ -575,6 +577,8 @@ canon_rsc_sub_get(const char *question_after_path)
 			i++;
 		}
 		a = strchr(a, '&');
+		if (a == NULL)
+			break;
 	}
 
 	if (i == 0) {
