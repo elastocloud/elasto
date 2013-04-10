@@ -97,6 +97,31 @@ cm_sign_s3_object_put(void **state)
 	assert_string_equal(sig_str, "MyyxeRY7whkBe+bq8fHCL/2kKUg=");
 }
 
+static void
+cm_sign_s3_list(void **state)
+{
+	int ret;
+	struct azure_op op;
+	char *sig_src = NULL;
+	char *sig_str = NULL;
+
+	memset(&op, 0, sizeof(op));
+	op.method = REQ_METHOD_GET;
+	op.url = "https://johnsmith.s3.amazonaws.com/?prefix=photos&max-keys=50&marker=puppy";
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"User-Agent: Mozilla/5.0");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"Date: Tue, 27 Mar 2007 19:42:41 +0000");
+
+	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+			  sizeof(S3_SECRET) - 1,
+			  &op,
+			  &sig_src,
+			  &sig_str);
+	assert_int_equal(ret, 0);
+	assert_string_equal(sig_str, "htDYFYduRNen8P9ZfE/s9SuKy0U=");
+}
+
 int
 main(void)
 {
@@ -104,6 +129,7 @@ main(void)
 	const UnitTest cm_sign_s3_tests[] = {
 		unit_test(cm_sign_s3_object_get),
 		unit_test(cm_sign_s3_object_put),
+		unit_test(cm_sign_s3_list),
 	};
 
 	dbg_level_set(10);
