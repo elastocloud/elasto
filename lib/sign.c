@@ -566,7 +566,7 @@ canon_rsc_sub_get(const char *question_after_path)
 		if (ret == -ENOMEM) {
 			goto err_cleanup;
 		} else if (ret == 0) {
-			ret = asprintf(&sub_rsc[i], "%s%s\n", sub_rsc_key,
+			ret = asprintf(&sub_rsc[i], "%s%s", sub_rsc_key,
 				       (sub_rsc_value ? sub_rsc_value : ""));
 			free(sub_rsc_key);
 			free(sub_rsc_value);
