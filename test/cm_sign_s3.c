@@ -70,12 +70,40 @@ cm_sign_s3_object_get(void **state)
 	assert_string_equal(sig_str, "bWq2s1WEIj+Ydj0vQ697zp+IXMU=");
 }
 
+static void
+cm_sign_s3_object_put(void **state)
+{
+	int ret;
+	struct azure_op op;
+	char *sig_src = NULL;
+	char *sig_str = NULL;
+
+	memset(&op, 0, sizeof(op));
+	op.method = REQ_METHOD_PUT;
+	op.url = "https://johnsmith.s3.amazonaws.com/photos/puppy.jpg";
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"Content-Type: image/jpeg");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"Content-Length: 94328");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"Date: Tue, 27 Mar 2007 21:15:45 +0000");
+
+	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+			  sizeof(S3_SECRET) - 1,
+			  &op,
+			  &sig_src,
+			  &sig_str);
+	assert_int_equal(ret, 0);
+	assert_string_equal(sig_str, "MyyxeRY7whkBe+bq8fHCL/2kKUg=");
+}
+
 int
 main(void)
 {
 	int ret;
 	const UnitTest cm_sign_s3_tests[] = {
 		unit_test(cm_sign_s3_object_get),
+		unit_test(cm_sign_s3_object_put),
 	};
 
 	dbg_level_set(10);
