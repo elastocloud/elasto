@@ -5,7 +5,6 @@ def options(opt):
 	opt.load('compiler_c')
 
 def configure(conf):
-	print("configure!")
 	conf.load('compiler_c')
 	conf.env.CFLAGS = ['-Wall','-g']
 	conf.check(lib='curl')
@@ -15,9 +14,10 @@ def configure(conf):
 	conf.recurse('ccan')
 	conf.recurse('lib')
 	conf.recurse('client')
+	conf.recurse('test')
 
 def build(bld):
-	print("build!")
 	bld.recurse('ccan')
 	bld.recurse('lib')
 	bld.recurse('client')
+	bld.recurse('test')
