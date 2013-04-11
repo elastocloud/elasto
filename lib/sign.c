@@ -686,6 +686,7 @@ canon_rsc_sub_get(const char *question_after_path)
 		free(sub_rsc[j]);
 		s += len;
 	}
+	*s = '\0';
 
 	return sub_rsc_sorted;
 
