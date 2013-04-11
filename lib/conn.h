@@ -44,7 +44,9 @@ elasto_conn_init_az(const char *pem_file,
 		    struct elasto_conn **econn);
 
 int
-elasto_conn_init_s3(struct elasto_conn **econn);
+elasto_conn_init_s3(const char *id,
+		    const char *secret,
+		    struct elasto_conn **econn);
 
 void
 elasto_conn_free(struct elasto_conn *econn);

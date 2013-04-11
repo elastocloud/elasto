@@ -39,6 +39,9 @@ elasto_conn_sign_setkey(struct elasto_conn *econn,
 {
 	int ret;
 
+	/* signing keys for S3 are set on econn initialisation */
+	assert(econn->type == CONN_TYPE_AZURE);
+
 	if (econn->sign.key_len > 0) {
 		free(econn->sign.key);
 		free(econn->sign.account);
@@ -477,20 +480,43 @@ elasto_conn_init_az(const char *pem_file,
 	return 0;
 }
 
+/* signing keys are set immediately for S3 */
 int
-elasto_conn_init_s3(struct elasto_conn **econn_out)
+elasto_conn_init_s3(const char *id,
+		    const char *secret,
+		    struct elasto_conn **econn_out)
 {
 	struct elasto_conn *econn;
 	int ret;
 
 	ret = elasto_conn_init_common(&econn);
 	if (ret < 0) {
-		return ret;
+		goto err_out;
 	}
 	econn->type = CONN_TYPE_S3;
+	econn->sign.key = (uint8_t *)strdup(secret);
+	if (econn->sign.key == NULL) {
+		ret = -ENOMEM;
+		goto err_conn_free;
+	}
+	econn->sign.key_len = strlen(secret);
+
+	econn->sign.account = strdup(id);
+	if (econn->sign.account == NULL) {
+		ret = -ENOMEM;
+		goto err_secret_free;
+	}
+
 	*econn_out = econn;
 
 	return 0;
+
+err_secret_free:
+	free(econn->sign.key);
+err_conn_free:
+	free(econn);
+err_out:
+	return ret;
 }
 
 void
