@@ -498,7 +498,6 @@ static char *
 canon_rsc_bucket_get(const char *slash_url_host)
 {
 	char *d;
-	char *bucket = NULL;
 
 	if (strncmp(slash_url_host + 1, URL_S3_BASE,
 		    sizeof(URL_S3_BASE) - 1) == 0) {
