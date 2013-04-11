@@ -147,6 +147,7 @@ hdr_key_lexi_cmp(const void *p1, const void *p2)
 static int
 canon_hdrs_gen(struct curl_slist *http_hdr,
 	       const char *hdr_vendor_pfx,
+	       bool vendor_date_trumps,
 	       char **canon_hdrs_out,
 	       char **content_type_out,
 	       char **content_md5_out,
@@ -201,7 +202,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 			hdr_trim_ws(hdr_array[i]);
 			is_vd = hdr_is_vendor_date(hdr_array[i],
 						   hdr_vendor_pfx);
-			if (is_vd) {
+			if (is_vd && vendor_date_trumps) {
 				if (date != NULL) {
 					dbg(3, "Date already set by standard "
 					    "header!\n");
@@ -415,8 +416,8 @@ sign_gen_lite_azure(const char *account,
 	int md_len;
 	char *md_b64;
 
-	ret = canon_hdrs_gen(op->http_hdr, HDR_PREFIX_AZ, &canon_hdrs,
-			     &content_type, NULL, NULL);
+	ret = canon_hdrs_gen(op->http_hdr, HDR_PREFIX_AZ, false,
+			     &canon_hdrs, &content_type, NULL, NULL);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -786,8 +787,8 @@ sign_gen_s3(const uint8_t *secret,
 		goto err_out;
 	}
 
-	ret = canon_hdrs_gen(op->http_hdr, HDR_PREFIX_S3, &canon_hdrs,
-			     &content_type, &content_md5, &date);
+	ret = canon_hdrs_gen(op->http_hdr, HDR_PREFIX_S3, true,
+			     &canon_hdrs, &content_type, &content_md5, &date);
 	if (ret < 0) {
 		dbg(0, "failed to generate canon hdrs: %s\n",
 		    strerror(-ret));
