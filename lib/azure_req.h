@@ -300,6 +300,7 @@ struct azure_op {
 			 * struct azure_rsp_blob_del blob_del;
 			 */
 		};
+		bool clen_recvd;
 		uint64_t clen;
 		uint64_t write_cbs;
 		struct azure_op_data *data;

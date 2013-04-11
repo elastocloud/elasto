@@ -98,11 +98,9 @@ curl_hdr_process(struct azure_op *op,
 		if ((eptr == loff) || (eptr > hdr_str + num_bytes)) {
 			return -1;
 		}
-		if (clen == 0) {
-			return 0;
-		}
 
 		/* allocate recv buffer in write callback */
+		op->rsp.clen_recvd = true;
 		op->rsp.clen = clen;
 	}
 
