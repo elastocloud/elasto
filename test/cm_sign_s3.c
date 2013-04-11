@@ -240,6 +240,29 @@ cm_sign_s3_bucket_list_all(void **state)
 	assert_string_equal(sig_str, "qGdzdERIC03wnaRNKh6OqZehG9s=");
 }
 
+static void
+cm_sign_s3_unicode_keys(void **state)
+{
+	int ret;
+	struct azure_op op;
+	char *sig_src = NULL;
+	char *sig_str = NULL;
+
+	memset(&op, 0, sizeof(op));
+	op.method = REQ_METHOD_GET;
+	op.url = "https://s3.amazonaws.com/dictionary/fran%C3%A7ais/pr%c3%a9f%c3%a8re";
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"Date: Wed, 28 Mar 2007 01:49:49 +0000");
+
+	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+			  sizeof(S3_SECRET) - 1,
+			  &op,
+			  &sig_src,
+			  &sig_str);
+	assert_int_equal(ret, 0);
+	assert_string_equal(sig_str, "DNEZGsoieTZ92F3bUfSPQcbGmlM=");
+}
+
 int
 main(void)
 {
@@ -252,6 +275,7 @@ main(void)
 		unit_test(cm_sign_s3_object_del),
 		unit_test(cm_sign_s3_object_upload),
 		unit_test(cm_sign_s3_bucket_list_all),
+		unit_test(cm_sign_s3_unicode_keys),
 	};
 
 	dbg_level_set(10);
