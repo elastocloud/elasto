@@ -36,18 +36,19 @@ struct cli_args {
 			char *pem_file;
 			char *sub_name;
 			char *sub_id;
+			char *blob_acc;
+			char *ctnr_name;
+			char *blob_name;
 		} az;
 		struct {
 			char *key_id;
 			char *secret;
+			char *bkt_name;
+			char *obj_name;
 		} s3;
 	};
 	bool insecure_http;
 	enum cli_cmd cmd;
-	/* mostly common to all */
-	char *blob_acc;
-	char *ctnr_name;
-	char *blob_name;
 	union {
 		struct {
 		} ls;

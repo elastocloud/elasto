@@ -37,9 +37,9 @@
 void
 cli_del_args_free(struct cli_args *cli_args)
 {
-	free(cli_args->blob_acc);
-	free(cli_args->ctnr_name);
-	free(cli_args->blob_name);
+	free(cli_args->az.blob_acc);
+	free(cli_args->az.ctnr_name);
+	free(cli_args->az.blob_name);
 }
 
 int
@@ -51,13 +51,13 @@ cli_del_args_parse(const char *progname,
 	int ret;
 
 	ret = cli_args_azure_path_parse(progname, argv[1],
-					&cli_args->blob_acc,
-					&cli_args->ctnr_name,
-					&cli_args->blob_name);
+					&cli_args->az.blob_acc,
+					&cli_args->az.ctnr_name,
+					&cli_args->az.blob_name);
 	if (ret < 0)
 		goto err_out;
 
-	if (cli_args->blob_acc == NULL) {
+	if (cli_args->az.blob_acc == NULL) {
 		cli_args_usage(progname,
 			       "Invalid remote path, must be "
 			       "<account>[/<container>[/<blob>]]");
@@ -69,7 +69,7 @@ cli_del_args_parse(const char *progname,
 	return 0;
 
 err_ctnr_free:
-	free(cli_args->ctnr_name);
+	free(cli_args->az.ctnr_name);
 err_out:
 	return ret;
 }
@@ -206,29 +206,29 @@ cli_del_handle(struct cli_args *cli_args)
 		goto err_out;
 	}
 
-	if ((cli_args->blob_name == NULL)
-	 && (cli_args->ctnr_name == NULL)) {
+	if ((cli_args->az.blob_name == NULL)
+	 && (cli_args->az.ctnr_name == NULL)) {
 		/* delete account for subscription, signing setup not needed */
 		ret = cli_del_acc_handle(econn, cli_args->az.sub_id,
-					 cli_args->blob_acc);
+					 cli_args->az.blob_acc);
 		elasto_conn_free(econn);
 		return ret;
 	}
 
 	ret = cli_sign_conn_setup(econn,
-				  cli_args->blob_acc,
+				  cli_args->az.blob_acc,
 				  cli_args->az.sub_id);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
 
-	if (cli_args->blob_name != NULL) {
-		ret = cli_del_blob_handle(econn, cli_args->blob_acc,
-					  cli_args->ctnr_name,
-					  cli_args->blob_name);
+	if (cli_args->az.blob_name != NULL) {
+		ret = cli_del_blob_handle(econn, cli_args->az.blob_acc,
+					  cli_args->az.ctnr_name,
+					  cli_args->az.blob_name);
 	} else {
-		ret = cli_del_ctnr_handle(econn, cli_args->blob_acc,
-					  cli_args->ctnr_name);
+		ret = cli_del_ctnr_handle(econn, cli_args->az.blob_acc,
+					  cli_args->az.ctnr_name);
 	}
 
 err_conn_free:

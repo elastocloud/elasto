@@ -37,9 +37,9 @@
 void
 cli_get_args_free(struct cli_args *cli_args)
 {
-	free(cli_args->blob_acc);
-	free(cli_args->ctnr_name);
-	free(cli_args->blob_name);
+	free(cli_args->az.blob_acc);
+	free(cli_args->az.ctnr_name);
+	free(cli_args->az.blob_name);
 	free(cli_args->get.local_path);
 }
 
@@ -52,13 +52,13 @@ cli_get_args_parse(const char *progname,
 	int ret;
 
 	ret = cli_args_azure_path_parse(progname, argv[1],
-					&cli_args->blob_acc,
-					&cli_args->ctnr_name,
-					&cli_args->blob_name);
+					&cli_args->az.blob_acc,
+					&cli_args->az.ctnr_name,
+					&cli_args->az.blob_name);
 	if (ret < 0)
 		goto err_out;
 
-	if (cli_args->blob_name == NULL) {
+	if (cli_args->az.blob_name == NULL) {
 		cli_args_usage(progname,
 		   "Invalid remote path, must be <account>/<container>/<blob>");
 		ret = -EINVAL;
@@ -75,9 +75,9 @@ cli_get_args_parse(const char *progname,
 	return 0;
 
 err_blob_free:
-	free(cli_args->blob_name);
+	free(cli_args->az.blob_name);
 err_ctnr_free:
-	free(cli_args->ctnr_name);
+	free(cli_args->az.ctnr_name);
 err_out:
 	return ret;
 }
@@ -100,7 +100,7 @@ cli_get_handle(struct cli_args *cli_args)
 	}
 
 	ret = cli_sign_conn_setup(econn,
-				  cli_args->blob_acc,
+				  cli_args->az.blob_acc,
 				  cli_args->az.sub_id);
 	if (ret < 0) {
 		goto err_conn_free;
@@ -114,13 +114,13 @@ cli_get_handle(struct cli_args *cli_args)
 	}
 	memset(&op, 0, sizeof(op));
 	printf("getting container %s blob %s for %s\n",
-	       cli_args->ctnr_name,
-	       cli_args->blob_name,
+	       cli_args->az.ctnr_name,
+	       cli_args->az.blob_name,
 	       cli_args->get.local_path);
 
-	ret = azure_op_blob_get(cli_args->blob_acc,
-				cli_args->ctnr_name,
-				cli_args->blob_name,
+	ret = azure_op_blob_get(cli_args->az.blob_acc,
+				cli_args->az.ctnr_name,
+				cli_args->az.blob_name,
 				false,
 				AOP_DATA_FILE,
 				(uint8_t *)cli_args->get.local_path,

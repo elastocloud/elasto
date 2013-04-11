@@ -43,9 +43,9 @@ void
 cli_put_args_free(struct cli_args *cli_args)
 {
 	free(cli_args->put.local_path);
-	free(cli_args->blob_acc);
-	free(cli_args->ctnr_name);
-	free(cli_args->blob_name);
+	free(cli_args->az.blob_acc);
+	free(cli_args->az.ctnr_name);
+	free(cli_args->az.blob_name);
 }
 
 int
@@ -63,13 +63,13 @@ cli_put_args_parse(const char *progname,
 	}
 
 	ret = cli_args_azure_path_parse(progname, argv[2],
-					&cli_args->blob_acc,
-					&cli_args->ctnr_name,
-					&cli_args->blob_name);
+					&cli_args->az.blob_acc,
+					&cli_args->az.ctnr_name,
+					&cli_args->az.blob_name);
 	if (ret < 0)
 		goto err_local_free;
 
-	if (cli_args->blob_name == NULL) {
+	if (cli_args->az.blob_name == NULL) {
 		cli_args_usage(progname,
 		   "Invalid remote path, must be <account>/<container>/<blob>");
 		ret = -EINVAL;
@@ -80,7 +80,7 @@ cli_put_args_parse(const char *progname,
 	return 0;
 
 err_ctnr_free:
-	free(cli_args->ctnr_name);
+	free(cli_args->az.ctnr_name);
 err_local_free:
 	free(cli_args->put.local_path);
 err_out:
@@ -145,7 +145,7 @@ cli_put_blocks(struct elasto_conn *econn,
 		 * blockid parameter must be the same size for each block.
 		 */
 		ret = asprintf(&blk->id, "%s_block%06d",
-			       cli_args->blob_name, blks_put);
+			       cli_args->az.blob_name, blks_put);
 		if (ret < 0) {
 			ret = -ENOMEM;
 			free(blk);
@@ -154,9 +154,9 @@ cli_put_blocks(struct elasto_conn *econn,
 
 		list_add_tail(blks, &blk->list);
 
-		ret = azure_op_block_put(cli_args->blob_acc,
-					 cli_args->ctnr_name,
-					 cli_args->blob_name,
+		ret = azure_op_block_put(cli_args->az.blob_acc,
+					 cli_args->az.ctnr_name,
+					 cli_args->az.blob_name,
 					 blk->id,
 					 op_data,
 					 cli_args->insecure_http,
@@ -224,7 +224,7 @@ cli_put_handle(struct cli_args *cli_args)
 	}
 
 	ret = cli_sign_conn_setup(econn,
-				  cli_args->blob_acc,
+				  cli_args->az.blob_acc,
 				  cli_args->az.sub_id);
 	if (ret < 0) {
 		goto err_conn_free;
@@ -236,8 +236,8 @@ cli_put_handle(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_ctnr_create(cli_args->blob_acc,
-				   cli_args->ctnr_name, &op);
+	ret = azure_op_ctnr_create(cli_args->az.blob_acc,
+				   cli_args->az.ctnr_name, &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
@@ -265,13 +265,13 @@ cli_put_handle(struct cli_args *cli_args)
 	printf("putting %zd from %s to container %s blob %s\n",
 	       st.st_size,
 	       cli_args->put.local_path,
-	       cli_args->ctnr_name,
-	       cli_args->blob_name);
+	       cli_args->az.ctnr_name,
+	       cli_args->az.blob_name);
 
 	if (st.st_size < BLOCK_THRESHOLD) {
-		ret = azure_op_blob_put(cli_args->blob_acc,
-					cli_args->ctnr_name,
-					cli_args->blob_name,
+		ret = azure_op_blob_put(cli_args->az.blob_acc,
+					cli_args->az.ctnr_name,
+					cli_args->az.blob_name,
 					AOP_DATA_FILE,
 					(uint8_t *)cli_args->put.local_path,
 					st.st_size,
@@ -286,9 +286,9 @@ cli_put_handle(struct cli_args *cli_args)
 		if (ret < 0) {
 			goto err_conn_free;
 		}
-		ret = azure_op_block_list_put(cli_args->blob_acc,
-					      cli_args->ctnr_name,
-					      cli_args->blob_name,
+		ret = azure_op_block_list_put(cli_args->az.blob_acc,
+					      cli_args->az.ctnr_name,
+					      cli_args->az.blob_name,
 					      blks, &op);
 		if (ret < 0) {
 			goto err_conn_free;

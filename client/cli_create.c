@@ -37,7 +37,7 @@
 void
 cli_create_args_free(struct cli_args *cli_args)
 {
-	free(cli_args->blob_acc);
+	free(cli_args->az.blob_acc);
 	free(cli_args->create.label);
 	free(cli_args->create.desc);
 	free(cli_args->create.affin_grp);
@@ -48,13 +48,13 @@ static int
 cli_create_args_validate(const char *progname,
 			 struct cli_args *cli_args)
 {
-	if (cli_args->blob_acc == NULL) {
+	if (cli_args->az.blob_acc == NULL) {
 		cli_args_usage(progname,
 			       "Create must include an <account> argument");
 		return -EINVAL;
 	}
 
-	if (cli_args->ctnr_name != NULL) {
+	if (cli_args->az.ctnr_name != NULL) {
 		/* container creation */
 		if ((cli_args->create.label != NULL)
 		 || (cli_args->create.desc != NULL)
@@ -136,8 +136,8 @@ cli_create_args_parse(const char *progname,
 	}
 
 	ret = cli_args_azure_path_parse(progname, argv[optind],
-					&cli_args->blob_acc,
-					&cli_args->ctnr_name, NULL);
+					&cli_args->az.blob_acc,
+					&cli_args->az.ctnr_name, NULL);
 	if (ret < 0)
 		goto err_args_free;
 
@@ -171,7 +171,7 @@ cli_create_handle_acc(struct cli_args *cli_args)
 
 	memset(&op, 0, sizeof(op));
 	ret = azure_op_acc_create(cli_args->az.sub_id,
-				  cli_args->blob_acc,
+				  cli_args->az.blob_acc,
 				  cli_args->create.label,
 				  cli_args->create.desc,
 				  cli_args->create.affin_grp,
@@ -223,15 +223,15 @@ cli_create_handle_ctnr(struct cli_args *cli_args)
 	}
 
 	ret = cli_sign_conn_setup(econn,
-				  cli_args->blob_acc,
+				  cli_args->az.blob_acc,
 				  cli_args->az.sub_id);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
 
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_ctnr_create(cli_args->blob_acc,
-				   cli_args->ctnr_name,
+	ret = azure_op_ctnr_create(cli_args->az.blob_acc,
+				   cli_args->az.ctnr_name,
 				   &op);
 	if (ret < 0) {
 		goto err_conn_free;
@@ -267,7 +267,7 @@ cli_create_handle(struct cli_args *cli_args)
 {
 	int ret;
 
-	if (cli_args->ctnr_name != NULL) {
+	if (cli_args->az.ctnr_name != NULL) {
 		/* container creation */
 		ret = cli_create_handle_ctnr(cli_args);
 	} else {
