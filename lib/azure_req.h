@@ -304,6 +304,7 @@ struct azure_op {
 		uint64_t clen;
 		uint64_t write_cbs;
 		struct azure_op_data *data;
+		bool recv_cb_alloced;	/* data buffer alloced by conn cb */
 	} rsp;
 };
 

@@ -186,6 +186,7 @@ curl_write_alloc_std(struct azure_op *op)
 		/* requester wants us to allocate a recv iov */
 		/* TODO check clen isn't too huge */
 		ret = azure_op_data_iov_new(NULL, clen, 0, true, &op->rsp.data);
+		op->rsp.recv_cb_alloced = true;
 		return ret;
 	}
 
