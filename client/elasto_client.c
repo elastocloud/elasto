@@ -370,7 +370,7 @@ cli_args_parse(int argc,
 				ret = -ENOMEM;
 				goto err_out;
 			}
-			sep = strchr(optarg, ',');
+			sep = strchr(s3_id, ',');
 			if ((sep == NULL) || (strlen(sep) <= 1)) {
 				ret = -EINVAL;
 				goto err_out;
@@ -380,6 +380,7 @@ cli_args_parse(int argc,
 				ret = -ENOMEM;
 				goto err_out;
 			}
+			*sep = 0;
 			break;
 		case 'd':
 			debug_level = (uint32_t)strtol(optarg, NULL, 10);
