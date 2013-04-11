@@ -287,13 +287,26 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 
 	s = hdr_str;
 	for (i = 0; i < count; i++) {
-		int len = strlen(hdr_array[i]);
-		memcpy(s, hdr_array[i], len);
+		int len;
+		int dup_val_off = 0;;
+		if ((i > 0)
+		 && (hdr_key_lexi_cmp(&hdr_array[i - 1], &hdr_array[i]) == 0)) {
+			dbg(4, "collapsing duplicate header \"%s\"\n",
+			    hdr_array[i]);
+			/* duplicate headers, append value */
+			*(s - 1) = ',';	/* overwrite newline */
+			dup_val_off = (strchr(hdr_array[i], ':') + 1
+							- hdr_array[i]);
+		}
+
+		len = strlen(hdr_array[i] + dup_val_off);
+		memcpy(s, hdr_array[i] + dup_val_off, len);
+		free(hdr_array[i]);
+		hdr_array[i] = s;	/* needed for cmp */
 		*(s + len) = '\n';
 		s += (len + 1);
-		free(hdr_array[i]);
+		*s = '\0';	/* needed for cmp */
 	}
-	*s = '\0';
 	free(hdr_array);
 out_empty:
 	*canon_hdrs_out = hdr_str;
