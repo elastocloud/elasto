@@ -172,6 +172,51 @@ cm_sign_s3_object_del(void **state)
 	assert_string_equal(sig_str, "lx3byBScXR6KzyMaifNkardMwNk=");
 }
 
+static void
+cm_sign_s3_object_upload(void **state)
+{
+	int ret;
+	struct azure_op op;
+	char *sig_src = NULL;
+	char *sig_str = NULL;
+
+	memset(&op, 0, sizeof(op));
+	op.method = REQ_METHOD_PUT;
+	op.url = "http://static.johnsmith.net:8080/db-backup.dat.gz";
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"User-Agent: curl/7.15.5");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"Date: Tue, 27 Mar 2007 21:06:08 +0000");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"x-amz-acl: public-read");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"content-type: application/x-download");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"Content-MD5: 4gJE4saaMU4BqNR0kLY+lw==");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"X-Amz-Meta-ReviewedBy: joe@johnsmith.net");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"X-Amz-Meta-ReviewedBy: jane@johnsmith.net");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"X-Amz-Meta-FileChecksum: 0x02661779");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"X-Amz-Meta-ChecksumAlgorithm: crc32");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+		"Content-Disposition: attachment; filename=database.dat");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"Content-Encoding: gzip");
+	op.http_hdr = curl_slist_append(op.http_hdr,
+				"Content-Length: 5913339");
+
+	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+			  sizeof(S3_SECRET) - 1,
+			  &op,
+			  &sig_src,
+			  &sig_str);
+	assert_int_equal(ret, 0);
+	assert_string_equal(sig_str, "ilyl83RwaSoYIEdixDQcA4OnAnc=");
+}
+
 int
 main(void)
 {
@@ -182,6 +227,7 @@ main(void)
 		unit_test(cm_sign_s3_list),
 		unit_test(cm_sign_s3_fetch),
 		unit_test(cm_sign_s3_object_del),
+		unit_test(cm_sign_s3_object_upload),
 	};
 
 	dbg_level_set(10);
