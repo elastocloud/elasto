@@ -31,6 +31,7 @@
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
+#include "util.h"
 #include "azure_xml.h"
 #include "azure_req.h"
 
@@ -2801,6 +2802,64 @@ err_out:
 	return ret;
 }
 
+static int
+s3_req_fill_hdr_common(struct azure_op *op)
+{
+	size_t sz;
+	char hdr_buf[100];
+	time_t t;
+	struct tm tm_gmt;
+
+	time(&t);
+	gmtime_r(&t, &tm_gmt);
+	sz = strftime(hdr_buf, ARRAY_SIZE(hdr_buf),
+		      "Date: %a, %d %b %Y %T %z", &tm_gmt);
+	if (sz == 0) {
+		return -E2BIG;
+	}
+
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_buf);
+	if (op->http_hdr == NULL) {
+		return -ENOMEM;
+	}
+	return 0;
+}
+
+static void
+s3_req_svc_list_free(struct s3_req_svc_list *svc_list)
+{
+	/* nothing to do */
+}
+
+int
+s3_op_svc_list(struct azure_op *op)
+{
+	int ret;
+
+	op->opcode = S3OP_SVC_LIST;
+	/* no arguments */
+
+	op->method = REQ_METHOD_GET;
+	ret = asprintf(&op->url, "https://s3.amazonaws.com/");
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_out:
+	return ret;
+}
+
 static void
 azure_req_free(struct azure_op *op)
 {
@@ -2851,6 +2910,10 @@ azure_req_free(struct azure_op *op)
 		break;
 	case AOP_BLOB_DEL:
 		azure_req_blob_del_free(&op->req.blob_del);
+		break;
+	/* S3 */
+	case S3OP_SVC_LIST:
+		s3_req_svc_list_free(&op->req.svc_list);
 		break;
 	default:
 		assert(true);
@@ -2953,6 +3016,7 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_BLOCK_PUT:
 	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
+	case S3OP_SVC_LIST:
 		/* nothing to do */
 		ret = 0;
 		break;

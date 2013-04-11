@@ -30,6 +30,8 @@ enum azure_opcode {
 	AOP_BLOCK_LIST_PUT,
 	AOP_BLOCK_LIST_GET,
 	AOP_BLOB_DEL,
+	/* Amazon S3 ops below this point */
+	S3OP_SVC_LIST,
 };
 
 enum azure_op_data_type {
@@ -222,6 +224,10 @@ struct azure_rsp_error {
 	uint64_t off;
 };
 
+struct s3_req_svc_list {
+	/* no arguments */
+};
+
 /*
  * @base_off is the base offset into the input/output
  * buffer. i.e. @iov.base_off + @off = read/write offset
@@ -273,6 +279,8 @@ struct azure_op {
 			struct azure_req_block_list_put block_list_put;
 			struct azure_req_block_list_get block_list_get;
 			struct azure_req_blob_del blob_del;
+
+			struct s3_req_svc_list svc_list;
 		};
 		uint64_t read_cbs;
 		struct azure_op_data *data;
@@ -298,6 +306,8 @@ struct azure_op {
 			 * struct azure_rsp_page_put page_put;
 			 * struct azure_rsp_block_put block_put;
 			 * struct azure_rsp_blob_del blob_del;
+			 *
+			 * struct s3_rsp_svc_list svc_list;
 			 */
 		};
 		bool clen_recvd;
@@ -427,6 +437,9 @@ azure_op_blob_del(const char *account,
 		  const char *ctnr,
 		  const char *bname,
 		  struct azure_op *op);
+
+int
+s3_op_svc_list(struct azure_op *op);
 
 bool
 azure_rsp_is_error(enum azure_opcode opcode, int err_code);
