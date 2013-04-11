@@ -329,12 +329,66 @@ curl_fail_cb(char *ptr,
 	return 0;
 }
 
+static int
+elasto_conn_send_sign(struct elasto_conn *econn,
+		      struct azure_op *op)
+{
+	int ret;
+	char *sig_str;
+	char *hdr_str = NULL;
+
+	if (econn->sign.key == NULL) {
+		dbg(0, "op requires signing, but conn key not set\n");
+		return -EINVAL;
+	}
+
+	if (econn->type == CONN_TYPE_AZURE) {
+		ret = sign_gen_lite_azure(econn->sign.account,
+					  econn->sign.key, econn->sign.key_len,
+					  op, &op->sig_src, &sig_str);
+		if (ret < 0) {
+			dbg(0, "Azure signing failed: %s\n",
+			    strerror(-ret));
+			return ret;
+		}
+		ret = asprintf(&hdr_str, "Authorization: SharedKeyLite %s:%s",
+			       econn->sign.account, sig_str);
+		free(sig_str);
+		if (ret < 0) {
+			return -ENOMEM;
+		}
+	} else if (econn->type == CONN_TYPE_S3) {
+		ret = sign_gen_s3(econn->sign.key, econn->sign.key_len,
+				  op, &op->sig_src, &sig_str);
+		if (ret < 0) {
+			dbg(0, "S3 signing failed: %s\n",
+			    strerror(-ret));
+			return ret;
+		}
+		ret = asprintf(&hdr_str, "Authorization: AWS %s:%s",
+			       econn->sign.account, sig_str);
+		free(sig_str);
+		if (ret < 0) {
+			return -ENOMEM;
+		}
+	} else {
+		return -ENOTSUP;
+	}
+
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
 /* a bit ugly, the signature src string is stored in @op for debugging */
 static int
 elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
 {
 	int ret;
-	char *hdr_str = NULL;
 
 	curl_easy_setopt(econn->curl, CURLOPT_CUSTOMREQUEST, op->method);
 	curl_easy_setopt(econn->curl, CURLOPT_URL, op->url);
@@ -360,28 +414,9 @@ elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
 	}
 
 	if (op->sign) {
-		char *sig_str;
-		if (econn->sign.key == NULL) {
-			dbg(0, "op requires signing, but conn key not set\n");
-			return -EINVAL;
-		}
-		ret = sign_gen_lite_azure(econn->sign.account,
-					  econn->sign.key, econn->sign.key_len,
-					  op, &op->sig_src, &sig_str);
+		ret = elasto_conn_send_sign(econn, op);
 		if (ret < 0) {
-			dbg(0, "signing failed: %s\n", strerror(-ret));
 			return ret;
-		}
-		ret = asprintf(&hdr_str, "Authorization: SharedKeyLite %s:%s",
-			       econn->sign.account, sig_str);
-		free(sig_str);
-		if (ret < 0) {
-			return -ENOMEM;
-		}
-		op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-		free(hdr_str);
-		if (op->http_hdr == NULL) {
-			return -ENOMEM;
 		}
 	}
 
