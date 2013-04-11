@@ -62,10 +62,10 @@ cli_put_args_parse(const char *progname,
 		goto err_out;
 	}
 
-	ret = cli_args_azure_path_parse(progname, argv[2],
-					&cli_args->az.blob_acc,
-					&cli_args->az.ctnr_name,
-					&cli_args->az.blob_name);
+	ret = cli_args_path_parse(progname, argv[2],
+				  &cli_args->az.blob_acc,
+				  &cli_args->az.ctnr_name,
+				  &cli_args->az.blob_name);
 	if (ret < 0)
 		goto err_local_free;
 

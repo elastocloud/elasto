@@ -51,10 +51,10 @@ cli_ls_args_parse(const char *progname,
 	int ret;
 
 	if (argc == 2) {
-		ret = cli_args_azure_path_parse(progname, argv[1],
-						&cli_args->az.blob_acc,
-						&cli_args->az.ctnr_name,
-						&cli_args->az.blob_name);
+		ret = cli_args_path_parse(progname, argv[1],
+					  &cli_args->az.blob_acc,
+					  &cli_args->az.ctnr_name,
+					  &cli_args->az.blob_name);
 		if (ret < 0)
 			goto err_out;
 

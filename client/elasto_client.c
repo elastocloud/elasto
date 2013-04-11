@@ -149,30 +149,32 @@ cli_cmd_lookup(const char *name)
 }
 
 /*
- * parse and azure path in the format:
+ * parse an azure or S3 path in the format:
  *	/account/container/blob
+ *	or
+ *	/bucket/object
  * return NULL for any components that do not exist, otherwise strdup.
  * handle corner cases such as double or missing '/'.
  */
 int
-cli_args_azure_path_parse(const char *progname,
-			  const char *apath,
-			  char **acc_r,
-			  char **ctnr_r,
-			  char **blob_r)
+cli_args_path_parse(const char *progname,
+		    const char *path,
+		    char **comp1_out,
+		    char **comp2_out,
+		    char **comp3_out)
 {
 	int ret;
 	char *s;
-	char *acc_name = NULL;
-	char *ctnr_name = NULL;
-	char *blob_name = NULL;
+	char *comp1 = NULL;
+	char *comp2 = NULL;
+	char *comp3 = NULL;
 
-	if (apath == NULL) {
+	if (path == NULL) {
 		cli_args_usage(progname, "Empty remote path");
 		return -EINVAL;
 	}
 
-	s = (char *)apath;
+	s = (char *)path;
 	while (*s == '/')
 		s++;
 
@@ -181,13 +183,13 @@ cli_args_azure_path_parse(const char *progname,
 		goto done;
 	}
 
-	acc_name = strdup(s);
-	if (acc_name == NULL) {
+	comp1 = strdup(s);
+	if (comp1 == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
-	s = strchr(acc_name, '/');
+	s = strchr(comp1, '/');
 	if (s == NULL) {
 		/* account only */
 		goto done;
@@ -202,13 +204,13 @@ cli_args_azure_path_parse(const char *progname,
 		goto done;
 	}
 
-	ctnr_name = strdup(s);
-	if (ctnr_name == NULL) {
+	comp2 = strdup(s);
+	if (comp2 == NULL) {
 		ret = -ENOMEM;
-		goto err_acc_free;
+		goto err_1_free;
 	}
 
-	s = strchr(ctnr_name, '/');
+	s = strchr(comp2, '/');
 	if (s == NULL) {
 		/* ctnr only */
 		goto done;
@@ -223,53 +225,53 @@ cli_args_azure_path_parse(const char *progname,
 		goto done;
 	}
 
-	blob_name = strdup(s);
-	if (blob_name == NULL) {
+	comp3 = strdup(s);
+	if (comp3 == NULL) {
 		ret = -ENOMEM;
-		goto err_ctnr_free;
+		goto err_2_free;
 	}
 
-	s = strchr(blob_name, '/');
+	s = strchr(comp3, '/');
 	if (s != NULL) {
 		/* blob has a trailing slash */
 		cli_args_usage(progname,
 			"Invalid remote path: blob has trailing garbage");
 		ret = -EINVAL;
-		goto err_blob_free;
+		goto err_3_free;
 	}
 done:
-	if ((acc_r == NULL) && (acc_name != NULL)) {
+	if ((comp1_out == NULL) && (comp1 != NULL)) {
 		cli_args_usage(progname,
-			"Invalid remote path: unexpected account component");
+			"Invalid remote path: unexpected 1st component");
 		ret = -EINVAL;
-		goto err_blob_free;
-	} else if (acc_r != NULL) {
-		*acc_r = acc_name;
+		goto err_3_free;
+	} else if (comp1_out != NULL) {
+		*comp1_out = comp1;
 	}
-	if ((ctnr_r == NULL) && (ctnr_name != NULL)) {
+	if ((comp2_out == NULL) && (comp2 != NULL)) {
 		cli_args_usage(progname,
-			"Invalid remote path: unexpected container component");
+			"Invalid remote path: unexpected 2nd component");
 		ret = -EINVAL;
-		goto err_blob_free;
-	} else if (ctnr_r != NULL) {
-		*ctnr_r = ctnr_name;
+		goto err_3_free;
+	} else if (comp2_out != NULL) {
+		*comp2_out = comp2;
 	}
-	if ((blob_r == NULL) && (blob_name != NULL)) {
+	if ((comp3_out == NULL) && (comp3 != NULL)) {
 		cli_args_usage(progname,
-			"Invalid remote path: unexpected blob component");
+			"Invalid remote path: unexpected 3rd component");
 		ret = -EINVAL;
-		goto err_blob_free;
-	} else if (blob_r != NULL) {
-		*blob_r = blob_name;
+		goto err_3_free;
+	} else if (comp3_out != NULL) {
+		*comp3_out = comp3;
 	}
 	return 0;
 
-err_blob_free:
-	free(blob_name);
-err_ctnr_free:
-	free(ctnr_name);
-err_acc_free:
-	free(acc_name);
+err_3_free:
+	free(comp3);
+err_2_free:
+	free(comp2);
+err_1_free:
+	free(comp1);
 err_out:
 	return ret;
 }

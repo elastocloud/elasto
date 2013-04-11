@@ -70,11 +70,11 @@ struct cli_args {
 };
 
 int
-cli_args_azure_path_parse(const char *progname,
-			  const char *apath,
-			  char **acc_r,
-			  char **ctnr_r,
-			  char **blob_r);
+cli_args_path_parse(const char *progname,
+		    const char *path,
+		    char **comp1_out,
+		    char **comp2_out,
+		    char **comp3_out);
 
 void
 cli_args_usage(const char *progname,

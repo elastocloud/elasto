@@ -135,9 +135,9 @@ cli_create_args_parse(const char *progname,
 		}
 	}
 
-	ret = cli_args_azure_path_parse(progname, argv[optind],
-					&cli_args->az.blob_acc,
-					&cli_args->az.ctnr_name, NULL);
+	ret = cli_args_path_parse(progname, argv[optind],
+				  &cli_args->az.blob_acc,
+				  &cli_args->az.ctnr_name, NULL);
 	if (ret < 0)
 		goto err_args_free;
 
