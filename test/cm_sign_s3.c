@@ -263,24 +263,14 @@ cm_sign_s3_unicode_keys(void **state)
 	assert_string_equal(sig_str, "DNEZGsoieTZ92F3bUfSPQcbGmlM=");
 }
 
-int
-main(void)
-{
-	int ret;
-	const UnitTest cm_sign_s3_tests[] = {
-		unit_test(cm_sign_s3_object_get),
-		unit_test(cm_sign_s3_object_put),
-		unit_test(cm_sign_s3_list),
-		unit_test(cm_sign_s3_fetch),
-		unit_test(cm_sign_s3_object_del),
-		unit_test(cm_sign_s3_object_upload),
-		unit_test(cm_sign_s3_bucket_list_all),
-		unit_test(cm_sign_s3_unicode_keys),
-	};
+static const UnitTest cm_sign_s3_tests[] = {
+	unit_test(cm_sign_s3_object_get),
+	unit_test(cm_sign_s3_object_put),
+	unit_test(cm_sign_s3_list),
+	unit_test(cm_sign_s3_fetch),
+	unit_test(cm_sign_s3_object_del),
+	unit_test(cm_sign_s3_object_upload),
+	unit_test(cm_sign_s3_bucket_list_all),
+	unit_test(cm_sign_s3_unicode_keys),
+};
 
-	dbg_level_set(10);
-	sign_init();
-	ret = run_tests(cm_sign_s3_tests);
-	sign_deinit();
-	return ret;
-}
