@@ -99,6 +99,10 @@ curl_hdr_process(struct azure_op *op,
 			return -1;
 		}
 
+		if (op->rsp.write_cbs > 0) {
+			dbg(0, "clen header received after data callback!\n");
+			return -1;
+		}
 		/* allocate recv buffer in write callback */
 		op->rsp.clen_recvd = true;
 		op->rsp.clen = clen;
