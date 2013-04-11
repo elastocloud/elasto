@@ -168,43 +168,96 @@ curl_read_cb(char *ptr,
 	return num_bytes;
 }
 
+/*
+ * @cb_nbytes is the number of bytes provided by this callback, clen is the
+ * number of bytes expected across all callbacks, but may not be known.
+ */
 static int
-curl_write_alloc_err(struct azure_op *op)
+curl_write_alloc_err(struct azure_op *op,
+		     uint64_t cb_nbytes)
 {
-	op->rsp.err.buf = malloc(op->rsp.clen);
-	if (op->rsp.err.buf == NULL) {
-		return -ENOMEM;
+	struct azure_rsp_error *err = &op->rsp.err;
+
+	if ((err->buf != NULL) && (cb_nbytes > (err->len - err->off))) {
+		dbg(6, "error buffer already alloced but not big enough\n");
+			err->buf = realloc(err->buf, err->len + cb_nbytes);
+			if (err->buf == NULL) {
+				/* leaks */
+				return -ENOMEM;
+			}
+			err->len = err->len + cb_nbytes;
+	} else if (err->buf == NULL) {
+		uint64_t sz = (op->rsp.clen_recvd ? op->rsp.clen : cb_nbytes);
+		err->buf = malloc(sz);
+		if (err->buf == NULL) {
+			return -ENOMEM;
+		}
+		err->len = sz;
+		err->off = 0;
 	}
-	op->rsp.err.len = op->rsp.clen;
-	op->rsp.err.off = 0;
 	return 0;
 }
 
+/*
+ * @cb_nbytes is the number of bytes provided by this callback, clen is the
+ * number of bytes expected across all callbacks, but may not be known.
+ * FIXME this is too complicated! Clean it up by adding a higher layer callback
+ * to the request structure and removing all data buffer types.
+ */
 static int
-curl_write_alloc_std(struct azure_op *op)
+curl_write_alloc_std(struct azure_op *op,
+		     uint64_t cb_nbytes)
+
 {
-	uint64_t clen = op->rsp.clen;
+	uint64_t rem;
 
 	if (op->rsp.data == NULL) {
 		int ret;
+		uint64_t sz = (op->rsp.clen_recvd ? op->rsp.clen : cb_nbytes);
 		/* requester wants us to allocate a recv iov */
 		/* TODO check clen isn't too huge */
-		ret = azure_op_data_iov_new(NULL, clen, 0, true, &op->rsp.data);
+		ret = azure_op_data_iov_new(NULL, sz, 0, true, &op->rsp.data);
 		op->rsp.recv_cb_alloced = true;
 		return ret;
 	}
 
 	switch (op->rsp.data->type) {
 	case AOP_DATA_IOV:
-		if (clen + op->rsp.data->base_off > op->rsp.data->len) {
-			dbg(0, "preallocated rsp buf not large enough - "
-			       "alloced=%lu, clen=%lu\n",
-			       op->rsp.data->len, clen);
+		rem = (op->rsp.data->len - op->rsp.data->off);
+		if (op->rsp.recv_cb_alloced == true) {
+			if (op->rsp.clen_recvd) {
+				dbg(0, "unexpected alloc call after clen\n");
+			}
+			if (cb_nbytes > rem) {
+				dbg(2, "growing buf for callback\n");
+				op->rsp.data->buf = realloc(op->rsp.data->buf,
+						(op->rsp.data->off + cb_nbytes));
+				if (op->rsp.data->buf == NULL) {
+					/* leak */
+					return -ENOMEM;
+				}
+			}
+			return 0;
+		}
+		/* external req buffer */
+		if (op->rsp.clen_recvd && (op->rsp.clen
+				+ op->rsp.data->base_off > op->rsp.data->len)) {
+				dbg(0, "preallocated rsp buf not large enough - "
+				       "alloced=%lu, received clen=%lu\n",
+				       op->rsp.data->len, op->rsp.clen);
 			return -E2BIG;
 		}
+		/* FIXME check for space on !op->rsp.clen_recvd */
 		break;
 	case AOP_DATA_FILE:
-		op->rsp.data->len = clen + op->rsp.data->base_off;
+		if (op->rsp.clen_recvd) {
+			op->rsp.data->len = op->rsp.clen
+						+ op->rsp.data->base_off;
+		} else if (op->rsp.write_cbs == 1) {
+			op->rsp.data->len = cb_nbytes + op->rsp.data->base_off;
+		} else {
+			op->rsp.data->len += cb_nbytes;
+		}
 		/* TODO, could fallocate entire file */
 		break;
 	default:
@@ -285,7 +338,8 @@ curl_write_cb(char *ptr,
 	uint64_t num_bytes = (size * nmemb);
 	int ret;
 
-	if (op->rsp.write_cbs++ == 0) {
+	/* alloc content buffer on the first callback, or if clen is unknown */
+	if ((op->rsp.write_cbs++ == 0) || (op->rsp.clen_recvd == false)) {
 		CURLcode cc;
 		int ret_code;
 		/* should already have the http response code by the time we get here */
@@ -300,15 +354,14 @@ curl_write_cb(char *ptr,
 		op->rsp.is_error = azure_rsp_is_error(op->opcode, ret_code);
 
 		if (op->rsp.is_error) {
-			ret = curl_write_alloc_err(op);
+			ret = curl_write_alloc_err(op, num_bytes);
 		} else {
-			ret = curl_write_alloc_std(op);
+			ret = curl_write_alloc_std(op, num_bytes);
 		}
 		if (ret < 0) {
 			dbg(0, "failed to allocate response buffer\n");
 			return -1;
 		}
-
 	}
 
 	if (op->rsp.is_error) {
