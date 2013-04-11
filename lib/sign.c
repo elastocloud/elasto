@@ -490,6 +490,7 @@ canon_rsc_path_get(const char *slash_after_hostname)
 	return path_part;
 }
 
+#define URL_S3_BASE "s3.amazonaws.com"
 /*
  * @slash_url_host points to the last forward slash after the protocol string
  */
@@ -499,20 +500,40 @@ canon_rsc_bucket_get(const char *slash_url_host)
 	char *d;
 	char *bucket = NULL;
 
+	if (strncmp(slash_url_host + 1, URL_S3_BASE,
+		    sizeof(URL_S3_BASE) - 1) == 0) {
+		/* base URL only */
+		return strdup("");
+	}
+
 	/* find the first dot, up to which may be the bucket name */
 	d = strchr(slash_url_host, '.');
-	assert(d != NULL);
-	/* FIXME URL assumption, use a #def at least */
-	if (strncmp(d, ".s3.", sizeof(".s3.") - 1) == 0) {
+	if ((d != NULL)
+	 && (strncmp(d + 1, URL_S3_BASE, sizeof(URL_S3_BASE) - 1) == 0)) {
+		dbg(6, "bucket prefix in S3 host path\n");
 		/*
 		 * There is a bucket name before the aws hostname, ensure the
 		 * required '/' prefix is included in the bucket string.
 		 */
-		bucket = strndup(slash_url_host, (d - slash_url_host));
+		return strndup(slash_url_host, (d - slash_url_host));
 	} else {
-		bucket = strdup("");
+		const char *sep = NULL;
+		dbg(2, "non S3 host, assuming CNAME bucket alias\n");
+		/* copy up to port, path or query sep */
+		sep = strchr(slash_url_host + 1, ':');
+		if (sep == NULL)
+			sep = strchr(slash_url_host + 1, '/');
+		if (sep == NULL)
+			sep = strchr(slash_url_host + 1, '?');
+
+		if (sep == NULL) {
+			return strdup(slash_url_host);
+		} else {
+			return strndup(slash_url_host, sep - slash_url_host);
+		}
 	}
-	return bucket;
+	dbg(0, "rsc bucket unhandled!\n");
+	return NULL;
 }
 
 /*
