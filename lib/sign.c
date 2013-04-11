@@ -28,6 +28,7 @@
 #include "base64.h"
 #include "azure_req.h"
 #include "dbg.h"
+#include "util.h"
 #include "sign.h"
 
 static int
@@ -548,8 +549,7 @@ static char *s3_sub_resources[] = {"acl", "lifecycle",
 				   "uploadId", "uploads",
 				   "versionId", "versioning",
 				   "versions", "website"};
-#define CANON_RSC_SUB_MAX \
-	(sizeof(s3_sub_resources) / sizeof(s3_sub_resources[0]))
+#define CANON_RSC_SUB_MAX ARRAY_SIZE(s3_sub_resources)
 /*
  * @sub_rsc may include trailing resources (after '&'), or values (after '=').
  * @sub_rsc_single_out: single resource string returned on success
