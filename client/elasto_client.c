@@ -66,7 +66,8 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_PUT,
 		.name = "put",
-		.help = "<local path> <account>/<container>/<blob>",
+		.help = "<local path> <account>/<container>/<blob>\n"
+			"\t\t<local path> <bucket>/<object>",
 		.arg_min = 2,
 		.arg_max = 2,
 		.args_parse = &cli_put_args_parse,
