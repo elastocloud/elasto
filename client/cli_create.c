@@ -37,7 +37,12 @@
 void
 cli_create_args_free(struct cli_args *cli_args)
 {
-	free(cli_args->az.blob_acc);
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		free(cli_args->az.blob_acc);
+		free(cli_args->az.ctnr_name);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		free(cli_args->s3.bkt_name);
+	}
 	free(cli_args->create.label);
 	free(cli_args->create.desc);
 	free(cli_args->create.affin_grp);
@@ -45,8 +50,8 @@ cli_create_args_free(struct cli_args *cli_args)
 }
 
 static int
-cli_create_args_validate(const char *progname,
-			 struct cli_args *cli_args)
+cli_create_args_validate_az(const char *progname,
+			    struct cli_args *cli_args)
 {
 	if (cli_args->az.blob_acc == NULL) {
 		cli_args_usage(progname,
@@ -78,6 +83,19 @@ cli_create_args_validate(const char *progname,
 		cli_args_usage(progname,
 			       "Create must specify either a <location> or "
 			       "<affinity group>");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int
+cli_create_args_validate_s3(const char *progname,
+			    struct cli_args *cli_args)
+{
+	if (cli_args->s3.bkt_name == NULL) {
+		cli_args_usage(progname,
+			       "Create must include a <bucket> argument");
 		return -EINVAL;
 	}
 
@@ -135,13 +153,23 @@ cli_create_args_parse(const char *progname,
 		}
 	}
 
-	ret = cli_args_path_parse(progname, argv[optind],
-				  &cli_args->az.blob_acc,
-				  &cli_args->az.ctnr_name, NULL);
-	if (ret < 0)
-		goto err_args_free;
-
-	ret = cli_create_args_validate(progname, cli_args);
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		ret = cli_args_path_parse(progname, argv[optind],
+					  &cli_args->az.blob_acc,
+					  &cli_args->az.ctnr_name, NULL);
+		if (ret < 0)
+			goto err_args_free;
+		ret = cli_create_args_validate_az(progname, cli_args);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		ret = cli_args_path_parse(progname, argv[optind],
+					  &cli_args->s3.bkt_name,
+					  NULL, NULL);
+		if (ret < 0)
+			goto err_args_free;
+		ret = cli_create_args_validate_s3(progname, cli_args);
+	} else {
+		ret = -ENOTSUP;
+	}
 	if (ret < 0)
 		goto err_args_free;
 
@@ -262,17 +290,67 @@ err_out:
 	return ret;
 }
 
+static int
+cli_create_handle_bkt(struct cli_args *cli_args)
+{
+	struct elasto_conn *econn;
+	struct azure_op op;
+	int ret;
+
+	ret = elasto_conn_init_s3(cli_args->s3.key_id,
+				  cli_args->s3.secret, &econn);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	memset(&op, 0, sizeof(op));
+	ret = s3_op_bkt_create(cli_args->s3.bkt_name,
+			       cli_args->create.location,
+			       &op);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_conn_free:
+	elasto_conn_free(econn);
+err_out:
+	return ret;
+}
+
 int
 cli_create_handle(struct cli_args *cli_args)
 {
-	int ret;
+	int ret = -ENOTSUP;
 
-	if (cli_args->az.ctnr_name != NULL) {
-		/* container creation */
-		ret = cli_create_handle_ctnr(cli_args);
-	} else {
-		/* account creation */
-		ret = cli_create_handle_acc(cli_args);
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		if (cli_args->az.ctnr_name != NULL) {
+			/* container creation */
+			ret = cli_create_handle_ctnr(cli_args);
+		} else {
+			/* account creation */
+			ret = cli_create_handle_acc(cli_args);
+		}
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		ret = cli_create_handle_bkt(cli_args);
 	}
 
 	return ret;
