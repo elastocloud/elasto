@@ -33,6 +33,7 @@ enum azure_opcode {
 	/* Amazon S3 ops below this point */
 	S3OP_SVC_LIST,
 	S3OP_BKT_CREATE,
+	S3OP_BKT_DEL,
 };
 
 enum azure_op_data_type {
@@ -247,6 +248,10 @@ struct s3_req_bkt_create {
 	char *location;
 };
 
+struct s3_req_bkt_del {
+	char *bkt_name;
+};
+
 /*
  * @base_off is the base offset into the input/output
  * buffer. i.e. @iov.base_off + @off = read/write offset
@@ -301,6 +306,7 @@ struct azure_op {
 
 			struct s3_req_svc_list svc_list;
 			struct s3_req_bkt_create bkt_create;
+			struct s3_req_bkt_del bkt_del;
 		};
 		uint64_t read_cbs;
 		struct azure_op_data *data;
@@ -329,6 +335,8 @@ struct azure_op {
 			 * struct azure_rsp_block_put block_put;
 			 * struct azure_rsp_blob_del blob_del;
 			 *
+			 * struct s3_rsp_bkt_create bkt_create;
+			 * struct s3_rsp_bkt_del bkt_del;
 			 */
 		};
 		bool clen_recvd;
@@ -468,6 +476,11 @@ s3_op_bkt_create(const char *bkt_name,
 		 const char *location,
 		 bool insecure_http,
 		 struct azure_op *op);
+
+int
+s3_op_bkt_del(const char *bkt_name,
+	      bool insecure_http,
+	      struct azure_op *op);
 
 bool
 azure_rsp_is_error(enum azure_opcode opcode, int err_code);
