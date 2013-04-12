@@ -306,6 +306,7 @@ cli_create_handle_bkt(struct cli_args *cli_args)
 	memset(&op, 0, sizeof(op));
 	ret = s3_op_bkt_create(cli_args->s3.bkt_name,
 			       cli_args->create.location,
+			       cli_args->insecure_http,
 			       &op);
 	if (ret < 0) {
 		goto err_conn_free;

@@ -446,11 +446,13 @@ azure_op_blob_del(const char *account,
 		  struct azure_op *op);
 
 int
-s3_op_svc_list(struct azure_op *op);
+s3_op_svc_list(bool insecure_http,
+	       struct azure_op *op);
 
 int
 s3_op_bkt_create(const char *bkt_name,
 		 const char *location,
+		 bool insecure_http,
 		 struct azure_op *op);
 
 bool

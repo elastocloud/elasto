@@ -2832,7 +2832,8 @@ s3_req_svc_list_free(struct s3_req_svc_list *svc_list)
 }
 
 int
-s3_op_svc_list(struct azure_op *op)
+s3_op_svc_list(bool insecure_http,
+	       struct azure_op *op)
 {
 	int ret;
 
@@ -2840,7 +2841,8 @@ s3_op_svc_list(struct azure_op *op)
 	/* no arguments */
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url, "https://s3.amazonaws.com/");
+	ret = asprintf(&op->url, "%s://s3.amazonaws.com/",
+		       (insecure_http ? "http" : "https"));
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -2922,6 +2924,7 @@ err_out:
 int
 s3_op_bkt_create(const char *bkt_name,
 		 const char *location,
+		 bool insecure_http,
 		 struct azure_op *op)
 {
 	int ret;
@@ -2945,7 +2948,8 @@ s3_op_bkt_create(const char *bkt_name,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url, "https://%s.s3.amazonaws.com/",
+	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/",
+		       (insecure_http ? "http" : "https"),
 		       bkt_name);
 	if (ret < 0) {
 		ret = -ENOMEM;
