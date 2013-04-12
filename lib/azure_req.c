@@ -2831,6 +2831,29 @@ s3_req_svc_list_free(struct s3_req_svc_list *svc_list)
 	/* nothing to do */
 }
 
+static void
+s3_bkt_free(struct s3_bucket **pbkt)
+{
+	struct s3_bucket *bkt = *pbkt;
+
+	free(bkt->name);
+	free(bkt->create_date);
+	free(bkt);
+}
+
+static void
+s3_rsp_svc_list_free(struct s3_rsp_svc_list *svc_list_rsp)
+{
+	struct s3_bucket *bkt;
+	struct s3_bucket *bkt_n;
+
+	free(svc_list_rsp->id);
+	free(svc_list_rsp->disp_name);
+	list_for_each_safe(&svc_list_rsp->bkts, bkt, bkt_n, list) {
+		s3_bkt_free(&bkt);
+	}
+}
+
 int
 s3_op_svc_list(bool insecure_http,
 	       struct azure_op *op)
@@ -2858,6 +2881,117 @@ s3_op_svc_list(bool insecure_http,
 	return 0;
 err_url_free:
 	free(op->url);
+err_out:
+	return ret;
+}
+
+static int
+s3_rsp_bkt_iter_process(struct apr_xml_elem *xel,
+			struct s3_bucket **bkt_ret)
+{
+	int ret;
+	struct s3_bucket *bkt;
+
+	bkt = malloc(sizeof(*bkt));
+	if (bkt == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	ret = azure_xml_path_get(xel, "Name", &bkt->name);
+	if (ret < 0) {
+		goto err_blk_free;
+	}
+
+	ret = azure_xml_path_get(xel, "CreationDate", &bkt->create_date);
+	if (ret < 0) {
+		goto err_name_free;
+	}
+	*bkt_ret = bkt;
+
+	return 0;
+
+err_name_free:
+	free(bkt->name);
+err_blk_free:
+	free(bkt);
+err_out:
+	return ret;
+}
+
+static int
+s3_rsp_svc_list_process(struct azure_op *op)
+{
+	int ret;
+	apr_status_t rv;
+	struct s3_rsp_svc_list *svc_list_rsp;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
+	struct apr_xml_elem *xel;
+	struct s3_bucket *bkt;
+	struct s3_bucket *bkt_n;
+
+	assert(op->opcode == S3OP_SVC_LIST);
+	assert(op->rsp.data->type == AOP_DATA_IOV);
+	svc_list_rsp = &op->rsp.svc_list;
+
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
+		goto err_out;
+	}
+
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+			      &xdoc);
+	if (ret < 0) {
+		goto err_pool_free;
+	}
+
+	ret = azure_xml_path_get(xdoc->root, "/ListAllMyBucketsResult/Owner/ID",
+				 &svc_list_rsp->id);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_pool_free;
+	}
+
+	ret = azure_xml_path_get(xdoc->root, "/ListAllMyBucketsResult/Owner/DisplayName",
+				 &svc_list_rsp->disp_name);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_pool_free;
+	}
+
+	list_head_init(&svc_list_rsp->bkts);
+
+	/* get the first, if present */
+	ret = azure_xml_path_el_get(xdoc->root,
+				    "/ListAllMyBucketsResult/Buckets/Bucket",
+				    &xel);
+	if (ret == -ENOENT) {
+		goto done;
+	} else if (ret < 0) {
+		goto err_pool_free;
+	}
+
+	while ((xel != NULL) && (strcmp(xel->name, "Bucket") == 0)) {
+		ret = s3_rsp_bkt_iter_process(xel->first_child, &bkt);
+		if (ret < 0) {
+			goto err_bkts_free;
+		}
+		list_add_tail(&svc_list_rsp->bkts, &bkt->list);
+		svc_list_rsp->num_bkts++;
+
+		xel = xel->next;
+	}
+done:
+	apr_pool_destroy(pool);
+	return 0;
+
+err_bkts_free:
+	list_for_each_safe(&svc_list_rsp->bkts, bkt, bkt_n, list) {
+		s3_bkt_free(&bkt);
+	}
+err_pool_free:
+	apr_pool_destroy(pool);
 err_out:
 	return ret;
 }
@@ -3071,6 +3205,9 @@ azure_rsp_free(struct azure_op *op)
 	case AOP_BLOCK_LIST_GET:
 		azure_rsp_block_list_get_free(&op->rsp.block_list_get);
 		break;
+	case S3OP_SVC_LIST:
+		s3_rsp_svc_list_free(&op->rsp.svc_list);
+		break;
 	case AOP_ACC_DEL:
 	case AOP_CONTAINER_CREATE:
 	case AOP_CONTAINER_DEL:
@@ -3080,7 +3217,6 @@ azure_rsp_free(struct azure_op *op)
 	case AOP_BLOCK_PUT:
 	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
-	case S3OP_SVC_LIST:
 	case S3OP_BKT_CREATE:
 		/* nothing to do */
 		break;
@@ -3132,6 +3268,9 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_BLOCK_LIST_GET:
 		ret = azure_rsp_block_list_get_process(op);
 		break;
+	case S3OP_SVC_LIST:
+		ret = s3_rsp_svc_list_process(op);
+		break;
 	case AOP_ACC_DEL:
 	case AOP_CONTAINER_CREATE:
 	case AOP_CONTAINER_DEL:
@@ -3141,7 +3280,6 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_BLOCK_PUT:
 	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
-	case S3OP_SVC_LIST:
 	case S3OP_BKT_CREATE:
 		/* nothing to do */
 		ret = 0;

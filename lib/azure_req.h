@@ -229,6 +229,19 @@ struct s3_req_svc_list {
 	/* no arguments */
 };
 
+struct s3_bucket {
+	struct list_node list;
+	char *name;
+	char *create_date;
+};
+
+struct s3_rsp_svc_list {
+	char *id;
+	char *disp_name;
+	int num_bkts;
+	struct list_head bkts;
+};
+
 struct s3_req_bkt_create {
 	char *bkt_name;
 	char *location;
@@ -303,6 +316,8 @@ struct azure_op {
 			struct azure_rsp_ctnr_list ctnr_list;
 			struct azure_rsp_blob_list blob_list;
 			struct azure_rsp_block_list_get block_list_get;
+
+			struct s3_rsp_svc_list svc_list;
 			/*
 			 * No response specific data handled yet:
 			 * struct azure_rsp_acc_del acc_del;
@@ -314,7 +329,6 @@ struct azure_op {
 			 * struct azure_rsp_block_put block_put;
 			 * struct azure_rsp_blob_del blob_del;
 			 *
-			 * struct s3_rsp_svc_list svc_list;
 			 */
 		};
 		bool clen_recvd;
