@@ -43,10 +43,10 @@ cli_ls_args_free(struct cli_args *cli_args)
 }
 
 int
-cli_ls_args_parse(const char *progname,
-		   int argc,
-		   char * const *argv,
-		   struct cli_args *cli_args)
+cli_ls_args_parse_az(const char *progname,
+		     int argc,
+		     char * const *argv,
+		     struct cli_args *cli_args)
 {
 	int ret;
 
@@ -75,6 +75,44 @@ cli_ls_args_parse(const char *progname,
 
 err_out:
 	return ret;
+}
+
+int
+cli_ls_args_parse_s3(const char *progname,
+		     int argc,
+		     char * const *argv,
+		     struct cli_args *cli_args)
+{
+	int ret;
+
+	if (argc == 2) {
+			cli_args_usage(progname,
+	"S3 client currently only supports top level listings");
+			ret = -EINVAL;
+			goto err_out;
+	}
+	cli_args->s3.bkt_name = NULL;
+	cli_args->s3.obj_name = NULL;
+
+	cli_args->cmd = CLI_CMD_LS;
+	ret = 0;
+
+err_out:
+	return ret;
+}
+
+int
+cli_ls_args_parse(const char *progname,
+		   int argc,
+		   char * const *argv,
+		   struct cli_args *cli_args)
+{
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		return cli_ls_args_parse_az(progname, argc, argv, cli_args);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		return cli_ls_args_parse_s3(progname, argc, argv, cli_args);
+	}
+	return -ENOTSUP;
 }
 
 static int
@@ -291,6 +329,55 @@ err_out:
 	return ret;
 }
 
+static int
+cli_ls_svc_handle(bool insecure_http,
+		  struct elasto_conn *econn)
+{
+	struct azure_op op;
+	struct s3_bucket *bkt;
+	int ret;
+
+	memset(&op, 0, sizeof(op));
+	ret = s3_op_svc_list(insecure_http, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	if (op.rsp.svc_list.num_bkts == 0) {
+		printf("No buckets assigned to owner %s\n",
+		       op.rsp.svc_list.disp_name);
+		ret = 0;
+		goto err_op_free;
+	}
+
+	printf("Buckets for owner %s:\n", op.rsp.svc_list.disp_name);
+	list_for_each(&op.rsp.svc_list.bkts, bkt, list) {
+		printf("%s\t%s\n",
+		       bkt->create_date, bkt->name);
+	}
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
 int
 cli_ls_handle(struct cli_args *cli_args)
 {
@@ -299,10 +386,20 @@ cli_ls_handle(struct cli_args *cli_args)
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
 		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+		if (ret < 0) {
+			goto err_out;
+		}
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		ret = elasto_conn_init_s3(cli_args->s3.key_id,
+					  cli_args->s3.secret, &econn);
+		if (ret < 0) {
+			goto err_out;
+		}
+		ret = cli_ls_svc_handle(cli_args->insecure_http, econn);
+		elasto_conn_free(econn);
+		return ret;
 	} else {
 		ret = -ENOTSUP;
-	}
-	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -315,11 +412,13 @@ cli_ls_handle(struct cli_args *cli_args)
 		return ret;
 	}
 
-	ret = cli_sign_conn_setup(econn,
-				  cli_args->az.blob_acc,
-				  cli_args->az.sub_id);
-	if (ret < 0) {
-		goto err_conn_free;
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		ret = cli_sign_conn_setup(econn,
+					  cli_args->az.blob_acc,
+					  cli_args->az.sub_id);
+		if (ret < 0) {
+			goto err_conn_free;
+		}
 	}
 
 	if (cli_args->az.blob_name != NULL) {
