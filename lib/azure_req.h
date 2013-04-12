@@ -225,6 +225,7 @@ struct azure_rsp_error {
 	uint8_t *buf;
 	uint64_t len;
 	uint64_t off;
+	char *redir_endpoint;
 };
 
 struct s3_req_svc_list {

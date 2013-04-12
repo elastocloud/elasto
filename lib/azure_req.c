@@ -2730,6 +2730,7 @@ static void
 azure_rsp_error_free(struct azure_rsp_error *err)
 {
 	free(err->msg);
+	free(err->redir_endpoint);
 	free(err->buf);
 }
 
@@ -2793,9 +2794,28 @@ azure_rsp_error_process(struct azure_op *op)
 	} else if (ret < 0) {
 		goto err_pool_free;
 	}
-	dbg(0, "got error msg: %s\n", op->rsp.err.msg);
-	ret = 0;
 
+	dbg(0, "got error msg: %s\n", op->rsp.err.msg);
+
+	if (op->rsp.err_code == 307) {
+		/* temporary redirect, fill location */
+		ret = azure_xml_path_get(xdoc->root, "/Error/Endpoint",
+					 &op->rsp.err.redir_endpoint);
+		if (ret == -ENOENT) {
+			dbg(1, "got redirect response without endpoint\n");
+		} else if (ret < 0) {
+			goto err_msg_free;
+		} else {
+			dbg(3, "redirect response endpoint: %s\n",
+			    op->rsp.err.redir_endpoint);
+		}
+	}
+
+	apr_pool_destroy(pool);
+	return 0;
+
+err_msg_free:
+	free(op->rsp.err.msg);
 err_pool_free:
 	apr_pool_destroy(pool);
 err_out:
