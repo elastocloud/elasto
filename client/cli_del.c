@@ -43,10 +43,10 @@ cli_del_args_free(struct cli_args *cli_args)
 }
 
 int
-cli_del_args_parse(const char *progname,
-		   int argc,
-		   char * const *argv,
-		   struct cli_args *cli_args)
+cli_del_args_parse_az(const char *progname,
+		      int argc,
+		      char * const *argv,
+		      struct cli_args *cli_args)
 {
 	int ret;
 
@@ -72,6 +72,50 @@ err_ctnr_free:
 	free(cli_args->az.ctnr_name);
 err_out:
 	return ret;
+}
+
+int
+cli_del_args_parse_s3(const char *progname,
+		      int argc,
+		      char * const *argv,
+		      struct cli_args *cli_args)
+{
+	int ret;
+
+	ret = cli_args_path_parse(progname, argv[1],
+				  &cli_args->s3.bkt_name,
+				  NULL, NULL);
+	if (ret < 0)
+		goto err_out;
+
+	if (cli_args->s3.bkt_name == NULL) {
+		cli_args_usage(progname,
+			       "Invalid remote path, must be <bucket name>");
+		ret = -EINVAL;
+		goto err_bkt_free;
+	}
+
+	cli_args->cmd = CLI_CMD_DEL;
+	return 0;
+
+err_bkt_free:
+	free(cli_args->s3.bkt_name);
+err_out:
+	return ret;
+}
+
+int
+cli_del_args_parse(const char *progname,
+		   int argc,
+		   char * const *argv,
+		   struct cli_args *cli_args)
+{
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		return cli_del_args_parse_az(progname, argc, argv, cli_args);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		return cli_del_args_parse_s3(progname, argc, argv, cli_args);
+	}
+	return -ENOTSUP;
 }
 
 static int
@@ -191,6 +235,43 @@ err_out:
 	return ret;
 }
 
+static int
+cli_del_bkt_handle(char *bkt_name,
+		   bool insecure_http,
+		   struct elasto_conn *econn)
+{
+	struct azure_op op;
+	int ret;
+
+	memset(&op, 0, sizeof(op));
+	ret = s3_op_bkt_del(bkt_name, insecure_http, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
 int
 cli_del_handle(struct cli_args *cli_args)
 {
@@ -199,10 +280,21 @@ cli_del_handle(struct cli_args *cli_args)
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
 		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+		if (ret < 0) {
+			goto err_out;
+		}
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		ret = elasto_conn_init_s3(cli_args->s3.key_id,
+					  cli_args->s3.secret, &econn);
+		if (ret < 0) {
+			goto err_out;
+		}
+		ret = cli_del_bkt_handle(cli_args->s3.bkt_name,
+					 cli_args->insecure_http, econn);
+		elasto_conn_free(econn);
+		return ret;
 	} else {
 		ret = -ENOTSUP;
-	}
-	if (ret < 0) {
 		goto err_out;
 	}
 
