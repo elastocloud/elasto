@@ -2861,6 +2861,122 @@ err_out:
 }
 
 static void
+s3_req_bkt_create_free(struct s3_req_bkt_create *bkt_create)
+{
+	free(bkt_create->bkt_name);
+	free(bkt_create->location);
+}
+
+static int
+s3_op_bkt_create_fill_body(const char *location,
+			   struct azure_op_data **req_data_out)
+{
+	int ret;
+	char *xml_data;
+	int buf_remain;
+	struct azure_op_data *req_data;
+
+	if (location == NULL) {
+		dbg(2, "bucket location not specified, using S3 default\n");
+		return 0;
+	}
+
+	/* 2k buf, should be strlen calculated */
+	buf_remain = 2048;
+	ret = azure_op_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	xml_data = (char *)req_data->buf;
+	ret = snprintf(xml_data, buf_remain,
+		       "<CreateBucketConfiguration "
+			  "xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+				"<LocationConstraint>%s</LocationConstraint>"
+		       "</CreateBucketConfiguration>",
+		       location);
+	if ((ret < 0) || (ret >= buf_remain)) {
+		/* truncated or error */
+		ret = -E2BIG;
+		goto err_buf_free;
+	}
+
+	xml_data += ret;
+	buf_remain -= ret;
+
+	/* truncate buffer to what was written */
+	req_data->len = req_data->len - buf_remain;
+
+	dbg(4, "sending bucket creation req data: %s\n",
+	    (char *)req_data->buf);
+	*req_data_out = req_data;
+
+	return 0;
+err_buf_free:
+	azure_op_data_destroy(&req_data);
+err_out:
+	return ret;
+}
+
+int
+s3_op_bkt_create(const char *bkt_name,
+		 const char *location,
+		 struct azure_op *op)
+{
+	int ret;
+	struct s3_req_bkt_create *bkt_create_req;
+
+	op->opcode = S3OP_BKT_CREATE;
+	bkt_create_req = &op->req.bkt_create;
+
+	bkt_create_req->bkt_name = strdup(bkt_name);
+	if (bkt_create_req->bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	if (location != NULL) {
+		bkt_create_req->location = strdup(location);
+		if (bkt_create_req->location == NULL) {
+			ret = -ENOMEM;
+			goto err_bkt_free;
+		}
+	}
+
+	op->method = REQ_METHOD_PUT;
+	ret = asprintf(&op->url, "https://%s.s3.amazonaws.com/",
+		       bkt_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_loc_free;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	ret = s3_op_bkt_create_fill_body(location, &op->req.data);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	op->sign = true;
+
+	return 0;
+
+err_url_free:
+	free(op->url);
+err_loc_free:
+	free(bkt_create_req->location);
+err_bkt_free:
+	free(bkt_create_req->bkt_name);
+err_out:
+	return ret;
+}
+
+static void
 azure_req_free(struct azure_op *op)
 {
 	azure_op_data_destroy(&op->req.data);
@@ -2915,6 +3031,9 @@ azure_req_free(struct azure_op *op)
 	case S3OP_SVC_LIST:
 		s3_req_svc_list_free(&op->req.svc_list);
 		break;
+	case S3OP_BKT_CREATE:
+		s3_req_bkt_create_free(&op->req.bkt_create);
+		break;
 	default:
 		assert(true);
 		break;
@@ -2957,6 +3076,8 @@ azure_rsp_free(struct azure_op *op)
 	case AOP_BLOCK_PUT:
 	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
+	case S3OP_SVC_LIST:
+	case S3OP_BKT_CREATE:
 		/* nothing to do */
 		break;
 	default:
@@ -3017,6 +3138,7 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
 	case S3OP_SVC_LIST:
+	case S3OP_BKT_CREATE:
 		/* nothing to do */
 		ret = 0;
 		break;
