@@ -416,6 +416,7 @@ cli_put_obj_handle(struct cli_args *cli_args)
 			    cli_args->s3.obj_name,
 			    op_data,
 			    cli_args->insecure_http,
+			    NULL,
 			    &op);
 	if (ret < 0) {
 		op_data->buf = NULL;

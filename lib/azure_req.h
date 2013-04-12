@@ -495,6 +495,7 @@ s3_op_obj_put(const char *bkt_name,
 	      const char *obj_name,
 	      struct azure_op_data *data,
 	      bool insecure_http,
+	      const char *url_host_override,
 	      struct azure_op *op);
 
 bool
