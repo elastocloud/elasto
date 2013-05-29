@@ -330,8 +330,8 @@ err_out:
 }
 
 static int
-cli_ls_svc_handle(bool insecure_http,
-		  struct elasto_conn *econn)
+cli_ls_svc_handle(struct elasto_conn *econn,
+		  bool insecure_http)
 {
 	struct azure_op op;
 	struct s3_bucket *bkt;
@@ -378,28 +378,14 @@ err_out:
 	return ret;
 }
 
-int
-cli_ls_handle(struct cli_args *cli_args)
+static int
+cli_ls_az_handle(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
 	int ret;
 
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
-		if (ret < 0) {
-			goto err_out;
-		}
-	} else if (cli_args->type == CLI_TYPE_S3) {
-		ret = elasto_conn_init_s3(cli_args->s3.key_id,
-					  cli_args->s3.secret, &econn);
-		if (ret < 0) {
-			goto err_out;
-		}
-		ret = cli_ls_svc_handle(cli_args->insecure_http, econn);
-		elasto_conn_free(econn);
-		return ret;
-	} else {
-		ret = -ENOTSUP;
+	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -408,17 +394,14 @@ cli_ls_handle(struct cli_args *cli_args)
 	 && (cli_args->az.blob_acc == NULL)) {
 		/* list accounts for subscription, signing setup not needed */
 		ret = cli_ls_sub_handle(econn, cli_args->az.sub_id);
-		elasto_conn_free(econn);
-		return ret;
+		goto err_conn_free;
 	}
 
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = cli_sign_conn_setup(econn,
-					  cli_args->az.blob_acc,
-					  cli_args->az.sub_id);
-		if (ret < 0) {
-			goto err_conn_free;
-		}
+	ret = cli_sign_conn_setup(econn,
+				  cli_args->az.blob_acc,
+				  cli_args->az.sub_id);
+	if (ret < 0) {
+		goto err_conn_free;
 	}
 
 	if (cli_args->az.blob_name != NULL) {
@@ -437,10 +420,47 @@ cli_ls_handle(struct cli_args *cli_args)
 	if (ret < 0) {
 		goto err_conn_free;
 	}
-
 	ret = 0;
+
 err_conn_free:
 	elasto_conn_free(econn);
 err_out:
+	return ret;
+}
+
+static int
+cli_ls_s3_handle(struct cli_args *cli_args)
+{
+	struct elasto_conn *econn;
+	int ret;
+
+	ret = elasto_conn_init_s3(cli_args->s3.key_id,
+				  cli_args->s3.secret, &econn);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = cli_ls_svc_handle(econn, cli_args->insecure_http);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+	ret = 0;
+
+err_conn_free:
+	elasto_conn_free(econn);
+err_out:
+	return ret;
+}
+
+int
+cli_ls_handle(struct cli_args *cli_args)
+{
+	int ret = -ENOTSUP;
+
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		ret = cli_ls_az_handle(cli_args);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		ret = cli_ls_s3_handle(cli_args);
+	}
 	return ret;
 }
