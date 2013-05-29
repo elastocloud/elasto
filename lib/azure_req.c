@@ -3017,6 +3017,219 @@ err_out:
 }
 
 static void
+s3_req_bkt_list_free(struct s3_req_bkt_list *bkt_list)
+{
+	free(bkt_list->bkt_name);
+}
+
+static void
+s3_obj_free(struct s3_object **pobj)
+{
+	struct s3_object *obj = *pobj;
+
+	free(obj->key);
+	free(obj->last_mod);
+	free(obj->store_class);
+	free(obj);
+}
+
+static void
+s3_rsp_bkt_list_free(struct s3_rsp_bkt_list *bkt_list_rsp)
+{
+	struct s3_object *obj;
+	struct s3_object *obj_n;
+
+	if (bkt_list_rsp->num_objs <= 0)
+		return;
+	list_for_each_safe(&bkt_list_rsp->objs, obj, obj_n, list) {
+		s3_obj_free(&obj);
+	}
+}
+
+
+int
+s3_op_bkt_list(const char *bkt_name,
+	       bool insecure_http,
+	       struct azure_op *op)
+{
+	int ret;
+	struct s3_req_bkt_list *bkt_list_req;
+
+	op->opcode = S3OP_BKT_LIST;
+	bkt_list_req = &op->req.bkt_list;
+
+	bkt_list_req->bkt_name = strdup(bkt_name);
+	if (bkt_list_req->bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	op->method = REQ_METHOD_GET;
+	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/",
+		       (insecure_http ? "http" : "https"),
+		       bkt_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_name_free;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	op->sign = true;
+
+	return 0;
+
+err_url_free:
+	free(op->url);
+err_name_free:
+	free(bkt_list_req->bkt_name);
+err_out:
+	return ret;
+}
+
+static int
+s3_rsp_obj_iter_process(struct apr_xml_elem *xel,
+			struct s3_object **obj_ret)
+{
+	int ret;
+	char *size;
+	char *size_end;
+	struct s3_object *obj;
+
+	obj = malloc(sizeof(*obj));
+	if (obj == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	ret = azure_xml_path_get(xel, "Key", &obj->key);
+	if (ret < 0) {
+		goto err_obj_free;
+	}
+
+	ret = azure_xml_path_get(xel, "LastModified", &obj->last_mod);
+	if (ret < 0) {
+		goto err_key_free;
+	}
+
+	ret = azure_xml_path_get(xel, "Size", &size);
+	if (ret < 0) {
+		goto err_mod_free;
+	}
+	obj->size = strtoll(size, &size_end, 10);
+	if (size_end == size) {
+		dbg(0, "unsupported object size response\n");
+		ret = -EINVAL;
+		goto err_size_free;
+	}
+
+	ret = azure_xml_path_get(xel, "StorageClass", &obj->store_class);
+	if (ret < 0) {
+		goto err_size_free;
+	}
+
+	*obj_ret = obj;
+	free(size);
+
+	return 0;
+
+err_size_free:
+	free(size);
+err_mod_free:
+	free(obj->last_mod);
+err_key_free:
+	free(obj->key);
+err_obj_free:
+	free(obj);
+err_out:
+	return ret;
+}
+
+static int
+s3_rsp_bkt_list_process(struct azure_op *op)
+{
+	int ret;
+	apr_status_t rv;
+	struct s3_rsp_bkt_list *bkt_list_rsp;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
+	struct apr_xml_elem *xel;
+	struct s3_object *obj;
+	struct s3_object *obj_n;
+	char *bool_val;
+
+	assert(op->opcode == S3OP_BKT_LIST);
+	assert(op->rsp.data->type == AOP_DATA_IOV);
+	bkt_list_rsp = &op->rsp.bkt_list;
+
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
+		goto err_out;
+	}
+
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+			      &xdoc);
+	if (ret < 0) {
+		goto err_pool_free;
+	}
+
+	ret = azure_xml_path_get(xdoc->root, "/ListBucketResult/IsTruncated",
+				 &bool_val);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_pool_free;
+	}
+	if (!strcmp(bool_val, "false")) {
+		bkt_list_rsp->truncated = false;
+	} else if (!strcmp(bool_val, "true")) {
+		bkt_list_rsp->truncated = true;
+	} else {
+		dbg(0, "invalid bool str: %s\n", bool_val);
+		ret = -EINVAL;
+		goto err_pool_free;
+	}
+
+	list_head_init(&bkt_list_rsp->objs);
+
+	/* get the first, if present */
+	ret = azure_xml_path_el_get(xdoc->root,
+				    "/ListBucketResult/Contents",
+				    &xel);
+	if (ret == -ENOENT) {
+		goto done;
+	} else if (ret < 0) {
+		goto err_pool_free;
+	}
+
+	while ((xel != NULL) && (strcmp(xel->name, "Contents") == 0)) {
+		ret = s3_rsp_obj_iter_process(xel->first_child, &obj);
+		if (ret < 0) {
+			goto err_objs_free;
+		}
+		list_add_tail(&bkt_list_rsp->objs, &obj->list);
+		bkt_list_rsp->num_objs++;
+
+		xel = xel->next;
+	}
+done:
+	apr_pool_destroy(pool);
+	return 0;
+
+err_objs_free:
+	list_for_each_safe(&bkt_list_rsp->objs, obj, obj_n, list) {
+		s3_obj_free(&obj);
+	}
+err_pool_free:
+	apr_pool_destroy(pool);
+err_out:
+	return ret;
+}
+
+static void
 s3_req_bkt_create_free(struct s3_req_bkt_create *bkt_create)
 {
 	free(bkt_create->bkt_name);
@@ -3310,6 +3523,9 @@ azure_req_free(struct azure_op *op)
 	case S3OP_SVC_LIST:
 		s3_req_svc_list_free(&op->req.svc_list);
 		break;
+	case S3OP_BKT_LIST:
+		s3_req_bkt_list_free(&op->req.bkt_list);
+		break;
 	case S3OP_BKT_CREATE:
 		s3_req_bkt_create_free(&op->req.bkt_create);
 		break;
@@ -3354,6 +3570,9 @@ azure_rsp_free(struct azure_op *op)
 		break;
 	case S3OP_SVC_LIST:
 		s3_rsp_svc_list_free(&op->rsp.svc_list);
+		break;
+	case S3OP_BKT_LIST:
+		s3_rsp_bkt_list_free(&op->rsp.bkt_list);
 		break;
 	case AOP_ACC_DEL:
 	case AOP_CONTAINER_CREATE:
@@ -3419,6 +3638,9 @@ azure_rsp_process(struct azure_op *op)
 		break;
 	case S3OP_SVC_LIST:
 		ret = s3_rsp_svc_list_process(op);
+		break;
+	case S3OP_BKT_LIST:
+		ret = s3_rsp_bkt_list_process(op);
 		break;
 	case AOP_ACC_DEL:
 	case AOP_CONTAINER_CREATE:

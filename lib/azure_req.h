@@ -32,6 +32,7 @@ enum azure_opcode {
 	AOP_BLOB_DEL,
 	/* Amazon S3 ops below this point */
 	S3OP_SVC_LIST,
+	S3OP_BKT_LIST,
 	S3OP_BKT_CREATE,
 	S3OP_BKT_DEL,
 	S3OP_OBJ_PUT,
@@ -245,6 +246,24 @@ struct s3_rsp_svc_list {
 	struct list_head bkts;
 };
 
+struct s3_req_bkt_list {
+	char *bkt_name;
+};
+
+struct s3_object {
+	struct list_node list;
+	char *key;
+	char *last_mod;
+	uint64_t size;
+	char *store_class;
+};
+
+struct s3_rsp_bkt_list {
+	bool truncated;
+	int num_objs;
+	struct list_head objs;
+};
+
 struct s3_req_bkt_create {
 	char *bkt_name;
 	char *location;
@@ -312,6 +331,7 @@ struct azure_op {
 			struct azure_req_blob_del blob_del;
 
 			struct s3_req_svc_list svc_list;
+			struct s3_req_bkt_list bkt_list;
 			struct s3_req_bkt_create bkt_create;
 			struct s3_req_bkt_del bkt_del;
 			struct s3_req_obj_put obj_put;
@@ -332,6 +352,7 @@ struct azure_op {
 			struct azure_rsp_block_list_get block_list_get;
 
 			struct s3_rsp_svc_list svc_list;
+			struct s3_rsp_bkt_list bkt_list;
 			/*
 			 * No response specific data handled yet:
 			 * struct azure_rsp_acc_del acc_del;
@@ -477,6 +498,11 @@ azure_op_blob_del(const char *account,
 
 int
 s3_op_svc_list(bool insecure_http,
+	       struct azure_op *op);
+
+int
+s3_op_bkt_list(const char *bkt_name,
+	       bool insecure_http,
 	       struct azure_op *op);
 
 int
