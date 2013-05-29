@@ -86,12 +86,13 @@ cli_ls_args_parse_s3(const char *progname,
 	int ret;
 
 	if (argc == 2) {
-			cli_args_usage(progname,
-	"S3 client currently only supports top level listings");
-			ret = -EINVAL;
+		ret = cli_args_path_parse(progname, argv[1],
+					  &cli_args->s3.bkt_name,
+					  NULL,
+					  NULL);
+		if (ret < 0)
 			goto err_out;
 	}
-	cli_args->s3.bkt_name = NULL;
 	cli_args->s3.obj_name = NULL;
 
 	cli_args->cmd = CLI_CMD_LS;
@@ -379,6 +380,55 @@ err_out:
 }
 
 static int
+cli_ls_bkt_handle(struct elasto_conn *econn,
+		  bool insecure_http,
+		  const char *bkt_name)
+{
+	struct azure_op op;
+	struct s3_object *obj;
+	int ret;
+
+	memset(&op, 0, sizeof(op));
+	ret = s3_op_bkt_list(bkt_name, insecure_http, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	if (op.rsp.bkt_list.num_objs == 0) {
+		printf("Bucket %s is empty\n", bkt_name);
+		ret = 0;
+		goto err_op_free;
+	}
+
+	printf("Contents of bucket %s\n", bkt_name);
+	list_for_each(&op.rsp.bkt_list.objs, obj, list) {
+		printf("%s\t%s\n",
+		       obj->last_mod, obj->key);
+	}
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
+static int
 cli_ls_az_handle(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
@@ -440,10 +490,19 @@ cli_ls_s3_handle(struct cli_args *cli_args)
 		goto err_out;
 	}
 
-	ret = cli_ls_svc_handle(econn, cli_args->insecure_http);
+	if ((cli_args->s3.bkt_name == NULL)
+	 && (cli_args->s3.obj_name == NULL)) {
+		ret = cli_ls_svc_handle(econn, cli_args->insecure_http);
+	} else if (cli_args->s3.obj_name != NULL) {
+		ret = -ENOTSUP;
+	} else if (cli_args->s3.bkt_name != NULL) {
+		ret = cli_ls_bkt_handle(econn, cli_args->insecure_http,
+					cli_args->s3.bkt_name);
+	}
 	if (ret < 0) {
 		goto err_conn_free;
 	}
+
 	ret = 0;
 
 err_conn_free:
