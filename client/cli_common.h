@@ -21,6 +21,7 @@ enum cli_cmd {
 	CLI_CMD_GET,
 	CLI_CMD_DEL,
 	CLI_CMD_CREATE,
+	CLI_CMD_HELP,
 	CLI_CMD_EXIT,
 };
 

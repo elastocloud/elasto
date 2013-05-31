@@ -44,6 +44,15 @@ int
 cli_exit_handle(struct cli_args *cli_args)
 {
 	exit(0);
+	/* not reached */
+	return 0;
+}
+
+int
+cli_help_handle(struct cli_args *cli_args)
+{
+	cli_args_usage(cli_args->progname, cli_args->flags, NULL);
+	return 0;
 }
 
 struct cli_cmd_spec {
@@ -121,6 +130,13 @@ struct cli_cmd_spec {
 		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
 	},
 	{
+		.id = CLI_CMD_HELP,
+		.name = "help",
+		.help = "",
+		.handle = &cli_help_handle,
+		.feature_flags = CLI_FL_PROMPT,
+	},
+	{
 		.id = CLI_CMD_EXIT,
 		.name = "exit",
 		.help = "",
@@ -160,11 +176,11 @@ cli_args_usage(const char *progname,
 "-k s3_key_id,secret:	Amazon S3 access key ID and secret access key duo\n"
 "-d log_level:		Log debug messages (default: 0)\n"
 "-i			Insecure, use HTTP where possible "
-"(default: HTTPS only)\n\n"
-"Commands:\n",
+"(default: HTTPS only)\n\n",
 			progname);
 	}
 
+	fprintf(stderr, "Commands:\n");
 	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
 		/*
 		 * filter listing based on whether run from elasto> prompt or as
