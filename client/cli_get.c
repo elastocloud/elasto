@@ -44,14 +44,13 @@ cli_get_args_free(struct cli_args *cli_args)
 }
 
 int
-cli_get_args_parse(const char *progname,
-		   int argc,
+cli_get_args_parse(int argc,
 		   char * const *argv,
 		   struct cli_args *cli_args)
 {
 	int ret;
 
-	ret = cli_args_path_parse(progname, argv[1],
+	ret = cli_args_path_parse(cli_args->progname, argv[1],
 				  &cli_args->az.blob_acc,
 				  &cli_args->az.ctnr_name,
 				  &cli_args->az.blob_name);
@@ -59,7 +58,7 @@ cli_get_args_parse(const char *progname,
 		goto err_out;
 
 	if (cli_args->az.blob_name == NULL) {
-		cli_args_usage(progname,
+		cli_args_usage(cli_args->progname,
 		   "Invalid remote path, must be <account>/<container>/<blob>");
 		ret = -EINVAL;
 		goto err_ctnr_free;

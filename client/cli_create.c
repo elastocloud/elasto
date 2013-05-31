@@ -50,11 +50,10 @@ cli_create_args_free(struct cli_args *cli_args)
 }
 
 static int
-cli_create_args_validate_az(const char *progname,
-			    struct cli_args *cli_args)
+cli_create_args_validate_az(struct cli_args *cli_args)
 {
 	if (cli_args->az.blob_acc == NULL) {
-		cli_args_usage(progname,
+		cli_args_usage(cli_args->progname,
 			       "Create must include an <account> argument");
 		return -EINVAL;
 	}
@@ -65,7 +64,7 @@ cli_create_args_validate_az(const char *progname,
 		 || (cli_args->create.desc != NULL)
 		 || (cli_args->create.location != NULL)
 		 || (cli_args->create.affin_grp != NULL)) {
-			cli_args_usage(progname,
+			cli_args_usage(cli_args->progname,
 				       "container creation does take "
 				       "-l, -d, -A or -L arguments");
 			return -EINVAL;
@@ -74,13 +73,13 @@ cli_create_args_validate_az(const char *progname,
 	}
 
 	if (cli_args->create.label == NULL) {
-		cli_args_usage(progname,
+		cli_args_usage(cli_args->progname,
 			       "Account creation requires a <label> argument");
 		return -EINVAL;
 	}
 	if ((cli_args->create.location == NULL)
 	 && (cli_args->create.affin_grp == NULL)) {
-		cli_args_usage(progname,
+		cli_args_usage(cli_args->progname,
 			       "Create must specify either a <location> or "
 			       "<affinity group>");
 		return -EINVAL;
@@ -90,11 +89,10 @@ cli_create_args_validate_az(const char *progname,
 }
 
 static int
-cli_create_args_validate_s3(const char *progname,
-			    struct cli_args *cli_args)
+cli_create_args_validate_s3(struct cli_args *cli_args)
 {
 	if (cli_args->s3.bkt_name == NULL) {
-		cli_args_usage(progname,
+		cli_args_usage(cli_args->progname,
 			       "Create must include a <bucket> argument");
 		return -EINVAL;
 	}
@@ -103,10 +101,9 @@ cli_create_args_validate_s3(const char *progname,
 }
 
 int
-cli_create_args_parse(const char *progname,
-		   int argc,
-		   char * const *argv,
-		   struct cli_args *cli_args)
+cli_create_args_parse(int argc,
+		      char * const *argv,
+		      struct cli_args *cli_args)
 {
 	int opt;
 	int ret;
@@ -146,7 +143,7 @@ cli_create_args_parse(const char *progname,
 			}
 			break;
 		default: /* '?' */
-			cli_args_usage(progname, "invalid create argument");
+			cli_args_usage(cli_args->progname, "invalid create argument");
 			ret = -EINVAL;
 			goto err_args_free;
 			break;
@@ -154,19 +151,19 @@ cli_create_args_parse(const char *progname,
 	}
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = cli_args_path_parse(progname, argv[optind],
+		ret = cli_args_path_parse(cli_args->progname, argv[optind],
 					  &cli_args->az.blob_acc,
 					  &cli_args->az.ctnr_name, NULL);
 		if (ret < 0)
 			goto err_args_free;
-		ret = cli_create_args_validate_az(progname, cli_args);
+		ret = cli_create_args_validate_az(cli_args);
 	} else if (cli_args->type == CLI_TYPE_S3) {
-		ret = cli_args_path_parse(progname, argv[optind],
+		ret = cli_args_path_parse(cli_args->progname, argv[optind],
 					  &cli_args->s3.bkt_name,
 					  NULL, NULL);
 		if (ret < 0)
 			goto err_args_free;
-		ret = cli_create_args_validate_s3(progname, cli_args);
+		ret = cli_create_args_validate_s3(cli_args);
 	} else {
 		ret = -ENOTSUP;
 	}

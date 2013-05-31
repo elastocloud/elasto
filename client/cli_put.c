@@ -54,14 +54,13 @@ cli_put_args_free(struct cli_args *cli_args)
 }
 
 static int
-cli_put_args_parse_az(const char *progname,
-		      int argc,
+cli_put_args_parse_az(int argc,
 		      char * const *argv,
 		      struct cli_args *cli_args)
 {
 	int ret;
 
-	ret = cli_args_path_parse(progname, argv[2],
+	ret = cli_args_path_parse(cli_args->progname, argv[2],
 				  &cli_args->az.blob_acc,
 				  &cli_args->az.ctnr_name,
 				  &cli_args->az.blob_name);
@@ -69,7 +68,7 @@ cli_put_args_parse_az(const char *progname,
 		goto err_out;
 
 	if (cli_args->az.blob_name == NULL) {
-		cli_args_usage(progname,
+		cli_args_usage(cli_args->progname,
 	    "Invalid remote Azure path, must be <account>/<container>/<blob>");
 		ret = -EINVAL;
 		goto err_path_free;
@@ -85,21 +84,20 @@ err_out:
 }
 
 static int
-cli_put_args_parse_s3(const char *progname,
-		      int argc,
+cli_put_args_parse_s3(int argc,
 		      char * const *argv,
 		      struct cli_args *cli_args)
 {
 	int ret;
 
-	ret = cli_args_path_parse(progname, argv[2],
+	ret = cli_args_path_parse(cli_args->progname, argv[2],
 				  &cli_args->s3.bkt_name,
 				  &cli_args->s3.obj_name, NULL);
 	if (ret < 0)
 		goto err_out;
 
 	if (cli_args->s3.obj_name == NULL) {
-		cli_args_usage(progname,
+		cli_args_usage(cli_args->progname,
 		   "Invalid remote S3 path, must be <bucket>/<object>");
 		ret = -EINVAL;
 		goto err_bkt_free;
@@ -114,8 +112,7 @@ err_out:
 }
 
 int
-cli_put_args_parse(const char *progname,
-		   int argc,
+cli_put_args_parse(int argc,
 		   char * const *argv,
 		   struct cli_args *cli_args)
 {
@@ -128,9 +125,9 @@ cli_put_args_parse(const char *progname,
 	}
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = cli_put_args_parse_az(progname, argc, argv, cli_args);
+		ret = cli_put_args_parse_az(argc, argv, cli_args);
 	} else if (cli_args->type == CLI_TYPE_S3) {
-		ret = cli_put_args_parse_s3(progname, argc, argv, cli_args);
+		ret = cli_put_args_parse_s3(argc, argv, cli_args);
 	} else {
 		ret = -ENOTSUP;
 	}

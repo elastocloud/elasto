@@ -42,6 +42,7 @@ enum cli_fl {
  * @feature_fl: features available to this instance
  */
 struct cli_args {
+	char *progname;
 	enum cli_type type;
 	enum cli_fl flags;
 	union {

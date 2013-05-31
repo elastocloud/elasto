@@ -52,8 +52,7 @@ struct cli_cmd_spec {
 	char *help;
 	int arg_min;
 	int arg_max;
-	int (*args_parse)(const char *,
-			  int argc,
+	int (*args_parse)(int argc,
 			  char * const *argv,
 			  struct cli_args *cli_args);
 	int (*handle)(struct cli_args *);
@@ -304,8 +303,7 @@ err_out:
 }
 
 static int
-cli_cmd_parse(const char *progname,
-	      int argc,
+cli_cmd_parse(int argc,
 	      char * const *argv,
 	      struct cli_args *cli_args,
 	      const struct cli_cmd_spec **cmd_spec)
@@ -314,26 +312,29 @@ cli_cmd_parse(const char *progname,
 	const struct cli_cmd_spec *cmd;
 
 	if (argc == 0) {
-		cli_args_usage(progname, NULL);
+		cli_args_usage(cli_args->progname, NULL);
 		ret = -EINVAL;
 		goto err_out;
 	}
 
 	cmd = cli_cmd_lookup(argv[0]);
 	if (cmd == NULL) {
-		cli_args_usage(progname, "command not found");
+		cli_args_usage(cli_args->progname,
+			       "command not found");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
 	if (argc - 1 < cmd->arg_min) {
-		cli_args_usage(progname, "to few arguments for command");
+		cli_args_usage(cli_args->progname,
+			       "to few arguments for command");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
 	if (argc - 1 > cmd->arg_max) {
-		cli_args_usage(progname, "to many arguments for command");
+		cli_args_usage(cli_args->progname,
+			       "to many arguments for command");
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -341,7 +342,7 @@ cli_cmd_parse(const char *progname,
 	if (cmd->args_parse == NULL)
 		goto done;
 
-	ret = cmd->args_parse(progname, argc, argv, cli_args);
+	ret = cmd->args_parse(argc, argv, cli_args);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -368,6 +369,7 @@ cli_args_free(const struct cli_cmd_spec *cmd,
 		free(cli_args->s3.key_id);
 		free(cli_args->s3.secret);
 	}
+	free(cli_args->progname);
 }
 
 static int
@@ -383,7 +385,11 @@ cli_args_parse(int argc,
 	char *pub_settings = NULL;
 	char *s3_id = NULL;
 	char *s3_secret = NULL;
-
+	char *progname = strdup(argv[0]);
+	if (progname == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
 	cli_args->insecure_http = false;
 
 	while ((opt = getopt(argc, argv, "s:k:d:?i")) != -1) {
@@ -447,6 +453,7 @@ cli_args_parse(int argc,
 		cli_args->s3.key_id = s3_id;
 		cli_args->s3.secret = s3_secret;
 	}
+	cli_args->progname = progname;
 
 	if (argc - optind == 0) {
 		/* no cmd string, elasto> prompt */
@@ -456,7 +463,7 @@ cli_args_parse(int argc,
 	}
 
 	cli_args->flags = CLI_FL_BIN_ARG;
-	ret = cli_cmd_parse(argv[0], argc - optind, &argv[optind],
+	ret = cli_cmd_parse(argc - optind, &argv[optind],
 			    cli_args, cmd_spec);
 	if (ret < 0) {
 		goto err_out;
@@ -468,6 +475,7 @@ err_out:
 	free(pub_settings);
 	free(s3_id);
 	free(s3_secret);
+	free(progname);
 
 	return ret;
 }
@@ -504,7 +512,7 @@ cli_cmd_line_run(struct cli_args *cli_args,
 		argv[argc++] = token;
 		token = strtok(NULL, " ");
 	}
-	ret = cli_cmd_parse("elasto_client", argc, argv,
+	ret = cli_cmd_parse(argc, argv,
 			    cli_args, &cmd);
 	if (ret < 0) {
 		return ret;

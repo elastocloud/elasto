@@ -18,8 +18,7 @@ void
 cli_get_args_free(struct cli_args *cli_args);
 
 int
-cli_get_args_parse(const char *progname,
-		   int argc,
+cli_get_args_parse(int argc,
 		   char * const *argv,
 		   struct cli_args *cli_args);
 
