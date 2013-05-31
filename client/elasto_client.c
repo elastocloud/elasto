@@ -56,7 +56,8 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_LS,
 		.name = "ls",
-		.help = "[<account>/[container[/blob]]]",
+		.help = "[<account>[/container[/blob]]]\n"
+			"\t\t[<bucket>]",
 		.arg_min = 0,
 		.arg_max = 1,
 		.args_parse = &cli_ls_args_parse,
@@ -87,7 +88,8 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_DEL,
 		.name = "del",
-		.help = "<account>[/<container>[/<blob>]]",
+		.help = "<account>[/<container>[/<blob>]]\n"
+			"\t\t<bucket>",
 		.arg_min = 1,
 		.arg_max = 1,
 		.args_parse = &cli_del_args_parse,
