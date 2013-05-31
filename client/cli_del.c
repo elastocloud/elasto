@@ -288,28 +288,13 @@ err_out:
 }
 
 int
-cli_del_handle(struct cli_args *cli_args)
+cli_del_az_handle(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
 	int ret;
 
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
-		if (ret < 0) {
-			goto err_out;
-		}
-	} else if (cli_args->type == CLI_TYPE_S3) {
-		ret = elasto_conn_init_s3(cli_args->s3.key_id,
-					  cli_args->s3.secret, &econn);
-		if (ret < 0) {
-			goto err_out;
-		}
-		ret = cli_del_bkt_handle(cli_args->s3.bkt_name,
-					 cli_args->insecure_http, econn);
-		elasto_conn_free(econn);
-		return ret;
-	} else {
-		ret = -ENOTSUP;
+	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -341,5 +326,36 @@ cli_del_handle(struct cli_args *cli_args)
 err_conn_free:
 	elasto_conn_free(econn);
 err_out:
+	return ret;
+}
+
+int
+cli_del_s3_handle(struct cli_args *cli_args)
+{
+	struct elasto_conn *econn;
+	int ret;
+
+	ret = elasto_conn_init_s3(cli_args->s3.key_id,
+				  cli_args->s3.secret, &econn);
+	if (ret < 0) {
+		goto err_out;
+	}
+	ret = cli_del_bkt_handle(cli_args->s3.bkt_name,
+				 cli_args->insecure_http, econn);
+	elasto_conn_free(econn);
+err_out:
+	return ret;
+}
+
+int
+cli_del_handle(struct cli_args *cli_args)
+{
+	int ret = -ENOTSUP;
+
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		ret = cli_del_az_handle(cli_args);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		ret = cli_del_s3_handle(cli_args);
+	}
 	return ret;
 }
