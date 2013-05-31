@@ -107,7 +107,7 @@ struct cli_cmd_spec {
 		.id = CLI_CMD_DEL,
 		.name = "del",
 		.help = "<account>[/<container>[/<blob>]]\n"
-			"\t\t<bucket>",
+			"\t\t<bucket>[/<object>]",
 		.arg_min = 1,
 		.arg_max = 1,
 		.args_parse = &cli_del_args_parse,

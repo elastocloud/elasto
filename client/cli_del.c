@@ -46,6 +46,7 @@ void
 cli_del_s3_args_free(struct cli_args *cli_args)
 {
 	free(cli_args->s3.bkt_name);
+	free(cli_args->s3.obj_name);
 }
 
 void
@@ -78,14 +79,14 @@ cli_del_args_parse_az(int argc,
 			       "Invalid remote path, must be "
 			       "<account>[/<container>[/<blob>]]");
 		ret = -EINVAL;
-		goto err_ctnr_free;
+		goto err_args_free;
 	}
 
 	cli_args->cmd = CLI_CMD_DEL;
 	return 0;
 
-err_ctnr_free:
-	free(cli_args->az.ctnr_name);
+err_args_free:
+	cli_del_az_args_free(cli_args);
 err_out:
 	return ret;
 }
@@ -100,22 +101,23 @@ cli_del_args_parse_s3(int argc,
 	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
 				  argv[1],
 				  &cli_args->s3.bkt_name,
-				  NULL, NULL);
+				  &cli_args->s3.obj_name, NULL);
 	if (ret < 0)
 		goto err_out;
 
 	if (cli_args->s3.bkt_name == NULL) {
 		cli_args_usage(cli_args->progname, cli_args->flags,
-			       "Invalid remote path, must be <bucket name>");
+			       "Invalid remote path, must be "
+			       "<bucket>[/<object>]");
 		ret = -EINVAL;
-		goto err_bkt_free;
+		goto err_args_free;
 	}
 
 	cli_args->cmd = CLI_CMD_DEL;
 	return 0;
 
-err_bkt_free:
-	free(cli_args->s3.bkt_name);
+err_args_free:
+	cli_del_s3_args_free(cli_args);
 err_out:
 	return ret;
 }
@@ -287,6 +289,44 @@ err_out:
 	return ret;
 }
 
+static int
+cli_del_obj_handle(struct elasto_conn *econn,
+		   char *bkt_name,
+		   char *obj_name,
+		   bool insecure_http)
+{
+	struct azure_op op;
+	int ret;
+
+	memset(&op, 0, sizeof(op));
+	ret = s3_op_obj_del(bkt_name, obj_name, insecure_http, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
 int
 cli_del_az_handle(struct cli_args *cli_args)
 {
@@ -340,8 +380,14 @@ cli_del_s3_handle(struct cli_args *cli_args)
 	if (ret < 0) {
 		goto err_out;
 	}
-	ret = cli_del_bkt_handle(cli_args->s3.bkt_name,
-				 cli_args->insecure_http, econn);
+	if (cli_args->s3.obj_name != NULL) {
+		ret = cli_del_obj_handle(econn, cli_args->s3.bkt_name,
+					 cli_args->s3.obj_name,
+					 cli_args->insecure_http);
+	} else {
+		ret = cli_del_bkt_handle(cli_args->s3.bkt_name,
+					 cli_args->insecure_http, econn);
+	}
 	elasto_conn_free(econn);
 err_out:
 	return ret;
