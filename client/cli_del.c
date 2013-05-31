@@ -49,7 +49,8 @@ cli_del_args_parse_az(int argc,
 {
 	int ret;
 
-	ret = cli_args_path_parse(cli_args->progname, argv[1],
+	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
+				  argv[1],
 				  &cli_args->az.blob_acc,
 				  &cli_args->az.ctnr_name,
 				  &cli_args->az.blob_name);
@@ -57,7 +58,7 @@ cli_del_args_parse_az(int argc,
 		goto err_out;
 
 	if (cli_args->az.blob_acc == NULL) {
-		cli_args_usage(cli_args->progname,
+		cli_args_usage(cli_args->progname, cli_args->flags,
 			       "Invalid remote path, must be "
 			       "<account>[/<container>[/<blob>]]");
 		ret = -EINVAL;
@@ -80,14 +81,15 @@ cli_del_args_parse_s3(int argc,
 {
 	int ret;
 
-	ret = cli_args_path_parse(cli_args->progname, argv[1],
+	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
+				  argv[1],
 				  &cli_args->s3.bkt_name,
 				  NULL, NULL);
 	if (ret < 0)
 		goto err_out;
 
 	if (cli_args->s3.bkt_name == NULL) {
-		cli_args_usage(cli_args->progname,
+		cli_args_usage(cli_args->progname, cli_args->flags,
 			       "Invalid remote path, must be <bucket name>");
 		ret = -EINVAL;
 		goto err_bkt_free;

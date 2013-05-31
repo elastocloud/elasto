@@ -60,7 +60,8 @@ cli_put_args_parse_az(int argc,
 {
 	int ret;
 
-	ret = cli_args_path_parse(cli_args->progname, argv[2],
+	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
+				  argv[2],
 				  &cli_args->az.blob_acc,
 				  &cli_args->az.ctnr_name,
 				  &cli_args->az.blob_name);
@@ -68,7 +69,7 @@ cli_put_args_parse_az(int argc,
 		goto err_out;
 
 	if (cli_args->az.blob_name == NULL) {
-		cli_args_usage(cli_args->progname,
+		cli_args_usage(cli_args->progname, cli_args->flags,
 	    "Invalid remote Azure path, must be <account>/<container>/<blob>");
 		ret = -EINVAL;
 		goto err_path_free;
@@ -90,14 +91,15 @@ cli_put_args_parse_s3(int argc,
 {
 	int ret;
 
-	ret = cli_args_path_parse(cli_args->progname, argv[2],
+	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
+				  argv[2],
 				  &cli_args->s3.bkt_name,
 				  &cli_args->s3.obj_name, NULL);
 	if (ret < 0)
 		goto err_out;
 
 	if (cli_args->s3.obj_name == NULL) {
-		cli_args_usage(cli_args->progname,
+		cli_args_usage(cli_args->progname, cli_args->flags,
 		   "Invalid remote S3 path, must be <bucket>/<object>");
 		ret = -EINVAL;
 		goto err_bkt_free;

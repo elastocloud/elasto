@@ -31,7 +31,7 @@ enum cli_type {
 
 /*
  * @CLI_FL_BIN_ARG:	run as argument to binary
- * @CLI_FL_PROMPT:	run from elasto prompt
+ * @CLI_FL_PROMPT:	run from elasto> prompt
  */
 enum cli_fl {
 	CLI_FL_BIN_ARG	= 0x00000001,
@@ -39,7 +39,7 @@ enum cli_fl {
 };
 
 /*
- * @feature_fl: features available to this instance
+ * @flags: features available to this instance
  */
 struct cli_args {
 	char *progname;
@@ -86,6 +86,7 @@ struct cli_args {
 
 int
 cli_args_path_parse(const char *progname,
+		    enum cli_fl flags,
 		    const char *path,
 		    char **comp1_out,
 		    char **comp2_out,
@@ -93,6 +94,7 @@ cli_args_path_parse(const char *progname,
 
 void
 cli_args_usage(const char *progname,
+	       enum cli_fl flags,
 	       const char *msg);
 
 #endif /* ifdef _CLI_COMMON_H_ */

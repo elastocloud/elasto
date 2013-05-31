@@ -139,6 +139,7 @@ struct cli_cmd_spec {
 
 void
 cli_args_usage(const char *progname,
+	       enum cli_fl flags,
 	       const char *msg)
 {
 	struct cli_cmd_spec *cmd;
@@ -146,7 +147,9 @@ cli_args_usage(const char *progname,
 	if (msg != NULL) {
 		fprintf(stderr, "%s\n\n", msg);
 	}
-	fprintf(stderr,
+
+	if (flags & CLI_FL_BIN_ARG) {
+		fprintf(stderr,
 "Usage: %s [options] <cmd> <cmd args>\n\n"
 "Options:\n"
 "-s publish_settings:	Azure PublishSettings file\n"
@@ -155,10 +158,18 @@ cli_args_usage(const char *progname,
 "-i			Insecure, use HTTP where possible "
 "(default: HTTPS only)\n\n"
 "Commands:\n",
-		progname);
+			progname);
+	}
 
 	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
-		fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->help);
+		/*
+		 * filter listing based on whether run from elasto> prompt or as
+		 * binary arg. Show only applicable commands
+		 */
+		if ((cmd->feature_flags & flags & CLI_FL_BIN_ARG)
+		 || (cmd->feature_flags & flags & CLI_FL_PROMPT)) {
+			fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->help);
+		}
 	}
 }
 
@@ -184,6 +195,7 @@ cli_cmd_lookup(const char *name)
  */
 int
 cli_args_path_parse(const char *progname,
+		    enum cli_fl flags,
 		    const char *path,
 		    char **comp1_out,
 		    char **comp2_out,
@@ -196,7 +208,7 @@ cli_args_path_parse(const char *progname,
 	char *comp3 = NULL;
 
 	if (path == NULL) {
-		cli_args_usage(progname, "Empty remote path");
+		cli_args_usage(progname, flags, "Empty remote path");
 		return -EINVAL;
 	}
 
@@ -260,14 +272,14 @@ cli_args_path_parse(const char *progname,
 	s = strchr(comp3, '/');
 	if (s != NULL) {
 		/* blob has a trailing slash */
-		cli_args_usage(progname,
+		cli_args_usage(progname, flags,
 			"Invalid remote path: blob has trailing garbage");
 		ret = -EINVAL;
 		goto err_3_free;
 	}
 done:
 	if ((comp1_out == NULL) && (comp1 != NULL)) {
-		cli_args_usage(progname,
+		cli_args_usage(progname, flags,
 			"Invalid remote path: unexpected 1st component");
 		ret = -EINVAL;
 		goto err_3_free;
@@ -275,7 +287,7 @@ done:
 		*comp1_out = comp1;
 	}
 	if ((comp2_out == NULL) && (comp2 != NULL)) {
-		cli_args_usage(progname,
+		cli_args_usage(progname, flags,
 			"Invalid remote path: unexpected 2nd component");
 		ret = -EINVAL;
 		goto err_3_free;
@@ -283,7 +295,7 @@ done:
 		*comp2_out = comp2;
 	}
 	if ((comp3_out == NULL) && (comp3 != NULL)) {
-		cli_args_usage(progname,
+		cli_args_usage(progname, flags,
 			"Invalid remote path: unexpected 3rd component");
 		ret = -EINVAL;
 		goto err_3_free;
@@ -312,28 +324,28 @@ cli_cmd_parse(int argc,
 	const struct cli_cmd_spec *cmd;
 
 	if (argc == 0) {
-		cli_args_usage(cli_args->progname, NULL);
+		cli_args_usage(cli_args->progname, cli_args->flags, NULL);
 		ret = -EINVAL;
 		goto err_out;
 	}
 
 	cmd = cli_cmd_lookup(argv[0]);
 	if (cmd == NULL) {
-		cli_args_usage(cli_args->progname,
+		cli_args_usage(cli_args->progname, cli_args->flags,
 			       "command not found");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
 	if (argc - 1 < cmd->arg_min) {
-		cli_args_usage(cli_args->progname,
+		cli_args_usage(cli_args->progname, cli_args->flags,
 			       "to few arguments for command");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
 	if (argc - 1 > cmd->arg_max) {
-		cli_args_usage(cli_args->progname,
+		cli_args_usage(cli_args->progname, cli_args->flags,
 			       "to many arguments for command");
 		ret = -EINVAL;
 		goto err_out;
@@ -429,7 +441,7 @@ cli_args_parse(int argc,
 			cli_args->insecure_http = true;
 			break;
 		default: /* '?' */
-			cli_args_usage(argv[0], NULL);
+			cli_args_usage(progname, CLI_FL_BIN_ARG, NULL);
 			ret = -EINVAL;
 			goto err_out;
 			break;
@@ -437,7 +449,7 @@ cli_args_parse(int argc,
 	}
 	if (((pub_settings == NULL) && (s3_id == NULL))
 	 || ((pub_settings != NULL) && (s3_id != NULL))) {
-		cli_args_usage(argv[0],
+		cli_args_usage(argv[0], CLI_FL_BIN_ARG,
 			       "Either an Azure PublishSettings file, or "
 			       "Amazon S3 key-duo is required");
 		ret = -EINVAL;
