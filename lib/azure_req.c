@@ -3469,6 +3469,64 @@ err_out:
 }
 
 static void
+s3_req_obj_del_free(struct s3_req_obj_del *obj_del)
+{
+	free(obj_del->bkt_name);
+	free(obj_del->obj_name);
+}
+
+int
+s3_op_obj_del(const char *bkt_name,
+	      const char *obj_name,
+	      bool insecure_http,
+	      struct azure_op *op)
+{
+	int ret;
+	struct s3_req_obj_del *obj_del_req;
+
+	op->opcode = S3OP_OBJ_DEL;
+	obj_del_req = &op->req.obj_del;
+
+	obj_del_req->bkt_name = strdup(bkt_name);
+	if (obj_del_req->bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	obj_del_req->obj_name = strdup(obj_name);
+	if (obj_del_req->obj_name == NULL) {
+		ret = -ENOMEM;
+		goto err_bkt_free;
+	}
+
+	op->method = REQ_METHOD_DELETE;
+	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s",
+		       (insecure_http ? "http" : "https"),
+		       bkt_name, obj_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_obj_free;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	op->sign = true;
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_obj_free:
+	free(obj_del_req->obj_name);
+err_bkt_free:
+	free(obj_del_req->bkt_name);
+err_out:
+	return ret;
+}
+
+static void
 azure_req_free(struct azure_op *op)
 {
 	azure_op_data_destroy(&op->req.data);
@@ -3535,6 +3593,9 @@ azure_req_free(struct azure_op *op)
 	case S3OP_OBJ_PUT:
 		s3_req_obj_put_free(&op->req.obj_put);
 		break;
+	case S3OP_OBJ_DEL:
+		s3_req_obj_del_free(&op->req.obj_del);
+		break;
 	default:
 		assert(true);
 		break;
@@ -3586,6 +3647,7 @@ azure_rsp_free(struct azure_op *op)
 	case S3OP_BKT_CREATE:
 	case S3OP_BKT_DEL:
 	case S3OP_OBJ_PUT:
+	case S3OP_OBJ_DEL:
 		/* nothing to do */
 		break;
 	default:
@@ -3654,6 +3716,7 @@ azure_rsp_process(struct azure_op *op)
 	case S3OP_BKT_CREATE:
 	case S3OP_BKT_DEL:
 	case S3OP_OBJ_PUT:
+	case S3OP_OBJ_DEL:
 		/* nothing to do */
 		ret = 0;
 		break;

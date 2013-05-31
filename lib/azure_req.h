@@ -36,6 +36,7 @@ enum azure_opcode {
 	S3OP_BKT_CREATE,
 	S3OP_BKT_DEL,
 	S3OP_OBJ_PUT,
+	S3OP_OBJ_DEL,
 };
 
 enum azure_op_data_type {
@@ -278,6 +279,11 @@ struct s3_req_obj_put {
 	char *obj_name;
 };
 
+struct s3_req_obj_del {
+	char *bkt_name;
+	char *obj_name;
+};
+
 /*
  * @base_off is the base offset into the input/output
  * buffer. i.e. @iov.base_off + @off = read/write offset
@@ -335,6 +341,7 @@ struct azure_op {
 			struct s3_req_bkt_create bkt_create;
 			struct s3_req_bkt_del bkt_del;
 			struct s3_req_obj_put obj_put;
+			struct s3_req_obj_del obj_del;
 		};
 		uint64_t read_cbs;
 		struct azure_op_data *data;
@@ -520,6 +527,12 @@ int
 s3_op_obj_put(const char *bkt_name,
 	      const char *obj_name,
 	      struct azure_op_data *data,
+	      bool insecure_http,
+	      struct azure_op *op);
+
+int
+s3_op_obj_del(const char *bkt_name,
+	      const char *obj_name,
 	      bool insecure_http,
 	      struct azure_op *op);
 
