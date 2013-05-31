@@ -124,11 +124,15 @@ struct cli_cmd_spec {
 		.id = CLI_CMD_EXIT,
 		.name = "exit",
 		.help = "",
-		.arg_min = 0,
-		.arg_max = 0,
-		.args_parse = NULL,
 		.handle = &cli_exit_handle,
-		.args_free = NULL,
+		/* alias for quit, never display */
+		.feature_flags = 0,
+	},
+	{
+		.id = CLI_CMD_EXIT,
+		.name = "quit",
+		.help = "",
+		.handle = &cli_exit_handle,
 		.feature_flags = CLI_FL_PROMPT,
 	},
 	{
