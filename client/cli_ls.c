@@ -35,11 +35,27 @@
 #include "cli_ls.h"
 
 void
-cli_ls_args_free(struct cli_args *cli_args)
+cli_ls_az_args_free(struct cli_args *cli_args)
 {
 	free(cli_args->az.blob_acc);
 	free(cli_args->az.ctnr_name);
 	free(cli_args->az.blob_name);
+}
+
+void
+cli_ls_s3_args_free(struct cli_args *cli_args)
+{
+	free(cli_args->s3.bkt_name);
+}
+
+void
+cli_ls_args_free(struct cli_args *cli_args)
+{
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		return cli_ls_az_args_free(cli_args);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		return cli_ls_s3_args_free(cli_args);
+	}
 }
 
 int
