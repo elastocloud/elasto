@@ -29,8 +29,21 @@ enum cli_type {
 	CLI_TYPE_S3,
 };
 
+/*
+ * @CLI_FL_BIN_ARG:	run as argument to binary
+ * @CLI_FL_PROMPT:	run from elasto prompt
+ */
+enum cli_fl {
+	CLI_FL_BIN_ARG	= 0x00000001,
+	CLI_FL_PROMPT	= 0x00000002,
+};
+
+/*
+ * @feature_fl: features available to this instance
+ */
 struct cli_args {
 	enum cli_type type;
+	enum cli_fl flags;
 	union {
 		struct {
 			char *ps_file;

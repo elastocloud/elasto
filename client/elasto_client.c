@@ -58,6 +58,7 @@ struct cli_cmd_spec {
 			  struct cli_args *cli_args);
 	int (*handle)(struct cli_args *);
 	void (*args_free)(struct cli_args *);
+	enum cli_fl feature_flags;
 } cli_cmd_specs[] = {
 	{
 		.id = CLI_CMD_LS,
@@ -69,6 +70,7 @@ struct cli_cmd_spec {
 		.args_parse = &cli_ls_args_parse,
 		.handle = &cli_ls_handle,
 		.args_free = &cli_ls_args_free,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
 	},
 	{
 		.id = CLI_CMD_PUT,
@@ -80,6 +82,7 @@ struct cli_cmd_spec {
 		.args_parse = &cli_put_args_parse,
 		.handle = &cli_put_handle,
 		.args_free = &cli_put_args_free,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
 	},
 	{
 		.id = CLI_CMD_GET,
@@ -90,6 +93,7 @@ struct cli_cmd_spec {
 		.args_parse = &cli_get_args_parse,
 		.handle = &cli_get_handle,
 		.args_free = &cli_get_args_free,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
 	},
 	{
 		.id = CLI_CMD_DEL,
@@ -101,6 +105,7 @@ struct cli_cmd_spec {
 		.args_parse = &cli_del_args_parse,
 		.handle = &cli_del_handle,
 		.args_free = &cli_del_args_free,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
 	},
 	{
 		.id = CLI_CMD_CREATE,
@@ -114,6 +119,7 @@ struct cli_cmd_spec {
 		.args_parse = &cli_create_args_parse,
 		.handle = &cli_create_handle,
 		.args_free = &cli_create_args_free,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
 	},
 	{
 		.id = CLI_CMD_EXIT,
@@ -124,6 +130,7 @@ struct cli_cmd_spec {
 		.args_parse = NULL,
 		.handle = &cli_exit_handle,
 		.args_free = NULL,
+		.feature_flags = CLI_FL_PROMPT,
 	},
 	{
 		/* must be last entry */
@@ -442,11 +449,13 @@ cli_args_parse(int argc,
 	}
 
 	if (argc - optind == 0) {
-		/* no cmd string */
+		/* no cmd string, elasto> prompt */
 		*cmd_spec = NULL;
+		cli_args->flags = CLI_FL_PROMPT;
 		return 0;
 	}
 
+	cli_args->flags = CLI_FL_BIN_ARG;
 	ret = cli_cmd_parse(argv[0], argc - optind, &argv[optind],
 			    cli_args, cmd_spec);
 	if (ret < 0) {
