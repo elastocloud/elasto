@@ -40,6 +40,12 @@
 #include "cli_del.h"
 #include "cli_create.h"
 
+int
+cli_exit_handle(struct cli_args *cli_args)
+{
+	exit(0);
+}
+
 struct cli_cmd_spec {
 	enum cli_cmd id;
 	char *name;
@@ -108,6 +114,16 @@ struct cli_cmd_spec {
 		.args_parse = &cli_create_args_parse,
 		.handle = &cli_create_handle,
 		.args_free = &cli_create_args_free,
+	},
+	{
+		.id = CLI_CMD_EXIT,
+		.name = "exit",
+		.help = "",
+		.arg_min = 0,
+		.arg_max = 0,
+		.args_parse = NULL,
+		.handle = &cli_exit_handle,
+		.args_free = NULL,
 	},
 	{
 		/* must be last entry */
@@ -315,11 +331,15 @@ cli_cmd_parse(const char *progname,
 		goto err_out;
 	}
 
+	if (cmd->args_parse == NULL)
+		goto done;
+
 	ret = cmd->args_parse(progname, argc, argv, cli_args);
 	if (ret < 0) {
 		goto err_out;
 	}
 
+done:
 	*cmd_spec = cmd;
 	ret = 0;
 err_out:
@@ -330,7 +350,7 @@ static void
 cli_args_free(const struct cli_cmd_spec *cmd,
 	      struct cli_args *cli_args)
 {
-	if (cmd != NULL)
+	if ((cmd != NULL) && (cmd->args_free != NULL))
 		cmd->args_free(cli_args);
 	if (cli_args->type == CLI_TYPE_AZURE) {
 		free(cli_args->az.sub_name);
@@ -484,7 +504,8 @@ cli_cmd_line_run(struct cli_args *cli_args,
 	if (ret < 0) {
 		return ret;
 	}
-	cmd->args_free(cli_args);
+	if (cmd->args_free != NULL)
+		cmd->args_free(cli_args);
 
 	return 0;
 }
