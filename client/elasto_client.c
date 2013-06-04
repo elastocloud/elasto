@@ -360,14 +360,14 @@ cli_cmd_parse(int argc,
 
 	if (argc - 1 < cmd->arg_min) {
 		cli_args_usage(cli_args->progname, cli_args->flags,
-			       "to few arguments for command");
+			       "too few arguments for command");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
 	if (argc - 1 > cmd->arg_max) {
 		cli_args_usage(cli_args->progname, cli_args->flags,
-			       "to many arguments for command");
+			       "too many arguments for command");
 		ret = -EINVAL;
 		goto err_out;
 	}
