@@ -1661,17 +1661,16 @@ err_out:
 }
 
 /*
- * if @len is zero then ignore @off and retrieve entire blob
+ * if @req_len is zero then ignore @req_off and retrieve entire blob
  */
 int
 azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
 		  bool is_page,
-		  enum azure_op_data_type data_type,
-		  uint8_t *buf,
-		  uint64_t off,
-		  uint64_t len,
+		  struct azure_op_data *data,
+		  uint64_t req_off,
+		  uint64_t req_len,
 		  bool insecure_http,
 		  struct azure_op *op)
 {
@@ -1679,11 +1678,9 @@ azure_op_blob_get(const char *account,
 	struct azure_req_blob_get *get_req;
 
 	/* check for correct alignment */
-	if (is_page && (((len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != len)) {
-		ret = -EINVAL;
-		goto err_out;
-	}
-	if (is_page && (((off / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != off)) {
+	if (is_page
+	 && ((((req_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != req_len)
+	  || (((req_off / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != req_off))) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -1714,40 +1711,17 @@ azure_op_blob_get(const char *account,
 	} else {
 		get_req->type = BLOB_TYPE_BLOCK;
 	}
-	if (len > 0) {
+	if (req_len > 0) {
 		/* retrieve a specific range */
-		get_req->off = off;
-		get_req->len = len;
+		get_req->off = req_off;
+		get_req->len = req_len;
 	}
 
-	switch (data_type) {
-	case AOP_DATA_NONE:
-		/* recv buffer allocated when data arrives */
-		assert(buf == NULL);
-		break;
-	case AOP_DATA_IOV:
-		/* caller request data is stuffed into this buffer */
-		assert(buf != NULL);
-		ret = azure_op_data_iov_new(buf, len, 0, false, &op->rsp.data);
-		if (ret < 0) {
-			goto err_bname_free;
-		}
-		break;
-	case AOP_DATA_FILE:
-		/* file name is stored in buf */
-		assert(buf != NULL);
-		ret = azure_op_data_file_new((char *)buf, len, 0,
-					     O_CREAT | O_WRONLY,
-					  S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH,
-					     &op->rsp.data);
-		if (ret < 0) {
-			goto err_bname_free;
-		}
-		break;
-	default:
-		assert(true);	/* unsupported */
-		break;
+	if (data == NULL) {
+		dbg(3, "no recv buffer, allocating on arrival\n");
 	}
+	op->rsp.data = data;
+	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_GET;
 	ret = asprintf(&op->url,
@@ -1756,7 +1730,7 @@ azure_op_blob_get(const char *account,
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_data_close;
+		goto err_bname_free;
 	}
 
 	/* mandatory headers */
@@ -1770,12 +1744,6 @@ azure_op_blob_get(const char *account,
 	return 0;
 err_url_free:
 	free(op->url);
-err_data_close:
-	/* should not free data.buf given by the caller on error */
-	if (op->rsp.data != NULL) {
-		op->rsp.data->buf = NULL;
-		azure_op_data_destroy(&op->rsp.data);
-	}
 err_bname_free:
 	free(get_req->bname);
 err_ctnr_free:

@@ -148,6 +148,7 @@ cli_get_blob_handle(struct cli_args *cli_args)
 	struct elasto_conn *econn;
 	struct stat st;
 	struct azure_op op;
+	struct azure_op_data *op_data;
 	int ret;
 
 	assert(cli_args->type == CLI_TYPE_AZURE);
@@ -176,16 +177,26 @@ cli_get_blob_handle(struct cli_args *cli_args)
 	       cli_args->az.blob_name,
 	       cli_args->get.local_path);
 
+	ret = azure_op_data_file_new(cli_args->get.local_path, 0, 0,
+				     O_CREAT | O_WRONLY,
+				     (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH),
+				     &op_data);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+
+
 	ret = azure_op_blob_get(cli_args->az.blob_acc,
 				cli_args->az.ctnr_name,
 				cli_args->az.blob_name,
 				false,
-				AOP_DATA_FILE,
-				(uint8_t *)cli_args->get.local_path,
+				op_data,
 				0, 0,
 				cli_args->insecure_http,
 				&op);
 	if (ret < 0) {
+		op_data->buf = NULL;
+		azure_op_data_destroy(&op_data);
 		goto err_conn_free;
 	}
 
