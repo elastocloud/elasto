@@ -21,6 +21,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 
 #include <curl/curl.h>
 #include <apr-1/apr_xml.h>
@@ -37,16 +38,21 @@
 void
 cli_get_args_free(struct cli_args *cli_args)
 {
-	free(cli_args->az.blob_acc);
-	free(cli_args->az.ctnr_name);
-	free(cli_args->az.blob_name);
 	free(cli_args->get.local_path);
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		free(cli_args->az.blob_acc);
+		free(cli_args->az.ctnr_name);
+		free(cli_args->az.blob_name);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		free(cli_args->s3.bkt_name);
+		free(cli_args->s3.obj_name);
+	}
 }
 
-int
-cli_get_args_parse(int argc,
-		   char * const *argv,
-		   struct cli_args *cli_args)
+static int
+cli_get_az_args_parse(int argc,
+		      char * const *argv,
+		      struct cli_args *cli_args)
 {
 	int ret;
 
@@ -62,39 +68,91 @@ cli_get_args_parse(int argc,
 		cli_args_usage(cli_args->progname, cli_args->flags,
 		   "Invalid remote path, must be <account>/<container>/<blob>");
 		ret = -EINVAL;
-		goto err_ctnr_free;
+		goto err_args_free;
 	}
 
-	cli_args->get.local_path = strdup(argv[2]);
-	if (cli_args->get.local_path == NULL) {
-		ret = -ENOMEM;
-		goto err_blob_free;
-	}
-
-	cli_args->cmd = CLI_CMD_GET;
 	return 0;
 
-err_blob_free:
-	free(cli_args->az.blob_name);
-err_ctnr_free:
+err_args_free:
 	free(cli_args->az.ctnr_name);
+	free(cli_args->az.blob_acc);
+err_out:
+	return ret;
+}
+
+static int
+cli_get_s3_args_parse(int argc,
+		      char * const *argv,
+		      struct cli_args *cli_args)
+{
+	int ret;
+
+	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
+				  argv[1],
+				  &cli_args->s3.bkt_name,
+				  &cli_args->s3.obj_name, NULL);
+	if (ret < 0)
+		goto err_out;
+
+	if (cli_args->s3.obj_name == NULL) {
+		cli_args_usage(cli_args->progname, cli_args->flags,
+		   "Invalid remote S3 path, must be <bucket>/<object>");
+		ret = -EINVAL;
+		goto err_bkt_free;
+	}
+
+	return 0;
+
+err_bkt_free:
+	free(cli_args->s3.bkt_name);
 err_out:
 	return ret;
 }
 
 int
-cli_get_handle(struct cli_args *cli_args)
+cli_get_args_parse(int argc,
+		   char * const *argv,
+		   struct cli_args *cli_args)
+{
+	int ret;
+
+	cli_args->get.local_path = strdup(argv[2]);
+	if (cli_args->get.local_path == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		ret = cli_get_az_args_parse(argc, argv, cli_args);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		ret = cli_get_s3_args_parse(argc, argv, cli_args);
+	} else {
+		ret = -ENOTSUP;
+	}
+	if (ret < 0) {
+		goto err_local_free;
+	}
+	cli_args->cmd = CLI_CMD_GET;
+
+	return 0;
+
+err_local_free:
+	free(cli_args->get.local_path);
+err_out:
+	return ret;
+}
+
+static int
+cli_get_blob_handle(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
 	struct stat st;
 	struct azure_op op;
 	int ret;
 
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
-	} else {
-		ret = -ENOTSUP;
-	}
+	assert(cli_args->type == CLI_TYPE_AZURE);
+
+	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -151,4 +209,86 @@ err_conn_free:
 	elasto_conn_free(econn);
 err_out:
 	return ret;
+}
+
+static int
+cli_get_obj_handle(struct cli_args *cli_args)
+{
+	struct elasto_conn *econn;
+	struct stat st;
+	struct azure_op op;
+	struct azure_op_data *op_data;
+	int ret;
+
+	assert(cli_args->type == CLI_TYPE_S3);
+
+	ret = elasto_conn_init_s3(cli_args->s3.key_id,
+				  cli_args->s3.secret, &econn);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = stat(cli_args->get.local_path, &st);
+	if (ret == 0) {
+		printf("destination already exists at %s\n",
+		       cli_args->get.local_path);
+		goto err_conn_free;
+	}
+	memset(&op, 0, sizeof(op));
+	printf("getting bucket %s container %s for %s\n",
+	       cli_args->s3.bkt_name,
+	       cli_args->s3.obj_name,
+	       cli_args->get.local_path);
+
+	ret = azure_op_data_file_new(cli_args->get.local_path, 0, 0,
+				     O_CREAT | O_WRONLY,
+				     (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH),
+				     &op_data);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+
+	ret = s3_op_obj_get(cli_args->s3.bkt_name,
+			    cli_args->s3.obj_name,
+			    op_data,
+			    cli_args->insecure_http,
+			    &op);
+	if (ret < 0) {
+		op_data->buf = NULL;
+		azure_op_data_destroy(&op_data);
+		goto err_conn_free;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	/* data buffer contains cli_args->get.local_path */
+	if (op.rsp.data)
+		op.rsp.data->buf = NULL;
+	azure_op_free(&op);
+err_conn_free:
+	elasto_conn_free(econn);
+err_out:
+	return ret;
+}
+
+int
+cli_get_handle(struct cli_args *cli_args)
+{
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		return cli_get_blob_handle(cli_args);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		return cli_get_obj_handle(cli_args);
+	}
+
+	return -ENOTSUP;
 }

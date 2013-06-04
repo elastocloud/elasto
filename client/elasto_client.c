@@ -95,7 +95,8 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_GET,
 		.name = "get",
-		.help = "<account>/<container>/<blob> <local path>",
+		.help = "<account>/<container>/<blob> <local path>\n"
+			"\t\t<bucket>/<object> <local path>",
 		.arg_min = 2,
 		.arg_max = 2,
 		.args_parse = &cli_get_args_parse,
