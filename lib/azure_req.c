@@ -3199,7 +3199,6 @@ s3_op_obj_put(const char *bkt_name,
 	      const char *obj_name,
 	      struct azure_op_data *data,
 	      bool insecure_http,
-	      const char *url_host_override,
 	      struct azure_op *op)
 {
 	int ret;
@@ -3229,11 +3228,9 @@ s3_op_obj_put(const char *bkt_name,
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url, "%s://%s%s/%s",
+	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s",
 		       (insecure_http ? "http" : "https"),
-		       (url_host_override ? url_host_override : bkt_name),
-		       (url_host_override ? "" : ".s3.amazonaws.com"),
-		       obj_name);
+		       bkt_name, obj_name);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_data_close;
