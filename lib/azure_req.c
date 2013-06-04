@@ -3469,6 +3469,81 @@ err_out:
 }
 
 static void
+s3_req_obj_get_free(struct s3_req_obj_get *obj_get)
+{
+	free(obj_get->bkt_name);
+	free(obj_get->obj_name);
+}
+
+/*
+ * @len bytes from @buf are put if @data_type is AOP_DATA_IOV, or @len bytes
+ * fom the file at path @buf if @data_type is AOP_DATA_FILE.
+ */
+int
+s3_op_obj_get(const char *bkt_name,
+	      const char *obj_name,
+	      struct azure_op_data *data,
+	      bool insecure_http,
+	      struct azure_op *op)
+{
+	int ret;
+	struct s3_req_obj_get *obj_get_req;
+
+	if ((data == NULL) || (data->type == AOP_DATA_NONE)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	op->opcode = S3OP_OBJ_GET;
+	obj_get_req = &op->req.obj_get;
+
+	obj_get_req->bkt_name = strdup(bkt_name);
+	if (obj_get_req->bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	obj_get_req->obj_name = strdup(obj_name);
+	if (obj_get_req->obj_name == NULL) {
+		ret = -ENOMEM;
+		goto err_bkt_free;
+	}
+
+	if (data == NULL) {
+		dbg(3, "no recv buffer, allocating on arrival\n");
+	}
+	op->rsp.data = data;
+	/* TODO add a foreign flag so @req.data is not freed with @op */
+
+	op->method = REQ_METHOD_GET;
+	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s",
+		       (insecure_http ? "http" : "https"),
+		       bkt_name, obj_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_data_close;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	op->sign = true;
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_data_close:
+	op->req.data = NULL;
+	free(obj_get_req->obj_name);
+err_bkt_free:
+	free(obj_get_req->bkt_name);
+err_out:
+	return ret;
+}
+
+static void
 s3_req_obj_del_free(struct s3_req_obj_del *obj_del)
 {
 	free(obj_del->bkt_name);
@@ -3593,6 +3668,9 @@ azure_req_free(struct azure_op *op)
 	case S3OP_OBJ_PUT:
 		s3_req_obj_put_free(&op->req.obj_put);
 		break;
+	case S3OP_OBJ_GET:
+		s3_req_obj_get_free(&op->req.obj_get);
+		break;
 	case S3OP_OBJ_DEL:
 		s3_req_obj_del_free(&op->req.obj_del);
 		break;
@@ -3647,6 +3725,7 @@ azure_rsp_free(struct azure_op *op)
 	case S3OP_BKT_CREATE:
 	case S3OP_BKT_DEL:
 	case S3OP_OBJ_PUT:
+	case S3OP_OBJ_GET:
 	case S3OP_OBJ_DEL:
 		/* nothing to do */
 		break;
@@ -3716,6 +3795,7 @@ azure_rsp_process(struct azure_op *op)
 	case S3OP_BKT_CREATE:
 	case S3OP_BKT_DEL:
 	case S3OP_OBJ_PUT:
+	case S3OP_OBJ_GET:
 	case S3OP_OBJ_DEL:
 		/* nothing to do */
 		ret = 0;

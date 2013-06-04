@@ -36,6 +36,7 @@ enum azure_opcode {
 	S3OP_BKT_CREATE,
 	S3OP_BKT_DEL,
 	S3OP_OBJ_PUT,
+	S3OP_OBJ_GET,
 	S3OP_OBJ_DEL,
 };
 
@@ -279,6 +280,11 @@ struct s3_req_obj_put {
 	char *obj_name;
 };
 
+struct s3_req_obj_get {
+	char *bkt_name;
+	char *obj_name;
+};
+
 struct s3_req_obj_del {
 	char *bkt_name;
 	char *obj_name;
@@ -341,6 +347,7 @@ struct azure_op {
 			struct s3_req_bkt_create bkt_create;
 			struct s3_req_bkt_del bkt_del;
 			struct s3_req_obj_put obj_put;
+			struct s3_req_obj_get obj_get;
 			struct s3_req_obj_del obj_del;
 		};
 		uint64_t read_cbs;
@@ -525,6 +532,13 @@ s3_op_bkt_del(const char *bkt_name,
 
 int
 s3_op_obj_put(const char *bkt_name,
+	      const char *obj_name,
+	      struct azure_op_data *data,
+	      bool insecure_http,
+	      struct azure_op *op);
+
+int
+s3_op_obj_get(const char *bkt_name,
 	      const char *obj_name,
 	      struct azure_op_data *data,
 	      bool insecure_http,
