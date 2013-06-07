@@ -260,6 +260,7 @@ cli_create_handle_ctnr(struct cli_args *cli_args)
 	memset(&op, 0, sizeof(op));
 	ret = azure_op_ctnr_create(cli_args->az.blob_acc,
 				   cli_args->az.ctnr_name,
+				   cli_args->insecure_http,
 				   &op);
 	if (ret < 0) {
 		goto err_conn_free;

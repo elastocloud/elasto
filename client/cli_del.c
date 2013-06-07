@@ -177,7 +177,8 @@ static int
 cli_del_blob_handle(struct elasto_conn *econn,
 		   const char *acc_name,
 		   const char *ctnr_name,
-		   const char *blob_name)
+		   const char *blob_name,
+		   bool insecure_http)
 {
 	struct azure_op op;
 	int ret;
@@ -185,7 +186,8 @@ cli_del_blob_handle(struct elasto_conn *econn,
 	memset(&op, 0, sizeof(op));
 	ret = azure_op_blob_del(acc_name,
 				ctnr_name,
-				blob_name, &op);
+				blob_name,
+				insecure_http, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -216,7 +218,8 @@ err_out:
 static int
 cli_del_ctnr_handle(struct elasto_conn *econn,
 		    const char *acc_name,
-		    const char *ctnr_name)
+		    const char *ctnr_name,
+		    bool insecure_http)
 {
 	struct azure_op op;
 	int ret;
@@ -224,7 +227,8 @@ cli_del_ctnr_handle(struct elasto_conn *econn,
 	memset(&op, 0, sizeof(op));
 
 	ret = azure_op_ctnr_del(acc_name,
-				ctnr_name, &op);
+				ctnr_name,
+				insecure_http, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -357,10 +361,12 @@ cli_del_az_handle(struct cli_args *cli_args)
 	if (cli_args->az.blob_name != NULL) {
 		ret = cli_del_blob_handle(econn, cli_args->az.blob_acc,
 					  cli_args->az.ctnr_name,
-					  cli_args->az.blob_name);
+					  cli_args->az.blob_name,
+					  cli_args->insecure_http);
 	} else {
 		ret = cli_del_ctnr_handle(econn, cli_args->az.blob_acc,
-					  cli_args->az.ctnr_name);
+					  cli_args->az.ctnr_name,
+					  cli_args->insecure_http);
 	}
 
 err_conn_free:

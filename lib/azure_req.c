@@ -820,7 +820,8 @@ err_out:
 
 int
 azure_op_ctnr_list(const char *account,
-		    struct azure_op *op)
+		   bool insecure_http,
+		   struct azure_op *op)
 {
 
 	int ret;
@@ -839,7 +840,8 @@ azure_op_ctnr_list(const char *account,
 
 	op->method = REQ_METHOD_GET;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net/?comp=list",
+		       "%s://%s.blob.core.windows.net/?comp=list",
+		       (insecure_http ? "http" : "https"),
 		       account);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1015,6 +1017,7 @@ err_out:
 int
 azure_op_ctnr_create(const char *account,
 		     const char *ctnr,
+		     bool insecure_http,
 		     struct azure_op *op)
 {
 
@@ -1039,7 +1042,8 @@ azure_op_ctnr_create(const char *account,
 
 	op->method = REQ_METHOD_PUT;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net/%s?restype=container",
+		       "%s://%s.blob.core.windows.net/%s?restype=container",
+		       (insecure_http ? "http" : "https"),
 		       account, ctnr);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1109,8 +1113,9 @@ err_out:
 
 int
 azure_op_ctnr_del(const char *account,
-		   const char *container,
-		   struct azure_op *op)
+		  const char *container,
+		  bool insecure_http,
+		  struct azure_op *op)
 {
 	int ret;
 	struct azure_req_ctnr_del *ctnr_del_req;
@@ -1132,7 +1137,8 @@ azure_op_ctnr_del(const char *account,
 
 	op->method = REQ_METHOD_DELETE;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net/%s?restype=container",
+		       "%s://%s.blob.core.windows.net/%s?restype=container",
+		       (insecure_http ? "http" : "https"),
 		       account, container);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1221,6 +1227,7 @@ err_out:
 int
 azure_op_blob_list(const char *account,
 		   const char *ctnr,
+		   bool insecure_http,
 		   struct azure_op *op)
 {
 
@@ -1246,8 +1253,9 @@ azure_op_blob_list(const char *account,
 
 	op->method = REQ_METHOD_GET;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net"
+		       "%s://%s.blob.core.windows.net"
 		       "/%s?restype=container&comp=list",
+		       (insecure_http ? "http" : "https"),
 		       account, ctnr);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -2242,6 +2250,7 @@ azure_op_block_list_put(const char *account,
 			const char *container,
 			const char *bname,
 			struct list_head *blks,
+			bool insecure_http,
 			struct azure_op *op)
 {
 	int ret;
@@ -2270,8 +2279,9 @@ azure_op_block_list_put(const char *account,
 
 	op->method = REQ_METHOD_PUT;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net"
+		       "%s://%s.blob.core.windows.net"
 		       "/%s/%s?comp=blocklist",
+		       (insecure_http ? "http" : "https"),
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -2367,6 +2377,7 @@ int
 azure_op_block_list_get(const char *account,
 			const char *container,
 			const char *bname,
+			bool insecure_http,
 			struct azure_op *op)
 {
 	int ret;
@@ -2395,8 +2406,9 @@ azure_op_block_list_get(const char *account,
 
 	op->method = REQ_METHOD_GET;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net"
+		       "%s://%s.blob.core.windows.net"
 		       "/%s/%s?comp=blocklist&blocklisttype=all",
+		       (insecure_http ? "http" : "https"),
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -2638,6 +2650,7 @@ int
 azure_op_blob_del(const char *account,
 		   const char *container,
 		   const char *bname,
+		   bool insecure_http,
 		   struct azure_op *op)
 {
 	int ret;
@@ -2666,7 +2679,8 @@ azure_op_blob_del(const char *account,
 
 	op->method = REQ_METHOD_DELETE;
 	ret = asprintf(&op->url,
-		       "https://%s.blob.core.windows.net/%s/%s",
+		       "%s://%s.blob.core.windows.net/%s/%s",
+		       (insecure_http ? "http" : "https"),
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;

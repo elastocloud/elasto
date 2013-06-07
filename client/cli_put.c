@@ -294,7 +294,9 @@ cli_put_blob_handle(struct cli_args *cli_args)
 	}
 	memset(&op, 0, sizeof(op));
 	ret = azure_op_ctnr_create(cli_args->az.blob_acc,
-				   cli_args->az.ctnr_name, &op);
+				   cli_args->az.ctnr_name,
+				   cli_args->insecure_http,
+				   &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
@@ -346,7 +348,9 @@ cli_put_blob_handle(struct cli_args *cli_args)
 		ret = azure_op_block_list_put(cli_args->az.blob_acc,
 					      cli_args->az.ctnr_name,
 					      cli_args->az.blob_name,
-					      blks, &op);
+					      blks,
+					      cli_args->insecure_http,
+					      &op);
 		if (ret < 0) {
 			goto err_conn_free;
 		}

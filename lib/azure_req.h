@@ -433,21 +433,25 @@ azure_op_acc_del(const char *sub_id,
 
 int
 azure_op_ctnr_list(const char *account,
+		   bool insecure_http,
 		   struct azure_op *op);
 
 int
 azure_op_ctnr_create(const char *account,
 		     const char *ctnr,
+		     bool insecure_http,
 		     struct azure_op *op);
 
 int
 azure_op_ctnr_del(const char *account,
-		   const char *container,
-		   struct azure_op *op);
+		  const char *container,
+		  bool insecure_http,
+		  struct azure_op *op);
 
 int
 azure_op_blob_list(const char *account,
 		   const char *ctnr,
+		   bool insecure_http,
 		   struct azure_op *op);
 
 int
@@ -495,18 +499,21 @@ azure_op_block_list_put(const char *account,
 			const char *container,
 			const char *bname,
 			struct list_head *blks,
+			bool insecure_http,
 			struct azure_op *op);
 
 int
 azure_op_block_list_get(const char *account,
 			const char *container,
 			const char *bname,
+			bool insecure_http,
 			struct azure_op *op);
 
 int
 azure_op_blob_del(const char *account,
 		  const char *ctnr,
 		  const char *bname,
+		  bool insecure_http,
 		  struct azure_op *op);
 
 int
