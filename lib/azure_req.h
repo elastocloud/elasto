@@ -39,6 +39,7 @@ enum azure_opcode {
 	S3OP_OBJ_PUT,
 	S3OP_OBJ_GET,
 	S3OP_OBJ_DEL,
+	S3OP_OBJ_CP,
 };
 
 enum azure_op_data_type {
@@ -304,6 +305,17 @@ struct s3_req_obj_del {
 	char *obj_name;
 };
 
+struct s3_req_obj_cp {
+	struct {
+		char *bkt_name;
+		char *obj_name;
+	} src;
+	struct {
+		char *bkt_name;
+		char *obj_name;
+	} dst;
+};
+
 /*
  * @base_off is the base offset into the input/output
  * buffer. i.e. @iov.base_off + @off = read/write offset
@@ -364,6 +376,7 @@ struct azure_op {
 			struct s3_req_obj_put obj_put;
 			struct s3_req_obj_get obj_get;
 			struct s3_req_obj_del obj_del;
+			struct s3_req_obj_cp obj_cp;
 		};
 		uint64_t read_cbs;
 		struct azure_op_data *data;
@@ -396,6 +409,7 @@ struct azure_op {
 			 *
 			 * struct s3_rsp_bkt_create bkt_create;
 			 * struct s3_rsp_bkt_del bkt_del;
+			 * struct s3_rsp_bkt_cp bkt_cp;
 			 */
 		};
 		bool clen_recvd;
@@ -581,6 +595,14 @@ s3_op_obj_del(const char *bkt_name,
 	      const char *obj_name,
 	      bool insecure_http,
 	      struct azure_op *op);
+
+int
+s3_op_obj_cp(const char *src_bkt,
+	     const char *src_obj,
+	     const char *dst_bkt,
+	     const char *dst_obj,
+	     bool insecure_http,
+	     struct azure_op *op);
 
 bool
 azure_rsp_is_error(enum azure_opcode opcode, int err_code);

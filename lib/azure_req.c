@@ -3408,6 +3408,114 @@ err_out:
 }
 
 static void
+s3_req_obj_cp_free(struct s3_req_obj_cp *obj_cp)
+{
+	free(obj_cp->src.bkt_name);
+	free(obj_cp->src.obj_name);
+	free(obj_cp->dst.bkt_name);
+	free(obj_cp->dst.obj_name);
+}
+
+static int
+s3_req_obj_cp_hdr_fill(struct azure_op *op)
+{
+	int ret;
+	char *hdr_str;
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = asprintf(&hdr_str, "x-amz-copy-source: /%s/%s",
+		       op->req.obj_cp.src.bkt_name,
+		       op->req.obj_cp.src.obj_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	ret = 0;
+err_out:
+	return ret;
+}
+
+int
+s3_op_obj_cp(const char *src_bkt,
+	     const char *src_obj,
+	     const char *dst_bkt,
+	     const char *dst_obj,
+	     bool insecure_http,
+	     struct azure_op *op)
+{
+	int ret;
+	struct s3_req_obj_cp *obj_cp_req;
+
+	op->opcode = S3OP_OBJ_CP;
+	obj_cp_req = &op->req.obj_cp;
+
+	obj_cp_req->src.bkt_name = strdup(src_bkt);
+	if (obj_cp_req->src.bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	obj_cp_req->src.obj_name = strdup(src_obj);
+	if (obj_cp_req->src.obj_name == NULL) {
+		ret = -ENOMEM;
+		goto err_src_bkt_free;
+	}
+
+	obj_cp_req->dst.bkt_name = strdup(dst_bkt);
+	if (obj_cp_req->dst.bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_src_obj_free;
+	}
+
+	obj_cp_req->dst.obj_name = strdup(dst_obj);
+	if (obj_cp_req->dst.obj_name == NULL) {
+		ret = -ENOMEM;
+		goto err_dst_bkt_free;
+	}
+
+	op->method = REQ_METHOD_PUT;
+	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s",
+		       (insecure_http ? "http" : "https"),
+		       dst_bkt, dst_obj);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_dst_obj_free;
+	}
+
+	ret = s3_req_obj_cp_hdr_fill(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	op->sign = true;
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_dst_obj_free:
+	free(obj_cp_req->dst.obj_name);
+err_dst_bkt_free:
+	free(obj_cp_req->dst.bkt_name);
+err_src_obj_free:
+	free(obj_cp_req->src.obj_name);
+err_src_bkt_free:
+	free(obj_cp_req->src.bkt_name);
+err_out:
+	return ret;
+}
+
+static void
 azure_req_free(struct azure_op *op)
 {
 	azure_op_data_destroy(&op->req.data);
@@ -3483,6 +3591,9 @@ azure_req_free(struct azure_op *op)
 	case S3OP_OBJ_DEL:
 		s3_req_obj_del_free(&op->req.obj_del);
 		break;
+	case S3OP_OBJ_CP:
+		s3_req_obj_cp_free(&op->req.obj_cp);
+		break;
 	default:
 		assert(true);
 		break;
@@ -3537,6 +3648,7 @@ azure_rsp_free(struct azure_op *op)
 	case S3OP_OBJ_PUT:
 	case S3OP_OBJ_GET:
 	case S3OP_OBJ_DEL:
+	case S3OP_OBJ_CP:
 		/* nothing to do */
 		break;
 	default:
@@ -3608,6 +3720,7 @@ azure_rsp_process(struct azure_op *op)
 	case S3OP_OBJ_PUT:
 	case S3OP_OBJ_GET:
 	case S3OP_OBJ_DEL:
+	case S3OP_OBJ_CP:
 		/* nothing to do */
 		ret = 0;
 		break;
