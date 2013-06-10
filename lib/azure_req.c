@@ -136,7 +136,54 @@ gen_date_str(void)
 	if (ret == 0)
 		return NULL;
 	return strdup(buf);
+}
 
+static int
+azure_op_fill_hdr_common(struct azure_op *op, bool mgmt)
+{
+	int ret;
+	char *hdr_str;
+	char *date_str;
+
+	if (mgmt) {
+		op->http_hdr = curl_slist_append(op->http_hdr,
+						  "x-ms-version: 2012-03-01");
+		if (op->http_hdr == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+		return 0;
+	}
+
+	date_str = gen_date_str();
+	if (date_str == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	free(date_str);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* different to the version in management */
+	op->http_hdr = curl_slist_append(op->http_hdr,
+					 "x-ms-version: 2009-09-19");
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
 }
 
 static void
@@ -155,12 +202,7 @@ azure_rsp_acc_keys_get_free(struct azure_rsp_acc_keys_get *acc_keys_get_rsp)
 static int
 azure_op_acc_keys_get_fill_hdr(struct azure_op *op)
 {
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-version: 2012-03-01");
-	if (op->http_hdr == NULL) {
-		return -ENOMEM;
-	}
-	return 0;
+	return azure_op_fill_hdr_common(op, true);
 }
 
 int
@@ -295,12 +337,7 @@ azure_rsp_acc_list_free(struct azure_rsp_acc_list *acc_list_rsp)
 static int
 azure_op_acc_list_fill_hdr(struct azure_op *op)
 {
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-version: 2012-03-01");
-	if (op->http_hdr == NULL) {
-		return -ENOMEM;
-	}
-	return 0;
+	return azure_op_fill_hdr_common(op, true);
 }
 
 int
@@ -477,10 +514,11 @@ azure_req_acc_create_free(struct azure_req_acc_create *acc_create_req)
 static int
 azure_op_acc_create_fill_hdr(struct azure_op *op)
 {
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					 "x-ms-version: 2012-03-01");
-	if (op->http_hdr == NULL) {
-		return -ENOMEM;
+	int ret;
+
+	ret = azure_op_fill_hdr_common(op, true);
+	if (ret < 0) {
+		return ret;
 	}
 	op->http_hdr = curl_slist_append(op->http_hdr,
 			"Content-Type: application/xml; charset=utf-8");
@@ -693,20 +731,7 @@ azure_req_acc_del_free(struct azure_req_acc_del *acc_del_req)
 static int
 azure_op_acc_del_fill_hdr(struct azure_op *op)
 {
-	int ret;
-
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					 "x-ms-version: 2011-06-01");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	return 0;
-
-err_out:
-	/* the slist is leaked on failure here */
-	return ret;
+	return azure_op_fill_hdr_common(op, true);
 }
 
 int
@@ -782,40 +807,7 @@ azure_rsp_ctnr_list_free(struct azure_rsp_ctnr_list *ctnr_list_rsp)
 static int
 azure_op_ctnr_list_fill_hdr(struct azure_op *op)
 {
-	int ret;
-	char *hdr_str;
-	char *date_str;
-
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	return 0;
-
-err_out:
-	/* the slist is leaked on failure here */
-	return ret;
+	return azure_op_fill_hdr_common(op, false);
 }
 
 int
@@ -979,39 +971,7 @@ azure_req_ctnr_create_free(struct azure_req_ctnr_create *ctnr_create_req)
 static int
 azure_op_ctnr_create_fill_hdr(struct azure_op *op)
 {
-	int ret;
-	char *hdr_str;
-	char *date_str;
-
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	return 0;
-
-err_out:
-	/* the slist is leaked on failure here */
-	return ret;
+	return azure_op_fill_hdr_common(op, false);
 }
 
 int
@@ -1074,41 +1034,7 @@ azure_req_ctnr_del_free(struct azure_req_ctnr_del *ctnr_del_req)
 static int
 azure_op_ctnr_del_fill_hdr(struct azure_op *op)
 {
-	int ret;
-	char *hdr_str;
-	char *date_str;
-
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					 "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	return 0;
-
-err_out:
-	/* the slist is leaked on failure here */
-	return ret;
+	return azure_op_fill_hdr_common(op, false);
 }
 
 int
@@ -1188,40 +1114,7 @@ azure_rsp_blob_list_free(struct azure_rsp_blob_list *blob_list_rsp)
 static int
 azure_op_blob_list_fill_hdr(struct azure_op *op)
 {
-	int ret;
-	char *hdr_str;
-	char *date_str;
-
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	return 0;
-
-err_out:
-	/* the slist is leaked on failure here */
-	return ret;
+	return azure_op_fill_hdr_common(op, false);
 }
 
 int
@@ -1423,27 +1316,13 @@ static int
 azure_op_blob_put_fill_hdr(struct azure_op *op)
 {
 	int ret;
-	char *hdr_str;
-	char *date_str;
 
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
+	ret = azure_op_fill_hdr_common(op, false);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
 		goto err_out;
 	}
 	if (strcmp(op->req.blob_put.type, BLOB_TYPE_PAGE) == 0) {
+		char *hdr_str;
 		op->http_hdr = curl_slist_append(op->http_hdr,
 						  "x-ms-blob-type: PageBlob");
 		if (op->http_hdr == NULL) {
@@ -1470,14 +1349,6 @@ azure_op_blob_put_fill_hdr(struct azure_op *op)
 			goto err_out;
 		}
 	}
-	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* common headers and signature added later */
 
 	return 0;
 
@@ -1604,28 +1475,14 @@ static int
 azure_op_blob_get_fill_hdr(struct azure_op *op)
 {
 	int ret;
-	char *hdr_str;
-	char *date_str;
 
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
+	ret = azure_op_fill_hdr_common(op, false);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
 		goto err_out;
 	}
 
 	if (op->req.blob_get.len > 0) {
+		char *hdr_str;
 		ret = asprintf(&hdr_str, "x-ms-range: bytes=%lu-%lu",
 			       op->req.blob_get.off,
 			       (op->req.blob_get.off + op->req.blob_get.len - 1));
@@ -1652,14 +1509,6 @@ azure_op_blob_get_fill_hdr(struct azure_op *op)
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* common headers and signature added later */
 
 	return 0;
 
@@ -1775,23 +1624,9 @@ azure_op_page_put_fill_hdr(struct azure_op *op)
 {
 	int ret;
 	char *hdr_str;
-	char *date_str;
 
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
+	ret = azure_op_fill_hdr_common(op, false);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
 		goto err_out;
 	}
 
@@ -1824,15 +1659,6 @@ azure_op_page_put_fill_hdr(struct azure_op *op)
 			goto err_out;
 		}
 	}
-
-	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					 "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* common headers and signature added later */
 
 	return 0;
 
@@ -1951,41 +1777,7 @@ azure_req_block_put_free(struct azure_req_block_put *blk_put_req)
 static int
 azure_op_block_put_fill_hdr(struct azure_op *op)
 {
-	int ret;
-	char *hdr_str;
-	char *date_str;
-
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* common headers and signature added later */
-
-	return 0;
-
-err_out:
-	/* the slist is leaked on failure here */
-	return ret;
+	return azure_op_fill_hdr_common(op, false);
 }
 
 /*
@@ -2114,41 +1906,7 @@ azure_req_block_list_put_free(struct azure_req_block_list_put *blk_list_put_req)
 static int
 azure_op_block_list_put_fill_hdr(struct azure_op *op)
 {
-	int ret;
-	char *hdr_str;
-	char *date_str;
-
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* common headers and signature added later */
-
-	return 0;
-
-err_out:
-	/* the slist is leaked on failure here */
-	return ret;
+	return azure_op_fill_hdr_common(op, false);
 }
 
 static int
@@ -2335,41 +2093,7 @@ azure_rsp_block_list_get_free(struct azure_rsp_block_list_get *blk_list_get_rsp)
 static int
 azure_op_block_list_get_fill_hdr(struct azure_op *op)
 {
-	int ret;
-	char *hdr_str;
-	char *date_str;
-
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					  "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* common headers and signature added later */
-
-	return 0;
-
-err_out:
-	/* the slist is leaked on failure here */
-	return ret;
+	return azure_op_fill_hdr_common(op, false);
 }
 
 /* request a list of all committed and uncommited blocks for @bname */
@@ -2608,42 +2332,7 @@ azure_req_blob_del_free(struct azure_req_blob_del *bl_del_req)
 static int
 azure_op_blob_del_fill_hdr(struct azure_op *op)
 {
-	int ret;
-	char *hdr_str;
-	char *date_str;
-
-	date_str = gen_date_str();
-	if (date_str == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
-	free(date_str);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					 "x-ms-version: 2009-09-19");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	/* common headers and signature added later */
-
-	return 0;
-
-err_out:
-	/* the slist is leaked on failure here */
-	return ret;
+	return azure_op_fill_hdr_common(op, false);
 }
 
 int
