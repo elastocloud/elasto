@@ -20,6 +20,7 @@ enum cli_cmd {
 	CLI_CMD_PUT,
 	CLI_CMD_GET,
 	CLI_CMD_DEL,
+	CLI_CMD_CP,
 	CLI_CMD_CREATE,
 	CLI_CMD_HELP,
 	CLI_CMD_EXIT,
@@ -76,6 +77,11 @@ struct cli_args {
 		} get;
 		struct {
 		} del;
+		struct {
+			char *src_acc;
+			char *src_ctnr;
+			char *src_blob;
+		} cp;
 		struct {
 			char *label;
 			char *desc;

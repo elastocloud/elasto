@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012, all rights reserved.
+ * Copyright (C) SUSE LINUX Products GmbH 2012-2013, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -38,6 +38,7 @@
 #include "cli_put.h"
 #include "cli_get.h"
 #include "cli_del.h"
+#include "cli_cp.h"
 #include "cli_create.h"
 
 int
@@ -114,6 +115,18 @@ struct cli_cmd_spec {
 		.args_parse = &cli_del_args_parse,
 		.handle = &cli_del_handle,
 		.args_free = &cli_del_args_free,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
+	},
+	{
+		.id = CLI_CMD_CP,
+		.name = "cp",
+		.help = "<src_acc>/<src_ctnr>/<src_blob> "
+			"<dst_acc>/<dst_ctnr>/<dst_blob>",
+		.arg_min = 2,
+		.arg_max = 2,
+		.args_parse = &cli_cp_args_parse,
+		.handle = &cli_cp_handle,
+		.args_free = &cli_cp_args_free,
 		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
 	},
 	{
