@@ -646,6 +646,7 @@ azure_op_acc_create(const char *sub_id,
 		ret = -ENOMEM;
 		goto err_sub_free;
 	}
+	memset(acc_create_req->acc, 0, sizeof(*acc_create_req->acc));
 
 	acc_create_req->acc->svc_name = strdup(svc_name);
 	if (acc_create_req->acc->svc_name == NULL) {
