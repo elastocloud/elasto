@@ -209,10 +209,10 @@ curl_write_alloc_std(struct azure_op *op,
 		     uint64_t cb_nbytes)
 
 {
+	int ret;
 	uint64_t rem;
 
 	if (op->rsp.data == NULL) {
-		int ret;
 		uint64_t sz = (op->rsp.clen_recvd ? op->rsp.clen : cb_nbytes);
 		/* requester wants us to allocate a recv iov */
 		/* TODO check clen isn't too huge */
@@ -230,11 +230,10 @@ curl_write_alloc_std(struct azure_op *op,
 			}
 			if (cb_nbytes > rem) {
 				dbg(2, "growing buf for callback\n");
-				op->rsp.data->buf = realloc(op->rsp.data->buf,
-						(op->rsp.data->off + cb_nbytes));
-				if (op->rsp.data->buf == NULL) {
-					/* leak */
-					return -ENOMEM;
+				ret = azure_op_data_iov_grow(op->rsp.data,
+							     cb_nbytes - rem);
+				if (ret < 0) {
+					return ret;
 				}
 			}
 			return 0;

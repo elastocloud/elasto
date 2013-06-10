@@ -121,6 +121,31 @@ azure_op_data_iov_new(uint8_t *buf,
 	return 0;
 }
 
+int
+azure_op_data_iov_grow(struct azure_op_data *data,
+		       uint64_t grow_by)
+{
+	uint8_t *buf_old;
+	if (data->type != AOP_DATA_IOV) {
+		dbg(0, "invalid data type %d\n", data->type);
+		return -EINVAL;
+	}
+
+	if (grow_by == 0) {
+		return 0;
+	}
+
+	buf_old = data->buf;
+	data->buf = realloc(data->buf, data->len + grow_by);
+	if (data->buf == NULL) {
+		data->buf = buf_old;
+		return -ENOMEM;
+	}
+
+	data->len += grow_by;
+	return 0;
+}
+
 static char *
 gen_date_str(void)
 {

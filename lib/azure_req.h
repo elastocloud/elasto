@@ -439,6 +439,10 @@ azure_op_data_iov_new(uint8_t *buf,
 		      struct azure_op_data **data);
 
 int
+azure_op_data_iov_grow(struct azure_op_data *data,
+		       uint64_t grow_by);
+
+int
 azure_op_acc_keys_get(const char *sub_id,
 		      const char *service_name,
 		      struct azure_op *op);
