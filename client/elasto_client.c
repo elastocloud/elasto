@@ -121,7 +121,8 @@ struct cli_cmd_spec {
 		.id = CLI_CMD_CP,
 		.name = "cp",
 		.help = "<src_acc>/<src_ctnr>/<src_blob> "
-			"<dst_acc>/<dst_ctnr>/<dst_blob>",
+			"<dst_acc>/<dst_ctnr>/<dst_blob>\n"
+			"\t\t<bucket>/<object> <bucket>/<object>",
 		.arg_min = 2,
 		.arg_max = 2,
 		.args_parse = &cli_cp_args_parse,

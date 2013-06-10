@@ -49,6 +49,8 @@ cli_cp_args_free(struct cli_args *cli_args)
 	} else if (cli_args->type == CLI_TYPE_S3) {
 		free(cli_args->s3.bkt_name);
 		free(cli_args->s3.obj_name);
+		free(cli_args->cp.s3.src_bkt);
+		free(cli_args->cp.s3.src_obj);
 	}
 }
 
@@ -80,7 +82,7 @@ cli_cp_args_az_parse(int argc,
 				  &cli_args->az.ctnr_name,
 				  &cli_args->az.blob_name);
 	if (ret < 0)
-		goto err_out;
+		goto err_src_free;
 
 	if (cli_args->az.blob_name == NULL) {
 		cli_args_usage(cli_args->progname, cli_args->flags,
@@ -103,15 +105,64 @@ err_out:
 	return ret;
 }
 
+static int
+cli_cp_args_s3_parse(int argc,
+		     char * const *argv,
+		     struct cli_args *cli_args)
+{
+	int ret;
+
+	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
+				  argv[1],
+				  &cli_args->cp.s3.src_bkt,
+				  &cli_args->cp.s3.src_obj, NULL);
+	if (ret < 0)
+		goto err_out;
+
+	if (cli_args->cp.s3.src_obj== NULL) {
+		cli_args_usage(cli_args->progname, cli_args->flags,
+		   "Invalid S3 cp source path, must be <bucket>/<object>");
+		ret = -EINVAL;
+		goto err_src_free;
+	}
+
+	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
+				  argv[2],
+				  &cli_args->s3.bkt_name,
+				  &cli_args->s3.obj_name, NULL);
+	if (ret < 0)
+		goto err_src_free;
+
+	if (cli_args->s3.obj_name == NULL) {
+		cli_args_usage(cli_args->progname, cli_args->flags,
+		   "Invalid S3 cp destination path, must be <bucket>/<object>");
+		ret = -EINVAL;
+		goto err_dst_free;
+	}
+
+	return 0;
+
+err_dst_free:
+	free(cli_args->s3.obj_name);
+	free(cli_args->s3.bkt_name);
+err_src_free:
+	free(cli_args->cp.s3.src_obj);
+	free(cli_args->cp.s3.src_bkt);
+err_out:
+	return ret;
+}
+
 int
 cli_cp_args_parse(int argc,
-		   char * const *argv,
-		   struct cli_args *cli_args)
+		  char * const *argv,
+		  struct cli_args *cli_args)
 {
 	int ret;
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
 		ret = cli_cp_args_az_parse(argc, argv, cli_args);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		ret = cli_cp_args_s3_parse(argc, argv, cli_args);
 	} else {
 		ret = -ENOTSUP;
 	}
@@ -126,7 +177,7 @@ err_out:
 	return ret;
 }
 
-int
+static int
 cli_cp_blob_handle(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
@@ -190,10 +241,67 @@ err_out:
 }
 
 int
+cli_cp_obj_handle(struct cli_args *cli_args)
+{
+	struct elasto_conn *econn;
+	struct azure_op op;
+	int ret;
+
+	assert(cli_args->type == CLI_TYPE_S3);
+
+	ret = elasto_conn_init_s3(cli_args->s3.key_id,
+				  cli_args->s3.secret, &econn);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	printf("copying object %s to %s\n",
+	       cli_args->cp.s3.src_obj,
+	       cli_args->s3.obj_name);
+
+	memset(&op, 0, sizeof(op));
+	ret = s3_op_obj_cp(cli_args->cp.s3.src_bkt,
+			   cli_args->cp.s3.src_obj,
+			   cli_args->s3.bkt_name,
+			   cli_args->s3.obj_name,
+			   cli_args->insecure_http,
+			   &op);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_conn_free:
+	elasto_conn_free(econn);
+err_out:
+	return ret;
+}
+
+int
 cli_cp_handle(struct cli_args *cli_args)
 {
 	if (cli_args->type == CLI_TYPE_AZURE) {
 		return cli_cp_blob_handle(cli_args);
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		return cli_cp_obj_handle(cli_args);
 	}
 
 	return -ENOTSUP;
