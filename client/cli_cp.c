@@ -43,9 +43,9 @@ cli_cp_args_free(struct cli_args *cli_args)
 		free(cli_args->az.blob_name);
 		free(cli_args->az.ctnr_name);
 		free(cli_args->az.blob_acc);
-		free(cli_args->cp.src_blob);
-		free(cli_args->cp.src_ctnr);
-		free(cli_args->cp.src_acc);
+		free(cli_args->cp.az.src_blob);
+		free(cli_args->cp.az.src_ctnr);
+		free(cli_args->cp.az.src_acc);
 	} else if (cli_args->type == CLI_TYPE_S3) {
 		free(cli_args->s3.bkt_name);
 		free(cli_args->s3.obj_name);
@@ -61,13 +61,13 @@ cli_cp_args_az_parse(int argc,
 
 	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
 				  argv[1],
-				  &cli_args->cp.src_acc,
-				  &cli_args->cp.src_ctnr,
-				  &cli_args->cp.src_blob);
+				  &cli_args->cp.az.src_acc,
+				  &cli_args->cp.az.src_ctnr,
+				  &cli_args->cp.az.src_blob);
 	if (ret < 0)
 		goto err_out;
 
-	if (cli_args->cp.src_blob == NULL) {
+	if (cli_args->cp.az.src_blob == NULL) {
 		cli_args_usage(cli_args->progname, cli_args->flags,
 	   "Invalid cp source path, must be <account>/<container>/<blob>");
 		ret = -EINVAL;
@@ -96,9 +96,9 @@ err_dst_free:
 	free(cli_args->az.ctnr_name);
 	free(cli_args->az.blob_acc);
 err_src_free:
-	free(cli_args->cp.src_blob);
-	free(cli_args->cp.src_ctnr);
-	free(cli_args->cp.src_acc);
+	free(cli_args->cp.az.src_blob);
+	free(cli_args->cp.az.src_ctnr);
+	free(cli_args->cp.az.src_acc);
 err_out:
 	return ret;
 }
@@ -148,13 +148,13 @@ cli_cp_blob_handle(struct cli_args *cli_args)
 	}
 
 	printf("copying blob %s to %s\n",
-	       cli_args->cp.src_blob,
+	       cli_args->cp.az.src_blob,
 	       cli_args->az.blob_name);
 
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_blob_cp(cli_args->cp.src_acc,
-			       cli_args->cp.src_ctnr,
-			       cli_args->cp.src_blob,
+	ret = azure_op_blob_cp(cli_args->cp.az.src_acc,
+			       cli_args->cp.az.src_ctnr,
+			       cli_args->cp.az.src_blob,
 			       cli_args->az.blob_acc,
 			       cli_args->az.ctnr_name,
 			       cli_args->az.blob_name,

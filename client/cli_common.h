@@ -78,9 +78,17 @@ struct cli_args {
 		struct {
 		} del;
 		struct {
-			char *src_acc;
-			char *src_ctnr;
-			char *src_blob;
+			union {
+				struct {
+					char *src_acc;
+					char *src_ctnr;
+					char *src_blob;
+				} az;
+				struct {
+					char *src_bkt;
+					char *src_obj;
+				} s3;
+			};
 		} cp;
 		struct {
 			char *label;
