@@ -2399,6 +2399,140 @@ err_out:
 }
 
 static void
+azure_req_blob_cp_free(struct azure_req_blob_cp *bl_cp_req)
+{
+	free(bl_cp_req->src.account);
+	free(bl_cp_req->src.container);
+	free(bl_cp_req->src.bname);
+	free(bl_cp_req->dst.account);
+	free(bl_cp_req->dst.container);
+	free(bl_cp_req->dst.bname);
+}
+
+static int
+azure_op_blob_cp_fill_hdr(struct azure_op *op,
+			  bool insecure_http)
+{
+	int ret;
+	char *hdr_str;
+
+	ret = azure_op_fill_hdr_common(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = asprintf(&hdr_str,
+		       "x-ms-copy-source: "
+		       "%s://%s.blob.core.windows.net/%s/%s",
+		       (insecure_http ? "http" : "https"),
+		       op->req.blob_cp.src.account,
+		       op->req.blob_cp.src.container,
+		       op->req.blob_cp.src.bname);
+	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	free(hdr_str);
+	if (op->http_hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	/* common headers and signature added later */
+
+	return 0;
+
+err_out:
+	/* the slist is leaked on failure here */
+	return ret;
+}
+
+int
+azure_op_blob_cp(const char *src_account,
+		 const char *src_container,
+		 const char *src_bname,
+		 const char *dst_account,
+		 const char *dst_container,
+		 const char *dst_bname,
+		 bool insecure_http,
+		 struct azure_op *op)
+{
+	int ret;
+	struct azure_req_blob_cp *bl_cp_req;
+
+	op->opcode = AOP_BLOB_CP;
+	bl_cp_req = &op->req.blob_cp;
+
+	bl_cp_req->src.account = strdup(src_account);
+	if (bl_cp_req->src.account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	bl_cp_req->src.container = strdup(src_container);
+	if (bl_cp_req->src.container == NULL) {
+		ret = -ENOMEM;
+		goto err_src_acc_free;
+	}
+
+	bl_cp_req->src.bname = strdup(src_bname);
+	if (bl_cp_req->src.bname == NULL) {
+		ret = -ENOMEM;
+		goto err_src_ctnr_free;
+	}
+
+	bl_cp_req->dst.account = strdup(dst_account);
+	if (bl_cp_req->dst.account == NULL) {
+		ret = -ENOMEM;
+		goto err_src_blb_free;
+	}
+
+	bl_cp_req->dst.container = strdup(dst_container);
+	if (bl_cp_req->dst.container == NULL) {
+		ret = -ENOMEM;
+		goto err_dst_acc_free;
+	}
+
+	bl_cp_req->dst.bname = strdup(dst_bname);
+	if (bl_cp_req->dst.bname == NULL) {
+		ret = -ENOMEM;
+		goto err_dst_ctnr_free;
+	}
+
+	op->method = REQ_METHOD_PUT;
+	ret = asprintf(&op->url,
+		       "%s://%s.blob.core.windows.net/%s/%s",
+		       (insecure_http ? "http" : "https"),
+		       dst_account, dst_container, dst_bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_dst_blb_free;
+	}
+
+	/* mandatory headers */
+	ret = azure_op_blob_cp_fill_hdr(op, insecure_http);
+	if (ret < 0)
+		goto err_free_url;
+
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+err_free_url:
+	free(op->url);
+err_dst_blb_free:
+	free(bl_cp_req->dst.bname);
+err_dst_ctnr_free:
+	free(bl_cp_req->dst.container);
+err_dst_acc_free:
+	free(bl_cp_req->dst.account);
+err_src_blb_free:
+	free(bl_cp_req->src.bname);
+err_src_ctnr_free:
+	free(bl_cp_req->src.container);
+err_src_acc_free:
+	free(bl_cp_req->src.account);
+err_out:
+	return ret;
+}
+
+static void
 azure_rsp_error_free(struct azure_rsp_error *err)
 {
 	free(err->msg);
@@ -3324,6 +3458,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_BLOB_DEL:
 		azure_req_blob_del_free(&op->req.blob_del);
 		break;
+	case AOP_BLOB_CP:
+		azure_req_blob_cp_free(&op->req.blob_cp);
+		break;
 	/* S3 */
 	case S3OP_SVC_LIST:
 		s3_req_svc_list_free(&op->req.svc_list);
@@ -3394,6 +3531,7 @@ azure_rsp_free(struct azure_op *op)
 	case AOP_BLOCK_PUT:
 	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
+	case AOP_BLOB_CP:
 	case S3OP_BKT_CREATE:
 	case S3OP_BKT_DEL:
 	case S3OP_OBJ_PUT:
@@ -3464,6 +3602,7 @@ azure_rsp_process(struct azure_op *op)
 	case AOP_BLOCK_PUT:
 	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
+	case AOP_BLOB_CP:
 	case S3OP_BKT_CREATE:
 	case S3OP_BKT_DEL:
 	case S3OP_OBJ_PUT:

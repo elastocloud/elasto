@@ -30,6 +30,7 @@ enum azure_opcode {
 	AOP_BLOCK_LIST_PUT,
 	AOP_BLOCK_LIST_GET,
 	AOP_BLOB_DEL,
+	AOP_BLOB_CP,
 	/* Amazon S3 ops below this point */
 	S3OP_SVC_LIST,
 	S3OP_BKT_LIST,
@@ -222,6 +223,19 @@ struct azure_req_blob_del {
 	char *bname;
 };
 
+struct azure_req_blob_cp {
+	struct {
+		char *account;
+		char *container;
+		char *bname;
+	} src;
+	struct {
+		char *account;
+		char *container;
+		char *bname;
+	} dst;
+};
+
 /* error response buffer is separate to request/response data */
 struct azure_rsp_error {
 	char *msg;
@@ -341,6 +355,7 @@ struct azure_op {
 			struct azure_req_block_list_put block_list_put;
 			struct azure_req_block_list_get block_list_get;
 			struct azure_req_blob_del blob_del;
+			struct azure_req_blob_cp blob_cp;
 
 			struct s3_req_svc_list svc_list;
 			struct s3_req_bkt_list bkt_list;
@@ -377,6 +392,7 @@ struct azure_op {
 			 * struct azure_rsp_page_put page_put;
 			 * struct azure_rsp_block_put block_put;
 			 * struct azure_rsp_blob_del blob_del;
+			 * struct azure_rsp_blob_cp blob_cp;
 			 *
 			 * struct s3_rsp_bkt_create bkt_create;
 			 * struct s3_rsp_bkt_del bkt_del;
@@ -515,6 +531,16 @@ azure_op_blob_del(const char *account,
 		  const char *bname,
 		  bool insecure_http,
 		  struct azure_op *op);
+
+int
+azure_op_blob_cp(const char *src_account,
+		 const char *src_ctnr,
+		 const char *src_bname,
+		 const char *dst_account,
+		 const char *dst_ctnr,
+		 const char *dst_bname,
+		 bool insecure_http,
+		 struct azure_op *op);
 
 int
 s3_op_svc_list(bool insecure_http,
