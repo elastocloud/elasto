@@ -174,7 +174,7 @@ azure_op_fill_hdr_common(struct azure_op *op, bool mgmt)
 	}
 	/* different to the version in management */
 	op->http_hdr = curl_slist_append(op->http_hdr,
-					 "x-ms-version: 2009-09-19");
+					 "x-ms-version: 2012-02-12");
 	if (op->http_hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
