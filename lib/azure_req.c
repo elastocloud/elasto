@@ -3646,6 +3646,171 @@ err_out:
 }
 
 static void
+s3_part_free(struct s3_part **_part)
+{
+	struct s3_part *part = *_part;
+	free(part->etag);
+	free(part);
+}
+
+static void
+s3_req_mp_done_free(struct s3_req_mp_done *mp_done_req)
+{
+	struct s3_part *part;
+	struct s3_part *part_n;
+
+	free(mp_done_req->bkt_name);
+	free(mp_done_req->obj_name);
+	free(mp_done_req->upload_id);
+	if (mp_done_req->parts == NULL) {
+		return;
+	}
+	list_for_each_safe(mp_done_req->parts, part, part_n, list) {
+		s3_part_free(&part);
+	}
+}
+
+static int
+s3_op_mp_done_fill_body(struct list_head *parts,
+			struct azure_op_data **req_data_out)
+{
+	int ret;
+	struct s3_part *part;
+	char *xml_data;
+	int buf_remain;
+	struct azure_op_data *req_data;
+
+	/* 2k buf, should be listlen calculated */
+	buf_remain = 2048;
+	ret = azure_op_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	xml_data = (char *)req_data->buf;
+	ret = snprintf(xml_data, buf_remain,
+		       "<CompleteMultipartUpload>");
+	if ((ret < 0) || (ret >= buf_remain)) {
+		/* truncated or error */
+		ret = -E2BIG;
+		goto err_buf_free;
+	}
+
+	xml_data += ret;
+	buf_remain -= ret;
+
+	list_for_each(parts, part, list) {
+		ret = snprintf(xml_data, buf_remain,
+			       "<Part>"
+					"<PartNumber>%u</PartNumber>"
+					"<ETag>%s</ETag>"
+			       "</Part>",
+			       (unsigned int)part->pnum,
+			       part->etag);
+		if ((ret < 0) || (ret >= buf_remain)) {
+			ret = -E2BIG;
+			goto err_buf_free;
+		}
+
+		xml_data += ret;
+		buf_remain -= ret;
+	}
+
+	ret = snprintf(xml_data, buf_remain,
+		       "</CompleteMultipartUpload>");
+	if ((ret < 0) || (ret >= buf_remain)) {
+		ret = -E2BIG;
+		goto err_buf_free;
+	}
+
+	xml_data += ret;
+	buf_remain -= ret;
+
+	/* truncate buffer to what was written */
+	req_data->len = req_data->len - buf_remain;
+
+	dbg(4, "sending multipart upload complete req data: %s\n",
+	    (char *)req_data->buf);
+	*req_data_out = req_data;
+
+	return 0;
+err_buf_free:
+	azure_op_data_destroy(&req_data);
+err_out:
+	return ret;
+}
+
+int
+s3_op_mp_done(const char *bkt,
+	      const char *obj,
+	      const char *upload_id,
+	      struct list_head *parts,
+	      bool insecure_http,
+	      struct azure_op *op)
+{
+	int ret;
+	struct s3_req_mp_done *mp_done_req;
+
+	op->opcode = S3OP_MULTIPART_DONE;
+	mp_done_req = &op->req.mp_done;
+
+	mp_done_req->bkt_name = strdup(bkt);
+	if (mp_done_req->bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	mp_done_req->obj_name = strdup(obj);
+	if (mp_done_req->obj_name == NULL) {
+		ret = -ENOMEM;
+		goto err_bkt_free;
+	}
+
+	mp_done_req->upload_id = strdup(upload_id);
+	if (mp_done_req->upload_id == NULL) {
+		ret = -ENOMEM;
+		goto err_obj_free;
+	}
+
+	op->method = REQ_METHOD_POST;
+	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s?uploadId=%s",
+		       (insecure_http ? "http" : "https"),
+		       bkt, obj, upload_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_obj_free;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	ret = s3_op_mp_done_fill_body(parts, &op->req.data);
+	if (ret < 0) {
+		goto err_hdr_free;
+	}
+	/* XXX should copy list */
+	mp_done_req->parts = parts;
+
+	op->sign = true;
+
+	return 0;
+
+err_hdr_free:
+	curl_slist_free_all(op->http_hdr);
+err_url_free:
+	free(op->url);
+err_obj_free:
+	free(mp_done_req->obj_name);
+err_bkt_free:
+	free(mp_done_req->bkt_name);
+err_out:
+	return ret;
+}
+
+static void
 azure_req_free(struct azure_op *op)
 {
 	azure_op_data_destroy(&op->req.data);
@@ -3727,6 +3892,9 @@ azure_req_free(struct azure_op *op)
 	case S3OP_MULTIPART_START:
 		s3_req_mp_start_free(&op->req.mp_start);
 		break;
+	case S3OP_MULTIPART_DONE:
+		s3_req_mp_done_free(&op->req.mp_done);
+		break;
 	default:
 		assert(true);
 		break;
@@ -3785,6 +3953,7 @@ azure_rsp_free(struct azure_op *op)
 	case S3OP_OBJ_GET:
 	case S3OP_OBJ_DEL:
 	case S3OP_OBJ_CP:
+	case S3OP_MULTIPART_DONE:
 		/* nothing to do */
 		break;
 	default:
@@ -3860,6 +4029,7 @@ azure_rsp_process(struct azure_op *op)
 	case S3OP_OBJ_GET:
 	case S3OP_OBJ_DEL:
 	case S3OP_OBJ_CP:
+	case S3OP_MULTIPART_DONE:
 		/* nothing to do */
 		ret = 0;
 		break;
