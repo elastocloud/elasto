@@ -25,7 +25,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include <curl/curl.h>
 #include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
