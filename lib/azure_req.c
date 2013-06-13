@@ -3541,6 +3541,111 @@ err_out:
 }
 
 static void
+s3_req_mp_start_free(struct s3_req_mp_start *mp_start_req)
+{
+	free(mp_start_req->bkt_name);
+	free(mp_start_req->obj_name);
+}
+
+static void
+s3_rsp_mp_start_free(struct s3_rsp_mp_start *mp_start_rsp)
+{
+	free(mp_start_rsp->upload_id);
+}
+
+int
+s3_op_mp_start(const char *bkt,
+	       const char *obj,
+	       bool insecure_http,
+	       struct azure_op *op)
+{
+	int ret;
+	struct s3_req_mp_start *mp_start_req;
+
+	op->opcode = S3OP_MULTIPART_START;
+	mp_start_req = &op->req.mp_start;
+
+	mp_start_req->bkt_name = strdup(bkt);
+	if (mp_start_req->bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	mp_start_req->obj_name = strdup(obj);
+	if (mp_start_req->obj_name == NULL) {
+		ret = -ENOMEM;
+		goto err_bkt_free;
+	}
+
+	op->method = REQ_METHOD_POST;
+	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s?uploads",
+		       (insecure_http ? "http" : "https"),
+		       bkt, obj);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_obj_free;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	op->sign = true;
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_obj_free:
+	free(mp_start_req->obj_name);
+err_bkt_free:
+	free(mp_start_req->bkt_name);
+err_out:
+	return ret;
+}
+
+static int
+s3_rsp_mp_start_process(struct azure_op *op)
+{
+	int ret;
+	apr_status_t rv;
+	struct s3_rsp_mp_start *mp_start_rsp;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
+
+	assert(op->opcode == S3OP_MULTIPART_START);
+	assert(op->rsp.data->type == AOP_DATA_IOV);
+	mp_start_rsp = &op->rsp.mp_start;
+
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
+		goto err_out;
+	}
+
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+			      &xdoc);
+	if (ret < 0) {
+		goto err_pool_free;
+	}
+
+	ret = azure_xml_path_get(xdoc->root, "/InitiateMultipartUploadResult/UploadId",
+				 &mp_start_rsp->upload_id);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_pool_free;
+	}
+
+	apr_pool_destroy(pool);
+	return 0;
+
+err_pool_free:
+	apr_pool_destroy(pool);
+err_out:
+	return ret;
+}
+
+static void
 azure_req_free(struct azure_op *op)
 {
 	azure_op_data_destroy(&op->req.data);
@@ -3619,6 +3724,9 @@ azure_req_free(struct azure_op *op)
 	case S3OP_OBJ_CP:
 		s3_req_obj_cp_free(&op->req.obj_cp);
 		break;
+	case S3OP_MULTIPART_START:
+		s3_req_mp_start_free(&op->req.mp_start);
+		break;
 	default:
 		assert(true);
 		break;
@@ -3657,6 +3765,9 @@ azure_rsp_free(struct azure_op *op)
 		break;
 	case S3OP_BKT_LIST:
 		s3_rsp_bkt_list_free(&op->rsp.bkt_list);
+		break;
+	case S3OP_MULTIPART_START:
+		s3_rsp_mp_start_free(&op->rsp.mp_start);
 		break;
 	case AOP_ACC_DEL:
 	case AOP_CONTAINER_CREATE:
@@ -3729,6 +3840,9 @@ azure_rsp_process(struct azure_op *op)
 		break;
 	case S3OP_BKT_LIST:
 		ret = s3_rsp_bkt_list_process(op);
+		break;
+	case S3OP_MULTIPART_START:
+		ret = s3_rsp_mp_start_process(op);
 		break;
 	case AOP_ACC_DEL:
 	case AOP_CONTAINER_CREATE:
