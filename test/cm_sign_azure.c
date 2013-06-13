@@ -49,15 +49,16 @@ cm_sign_az_list(void **state)
 	char *sig_str = NULL;
 
 	memset(&op, 0, sizeof(op));
+	list_head_init(&op.req.hdrs);
 	op.method = REQ_METHOD_GET;
 	op.url = strdup("https://ddiss.blob.core.windows.net/test?restype=container&comp=list");
-	op.http_hdr = curl_slist_append(op.http_hdr,
-				"Accept: */*");
-	op.http_hdr = curl_slist_append(op.http_hdr,
-				"x-ms-date: Thu, 11 Apr 2013 11:28:15 GMT");
-	op.http_hdr = curl_slist_append(op.http_hdr,
-				"x-ms-version: 2009-09-19");
-	assert_non_null(op.http_hdr);
+	ret = azure_op_req_hdr_add(&op, "Accept", "*/*");
+	assert_int_equal(ret, 0);
+	ret = azure_op_req_hdr_add(&op, "x-ms-date",
+				   "Thu, 11 Apr 2013 11:28:15 GMT");
+	assert_int_equal(ret, 0);
+	ret = azure_op_req_hdr_add(&op, "x-ms-version", "2009-09-19");
+	assert_int_equal(ret, 0);
 
 	ret = sign_gen_lite_azure(AZ_ACC,
 				  (const uint8_t *)AZ_KEY,

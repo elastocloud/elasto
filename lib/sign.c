@@ -72,38 +72,16 @@ hdr_tolower(char *hdr)
 		*hdr = tolower(*hdr);
 }
 
-static void
-hdr_trim_ws(char *hdr)
-{
-	char *colon;
-	char *s;
-	colon = strchr(hdr, ':');
-	assert(colon != NULL);
-
-	/* trim after the colon */
-	for (s = colon + 1; *s == ' '; s++);
-	if (s > colon + 1) {
-		int len = strlen(s);
-		memmove(colon + 1, s, len);
-		*(colon + 1 + len) = '\0';
-	}
-
-	/* trim before the colon */
-	for (s = colon - 1; *s == ' '; s--);
-	assert(s >= hdr);
-	memmove(s + 1, colon, strlen(colon) + 1);
-}
-
 /*
  * Both Azure and S3 allow for "x-ms-date:" and "x-amz-date:" headers
  * respectively, as opposed to the standard HTTP Date header.
  */
 static bool
-hdr_is_vendor_date(const char *hdr,
-		   const char *hdr_vendor_pfx)
+key_is_vendor_date(const char *key,
+		   const char *key_vendor_pfx)
 {
-	const char *hdr_sfx = hdr + strlen(hdr_vendor_pfx);
-	return (strncmp(hdr_sfx, "date:", sizeof("date:") - 1) == 0);
+	const char *key_sfx = key + strlen(key_vendor_pfx);
+	return (strcasecmp(key_sfx, "date") == 0);
 }
 
 static int
@@ -146,7 +124,8 @@ hdr_key_lexi_cmp(const void *p1, const void *p2)
  * all headers in this list into a single string.
  */
 static int
-canon_hdrs_gen(struct curl_slist *http_hdr,
+canon_hdrs_gen(uint32_t num_hdrs,
+	       struct list_head *hdrs,
 	       const char *hdr_vendor_pfx,
 	       bool vendor_date_trumps,
 	       char **canon_hdrs_out,
@@ -154,7 +133,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 	       char **content_md5_out,
 	       char **date_out)
 {
-	struct curl_slist *l;
+	struct azure_op_hdr *hdr;
 	int count = 0;
 	int i;
 	int ret;
@@ -166,14 +145,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 	char *s;
 	int hdr_str_len = 0;
 
-	for (l = http_hdr; l != NULL; l = l->next) {
-		/*
-		 * TODO add counter alongside op->http_hdr to avoid this
-		 * also, a stack alloced array could be used.
-		 */
-		count++;
-	}
-	if (count == 0) {
+	if (num_hdrs == 0) {
 		hdr_str = strdup("");
 		if (hdr_str == NULL) {
 			ret = -ENOMEM;
@@ -182,7 +154,7 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 		goto out_empty;
 	}
 
-	hdr_array = malloc(count * sizeof(char *));
+	hdr_array = malloc(num_hdrs * sizeof(char *));
 	if (hdr_array == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -190,26 +162,25 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 
 	i = 0;
 	count = 0;
-	for (l = http_hdr; l != NULL; l = l->next) {
-		if (strncasecmp(l->data, hdr_vendor_pfx,
+	list_for_each(hdrs, hdr, list) {
+		if (strncasecmp(hdr->key, hdr_vendor_pfx,
 				strlen(hdr_vendor_pfx)) == 0) {
 			bool is_vd;
-			hdr_array[i] = strdup(l->data);
-			if (hdr_array[i] == NULL) {
+			ret = asprintf(&hdr_array[i], "%s:%s",
+				       hdr->key, hdr->val);
+			if (ret < 0) {
 				ret = -ENOMEM;
 				goto err_array_free;
 			}
 			hdr_tolower(hdr_array[i]);
-			hdr_trim_ws(hdr_array[i]);
-			is_vd = hdr_is_vendor_date(hdr_array[i],
-						   hdr_vendor_pfx);
+			is_vd = key_is_vendor_date(hdr->key, hdr_vendor_pfx);
 			if (is_vd && vendor_date_trumps) {
 				if (date != NULL) {
 					dbg(3, "Date already set by standard "
 					    "header!\n");
 					free(date);
 				}
-				date = strdup(strchr(hdr_array[i], ':') + 1);
+				date = strdup(hdr->val);
 				if (date == NULL) {
 					ret = -ENOMEM;
 					goto err_array_free;
@@ -223,43 +194,28 @@ canon_hdrs_gen(struct curl_slist *http_hdr,
 			dbg(6, "got vendor hdr: %s\n", hdr_array[i]);
 			i++;
 			count = i;
-		} else if (strncasecmp(l->data, "Content-Type",
-				       sizeof("Content-Type") - 1) == 0) {
-			for (s = strchr(l->data, ':');
-			     s && ((*s == ' ' ) || (*s == ':'));
-			     s++);
-			assert(s != NULL);
+		} else if (strcasecmp(hdr->key, "Content-Type") == 0) {
 			assert(ctype == NULL);
-			ctype = strdup(s);
+			ctype = strdup(hdr->val);
 			if (ctype == NULL) {
 				ret = -ENOMEM;
 				goto err_array_free;
 			}
 			dbg(6, "got Content-Type hdr: %s\n", ctype);
-		} else if (strncasecmp(l->data, "Content-MD5",
-				       sizeof("Content-MD5") - 1) == 0) {
-			for (s = strchr(l->data, ':');
-			     s && ((*s == ' ' ) || (*s == ':'));
-			     s++);
-			assert(s != NULL);
+		} else if (strcasecmp(hdr->key, "Content-MD5") == 0) {
 			assert(md5 == NULL);
-			md5 = strdup(s);
+			md5 = strdup(hdr->val);
 			if (md5 == NULL) {
 				ret = -ENOMEM;
 				goto err_array_free;
 			}
 			dbg(6, "got Content-MD5 hdr: %s\n", md5);
-		} else if (strncasecmp(l->data, "Date",
-				       sizeof("Date") - 1) == 0) {
+		} else if (strcasecmp(hdr->key, "Date") == 0) {
 			if (date != NULL) {
 				dbg(3, "Date already set by vendor header!\n");
 				continue;
 			}
-			for (s = strchr(l->data, ':');
-			     s && ((*s == ' ' ) || (*s == ':'));
-			     s++);
-			assert(s != NULL);
-			date = strdup(s);
+			date = strdup(hdr->val);
 			if (date == NULL) {
 				ret = -ENOMEM;
 				goto err_array_free;
@@ -417,7 +373,8 @@ sign_gen_lite_azure(const char *account,
 	int md_len;
 	char *md_b64;
 
-	ret = canon_hdrs_gen(op->http_hdr, HDR_PREFIX_AZ, false,
+	ret = canon_hdrs_gen(op->req.num_hdrs, &op->req.hdrs,
+			     HDR_PREFIX_AZ, false,
 			     &canon_hdrs, &content_type, NULL, NULL);
 	if (ret < 0) {
 		goto err_out;
@@ -787,7 +744,8 @@ sign_gen_s3(const uint8_t *secret,
 		goto err_out;
 	}
 
-	ret = canon_hdrs_gen(op->http_hdr, HDR_PREFIX_S3, true,
+	ret = canon_hdrs_gen(op->req.num_hdrs, &op->req.hdrs,
+			     HDR_PREFIX_S3, true,
 			     &canon_hdrs, &content_type, &content_md5, &date);
 	if (ret < 0) {
 		dbg(0, "failed to generate canon hdrs: %s\n",

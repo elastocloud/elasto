@@ -361,6 +361,12 @@ struct azure_op_data {
 	};
 };
 
+struct azure_op_hdr {
+	struct list_node list;
+	char *key;
+	char *val;
+};
+
 #define REQ_METHOD_GET		"GET"
 #define REQ_METHOD_PUT		"PUT"
 #define REQ_METHOD_DELETE	"DELETE"
@@ -368,7 +374,6 @@ struct azure_op_data {
 struct azure_op {
 	struct elasto_conn *econn;
 	enum azure_opcode opcode;
-	struct curl_slist *http_hdr;
 	bool sign;
 	char *sig_src;	/* debug, compare with signing error response */
 	const char *method;
@@ -406,6 +411,8 @@ struct azure_op {
 		};
 		uint64_t read_cbs;
 		struct azure_op_data *data;
+		uint32_t num_hdrs;
+		struct list_head hdrs;
 	} req;
 
 	struct {
@@ -447,6 +454,11 @@ struct azure_op {
 		bool recv_cb_alloced;	/* data buffer alloced by conn cb */
 	} rsp;
 };
+
+int
+azure_op_req_hdr_add(struct azure_op *op,
+		     const char *key,
+		     const char *val);
 
 void
 azure_op_data_destroy(struct azure_op_data **data);

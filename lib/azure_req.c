@@ -35,6 +35,68 @@
 #include "azure_xml.h"
 #include "azure_req.h"
 
+static int
+azure_op_hdr_add(struct list_head *hdrs,
+		 const char *key,
+		 const char *val)
+{
+	int ret;
+	struct azure_op_hdr *hdr = malloc(sizeof(*hdr));
+	if (hdr == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	hdr->key = strdup(key);
+	if (hdr->key == NULL) {
+		ret = -ENOMEM;
+		goto err_hdr_free;
+	}
+
+	hdr->val = strdup(val);
+	if (hdr->val == NULL) {
+		ret = -ENOMEM;
+		goto err_key_free;
+	}
+
+	list_add_tail(hdrs, &hdr->list);
+
+	return 0;
+
+err_key_free:
+	free(hdr->key);
+err_hdr_free:
+	free(hdr);
+err_out:
+	return ret;
+}
+
+int
+azure_op_req_hdr_add(struct azure_op *op,
+		     const char *key,
+		     const char *val)
+{
+	int ret = azure_op_hdr_add(&op->req.hdrs, key, val);
+	if (ret < 0) {
+		return ret;
+	}
+	op->req.num_hdrs++;
+
+	return 0;
+}
+
+void
+azure_op_hdrs_free(struct list_head *hdrs)
+{
+	struct azure_op_hdr *hdr;
+	struct azure_op_hdr *hdr_n;
+
+	list_for_each_safe(hdrs, hdr, hdr_n, list) {
+		free(hdr->key);
+		free(hdr->val);
+		free(hdr);
+	}
+}
+
 void
 azure_op_data_destroy(struct azure_op_data **data)
 {
@@ -167,14 +229,11 @@ static int
 azure_op_fill_hdr_common(struct azure_op *op, bool mgmt)
 {
 	int ret;
-	char *hdr_str;
 	char *date_str;
 
 	if (mgmt) {
-		op->http_hdr = curl_slist_append(op->http_hdr,
-						  "x-ms-version: 2012-03-01");
-		if (op->http_hdr == NULL) {
-			ret = -ENOMEM;
+		ret = azure_op_req_hdr_add(op, "x-ms-version", "2012-03-01");
+		if (ret < 0) {
 			goto err_out;
 		}
 		return 0;
@@ -185,23 +244,14 @@ azure_op_fill_hdr_common(struct azure_op *op, bool mgmt)
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	ret = asprintf(&hdr_str, "x-ms-date: %s", date_str);
+	ret = azure_op_req_hdr_add(op, "x-ms-date", date_str);
 	free(date_str);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
-	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
 		goto err_out;
 	}
 	/* different to the version in management */
-	op->http_hdr = curl_slist_append(op->http_hdr,
-					 "x-ms-version: 2012-02-12");
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
+	ret = azure_op_req_hdr_add(op, "x-ms-version", "2012-02-12");
+	if (ret < 0) {
 		goto err_out;
 	}
 	return 0;
@@ -240,6 +290,8 @@ azure_op_acc_keys_get(const char *sub_id,
 
 	/* TODO input validation */
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_ACC_KEYS_GET;
 	acc_keys_get_req = &op->req.acc_keys_get;
 
@@ -374,6 +426,8 @@ azure_op_acc_list(const char *sub_id,
 
 	/* TODO input validation */
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_ACC_LIST;
 	acc_list_req = &op->req.acc_list;
 
@@ -545,10 +599,10 @@ azure_op_acc_create_fill_hdr(struct azure_op *op)
 	if (ret < 0) {
 		return ret;
 	}
-	op->http_hdr = curl_slist_append(op->http_hdr,
-			"Content-Type: application/xml; charset=utf-8");
-	if (op->http_hdr == NULL) {
-		return -ENOMEM;
+	ret = azure_op_req_hdr_add(op,
+			"Content-Type", "application/xml; charset=utf-8");
+	if (ret < 0) {
+		return ret;
 	}
 	return 0;
 }
@@ -657,6 +711,8 @@ azure_op_acc_create(const char *sub_id,
 		return -EINVAL;
 	}
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_ACC_CREATE;
 	acc_create_req = &op->req.acc_create;
 
@@ -768,6 +824,8 @@ azure_op_acc_del(const char *sub_id,
 	int ret;
 	struct azure_req_acc_del *acc_del_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_ACC_DEL;
 	acc_del_req = &op->req.acc_del;
 
@@ -847,6 +905,8 @@ azure_op_ctnr_list(const char *account,
 
 	/* TODO input validation */
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_CONTAINER_LIST;
 	ctnr_list_req = &op->req.ctnr_list;
 
@@ -1012,6 +1072,8 @@ azure_op_ctnr_create(const char *account,
 
 	/* TODO input validation */
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_CONTAINER_CREATE;
 	ctnr_create_req = &op->req.ctnr_create;
 
@@ -1072,6 +1134,8 @@ azure_op_ctnr_del(const char *account,
 	int ret;
 	struct azure_req_ctnr_del *ctnr_del_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_CONTAINER_DEL;
 	ctnr_del_req = &op->req.ctnr_del;
 
@@ -1155,6 +1219,8 @@ azure_op_blob_list(const char *account,
 
 	/* TODO input validation */
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_BLOB_LIST;
 	blob_list_req = &op->req.blob_list;
 
@@ -1349,29 +1415,25 @@ azure_op_blob_put_fill_hdr(struct azure_op *op)
 	}
 	if (strcmp(op->req.blob_put.type, BLOB_TYPE_PAGE) == 0) {
 		char *hdr_str;
-		op->http_hdr = curl_slist_append(op->http_hdr,
-						  "x-ms-blob-type: PageBlob");
-		if (op->http_hdr == NULL) {
-			ret = -ENOMEM;
+		ret = azure_op_req_hdr_add(op, "x-ms-blob-type", "PageBlob");
+		if (ret < 0) {
 			goto err_out;
 		}
-		ret = asprintf(&hdr_str, "x-ms-blob-content-length: %lu",
+		ret = asprintf(&hdr_str, "%lu",
 			       op->req.blob_put.pg_len);
 		if (ret < 0) {
 			ret = -ENOMEM;
 			goto err_out;
 		}
-		op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+		ret = azure_op_req_hdr_add(op, "x-ms-blob-content-length",
+					   hdr_str);
 		free(hdr_str);
-		if (op->http_hdr == NULL) {
-			ret = -ENOMEM;
+		if (ret < 0) {
 			goto err_out;
 		}
 	} else {
-		op->http_hdr = curl_slist_append(op->http_hdr,
-						  "x-ms-blob-type: BlockBlob");
-		if (op->http_hdr == NULL) {
-			ret = -ENOMEM;
+		ret = azure_op_req_hdr_add(op, "x-ms-blob-type", "BlockBlob");
+		if (ret < 0) {
 			goto err_out;
 		}
 	}
@@ -1409,6 +1471,8 @@ azure_op_blob_put(const char *account,
 		goto err_out;
 	}
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_BLOB_PUT;
 	bl_put_req = &op->req.blob_put;
 
@@ -1509,30 +1573,26 @@ azure_op_blob_get_fill_hdr(struct azure_op *op)
 
 	if (op->req.blob_get.len > 0) {
 		char *hdr_str;
-		ret = asprintf(&hdr_str, "x-ms-range: bytes=%lu-%lu",
+		ret = asprintf(&hdr_str, "bytes=%lu-%lu",
 			       op->req.blob_get.off,
 			       (op->req.blob_get.off + op->req.blob_get.len - 1));
 		if (ret < 0) {
 			ret = -ENOMEM;
 			goto err_out;
 		}
-		op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+		ret = azure_op_req_hdr_add(op, "x-ms-range", hdr_str);
 		free(hdr_str);
-		if (op->http_hdr == NULL) {
-			ret = -ENOMEM;
+		if (ret < 0) {
 			goto err_out;
 		}
 	}
 
 	if (strcmp(op->req.blob_get.type, BLOB_TYPE_PAGE) == 0) {
-		op->http_hdr = curl_slist_append(op->http_hdr,
-						 "x-ms-blob-type: PageBlob");
+		ret = azure_op_req_hdr_add(op, "x-ms-blob-type", "PageBlob");
 	} else {
-		op->http_hdr = curl_slist_append(op->http_hdr,
-						 "x-ms-blob-type: BlockBlob");
+		ret = azure_op_req_hdr_add(op, "x-ms-blob-type", "BlockBlob");
 	}
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
+	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -1568,6 +1628,8 @@ azure_op_blob_get(const char *account,
 		goto err_out;
 	}
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_BLOB_GET;
 	get_req = &op->req.blob_get;
 
@@ -1656,32 +1718,27 @@ azure_op_page_put_fill_hdr(struct azure_op *op)
 		goto err_out;
 	}
 
-	ret = asprintf(&hdr_str, "x-ms-range: bytes=%lu-%lu",
+	ret = asprintf(&hdr_str, "bytes=%lu-%lu",
 		       op->req.page_put.off,
 		       (op->req.page_put.off + op->req.page_put.len - 1));
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	ret = azure_op_req_hdr_add(op, "x-ms-range", hdr_str);
 	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
+	if (ret < 0) {
 		goto err_out;
 	}
 
 	if (op->req.page_put.clear_data) {
-		op->http_hdr = curl_slist_append(op->http_hdr,
-						 "x-ms-page-write: clear");
-		if (op->http_hdr == NULL) {
-			ret = -ENOMEM;
+		ret = azure_op_req_hdr_add(op, "x-ms-page-write", "clear");
+		if (ret < 0) {
 			goto err_out;
 		}
 	} else {
-		op->http_hdr = curl_slist_append(op->http_hdr,
-						 "x-ms-page-write: update");
-		if (op->http_hdr == NULL) {
-			ret = -ENOMEM;
+		ret = azure_op_req_hdr_add(op, "x-ms-page-write", "update");
+		if (ret < 0) {
 			goto err_out;
 		}
 	}
@@ -1719,6 +1776,8 @@ azure_op_page_put(const char *account,
 		goto err_out;
 	}
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_BLOB_PUT;
 	pg_put_req = &op->req.page_put;
 
@@ -1842,6 +1901,8 @@ azure_op_block_put(const char *account,
 		goto err_out;
 	}
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_BLOCK_PUT;
 	blk_put_req = &op->req.block_put;
 
@@ -2040,6 +2101,8 @@ azure_op_block_list_put(const char *account,
 	int ret;
 	struct azure_req_block_list_put *blk_list_put_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_BLOCK_LIST_PUT;
 	blk_list_put_req = &op->req.block_list_put;
 
@@ -2133,6 +2196,8 @@ azure_op_block_list_get(const char *account,
 	int ret;
 	struct azure_req_block_list_get *blk_list_get_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_BLOCK_LIST_GET;
 	blk_list_get_req = &op->req.block_list_get;
 
@@ -2371,6 +2436,8 @@ azure_op_blob_del(const char *account,
 	int ret;
 	struct azure_req_blob_del *bl_del_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_BLOB_DEL;
 	bl_del_req = &op->req.blob_del;
 
@@ -2447,16 +2514,14 @@ azure_op_blob_cp_fill_hdr(struct azure_op *op,
 	}
 
 	ret = asprintf(&hdr_str,
-		       "x-ms-copy-source: "
 		       "%s://%s.blob.core.windows.net/%s/%s",
 		       (insecure_http ? "http" : "https"),
 		       op->req.blob_cp.src.account,
 		       op->req.blob_cp.src.container,
 		       op->req.blob_cp.src.bname);
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	ret = azure_op_req_hdr_add(op, "x-ms-copy-source", hdr_str);
 	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
+	if (ret < 0) {
 		goto err_out;
 	}
 	/* common headers and signature added later */
@@ -2481,6 +2546,8 @@ azure_op_blob_cp(const char *src_account,
 	int ret;
 	struct azure_req_blob_cp *bl_cp_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = AOP_BLOB_CP;
 	bl_cp_req = &op->req.blob_cp;
 
@@ -2656,6 +2723,7 @@ err_out:
 static int
 s3_req_fill_hdr_common(struct azure_op *op)
 {
+	int ret;
 	size_t sz;
 	char hdr_buf[100];
 	time_t t;
@@ -2664,14 +2732,14 @@ s3_req_fill_hdr_common(struct azure_op *op)
 	time(&t);
 	gmtime_r(&t, &tm_gmt);
 	sz = strftime(hdr_buf, ARRAY_SIZE(hdr_buf),
-		      "Date: %a, %d %b %Y %T %z", &tm_gmt);
+		      "%a, %d %b %Y %T %z", &tm_gmt);
 	if (sz == 0) {
 		return -E2BIG;
 	}
 
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_buf);
-	if (op->http_hdr == NULL) {
-		return -ENOMEM;
+	ret = azure_op_req_hdr_add(op, "Date", hdr_buf);
+	if (ret < 0) {
+		return ret;
 	}
 	return 0;
 }
@@ -2711,6 +2779,8 @@ s3_op_svc_list(bool insecure_http,
 {
 	int ret;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = S3OP_SVC_LIST;
 	/* no arguments */
 
@@ -2886,6 +2956,8 @@ s3_op_bkt_list(const char *bkt_name,
 	int ret;
 	struct s3_req_bkt_list *bkt_list_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = S3OP_BKT_LIST;
 	bkt_list_req = &op->req.bkt_list;
 
@@ -3128,6 +3200,8 @@ s3_op_bkt_create(const char *bkt_name,
 	int ret;
 	struct s3_req_bkt_create *bkt_create_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = S3OP_BKT_CREATE;
 	bkt_create_req = &op->req.bkt_create;
 
@@ -3192,6 +3266,8 @@ s3_op_bkt_del(const char *bkt_name,
 	int ret;
 	struct s3_req_bkt_del *bkt_del_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = S3OP_BKT_DEL;
 	bkt_del_req = &op->req.bkt_del;
 
@@ -3253,6 +3329,8 @@ s3_op_obj_put(const char *bkt_name,
 		goto err_out;
 	}
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = S3OP_OBJ_PUT;
 	obj_put_req = &op->req.obj_put;
 
@@ -3325,6 +3403,8 @@ s3_op_obj_get(const char *bkt_name,
 		goto err_out;
 	}
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = S3OP_OBJ_GET;
 	obj_get_req = &op->req.obj_get;
 
@@ -3390,6 +3470,8 @@ s3_op_obj_del(const char *bkt_name,
 	int ret;
 	struct s3_req_obj_del *obj_del_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = S3OP_OBJ_DEL;
 	obj_del_req = &op->req.obj_del;
 
@@ -3452,17 +3534,16 @@ s3_req_obj_cp_hdr_fill(struct azure_op *op)
 		goto err_out;
 	}
 
-	ret = asprintf(&hdr_str, "x-amz-copy-source: /%s/%s",
+	ret = asprintf(&hdr_str, "/%s/%s",
 		       op->req.obj_cp.src.bkt_name,
 		       op->req.obj_cp.src.obj_name);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	ret = azure_op_req_hdr_add(op, "x-amz-copy-source", hdr_str);
 	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		ret = -ENOMEM;
+	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -3482,6 +3563,8 @@ s3_op_obj_cp(const char *src_bkt,
 	int ret;
 	struct s3_req_obj_cp *obj_cp_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = S3OP_OBJ_CP;
 	obj_cp_req = &op->req.obj_cp;
 
@@ -3562,6 +3645,8 @@ s3_op_mp_start(const char *bkt,
 	int ret;
 	struct s3_req_mp_start *mp_start_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = S3OP_MULTIPART_START;
 	mp_start_req = &op->req.mp_start;
 
@@ -3752,6 +3837,8 @@ s3_op_mp_done(const char *bkt,
 	int ret;
 	struct s3_req_mp_done *mp_done_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
 	op->opcode = S3OP_MULTIPART_DONE;
 	mp_done_req = &op->req.mp_done;
 
@@ -3799,7 +3886,7 @@ s3_op_mp_done(const char *bkt,
 	return 0;
 
 err_hdr_free:
-	curl_slist_free_all(op->http_hdr);
+	azure_op_hdrs_free(&op->req.hdrs);
 err_url_free:
 	free(op->url);
 err_obj_free:
@@ -3813,6 +3900,7 @@ err_out:
 static void
 azure_req_free(struct azure_op *op)
 {
+	azure_op_hdrs_free(&op->req.hdrs);
 	azure_op_data_destroy(&op->req.data);
 
 	switch (op->opcode) {
@@ -3966,8 +4054,6 @@ azure_rsp_free(struct azure_op *op)
 void
 azure_op_free(struct azure_op *op)
 {
-	/* CURLOPT_HTTPHEADER must be cleared before doing this */
-	curl_slist_free_all(op->http_hdr);
 	free(op->sig_src);
 	free(op->url);
 	azure_req_free(op);

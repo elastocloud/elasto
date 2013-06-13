@@ -29,6 +29,7 @@
 #include "base64.h"
 #include "azure_req.h"
 #include "sign.h"
+#include "util.h"
 #include "conn.h"
 
 /* convert base64 encoded key to binary and store in @econn */
@@ -406,7 +407,7 @@ elasto_conn_send_sign(struct elasto_conn *econn,
 			    strerror(-ret));
 			return ret;
 		}
-		ret = asprintf(&hdr_str, "Authorization: SharedKeyLite %s:%s",
+		ret = asprintf(&hdr_str, "SharedKeyLite %s:%s",
 			       econn->sign.account, sig_str);
 		free(sig_str);
 		if (ret < 0) {
@@ -420,7 +421,7 @@ elasto_conn_send_sign(struct elasto_conn *econn,
 			    strerror(-ret));
 			return ret;
 		}
-		ret = asprintf(&hdr_str, "Authorization: AWS %s:%s",
+		ret = asprintf(&hdr_str, "AWS %s:%s",
 			       econn->sign.account, sig_str);
 		free(sig_str);
 		if (ret < 0) {
@@ -430,10 +431,10 @@ elasto_conn_send_sign(struct elasto_conn *econn,
 		return -ENOTSUP;
 	}
 
-	op->http_hdr = curl_slist_append(op->http_hdr, hdr_str);
+	ret = azure_op_req_hdr_add(op, "Authorization", hdr_str);
 	free(hdr_str);
-	if (op->http_hdr == NULL) {
-		return -ENOMEM;
+	if (ret < 0) {
+		return ret;
 	}
 
 	return 0;
@@ -444,6 +445,8 @@ static int
 elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
 {
 	int ret;
+	struct curl_slist *http_hdr = NULL;
+	struct azure_op_hdr *hdr;
 
 	curl_easy_setopt(econn->curl, CURLOPT_CUSTOMREQUEST, op->method);
 	curl_easy_setopt(econn->curl, CURLOPT_URL, op->url);
@@ -475,7 +478,23 @@ elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
 		}
 	}
 
-	curl_easy_setopt(econn->curl, CURLOPT_HTTPHEADER, op->http_hdr);
+	list_for_each(&op->req.hdrs, hdr, list) {
+		char buf[512];
+		struct curl_slist *http_hdr_nxt;
+		ret = snprintf(buf, ARRAY_SIZE(buf), "%s: %s",
+			       hdr->key, hdr->val);
+		if (ret >= ARRAY_SIZE(buf)) {
+			dbg(0, "header too large\n");
+			return -E2BIG;
+		}
+		http_hdr_nxt = curl_slist_append(http_hdr, buf);
+		if (http_hdr_nxt == NULL) {
+			curl_slist_free_all(http_hdr);
+			return -ENOMEM;
+		}
+		http_hdr = http_hdr_nxt;
+	}
+	curl_easy_setopt(econn->curl, CURLOPT_HTTPHEADER, http_hdr);
 
 	return 0;	/* FIXME detect curl_easy_setopt errors */
 }
@@ -499,7 +518,6 @@ elasto_conn_send_op(struct elasto_conn *econn,
 	if (res != CURLE_OK) {
 		dbg(0, "curl_easy_perform() failed: %s\n",
 		       curl_easy_strerror(res));
-		curl_easy_setopt(econn->curl, CURLOPT_HTTPHEADER, NULL);
 		op->econn = NULL;
 		return -EBADF;
 	}
@@ -512,8 +530,6 @@ elasto_conn_send_op(struct elasto_conn *econn,
 						      op->rsp.err_code);
 	}
 
-	/* reset headers, so that op->http_hdr can be freed */
-	curl_easy_setopt(econn->curl, CURLOPT_HTTPHEADER, NULL);
 	op->econn = NULL;
 
 	return 0;
