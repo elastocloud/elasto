@@ -99,6 +99,28 @@ azure_op_rsp_hdr_add(struct azure_op *op,
 	return 0;
 }
 
+static int
+azure_op_hdr_val_lookup(struct list_head *hdrs,
+			const char *key,
+			char **_val)
+{
+	struct azure_op_hdr *hdr;
+
+	list_for_each(hdrs, hdr, list) {
+		if (strcmp(hdr->key, key) == 0) {
+			char *val;
+			val = strdup(hdr->val);
+			if (val == NULL) {
+				return -ENOMEM;
+			}
+			*_val = val;
+			return 0;
+		}
+	}
+	dbg(3, "hdr with key \"%s\" not found\n", key);
+	return -ENOENT;
+}
+
 void
 azure_op_hdrs_free(struct list_head *hdrs)
 {
