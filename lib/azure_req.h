@@ -452,11 +452,18 @@ struct azure_op {
 		uint64_t write_cbs;
 		struct azure_op_data *data;
 		bool recv_cb_alloced;	/* data buffer alloced by conn cb */
+		uint32_t num_hdrs;
+		struct list_head hdrs;
 	} rsp;
 };
 
 int
 azure_op_req_hdr_add(struct azure_op *op,
+		     const char *key,
+		     const char *val);
+
+int
+azure_op_rsp_hdr_add(struct azure_op *op,
 		     const char *key,
 		     const char *val);
 

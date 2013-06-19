@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <time.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #include <curl/curl.h>
 
@@ -79,7 +80,6 @@ err_out:
 	return ret;
 }
 
-#define HDR_PFX_CLEN "Content-Length: "
 /*
  * @hdr_str:	single non-null terminated header string.
  * @num_bytes:	length of @hdr_str.
@@ -89,27 +89,75 @@ curl_hdr_process(struct azure_op *op,
 		 char *hdr_str,
 		 uint64_t num_bytes)
 {
+	int ret;
+	char *s;
+	char *c = strchr(hdr_str, ':');
+	char *val;
+	int64_t len;
 
-	if (!strncmp(hdr_str, HDR_PFX_CLEN, sizeof(HDR_PFX_CLEN) - 1)) {
-		int64_t clen;
+	if ((c == NULL) || (c > hdr_str + num_bytes) || (c == hdr_str)) {
+		dbg(3, "ignoring header: %s\n", hdr_str);
+		return 0;
+	}
+
+	for (s = c + 1; isspace((int)*s); s++);
+
+	if (s > hdr_str + num_bytes) {
+		dbg(0, "invalid header: %s\n", hdr_str);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	len = num_bytes - (s - hdr_str);
+	/* XXX curl makes no guarantees that hdr_str has a null term */
+	val = strndup(s, (size_t)len);
+	if (val == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	/* trim trailing '\r', '\n' and space chars */
+	for (s = val + len - 1; isspace((int)*s); s--);
+	if (s < val) {
+		dbg(0, "invalid header: %s\n", hdr_str);
+		ret = -EINVAL;
+		goto err_val_free;
+	}
+	*(s + 1) = '\0';
+
+	*c = '\0';	/* zero terminate key */
+	ret = azure_op_rsp_hdr_add(op, hdr_str, val);
+	if (ret < 0) {
+		goto err_cln_fill;
+	}
+
+	if (!strcmp(hdr_str, "Content-Length")) {
 		char *eptr;
-		char *loff = hdr_str + sizeof(HDR_PFX_CLEN) - 1;
 
-		clen = strtoll(loff, &eptr, 10);
-		if ((eptr == loff) || (eptr > hdr_str + num_bytes)) {
-			return -1;
+		errno = 0;
+		len = strtoll(val, &eptr, 10);
+		if ((eptr == val) || (errno != 0)) {
+			ret = -EINVAL;
+			goto err_cln_fill;
 		}
 
 		if (op->rsp.write_cbs > 0) {
 			dbg(0, "clen header received after data callback!\n");
-			return -1;
+			ret = -EINVAL;
+			goto err_cln_fill;
 		}
 		/* allocate recv buffer in write callback */
 		op->rsp.clen_recvd = true;
-		op->rsp.clen = clen;
+		op->rsp.clen = len;
 	}
 
-	return 0;
+	ret = 0;
+err_cln_fill:
+	*c = ':';
+err_val_free:
+	free(val);
+err_out:
+	return ret;
 }
 
 static size_t

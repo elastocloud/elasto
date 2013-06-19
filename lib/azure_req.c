@@ -79,6 +79,22 @@ azure_op_req_hdr_add(struct azure_op *op,
 		return ret;
 	}
 	op->req.num_hdrs++;
+	dbg(4, "added req hdr(%u): \"%s: %s\"\n", op->req.num_hdrs, key, val);
+
+	return 0;
+}
+
+int
+azure_op_rsp_hdr_add(struct azure_op *op,
+		     const char *key,
+		     const char *val)
+{
+	int ret = azure_op_hdr_add(&op->rsp.hdrs, key, val);
+	if (ret < 0) {
+		return ret;
+	}
+	op->rsp.num_hdrs++;
+	dbg(4, "added rsp hdr(%u): \"%s: %s\"\n", op->rsp.num_hdrs, key, val);
 
 	return 0;
 }
@@ -291,6 +307,7 @@ azure_op_acc_keys_get(const char *sub_id,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_ACC_KEYS_GET;
 	acc_keys_get_req = &op->req.acc_keys_get;
 
@@ -427,6 +444,7 @@ azure_op_acc_list(const char *sub_id,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_ACC_LIST;
 	acc_list_req = &op->req.acc_list;
 
@@ -712,6 +730,7 @@ azure_op_acc_create(const char *sub_id,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_ACC_CREATE;
 	acc_create_req = &op->req.acc_create;
 
@@ -825,6 +844,7 @@ azure_op_acc_del(const char *sub_id,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_ACC_DEL;
 	acc_del_req = &op->req.acc_del;
 
@@ -906,6 +926,7 @@ azure_op_ctnr_list(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_CONTAINER_LIST;
 	ctnr_list_req = &op->req.ctnr_list;
 
@@ -1073,6 +1094,7 @@ azure_op_ctnr_create(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_CONTAINER_CREATE;
 	ctnr_create_req = &op->req.ctnr_create;
 
@@ -1135,6 +1157,7 @@ azure_op_ctnr_del(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_CONTAINER_DEL;
 	ctnr_del_req = &op->req.ctnr_del;
 
@@ -1220,6 +1243,7 @@ azure_op_blob_list(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_BLOB_LIST;
 	blob_list_req = &op->req.blob_list;
 
@@ -1472,6 +1496,7 @@ azure_op_blob_put(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_BLOB_PUT;
 	bl_put_req = &op->req.blob_put;
 
@@ -1629,6 +1654,7 @@ azure_op_blob_get(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_BLOB_GET;
 	get_req = &op->req.blob_get;
 
@@ -1777,6 +1803,7 @@ azure_op_page_put(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_BLOB_PUT;
 	pg_put_req = &op->req.page_put;
 
@@ -1902,6 +1929,7 @@ azure_op_block_put(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_BLOCK_PUT;
 	blk_put_req = &op->req.block_put;
 
@@ -2102,6 +2130,7 @@ azure_op_block_list_put(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_BLOCK_LIST_PUT;
 	blk_list_put_req = &op->req.block_list_put;
 
@@ -2197,6 +2226,7 @@ azure_op_block_list_get(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_BLOCK_LIST_GET;
 	blk_list_get_req = &op->req.block_list_get;
 
@@ -2437,6 +2467,7 @@ azure_op_blob_del(const char *account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_BLOB_DEL;
 	bl_del_req = &op->req.blob_del;
 
@@ -2547,6 +2578,7 @@ azure_op_blob_cp(const char *src_account,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = AOP_BLOB_CP;
 	bl_cp_req = &op->req.blob_cp;
 
@@ -2780,6 +2812,7 @@ s3_op_svc_list(bool insecure_http,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_SVC_LIST;
 	/* no arguments */
 
@@ -2957,6 +2990,7 @@ s3_op_bkt_list(const char *bkt_name,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_BKT_LIST;
 	bkt_list_req = &op->req.bkt_list;
 
@@ -3091,9 +3125,11 @@ s3_rsp_bkt_list_process(struct azure_op *op)
 		bkt_list_rsp->truncated = true;
 	} else {
 		dbg(0, "invalid bool str: %s\n", bool_val);
+		free(bool_val);
 		ret = -EINVAL;
 		goto err_pool_free;
 	}
+	free(bool_val);
 
 	list_head_init(&bkt_list_rsp->objs);
 
@@ -3201,6 +3237,7 @@ s3_op_bkt_create(const char *bkt_name,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_BKT_CREATE;
 	bkt_create_req = &op->req.bkt_create;
 
@@ -3267,6 +3304,7 @@ s3_op_bkt_del(const char *bkt_name,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_BKT_DEL;
 	bkt_del_req = &op->req.bkt_del;
 
@@ -3330,6 +3368,7 @@ s3_op_obj_put(const char *bkt_name,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_OBJ_PUT;
 	obj_put_req = &op->req.obj_put;
 
@@ -3404,6 +3443,7 @@ s3_op_obj_get(const char *bkt_name,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_OBJ_GET;
 	obj_get_req = &op->req.obj_get;
 
@@ -3471,6 +3511,7 @@ s3_op_obj_del(const char *bkt_name,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_OBJ_DEL;
 	obj_del_req = &op->req.obj_del;
 
@@ -3564,6 +3605,7 @@ s3_op_obj_cp(const char *src_bkt,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_OBJ_CP;
 	obj_cp_req = &op->req.obj_cp;
 
@@ -3646,6 +3688,7 @@ s3_op_mp_start(const char *bkt,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_MULTIPART_START;
 	mp_start_req = &op->req.mp_start;
 
@@ -3838,6 +3881,7 @@ s3_op_mp_done(const char *bkt,
 
 	memset(op, 0, sizeof(*op));
 	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_MULTIPART_DONE;
 	mp_done_req = &op->req.mp_done;
 
@@ -3991,6 +4035,7 @@ azure_req_free(struct azure_op *op)
 static void
 azure_rsp_free(struct azure_op *op)
 {
+	azure_op_hdrs_free(&op->rsp.hdrs);
 	azure_op_data_destroy(&op->rsp.data);
 
 	if (op->rsp.is_error) {
