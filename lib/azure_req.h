@@ -42,6 +42,7 @@ enum azure_opcode {
 	S3OP_OBJ_CP,
 	S3OP_MULTIPART_START,
 	S3OP_MULTIPART_DONE,
+	S3OP_PART_PUT,
 };
 
 enum azure_op_data_type {
@@ -340,6 +341,18 @@ struct s3_req_mp_done {
 	struct list_head *parts;
 };
 
+struct s3_req_part_put {
+	char *bkt_name;
+	char *obj_name;
+	char *upload_id;
+	uint32_t pnum;
+	struct azure_op_data *data;
+};
+
+struct s3_rsp_part_put {
+	char *etag;
+};
+
 /*
  * @base_off is the base offset into the input/output
  * buffer. i.e. @iov.base_off + @off = read/write offset
@@ -408,6 +421,7 @@ struct azure_op {
 			struct s3_req_obj_cp obj_cp;
 			struct s3_req_mp_start mp_start;
 			struct s3_req_mp_done mp_done;
+			struct s3_req_part_put part_put;
 		};
 		uint64_t read_cbs;
 		struct azure_op_data *data;
@@ -429,6 +443,7 @@ struct azure_op {
 			struct s3_rsp_svc_list svc_list;
 			struct s3_rsp_bkt_list bkt_list;
 			struct s3_rsp_mp_start mp_start;
+			struct s3_rsp_part_put part_put;
 			/*
 			 * No response specific data handled yet:
 			 * struct azure_rsp_acc_del acc_del;
@@ -668,6 +683,15 @@ s3_op_mp_done(const char *bkt,
 	      struct list_head *parts,
 	      bool insecure_http,
 	      struct azure_op *op);
+
+int
+s3_op_part_put(const char *bkt,
+	       const char *obj,
+	       const char *upload_id,
+	       uint32_t pnum,
+	       struct azure_op_data *data,
+	       bool insecure_http,
+	       struct azure_op *op);
 
 bool
 azure_rsp_is_error(enum azure_opcode opcode, int err_code);

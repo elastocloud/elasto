@@ -3963,6 +3963,108 @@ err_out:
 }
 
 static void
+s3_req_part_put_free(struct s3_req_part_put *part_put_req)
+{
+	free(part_put_req->bkt_name);
+	free(part_put_req->obj_name);
+	free(part_put_req->upload_id);
+}
+
+static void
+s3_rsp_part_put_free(struct s3_rsp_part_put *part_put_rsp)
+{
+	free(part_put_rsp->etag);
+}
+
+int
+s3_op_part_put(const char *bkt,
+	       const char *obj,
+	       const char *upload_id,
+	       uint32_t pnum,
+	       struct azure_op_data *data,
+	       bool insecure_http,
+	       struct azure_op *op)
+{
+	int ret;
+	struct s3_req_part_put *part_put_req;
+
+	op->opcode = S3OP_PART_PUT;
+	part_put_req = &op->req.part_put;
+
+	part_put_req->bkt_name = strdup(bkt);
+	if (part_put_req->bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	part_put_req->obj_name = strdup(obj);
+	if (part_put_req->obj_name == NULL) {
+		ret = -ENOMEM;
+		goto err_bkt_free;
+	}
+
+	part_put_req->upload_id = strdup(upload_id);
+	if (part_put_req->upload_id == NULL) {
+		ret = -ENOMEM;
+		goto err_obj_free;
+	}
+
+	part_put_req->pnum = pnum;
+
+	op->req.data = data;
+	/* TODO add a foreign flag so @req.data is not freed with @op */
+
+	op->method = REQ_METHOD_PUT;
+	ret = asprintf(&op->url,
+		       "%s://%s.s3.amazonaws.com/%s?partNumber=%u&uploadId=%s",
+		       (insecure_http ? "http" : "https"),
+		       bkt, obj, (unsigned int)pnum, upload_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uploadid_free;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	op->sign = true;
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_uploadid_free:
+	free(part_put_req->upload_id);
+err_obj_free:
+	free(part_put_req->obj_name);
+err_bkt_free:
+	free(part_put_req->bkt_name);
+err_out:
+	return ret;
+}
+
+static int
+s3_rsp_part_put_process(struct azure_op *op)
+{
+	int ret;
+	struct s3_rsp_part_put *part_put_rsp;
+
+	assert(op->opcode == S3OP_PART_PUT);
+	part_put_rsp = &op->rsp.part_put;
+	ret = azure_op_hdr_val_lookup(&op->rsp.hdrs, "ETag",
+				      &part_put_rsp->etag);
+	if (ret < 0) {
+		dbg(0, "no etag in response header\n");
+		goto err_out;
+	}
+
+	ret = 0;
+err_out:
+	return ret;
+}
+
+static void
 azure_req_free(struct azure_op *op)
 {
 	azure_op_hdrs_free(&op->req.hdrs);
@@ -4048,6 +4150,9 @@ azure_req_free(struct azure_op *op)
 	case S3OP_MULTIPART_DONE:
 		s3_req_mp_done_free(&op->req.mp_done);
 		break;
+	case S3OP_PART_PUT:
+		s3_req_part_put_free(&op->req.part_put);
+		break;
 	default:
 		assert(true);
 		break;
@@ -4090,6 +4195,9 @@ azure_rsp_free(struct azure_op *op)
 		break;
 	case S3OP_MULTIPART_START:
 		s3_rsp_mp_start_free(&op->rsp.mp_start);
+		break;
+	case S3OP_PART_PUT:
+		s3_rsp_part_put_free(&op->rsp.part_put);
 		break;
 	case AOP_ACC_DEL:
 	case AOP_CONTAINER_CREATE:
@@ -4164,6 +4272,9 @@ azure_rsp_process(struct azure_op *op)
 		break;
 	case S3OP_MULTIPART_START:
 		ret = s3_rsp_mp_start_process(op);
+		break;
+	case S3OP_PART_PUT:
+		ret = s3_rsp_part_put_process(op);
 		break;
 	case AOP_ACC_DEL:
 	case AOP_CONTAINER_CREATE:
