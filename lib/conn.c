@@ -517,6 +517,10 @@ elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
 		curl_easy_setopt(econn->curl, CURLOPT_READDATA, op);
 		curl_easy_setopt(econn->curl, CURLOPT_READFUNCTION,
 				 curl_read_cb);
+	} else {
+		/* DELETE, etc. must set Content-Length hdr */
+		curl_easy_setopt(econn->curl, CURLOPT_INFILESIZE_LARGE, 0);
+		curl_easy_setopt(econn->curl, CURLOPT_UPLOAD, 0);
 	}
 
 	if (op->sign) {
