@@ -34,6 +34,21 @@
 #include "cli_sign.h"
 #include "cli_ls.h"
 
+static void
+human_size(double bytes,
+	   char *buf,
+	   size_t buflen)
+{
+	int i = 0;
+	const char* units[] = {"B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB"};
+
+	while (bytes > 1024) {
+		bytes /= 1024;
+		i++;
+	}
+	snprintf(buf, buflen, "%.*f %s", i, bytes, units[i]);
+}
+
 void
 cli_ls_az_args_free(struct cli_args *cli_args)
 {
@@ -232,10 +247,12 @@ cli_ls_ctnr_handle(struct elasto_conn *econn,
 		goto err_op_free;
 	}
 
-	printf("Contents of container %s (*= page blob)\n", ctnr_name);
+	printf("Contents of container %s (*= page blob):\n", ctnr_name);
 	list_for_each(&op.rsp.blob_list.blobs, blob, list) {
-		printf("%lu\t%s%s\n",
-		       blob->len, blob->name,
+		char buf[20];
+		human_size(blob->len, buf, sizeof(buf));
+		printf("%*s\t%s%s\n",
+		       10, buf, blob->name,
 		       (blob->is_page ? "*" : ""));
 	}
 	ret = 0;
@@ -435,10 +452,12 @@ cli_ls_bkt_handle(struct elasto_conn *econn,
 		goto err_op_free;
 	}
 
-	printf("Contents of bucket %s\n", bkt_name);
+	printf("Contents of bucket %s:\n", bkt_name);
 	list_for_each(&op.rsp.bkt_list.objs, obj, list) {
-		printf("%s\t%s\n",
-		       obj->last_mod, obj->key);
+		char buf[20];
+		human_size(obj->size, buf, sizeof(buf));
+		printf("%*s\t%s\t%s\n",
+		       10, buf, obj->last_mod, obj->key);
 	}
 	ret = 0;
 err_op_free:
