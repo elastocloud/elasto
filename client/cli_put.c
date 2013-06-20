@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012, all rights reserved.
+ * Copyright (C) SUSE LINUX Products GmbH 2012-2013, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -265,7 +265,7 @@ err_blks_free:
 	return ret;
 }
 
-int
+static int
 cli_put_blob_handle(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
@@ -378,41 +378,20 @@ err_out:
 	return ret;
 }
 
-int
-cli_put_obj_handle(struct cli_args *cli_args)
+static int
+cli_put_single_obj_handle(struct elasto_conn *econn,
+			  struct cli_args *cli_args,
+			  struct stat *src_st)
 {
-	struct elasto_conn *econn;
-	struct azure_op_data *op_data;
-	struct stat st;
-	struct azure_op op;
 	int ret;
-
-	assert(cli_args->type == CLI_TYPE_S3);
-
-	ret = elasto_conn_init_s3(cli_args->s3.key_id,
-				  cli_args->s3.secret, &econn);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	ret = stat(cli_args->put.local_path, &st);
-	if (ret < 0) {
-		printf("failed to stat %s\n", cli_args->put.local_path);
-		goto err_conn_free;
-	}
-
-	memset(&op, 0, sizeof(op));
-	printf("putting %zd from %s to bucket %s object %s\n",
-	       st.st_size,
-	       cli_args->put.local_path,
-	       cli_args->s3.bkt_name,
-	       cli_args->s3.obj_name);
+	struct azure_op_data *op_data;
+	struct azure_op op;
 
 	ret = azure_op_data_file_new(cli_args->put.local_path,
-				     st.st_size, 0, O_RDONLY, 0,
+				     src_st->st_size, 0, O_RDONLY, 0,
 				     &op_data);
 	if (ret < 0) {
-		goto err_conn_free;
+		goto err_out;
 	}
 
 	ret = s3_op_obj_put(cli_args->s3.bkt_name,
@@ -423,7 +402,7 @@ cli_put_obj_handle(struct cli_args *cli_args)
 	if (ret < 0) {
 		op_data->buf = NULL;
 		azure_op_data_destroy(&op_data);
-		goto err_conn_free;
+		goto err_out;
 	}
 
 	ret = elasto_conn_send_op(econn, &op);
@@ -448,6 +427,291 @@ err_op_free:
 	if (op.req.data)
 		op.req.data->buf = NULL;
 	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
+static int
+cli_put_multi_part_abort(struct elasto_conn *econn,
+			 const char *bkt,
+			 const char *obj,
+			 const char *upload_id,
+			 bool insecure_http)
+{
+	int ret;
+	struct azure_op op;
+
+	printf("aborting upload %s\n", upload_id);
+
+	ret = s3_op_mp_abort(bkt,
+			     obj,
+			     upload_id,
+			     insecure_http,
+			     &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed to abort upload %s: %d\n",
+		       upload_id, op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
+static int
+cli_put_part_handle(struct elasto_conn *econn,
+		    const char *bkt,
+		    const char *obj,
+		    const char *upload_id,
+		    int pnum,
+		    struct azure_op_data *op_data,
+		    bool insecure_http,
+		    struct s3_part **_part)
+{
+	int ret;
+	struct azure_op op;
+	struct s3_part *part;
+
+	part = malloc(sizeof(*part));
+	if (part == NULL) {
+		goto err_out;
+	}
+	memset(part, 0, sizeof(*part));
+
+	ret = s3_op_part_put(bkt,
+			     obj,
+			     upload_id,
+			     pnum,
+			     op_data,
+			     insecure_http,
+			     &op);
+	if (ret < 0) {
+		goto err_part_free;
+	}
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	part->pnum = pnum;
+	part->etag = strdup(op.rsp.part_put.etag);
+	if (part->etag == NULL) {
+		ret = -ENOMEM;
+		goto err_op_free;
+	}
+	*_part = part;
+	op.req.data = NULL;
+	azure_op_free(&op);
+
+	return 0;
+
+err_op_free:
+	op.req.data = NULL;
+	azure_op_free(&op);
+err_part_free:
+	free(part);
+err_out:
+	return ret;
+}
+
+#define PART_LEN (5 * 1024 * 1024)
+static int
+cli_put_multi_part_handle(struct elasto_conn *econn,
+			  struct cli_args *cli_args,
+			  struct stat *src_st)
+{
+	int ret;
+	uint64_t bytes_put;
+	int parts_put;
+	char *upload_id = NULL;
+	struct azure_op_data *op_data;
+	struct azure_op op;
+	struct list_head parts;
+
+	ret = s3_op_mp_start(cli_args->s3.bkt_name,
+			     cli_args->s3.obj_name,
+			     cli_args->insecure_http,
+			     &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		azure_op_free(&op);
+		goto err_out;
+	}
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		azure_op_free(&op);
+		goto err_out;
+	}
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed mp_start response: %d\n", op.rsp.err_code);
+		azure_op_free(&op);
+		goto err_out;
+	}
+
+	upload_id = strdup(op.rsp.part_put.etag);
+	if (upload_id == NULL) {
+		ret = -ENOMEM;
+		azure_op_free(&op);
+		goto err_out;
+	}
+
+	printf("multipart upload %s started\n", upload_id);
+	azure_op_free(&op);
+
+	ret = azure_op_data_file_new(cli_args->put.local_path,
+				     min(PART_LEN, src_st->st_size),
+				     0, O_RDONLY, 0,
+				     &op_data);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	bytes_put = 0;
+	parts_put = 0;
+	list_head_init(&parts);
+	while (bytes_put < src_st->st_size) {
+		struct s3_part *part;
+		ret = cli_put_part_handle(econn,
+					  cli_args->s3.bkt_name,
+					  cli_args->s3.obj_name,
+					  upload_id,
+					  parts_put + 1, /* pnum must be > 0 */
+					  op_data,
+					  cli_args->insecure_http,
+					  &part);
+		if (ret < 0) {
+			goto err_upload_abort;
+		}
+		list_add_tail(&parts, &part->list);
+
+		bytes_put += op_data->off;
+		op_data->base_off = bytes_put;
+		op_data->off = 0;
+		op_data->len = min(PART_LEN,
+				   (src_st->st_size - bytes_put));
+		parts_put++;
+	}
+
+	op_data->buf = NULL;
+	azure_op_data_destroy(&op_data);
+
+	ret = s3_op_mp_done(cli_args->s3.bkt_name,
+			    cli_args->s3.obj_name,
+			    upload_id,
+			    &parts,
+			    cli_args->insecure_http,
+			    &op);
+	if (ret < 0) {
+		goto err_upload_abort;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		azure_op_free(&op);
+		goto err_upload_abort;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		azure_op_free(&op);
+		goto err_upload_abort;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed mp_done response: %d\n", op.rsp.err_code);
+		azure_op_free(&op);
+		goto err_upload_abort;
+	}
+	printf("multipart upload %s done\n", upload_id);
+
+	ret = 0;
+err_out:
+	free(upload_id);
+	return ret;
+
+err_upload_abort:
+	cli_put_multi_part_abort(econn,
+				 cli_args->s3.bkt_name,
+				 cli_args->s3.obj_name,
+				 upload_id,
+				 cli_args->insecure_http);
+	free(upload_id);
+	return ret;
+}
+
+static int
+cli_put_obj_handle(struct cli_args *cli_args)
+{
+	struct elasto_conn *econn;
+	struct stat st;
+	int ret;
+
+	assert(cli_args->type == CLI_TYPE_S3);
+
+	ret = elasto_conn_init_s3(cli_args->s3.key_id,
+				  cli_args->s3.secret, &econn);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = stat(cli_args->put.local_path, &st);
+	if (ret < 0) {
+		printf("failed to stat %s\n", cli_args->put.local_path);
+		goto err_conn_free;
+	}
+
+	printf("putting %zd from %s to bucket %s object %s\n",
+	       st.st_size,
+	       cli_args->put.local_path,
+	       cli_args->s3.bkt_name,
+	       cli_args->s3.obj_name);
+
+	if (st.st_size < BLOCK_THRESHOLD) {
+		ret = cli_put_single_obj_handle(econn, cli_args, &st);
+		if (ret < 0) {
+			goto err_conn_free;
+		}
+	} else {
+		ret = cli_put_multi_part_handle(econn, cli_args, &st);
+		if (ret < 0) {
+			goto err_conn_free;
+		}
+	}
+
+	ret = 0;
 err_conn_free:
 	elasto_conn_free(econn);
 err_out:
