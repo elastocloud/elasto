@@ -3988,6 +3988,9 @@ s3_op_part_put(const char *bkt,
 	int ret;
 	struct s3_req_part_put *part_put_req;
 
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
 	op->opcode = S3OP_PART_PUT;
 	part_put_req = &op->req.part_put;
 
