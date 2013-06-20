@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012, all rights reserved.
+ * Copyright (C) SUSE LINUX Products GmbH 2012-2013, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -42,6 +42,7 @@ enum azure_opcode {
 	S3OP_OBJ_CP,
 	S3OP_MULTIPART_START,
 	S3OP_MULTIPART_DONE,
+	S3OP_MULTIPART_ABORT,
 	S3OP_PART_PUT,
 };
 
@@ -341,6 +342,12 @@ struct s3_req_mp_done {
 	struct list_head *parts;
 };
 
+struct s3_req_mp_abort {
+	char *bkt_name;
+	char *obj_name;
+	char *upload_id;
+};
+
 struct s3_req_part_put {
 	char *bkt_name;
 	char *obj_name;
@@ -421,6 +428,7 @@ struct azure_op {
 			struct s3_req_obj_cp obj_cp;
 			struct s3_req_mp_start mp_start;
 			struct s3_req_mp_done mp_done;
+			struct s3_req_mp_abort mp_abort;
 			struct s3_req_part_put part_put;
 		};
 		uint64_t read_cbs;
@@ -460,6 +468,7 @@ struct azure_op {
 			 * struct s3_rsp_bkt_del bkt_del;
 			 * struct s3_rsp_bkt_cp bkt_cp;
 			 * struct s3_rsp_mp_done mp_done;
+			 * struct s3_rsp_mp_done mp_abort;
 			 */
 		};
 		bool clen_recvd;
@@ -683,6 +692,13 @@ s3_op_mp_done(const char *bkt,
 	      struct list_head *parts,
 	      bool insecure_http,
 	      struct azure_op *op);
+
+int
+s3_op_mp_abort(const char *bkt,
+	       const char *obj,
+	       const char *upload_id,
+	       bool insecure_http,
+	       struct azure_op *op);
 
 int
 s3_op_part_put(const char *bkt,

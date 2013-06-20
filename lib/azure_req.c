@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012, all rights reserved.
+ * Copyright (C) SUSE LINUX Products GmbH 2012-2013, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -3963,6 +3963,76 @@ err_out:
 }
 
 static void
+s3_req_mp_abort_free(struct s3_req_mp_abort *mp_abort_req)
+{
+	free(mp_abort_req->bkt_name);
+	free(mp_abort_req->obj_name);
+	free(mp_abort_req->upload_id);
+}
+
+int
+s3_op_mp_abort(const char *bkt,
+	       const char *obj,
+	       const char *upload_id,
+	       bool insecure_http,
+	       struct azure_op *op)
+{
+	int ret;
+	struct s3_req_mp_abort *mp_abort_req;
+
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
+	op->opcode = S3OP_MULTIPART_ABORT;
+	mp_abort_req = &op->req.mp_abort;
+
+	mp_abort_req->bkt_name = strdup(bkt);
+	if (mp_abort_req->bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	mp_abort_req->obj_name = strdup(obj);
+	if (mp_abort_req->obj_name == NULL) {
+		ret = -ENOMEM;
+		goto err_bkt_free;
+	}
+
+	mp_abort_req->upload_id = strdup(upload_id);
+	if (mp_abort_req->upload_id == NULL) {
+		ret = -ENOMEM;
+		goto err_obj_free;
+	}
+
+	op->method = REQ_METHOD_DELETE;
+	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s?uploadId=%s",
+		       (insecure_http ? "http" : "https"),
+		       bkt, obj, upload_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_obj_free;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	op->sign = true;
+
+	return 0;
+
+err_url_free:
+	free(op->url);
+err_obj_free:
+	free(mp_abort_req->obj_name);
+err_bkt_free:
+	free(mp_abort_req->bkt_name);
+err_out:
+	return ret;
+}
+
+static void
 s3_req_part_put_free(struct s3_req_part_put *part_put_req)
 {
 	free(part_put_req->bkt_name);
@@ -4153,6 +4223,9 @@ azure_req_free(struct azure_op *op)
 	case S3OP_MULTIPART_DONE:
 		s3_req_mp_done_free(&op->req.mp_done);
 		break;
+	case S3OP_MULTIPART_ABORT:
+		s3_req_mp_abort_free(&op->req.mp_abort);
+		break;
 	case S3OP_PART_PUT:
 		s3_req_part_put_free(&op->req.part_put);
 		break;
@@ -4219,6 +4292,7 @@ azure_rsp_free(struct azure_op *op)
 	case S3OP_OBJ_DEL:
 	case S3OP_OBJ_CP:
 	case S3OP_MULTIPART_DONE:
+	case S3OP_MULTIPART_ABORT:
 		/* nothing to do */
 		break;
 	default:
@@ -4296,6 +4370,7 @@ azure_rsp_process(struct azure_op *op)
 	case S3OP_OBJ_DEL:
 	case S3OP_OBJ_CP:
 	case S3OP_MULTIPART_DONE:
+	case S3OP_MULTIPART_ABORT:
 		/* nothing to do */
 		ret = 0;
 		break;
