@@ -440,6 +440,7 @@ struct azure_op {
 	struct {
 		bool is_error;
 		int32_t err_code;
+		char *req_id;
 		union {
 			struct azure_rsp_error err;
 			struct azure_rsp_acc_keys_get acc_keys_get;

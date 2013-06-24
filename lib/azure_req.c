@@ -4247,6 +4247,8 @@ azure_rsp_free(struct azure_op *op)
 		return;
 	}
 
+	free(op->rsp.req_id);
+
 	switch (op->opcode) {
 	case AOP_ACC_KEYS_GET:
 		azure_rsp_acc_keys_get_free(&op->rsp.acc_keys_get);
@@ -4323,6 +4325,22 @@ azure_rsp_process(struct azure_op *op)
 	if (op->rsp.is_error) {
 		/* set by conn layer, error response only */
 		return azure_rsp_error_process(op);
+	}
+
+	if (op->opcode < S3OP_SVC_LIST) {
+		/* azure op */
+		azure_op_hdr_val_lookup(&op->rsp.hdrs, "x-ms-request-id",
+					&op->rsp.req_id);
+	} else {
+		/* s3 op */
+		azure_op_hdr_val_lookup(&op->rsp.hdrs, "x-amz-request-id",
+					&op->rsp.req_id);
+	}
+	if (op->rsp.req_id == NULL) {
+		dbg(0, "no req_id in %d response\n", op->opcode);
+	} else {
+		dbg(4, "req_id in %d response: %s\n",
+		    op->opcode, op->rsp.req_id);
 	}
 
 	switch (op->opcode) {
