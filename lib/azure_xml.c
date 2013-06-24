@@ -139,7 +139,7 @@ err_out:
 	return ret;
 }
 
-/* get value at corresponding xpath */
+/* get string value at corresponding xpath */
 int
 azure_xml_path_get(struct apr_xml_elem *xel_parent,
 		   const char *xp_expr,
@@ -163,6 +163,67 @@ azure_xml_path_get(struct apr_xml_elem *xel_parent,
 	if (*value == NULL) {
 		return -ENOMEM;
 	}
+
+	return 0;
+}
+
+/* get integer value at corresponding xpath */
+int
+azure_xml_path_i32_get(struct apr_xml_elem *xel_parent,
+		       const char *xp_expr,
+		       int32_t *value)
+{
+	int ret;
+	struct apr_xml_elem *xel;
+	char *sval_end;
+	int32_t val;
+
+	ret = azure_xml_path_el_get(xel_parent, xp_expr, &xel);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (xel->first_cdata.first == NULL) {
+		return -ENOENT;
+	}
+
+	val = strtol(xel->first_cdata.first->text, &sval_end, 10);
+	if (sval_end == xel->first_cdata.first->text) {
+		dbg(0, "non-numeric at %s: %s\n",
+		    xp_expr, xel->first_cdata.first->text);
+		return -EINVAL;
+	}
+	*value = val;
+
+	return 0;
+}
+
+int
+azure_xml_path_i64_get(struct apr_xml_elem *xel_parent,
+		       const char *xp_expr,
+		       int64_t *value)
+{
+	int ret;
+	struct apr_xml_elem *xel;
+	char *sval_end;
+	int64_t val;
+
+	ret = azure_xml_path_el_get(xel_parent, xp_expr, &xel);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (xel->first_cdata.first == NULL) {
+		return -ENOENT;
+	}
+
+	val = strtoll(xel->first_cdata.first->text, &sval_end, 10);
+	if (sval_end == xel->first_cdata.first->text) {
+		dbg(0, "non-numeric at %s: %s\n",
+		    xp_expr, xel->first_cdata.first->text);
+		return -EINVAL;
+	}
+	*value = val;
 
 	return 0;
 }
