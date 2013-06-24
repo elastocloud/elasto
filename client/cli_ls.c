@@ -26,6 +26,7 @@
 #include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
+#include "lib/util.h"
 #include "lib/azure_xml.h"
 #include "lib/azure_req.h"
 #include "lib/conn.h"
@@ -40,9 +41,9 @@ human_size(double bytes,
 	   size_t buflen)
 {
 	int i = 0;
-	const char* units[] = {"B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB"};
+	const char* units[] = {"B", "K", "M", "G", "T", "P", "E", "Z"};
 
-	while (bytes > 1024) {
+	while ((bytes > 1024) && (i < ARRAY_SIZE(units) - 1)) {
 		bytes /= 1024;
 		i++;
 	}
@@ -250,7 +251,7 @@ cli_ls_ctnr_handle(struct elasto_conn *econn,
 	printf("Contents of container %s (*= page blob):\n", ctnr_name);
 	list_for_each(&op.rsp.blob_list.blobs, blob, list) {
 		char buf[20];
-		human_size(blob->len, buf, sizeof(buf));
+		human_size(blob->len, buf, ARRAY_SIZE(buf));
 		printf("%*s\t%s%s\n",
 		       10, buf, blob->name,
 		       (blob->is_page ? "*" : ""));
@@ -455,7 +456,7 @@ cli_ls_bkt_handle(struct elasto_conn *econn,
 	printf("Contents of bucket %s:\n", bkt_name);
 	list_for_each(&op.rsp.bkt_list.objs, obj, list) {
 		char buf[20];
-		human_size(obj->size, buf, sizeof(buf));
+		human_size(obj->size, buf, ARRAY_SIZE(buf));
 		printf("%*s\t%s\t%s\n",
 		       10, buf, obj->last_mod, obj->key);
 	}
