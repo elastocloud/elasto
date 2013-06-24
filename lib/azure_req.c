@@ -3117,7 +3117,6 @@ s3_rsp_bkt_list_process(struct azure_op *op)
 	struct apr_xml_elem *xel;
 	struct s3_object *obj;
 	struct s3_object *obj_n;
-	char *bool_val;
 
 	assert(op->opcode == S3OP_BKT_LIST);
 	assert(op->rsp.data->type == AOP_DATA_IOV);
@@ -3136,22 +3135,12 @@ s3_rsp_bkt_list_process(struct azure_op *op)
 		goto err_pool_free;
 	}
 
-	ret = azure_xml_path_get(xdoc->root, "/ListBucketResult/IsTruncated",
-				 &bool_val);
-	if ((ret < 0) && (ret != -ENOENT)) {
+	ret = azure_xml_path_bool_get(xdoc->root,
+				      "/ListBucketResult/IsTruncated",
+				      &bkt_list_rsp->truncated);
+	if (ret < 0) {
 		goto err_pool_free;
 	}
-	if (!strcmp(bool_val, "false")) {
-		bkt_list_rsp->truncated = false;
-	} else if (!strcmp(bool_val, "true")) {
-		bkt_list_rsp->truncated = true;
-	} else {
-		dbg(0, "invalid bool str: %s\n", bool_val);
-		free(bool_val);
-		ret = -EINVAL;
-		goto err_pool_free;
-	}
-	free(bool_val);
 
 	list_head_init(&bkt_list_rsp->objs);
 
