@@ -2657,6 +2657,182 @@ err_out:
 }
 
 static void
+azure_req_status_get_free(struct azure_req_status_get *sts_get_req)
+{
+	free(sts_get_req->sub_id);
+	free(sts_get_req->req_id);
+}
+
+static void
+azure_rsp_status_get_free(struct azure_rsp_status_get *sts_get_rsp)
+{
+	if (sts_get_rsp->status == AOP_STATUS_FAILED) {
+		free(sts_get_rsp->err.msg);
+	}
+}
+
+int
+azure_op_status_get(const char *sub_id,
+		    const char *req_id,
+		    struct azure_op *op)
+{
+	int ret;
+	struct azure_req_status_get *sts_get_req;
+
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
+	op->opcode = AOP_STATUS_GET;
+	sts_get_req = &op->req.sts_get;
+
+	sts_get_req->sub_id = strdup(sub_id);
+	if (sts_get_req->sub_id == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	sts_get_req->req_id = strdup(req_id);
+	if (sts_get_req->req_id == NULL) {
+		ret = -ENOMEM;
+		goto err_sub_free;
+	}
+
+	op->method = REQ_METHOD_GET;
+	ret = asprintf(&op->url,
+		       "https://management.core.windows.net"
+		       "/%s/operations/%s",
+		       sub_id, req_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_req_free;
+	}
+
+	ret = azure_op_fill_hdr_common(op, false);
+	if (ret < 0)
+		goto err_url_free;
+
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+err_url_free:
+	free(op->url);
+err_req_free:
+	free(sts_get_req->req_id);
+err_sub_free:
+	free(sts_get_req->sub_id);
+err_out:
+	return ret;
+}
+
+static int
+azure_rsp_status_get_ok_process(struct apr_xml_doc *xdoc,
+				struct azure_rsp_status_get *sts_get_rsp)
+{
+	int ret;
+
+	ret = azure_xml_path_i32_get(xdoc->root,
+				     "/operation/HttpStatusCode",
+				     &sts_get_rsp->ok.http_code);
+	return ret;
+}
+
+static int
+azure_rsp_status_get_err_process(struct apr_xml_doc *xdoc,
+				 struct azure_rsp_status_get *sts_get_rsp)
+{
+	int ret;
+
+	ret = azure_xml_path_i32_get(xdoc->root,
+				     "/operation/HttpStatusCode",
+				     &sts_get_rsp->err.http_code);
+	if (ret < 0) {
+		return ret;
+	}
+	ret = azure_xml_path_i32_get(xdoc->root,
+				     "/operation/Error/Code",
+				     &sts_get_rsp->err.code);
+	if (ret < 0) {
+		return ret;
+	}
+	ret = azure_xml_path_get(xdoc->root,
+				 "/operation/Error/Message",
+				 &sts_get_rsp->err.msg);
+	if (ret < 0) {
+		return ret;
+	}
+
+	return 0;
+}
+
+static int
+azure_rsp_status_get_process(struct azure_op *op)
+{
+	int ret;
+	apr_status_t rv;
+	struct azure_rsp_status_get *sts_get_rsp;
+	apr_pool_t *pool;
+	struct apr_xml_doc *xdoc;
+	char *xml_val;
+
+	assert(op->opcode == AOP_STATUS_GET);
+	assert(op->rsp.data->type == AOP_DATA_IOV);
+
+	rv = apr_pool_create(&pool, NULL);
+	if (rv != APR_SUCCESS) {
+		ret = -APR_TO_OS_ERROR(rv);
+		goto err_out;
+	}
+
+	/* parse response */
+	assert(op->rsp.data->base_off == 0);
+	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+			      &xdoc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	sts_get_rsp = &op->rsp.sts_get;
+
+	ret = azure_xml_path_get(xdoc->root,
+				 "/operation/status",
+				 &xml_val);
+	if (ret < 0) {
+		goto err_pool_free;
+	}
+	if (strcmp(xml_val, "InProgress") == 0) {
+		sts_get_rsp->status = AOP_STATUS_IN_PROGRESS;
+	} else if (strcmp(xml_val, "Succeeded") == 0) {
+		sts_get_rsp->status = AOP_STATUS_SUCCEEDED;
+		free(xml_val);
+		ret = azure_rsp_status_get_ok_process(xdoc, sts_get_rsp);
+		if (ret < 0) {
+			goto err_pool_free;
+		}
+	} else if (strcmp(xml_val, "Failed") == 0) {
+		sts_get_rsp->status = AOP_STATUS_FAILED;
+		free(xml_val);
+		ret = azure_rsp_status_get_err_process(xdoc, sts_get_rsp);
+		if (ret < 0) {
+			goto err_pool_free;
+		}
+	} else {
+		dbg(0, "unexpected op status: %s\n", xml_val);
+		ret = -EINVAL;
+		free(xml_val);
+		goto err_pool_free;
+	}
+
+	apr_pool_destroy(pool);
+	return 0;
+
+err_pool_free:
+	apr_pool_destroy(pool);
+err_out:
+	return ret;
+}
+
+static void
 azure_rsp_error_free(struct azure_rsp_error *err)
 {
 	free(err->msg);
@@ -4149,6 +4325,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_BLOB_CP:
 		azure_req_blob_cp_free(&op->req.blob_cp);
 		break;
+	case AOP_STATUS_GET:
+		azure_req_status_get_free(&op->req.sts_get);
+		break;
 	/* S3 */
 	case S3OP_SVC_LIST:
 		s3_req_svc_list_free(&op->req.svc_list);
@@ -4221,6 +4400,9 @@ azure_rsp_free(struct azure_op *op)
 		break;
 	case AOP_BLOCK_LIST_GET:
 		azure_rsp_block_list_get_free(&op->rsp.block_list_get);
+		break;
+	case AOP_STATUS_GET:
+		azure_rsp_status_get_free(&op->rsp.sts_get);
 		break;
 	case S3OP_SVC_LIST:
 		s3_rsp_svc_list_free(&op->rsp.svc_list);
@@ -4315,6 +4497,9 @@ azure_rsp_process(struct azure_op *op)
 		break;
 	case AOP_BLOCK_LIST_GET:
 		ret = azure_rsp_block_list_get_process(op);
+		break;
+	case AOP_STATUS_GET:
+		ret = azure_rsp_status_get_process(op);
 		break;
 	case S3OP_SVC_LIST:
 		ret = s3_rsp_svc_list_process(op);

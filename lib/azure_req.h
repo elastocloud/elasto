@@ -31,6 +31,7 @@ enum azure_opcode {
 	AOP_BLOCK_LIST_GET,
 	AOP_BLOB_DEL,
 	AOP_BLOB_CP,
+	AOP_STATUS_GET,
 	/* Amazon S3 ops below this point */
 	S3OP_SVC_LIST,
 	S3OP_BKT_LIST,
@@ -241,6 +242,31 @@ struct azure_req_blob_cp {
 	} dst;
 };
 
+struct azure_req_status_get {
+	char *sub_id;
+	char *req_id;
+};
+
+enum azure_op_status {
+	AOP_STATUS_IN_PROGRESS,
+	AOP_STATUS_SUCCEEDED,
+	AOP_STATUS_FAILED,
+};
+
+struct azure_rsp_status_get {
+	enum azure_op_status status;
+	union {
+		struct {
+			int http_code;
+		} ok;
+		struct {
+			int http_code;
+			int code;
+			char *msg;
+		} err;
+	};
+};
+
 /* error response buffer is separate to request/response data */
 struct azure_rsp_error {
 	char *msg;
@@ -417,6 +443,7 @@ struct azure_op {
 			struct azure_req_block_list_get block_list_get;
 			struct azure_req_blob_del blob_del;
 			struct azure_req_blob_cp blob_cp;
+			struct azure_req_status_get sts_get;
 
 			struct s3_req_svc_list svc_list;
 			struct s3_req_bkt_list bkt_list;
@@ -448,6 +475,7 @@ struct azure_op {
 			struct azure_rsp_ctnr_list ctnr_list;
 			struct azure_rsp_blob_list blob_list;
 			struct azure_rsp_block_list_get block_list_get;
+			struct azure_rsp_status_get sts_get;
 
 			struct s3_rsp_svc_list svc_list;
 			struct s3_rsp_bkt_list bkt_list;
@@ -631,6 +659,11 @@ azure_op_blob_cp(const char *src_account,
 		 const char *dst_bname,
 		 bool insecure_http,
 		 struct azure_op *op);
+
+int
+azure_op_status_get(const char *sub_id,
+		    const char *req_id,
+		    struct azure_op *op);
 
 int
 s3_op_svc_list(bool insecure_http,
