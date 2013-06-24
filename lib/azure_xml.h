@@ -37,6 +37,11 @@ azure_xml_path_i64_get(struct apr_xml_elem *xel_parent,
 		       int64_t *value);
 
 int
+azure_xml_path_bool_get(struct apr_xml_elem *xel_parent,
+			const char *xp_expr,
+			bool *value);
+
+int
 azure_xml_path_el_get(struct apr_xml_elem *xel_parent,
 		      const char *xp_expr,
 		      struct apr_xml_elem **xel_child_out);

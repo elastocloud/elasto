@@ -229,6 +229,35 @@ azure_xml_path_i64_get(struct apr_xml_elem *xel_parent,
 }
 
 int
+azure_xml_path_bool_get(struct apr_xml_elem *xel_parent,
+			const char *xp_expr,
+			bool *value)
+{
+	int ret;
+	char *bool_str;
+	bool val;
+
+	ret = azure_xml_path_get(xel_parent, xp_expr, &bool_str);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if (!strcmp(bool_str, "false")) {
+		val = false;
+	} else if (!strcmp(bool_str, "true")) {
+		val = true;
+	} else {
+		dbg(0, "invalid bool str: %s\n", bool_str);
+		free(bool_str);
+		return -EINVAL;
+	}
+	free(bool_str);
+	*value = val;
+
+	return 0;
+}
+
+int
 azure_xml_attr_get(struct apr_xml_elem *xel,
 		   const char *key,
 		   char **value)
