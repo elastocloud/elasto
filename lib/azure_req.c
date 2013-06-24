@@ -1328,8 +1328,6 @@ azure_rsp_blob_iter_process(struct apr_xml_elem *xel,
 			    struct azure_blob **blob)
 {
 	int ret;
-	char *len;
-	char *len_end;
 	char *type;
 	struct azure_blob *iblob;
 
@@ -1344,30 +1342,22 @@ azure_rsp_blob_iter_process(struct apr_xml_elem *xel,
 		goto err_blob_free;
 	}
 
-	ret = azure_xml_path_get(xel, "Properties/Content-Length", &len);
+	ret = azure_xml_path_u64_get(xel, "Properties/Content-Length",
+				     &iblob->len);
 	if (ret < 0) {
 		goto err_name_free;
-	}
-	iblob->len = strtoll(len, &len_end, 10);
-	if (len_end == len) {
-		dbg(0, "unsupported blob length response\n");
-		ret = -EINVAL;
-		goto err_len_free;
 	}
 
 	ret = azure_xml_path_get(xel, "Properties/BlobType", &type);
 	if (ret < 0) {
-		goto err_len_free;
+		goto err_name_free;
 	}
 	iblob->is_page = (strcmp(type, BLOB_TYPE_PAGE) == 0);
 
 	*blob = iblob;
-	free(len);
 	free(type);
 	return 0;
 
-err_len_free:
-	free(len);
 err_name_free:
 	free(iblob->name);
 err_blob_free:
@@ -2320,8 +2310,6 @@ azure_rsp_blk_iter_process(struct apr_xml_elem *xel,
 {
 	int ret;
 	char *name;
-	char *size;
-	char *size_end;
 	struct azure_block *blk;
 
 	blk = malloc(sizeof(*blk));
@@ -2347,26 +2335,17 @@ azure_rsp_blk_iter_process(struct apr_xml_elem *xel,
 	/* zero terminate */
 	blk->id[ret] = '\0';
 
-	ret = azure_xml_path_get(xel, "Size", &size);
+	ret = azure_xml_path_u64_get(xel, "Size", &blk->len);
 	if (ret < 0) {
-		goto err_name_free;
-	}
-	blk->len = strtoll(size, &size_end, 10);
-	if (size_end == size) {
-		dbg(0, "unsupported block size response\n");
-		ret = -EINVAL;
-		goto err_size_free;
+		goto err_id_free;
 	}
 
 	blk->state = state;
 	*blk_ret = blk;
-	free(size);
 	free(name);
 
 	return 0;
 
-err_size_free:
-	free(size);
 err_id_free:
 	free(blk->id);
 err_name_free:
@@ -3053,8 +3032,6 @@ s3_rsp_obj_iter_process(struct apr_xml_elem *xel,
 			struct s3_object **obj_ret)
 {
 	int ret;
-	char *size;
-	char *size_end;
 	struct s3_object *obj;
 
 	obj = malloc(sizeof(*obj));
@@ -3073,29 +3050,20 @@ s3_rsp_obj_iter_process(struct apr_xml_elem *xel,
 		goto err_key_free;
 	}
 
-	ret = azure_xml_path_get(xel, "Size", &size);
+	ret = azure_xml_path_u64_get(xel, "Size", &obj->size);
 	if (ret < 0) {
 		goto err_mod_free;
-	}
-	obj->size = strtoll(size, &size_end, 10);
-	if (size_end == size) {
-		dbg(0, "unsupported object size response\n");
-		ret = -EINVAL;
-		goto err_size_free;
 	}
 
 	ret = azure_xml_path_get(xel, "StorageClass", &obj->store_class);
 	if (ret < 0) {
-		goto err_size_free;
+		goto err_mod_free;
 	}
 
 	*obj_ret = obj;
-	free(size);
 
 	return 0;
 
-err_size_free:
-	free(size);
 err_mod_free:
 	free(obj->last_mod);
 err_key_free:
