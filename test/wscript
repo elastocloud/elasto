@@ -15,4 +15,5 @@ def build(bld):
 		    target='cm_unity',
 		    lib=['curl','apr-1','aprutil-1','crypto','cmocka'],
 		    use=['ccan','elasto'],
-		    includes = '. .. ../lib')
+		    includes = '. .. ../lib',
+		    install_path = None)

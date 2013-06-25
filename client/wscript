@@ -12,4 +12,5 @@ def build(bld):
 		    target='elasto_cli',
 		    lib=['curl','apr-1','aprutil-1','crypto'],
 		    use=['ccan','elasto'],
-		    includes = '. ..')
+		    includes = '. ..',
+		    install_path = '${BINDIR}')
