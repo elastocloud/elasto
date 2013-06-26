@@ -2707,12 +2707,9 @@ azure_op_status_get(const char *sub_id,
 		goto err_req_free;
 	}
 
-	ret = azure_op_fill_hdr_common(op, false);
+	ret = azure_op_fill_hdr_common(op, true);
 	if (ret < 0)
 		goto err_url_free;
-
-	/* the connection layer must sign this request before sending */
-	op->sign = true;
 
 	return 0;
 err_url_free:
@@ -2732,7 +2729,7 @@ azure_rsp_status_get_ok_process(struct apr_xml_doc *xdoc,
 	int ret;
 
 	ret = azure_xml_path_i32_get(xdoc->root,
-				     "/operation/HttpStatusCode",
+				     "/Operation/HttpStatusCode",
 				     &sts_get_rsp->ok.http_code);
 	return ret;
 }
@@ -2744,19 +2741,19 @@ azure_rsp_status_get_err_process(struct apr_xml_doc *xdoc,
 	int ret;
 
 	ret = azure_xml_path_i32_get(xdoc->root,
-				     "/operation/HttpStatusCode",
+				     "/Operation/HttpStatusCode",
 				     &sts_get_rsp->err.http_code);
 	if (ret < 0) {
 		return ret;
 	}
 	ret = azure_xml_path_i32_get(xdoc->root,
-				     "/operation/Error/Code",
+				     "/Operation/Error/Code",
 				     &sts_get_rsp->err.code);
 	if (ret < 0) {
 		return ret;
 	}
 	ret = azure_xml_path_get(xdoc->root,
-				 "/operation/Error/Message",
+				 "/Operation/Error/Message",
 				 &sts_get_rsp->err.msg);
 	if (ret < 0) {
 		return ret;
@@ -2795,7 +2792,7 @@ azure_rsp_status_get_process(struct azure_op *op)
 	sts_get_rsp = &op->rsp.sts_get;
 
 	ret = azure_xml_path_get(xdoc->root,
-				 "/operation/status",
+				 "/Operation/Status",
 				 &xml_val);
 	if (ret < 0) {
 		goto err_pool_free;
