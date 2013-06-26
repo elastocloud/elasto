@@ -32,6 +32,7 @@
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
 #include "cli_sign.h"
+#include "cli_util.h"
 #include "cli_create.h"
 
 void
@@ -223,6 +224,24 @@ cli_create_handle_acc(struct cli_args *cli_args)
 		ret = -EIO;
 		printf("failed response: %d\n", op.rsp.err_code);
 		goto err_op_free;
+	}
+
+	if (op.rsp.err_code == 202) {
+		enum azure_op_status status;
+		int err_code;
+		/* asynchronously handled */
+		ret = cli_op_wait(econn, cli_args->az.sub_id, op.rsp.req_id,
+				  &status, &err_code);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+		if (status == AOP_STATUS_FAILED) {
+			ret = -EIO;
+			printf("failed async response: %d\n", err_code);
+			goto err_op_free;
+		} else {
+			printf("create completed successfully\n");
+		}
 	}
 
 	ret = 0;
