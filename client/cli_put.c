@@ -292,34 +292,6 @@ cli_put_blob_handle(struct cli_args *cli_args)
 		printf("failed to stat %s\n", cli_args->put.local_path);
 		goto err_conn_free;
 	}
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_ctnr_create(cli_args->az.blob_acc,
-				   cli_args->az.ctnr_name,
-				   cli_args->insecure_http,
-				   &op);
-	if (ret < 0) {
-		goto err_conn_free;
-	}
-
-	ret = elasto_conn_send_op(econn, &op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = azure_rsp_process(&op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op.rsp.is_error && (op.rsp.err_code == 409)) {
-		printf("container already exists, proceeding with put\n");
-	} else if (op.rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
-		goto err_op_free;
-	}
-
-	azure_op_free(&op);
 
 	printf("putting %zd from %s to container %s blob %s\n",
 	       st.st_size,
