@@ -67,6 +67,10 @@ class StarkyContext:
 				  % (self.cli_bin, options.debug_level,
 				     options.s3_key_duo)
 
+		if (options.insecure == True):
+			self.cli_az_cmd += " -i"
+			self.cli_s3_cmd += " -i"
+
 	def acc_name_get(self):
 		# TODO check for uniqueness, must be valid and unique within the
 		# azure.com DNS namespace
@@ -94,8 +98,6 @@ class StarkyTestAzureCreate(unittest.TestCase):
 			self.assertTrue(False, "create failed with "
 					+ str(e.returncode) + e.output)
 
-		print "create successful with: \n" + out
-
 		cmd = self.ctx.cli_az_cmd + " -- ls " + acc_name
 		try:
 			out = sp.check_output(cmd, shell=True)
@@ -103,16 +105,12 @@ class StarkyTestAzureCreate(unittest.TestCase):
 			self.assertTrue(False, "ls failed with "
 					+ str(e.returncode))
 
-		print "ls successful with: \n" + out
-
 		cmd = self.ctx.cli_az_cmd + " -- del " + acc_name
 		try:
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "del failed with "
 					+ str(e.returncode))
-
-		print "del successful with: \n" + out
 
 	def test_container(self):
 		'''
@@ -257,6 +255,10 @@ if __name__ == '__main__':
 			  help="Debug level",
 			  type="int",
 			  default=0)
+	parser.add_option("-i", "--insecure",
+			  dest="insecure",
+			  help="Insecure, use HTTP where possible",
+			  action="store_true")
 	(options, args) = parser.parse_args()
 	ctx = StarkyContext(options)
 	suite = unittest.TestSuite()
