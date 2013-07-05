@@ -293,8 +293,8 @@ cli_put_blob_handle(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	printf("putting %zd from %s to container %s blob %s\n",
-	       st.st_size,
+	printf("putting %ld from %s to container %s blob %s\n",
+	       (long int)st.st_size,
 	       cli_args->put.local_path,
 	       cli_args->az.ctnr_name,
 	       cli_args->az.blob_name);
@@ -665,8 +665,8 @@ cli_put_obj_handle(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	printf("putting %zd from %s to bucket %s object %s\n",
-	       st.st_size,
+	printf("putting %ld from %s to bucket %s object %s\n",
+	       (long int)st.st_size,
 	       cli_args->put.local_path,
 	       cli_args->s3.bkt_name,
 	       cli_args->s3.obj_name);

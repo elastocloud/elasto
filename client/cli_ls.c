@@ -21,6 +21,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <inttypes.h>
 
 #include <curl/curl.h>
 #include <apr-1/apr_xml.h>
@@ -195,7 +196,7 @@ cli_ls_blob_handle(struct elasto_conn *econn,
 	printf("Blob %s has %d associated blocks (^ = uncommitted)\n",
 	       blob_name, op.rsp.block_list_get.num_blks);
 	list_for_each(&op.rsp.block_list_get.blks, blk, list) {
-		printf("%lu\t%s%s\n",
+		printf("%" PRIu64 "\t%s%s\n",
 		       blk->len, blk->id,
 		       (blk->state == BLOCK_STATE_UNCOMMITED ? "^" : ""));
 	}

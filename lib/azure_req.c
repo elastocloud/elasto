@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <inttypes.h>
 
 #include <apr-1/apr_xml.h>
 
@@ -1454,7 +1455,7 @@ azure_op_blob_put_fill_hdr(struct azure_op *op)
 		if (ret < 0) {
 			goto err_out;
 		}
-		ret = asprintf(&hdr_str, "%lu",
+		ret = asprintf(&hdr_str, "%" PRIu64,
 			       op->req.blob_put.pg_len);
 		if (ret < 0) {
 			ret = -ENOMEM;
@@ -1609,7 +1610,7 @@ azure_op_blob_get_fill_hdr(struct azure_op *op)
 
 	if (op->req.blob_get.len > 0) {
 		char *hdr_str;
-		ret = asprintf(&hdr_str, "bytes=%lu-%lu",
+		ret = asprintf(&hdr_str, "bytes=%" PRIu64 "-%" PRIu64,
 			       op->req.blob_get.off,
 			       (op->req.blob_get.off + op->req.blob_get.len - 1));
 		if (ret < 0) {
@@ -1755,7 +1756,7 @@ azure_op_page_put_fill_hdr(struct azure_op *op)
 		goto err_out;
 	}
 
-	ret = asprintf(&hdr_str, "bytes=%lu-%lu",
+	ret = asprintf(&hdr_str, "bytes=%" PRIu64 "-%" PRIu64,
 		       op->req.page_put.off,
 		       (op->req.page_put.off + op->req.page_put.len - 1));
 	if (ret < 0) {

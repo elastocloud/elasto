@@ -22,6 +22,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <inttypes.h>
 
 #include <curl/curl.h>
 
@@ -197,8 +198,8 @@ curl_read_cb(char *ptr,
 	op->req.read_cbs++;
 	read_off = op->req.data->base_off + op->req.data->off;
 	if (op->req.data->off + num_bytes > op->req.data->len) {
-		dbg(3, "curl_read_cb buffer exceeded, "
-		       "len %lu off %lu io_sz %lu, capping\n",
+		dbg(3, "curl_read_cb buffer exceeded, len %" PRIu64
+		       " off %" PRIu64 " io_sz %" PRIu64 ", capping\n",
 		       op->req.data->len, op->req.data->off, num_bytes);
 		num_bytes = op->req.data->len - op->req.data->off;
 	}
@@ -290,8 +291,9 @@ curl_write_alloc_std(struct azure_op *op,
 		/* external req buffer */
 		if (op->rsp.clen_recvd && (op->rsp.clen
 				+ op->rsp.data->base_off > op->rsp.data->len)) {
-				dbg(0, "preallocated rsp buf not large enough - "
-				       "alloced=%lu, received clen=%lu\n",
+				dbg(0, "preallocated rsp buf not large enough "
+				       "- alloced=%" PRIu64 ", "
+				       "received clen=%" PRIu64 "\n",
 				       op->rsp.data->len, op->rsp.clen);
 			return -E2BIG;
 		}
@@ -323,7 +325,7 @@ curl_write_err(struct azure_op *op,
 {
 	if (op->rsp.err.off + num_bytes > op->rsp.err.len) {
 		dbg(0, "fatal: error rsp buffer exceeded, "
-		       "len %lu off %lu io_sz %lu\n",
+		       "len %" PRIu64 " off %" PRIu64 " io_sz %" PRIu64 "\n",
 		       op->rsp.err.len, op->rsp.err.off, num_bytes);
 		return -E2BIG;
 	}
@@ -349,8 +351,8 @@ curl_write_std(struct azure_op *op,
 	case AOP_DATA_IOV:
 		if (write_off + num_bytes > op->rsp.data->len) {
 			dbg(0, "fatal: curl_write_cb buffer exceeded, "
-			       "len %lu off %lu io_sz %lu\n",
-			       op->rsp.data->len, write_off, num_bytes);
+			       "len %" PRIu64 " off %" PRIu64 " io_sz %" PRIu64
+			       "\n", op->rsp.data->len, write_off, num_bytes);
 			return -E2BIG;
 		}
 		memcpy((void *)(op->rsp.data->buf + write_off), data, num_bytes);
@@ -358,8 +360,8 @@ curl_write_std(struct azure_op *op,
 	case AOP_DATA_FILE:
 		if (write_off + num_bytes > op->rsp.data->len) {
 			dbg(0, "fatal: curl_write_cb file exceeded, "
-			       "len %lu off %lu io_sz %lu\n",
-			       op->rsp.data->len, write_off, num_bytes);
+			       "len %" PRIu64 " off %" PRIu64 " io_sz %" PRIu64
+			       "\n", op->rsp.data->len, write_off, num_bytes);
 			return -E2BIG;
 		}
 		ret = pwrite(op->rsp.data->file.fd, data, num_bytes, write_off);
