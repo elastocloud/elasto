@@ -22,6 +22,7 @@ import hashlib
 import optparse
 import os.path
 import tempfile
+import shutil
 
 def md5_for_file(f, block_size=2**20):
 	md5 = hashlib.md5()
@@ -171,7 +172,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 			self.tmp_dir = tempfile.mkdtemp(prefix='elasto_tmp')
 		except:
 			self.assertTrue(False, "failed to create tmpdir")
-		self.tmp_dir_create = True
+		self.tmp_dir_created = True
 
 		self.acc_name = self.ctx.acc_name_get()
 		sp = subprocess
@@ -204,7 +205,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 			self.assertTrue(False, "del failed with "
 					+ str(e.returncode) + e.output)
 
-	def test_md5(self):
+	def test_put_get_md5(self):
 		tmp_path = self.tmp_dir + "/" + "got_blob"
 		sp = subprocess
 		# put the elasto client binary
@@ -221,6 +222,49 @@ class StarkyTestAzureIo(unittest.TestCase):
 		cmd = "%s -- get %s/%s/%s %s" \
 		      % (self.ctx.cli_az_cmd,
 			 self.acc_name, self.ctx.ctnr, "blob", tmp_path)
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "get blob failed with "
+					+ str(e.returncode))
+
+		# compare md5 on each file
+		f = open(self.ctx.cli_bin, "r")
+		src_md5 = md5_for_file(f)
+		f.close()
+		f = open(tmp_path, "r")
+		xfer_md5 = md5_for_file(f)
+		f.close()
+
+		self.assertEqual(src_md5, xfer_md5, "md5sums do not match")
+
+	def test_cp_md5(self):
+		tmp_path = self.tmp_dir + "/" + "got_cp_blob"
+		sp = subprocess
+		# put the elasto client binary
+		cmd = "%s -- put \"%s\" %s/%s/%s" \
+		      % (self.ctx.cli_az_cmd,
+			 self.ctx.cli_bin, self.acc_name, self.ctx.ctnr, "blob")
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "put blob failed with "
+					+ str(e.returncode))
+
+		cmd = "%s -- cp %s/%s/%s %s/%s/%s" \
+		      % (self.ctx.cli_az_cmd,
+			 self.acc_name, self.ctx.ctnr, "blob",
+			 self.acc_name, self.ctx.ctnr, "cp_blob")
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "cp blob failed with "
+					+ str(e.returncode))
+
+		# read back copy of binary
+		cmd = "%s -- get %s/%s/%s %s" \
+		      % (self.ctx.cli_az_cmd,
+			 self.acc_name, self.ctx.ctnr, "cp_blob", tmp_path)
 		try:
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
@@ -264,5 +308,6 @@ if __name__ == '__main__':
 	suite = unittest.TestSuite()
 	suite.addTest(StarkyTestAzureCreate("test_account", ctx))
 	suite.addTest(StarkyTestAzureCreate("test_container", ctx))
-	suite.addTest(StarkyTestAzureIo("test_md5", ctx))
+	suite.addTest(StarkyTestAzureIo("test_put_get_md5", ctx))
+	suite.addTest(StarkyTestAzureIo("test_cp_md5", ctx))
 	unittest.TextTestRunner().run(suite)
