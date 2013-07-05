@@ -8,7 +8,7 @@ def options(opt):
 def configure(conf):
 	conf.load('compiler_c')
 	conf.load('gnu_dirs')
-	conf.env.CFLAGS = ['-Wall','-g']
+	conf.env.CFLAGS = ['-Wall', '-g', '-D_LARGEFILE64_SOURCE']
 	conf.check(lib='curl')
 	conf.check(lib='apr-1')
 	conf.check(lib='aprutil-1')
