@@ -29,6 +29,7 @@
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
+#include "data.h"
 #include "azure_req.h"
 #include "sign.h"
 #include "util.h"
@@ -190,8 +191,8 @@ curl_read_cb(char *ptr,
 	uint64_t read_off;
 
 	if ((op->req.data == NULL)
-	 || ((op->req.data->type != AOP_DATA_IOV)
-	      && (op->req.data->type != AOP_DATA_FILE))) {
+	 || ((op->req.data->type != ELASTO_DATA_IOV)
+	      && (op->req.data->type != ELASTO_DATA_FILE))) {
 		return -1;	/* unsupported */
 	}
 
@@ -204,9 +205,9 @@ curl_read_cb(char *ptr,
 		num_bytes = op->req.data->len - op->req.data->off;
 	}
 
-	if (op->req.data->type == AOP_DATA_IOV) {
+	if (op->req.data->type == ELASTO_DATA_IOV) {
 		memcpy(ptr, (void *)(op->req.data->buf + read_off), num_bytes);
-	} else if (op->req.data->type == AOP_DATA_FILE) {
+	} else if (op->req.data->type == ELASTO_DATA_FILE) {
 		ssize_t ret;
 		ret = pread(op->req.data->file.fd, ptr, num_bytes, read_off);
 		if (ret != num_bytes) {
@@ -266,13 +267,13 @@ curl_write_alloc_std(struct azure_op *op,
 		uint64_t sz = (op->rsp.clen_recvd ? op->rsp.clen : cb_nbytes);
 		/* requester wants us to allocate a recv iov */
 		/* TODO check clen isn't too huge */
-		ret = azure_op_data_iov_new(NULL, sz, 0, true, &op->rsp.data);
+		ret = elasto_data_iov_new(NULL, sz, 0, true, &op->rsp.data);
 		op->rsp.recv_cb_alloced = true;
 		return ret;
 	}
 
 	switch (op->rsp.data->type) {
-	case AOP_DATA_IOV:
+	case ELASTO_DATA_IOV:
 		rem = (op->rsp.data->len - op->rsp.data->off);
 		if (op->rsp.recv_cb_alloced == true) {
 			if (op->rsp.clen_recvd) {
@@ -280,7 +281,7 @@ curl_write_alloc_std(struct azure_op *op,
 			}
 			if (cb_nbytes > rem) {
 				dbg(2, "growing buf for callback\n");
-				ret = azure_op_data_iov_grow(op->rsp.data,
+				ret = elasto_data_iov_grow(op->rsp.data,
 							     cb_nbytes - rem);
 				if (ret < 0) {
 					return ret;
@@ -299,7 +300,7 @@ curl_write_alloc_std(struct azure_op *op,
 		}
 		/* FIXME check for space on !op->rsp.clen_recvd */
 		break;
-	case AOP_DATA_FILE:
+	case ELASTO_DATA_FILE:
 		if (op->rsp.clen_recvd) {
 			op->rsp.data->len = op->rsp.clen
 						+ op->rsp.data->base_off;
@@ -348,7 +349,7 @@ curl_write_std(struct azure_op *op,
 	assert(op->rsp.data != NULL);
 
 	switch (op->rsp.data->type) {
-	case AOP_DATA_IOV:
+	case ELASTO_DATA_IOV:
 		if (write_off + num_bytes > op->rsp.data->len) {
 			dbg(0, "fatal: curl_write_cb buffer exceeded, "
 			       "len %" PRIu64 " off %" PRIu64 " io_sz %" PRIu64
@@ -357,7 +358,7 @@ curl_write_std(struct azure_op *op,
 		}
 		memcpy((void *)(op->rsp.data->buf + write_off), data, num_bytes);
 		break;
-	case AOP_DATA_FILE:
+	case ELASTO_DATA_FILE:
 		if (write_off + num_bytes > op->rsp.data->len) {
 			dbg(0, "fatal: curl_write_cb file exceeded, "
 			       "len %" PRIu64 " off %" PRIu64 " io_sz %" PRIu64

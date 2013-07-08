@@ -29,6 +29,7 @@
 
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
+#include "lib/data.h"
 #include "lib/azure_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -156,7 +157,7 @@ cli_put_blocks(struct elasto_conn *econn,
 {
 	int num_blks = (size / BLOB_BLOCK_MAX) + ((size % BLOB_BLOCK_MAX) != 0);
 	int ret;
-	struct azure_op_data *op_data;
+	struct elasto_data *op_data;
 	struct list_head *blks;
 	struct azure_block *blk;
 	struct azure_block *blk_n;
@@ -173,7 +174,7 @@ cli_put_blocks(struct elasto_conn *econn,
 		return -EINVAL;
 	}
 
-	ret = azure_op_data_file_new(cli_args->put.local_path,
+	ret = elasto_data_file_new(cli_args->put.local_path,
 				     min(BLOB_BLOCK_MAX, size), 0, O_RDONLY, 0,
 				     &op_data);
 	if (ret < 0) {
@@ -184,7 +185,7 @@ cli_put_blocks(struct elasto_conn *econn,
 	if (blks == NULL) {
 		/* don't free the args filename */
 		op_data->buf = NULL;
-		azure_op_data_destroy(&op_data);
+		elasto_data_destroy(&op_data);
 		return -ENOMEM;
 	}
 
@@ -247,7 +248,7 @@ cli_put_blocks(struct elasto_conn *econn,
 	assert(blks_put == num_blks);
 	/* don't free the args filename */
 	op_data->buf = NULL;
-	azure_op_data_destroy(&op_data);
+	elasto_data_destroy(&op_data);
 	*blks_ret = blks;
 
 	return 0;
@@ -303,7 +304,7 @@ cli_put_blob_handle(struct cli_args *cli_args)
 		ret = azure_op_blob_put(cli_args->az.blob_acc,
 					cli_args->az.ctnr_name,
 					cli_args->az.blob_name,
-					AOP_DATA_FILE,
+					ELASTO_DATA_FILE,
 					(uint8_t *)cli_args->put.local_path,
 					st.st_size,
 					cli_args->insecure_http,
@@ -356,10 +357,10 @@ cli_put_single_obj_handle(struct elasto_conn *econn,
 			  struct stat *src_st)
 {
 	int ret;
-	struct azure_op_data *op_data;
+	struct elasto_data *op_data;
 	struct azure_op op;
 
-	ret = azure_op_data_file_new(cli_args->put.local_path,
+	ret = elasto_data_file_new(cli_args->put.local_path,
 				     src_st->st_size, 0, O_RDONLY, 0,
 				     &op_data);
 	if (ret < 0) {
@@ -373,7 +374,7 @@ cli_put_single_obj_handle(struct elasto_conn *econn,
 			    &op);
 	if (ret < 0) {
 		op_data->buf = NULL;
-		azure_op_data_destroy(&op_data);
+		elasto_data_destroy(&op_data);
 		goto err_out;
 	}
 
@@ -452,7 +453,7 @@ cli_put_part_handle(struct elasto_conn *econn,
 		    const char *obj,
 		    const char *upload_id,
 		    int pnum,
-		    struct azure_op_data *op_data,
+		    struct elasto_data *op_data,
 		    bool insecure_http,
 		    struct s3_part **_part)
 {
@@ -523,7 +524,7 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 	uint64_t bytes_put;
 	int parts_put;
 	char *upload_id = NULL;
-	struct azure_op_data *op_data;
+	struct elasto_data *op_data;
 	struct azure_op op;
 	struct list_head parts;
 
@@ -562,7 +563,7 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 	printf("multipart upload %s started\n", upload_id);
 	azure_op_free(&op);
 
-	ret = azure_op_data_file_new(cli_args->put.local_path,
+	ret = elasto_data_file_new(cli_args->put.local_path,
 				     min(PART_LEN, src_st->st_size),
 				     0, O_RDONLY, 0,
 				     &op_data);
@@ -597,7 +598,7 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 	}
 
 	op_data->buf = NULL;
-	azure_op_data_destroy(&op_data);
+	elasto_data_destroy(&op_data);
 
 	ret = s3_op_mp_done(cli_args->s3.bkt_name,
 			    cli_args->s3.obj_name,

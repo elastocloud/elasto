@@ -28,6 +28,7 @@
 
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
+#include "lib/data.h"
 #include "lib/azure_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -148,7 +149,7 @@ cli_get_blob_handle(struct cli_args *cli_args)
 	struct elasto_conn *econn;
 	struct stat st;
 	struct azure_op op;
-	struct azure_op_data *op_data;
+	struct elasto_data *op_data;
 	int ret;
 
 	assert(cli_args->type == CLI_TYPE_AZURE);
@@ -177,7 +178,7 @@ cli_get_blob_handle(struct cli_args *cli_args)
 	       cli_args->az.blob_name,
 	       cli_args->get.local_path);
 
-	ret = azure_op_data_file_new(cli_args->get.local_path, 0, 0,
+	ret = elasto_data_file_new(cli_args->get.local_path, 0, 0,
 				     O_CREAT | O_WRONLY,
 				     (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH),
 				     &op_data);
@@ -196,7 +197,7 @@ cli_get_blob_handle(struct cli_args *cli_args)
 				&op);
 	if (ret < 0) {
 		op_data->buf = NULL;
-		azure_op_data_destroy(&op_data);
+		elasto_data_destroy(&op_data);
 		goto err_conn_free;
 	}
 
@@ -228,7 +229,7 @@ cli_get_obj_handle(struct cli_args *cli_args)
 	struct elasto_conn *econn;
 	struct stat st;
 	struct azure_op op;
-	struct azure_op_data *op_data;
+	struct elasto_data *op_data;
 	int ret;
 
 	assert(cli_args->type == CLI_TYPE_S3);
@@ -251,7 +252,7 @@ cli_get_obj_handle(struct cli_args *cli_args)
 	       cli_args->s3.obj_name,
 	       cli_args->get.local_path);
 
-	ret = azure_op_data_file_new(cli_args->get.local_path, 0, 0,
+	ret = elasto_data_file_new(cli_args->get.local_path, 0, 0,
 				     O_CREAT | O_WRONLY,
 				     (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH),
 				     &op_data);
@@ -266,7 +267,7 @@ cli_get_obj_handle(struct cli_args *cli_args)
 			    &op);
 	if (ret < 0) {
 		op_data->buf = NULL;
-		azure_op_data_destroy(&op_data);
+		elasto_data_destroy(&op_data);
 		goto err_conn_free;
 	}
 

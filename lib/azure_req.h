@@ -47,12 +47,6 @@ enum azure_opcode {
 	S3OP_PART_PUT,
 };
 
-enum azure_op_data_type {
-	AOP_DATA_NONE = 0,
-	AOP_DATA_IOV,
-	AOP_DATA_FILE,
-};
-
 struct azure_req_acc_keys_get {
 	char *sub_id;
 	char *service_name;
@@ -379,32 +373,11 @@ struct s3_req_part_put {
 	char *obj_name;
 	char *upload_id;
 	uint32_t pnum;
-	struct azure_op_data *data;
+	struct elasto_data *data;
 };
 
 struct s3_rsp_part_put {
 	char *etag;
-};
-
-/*
- * @base_off is the base offset into the input/output
- * buffer. i.e. @iov.base_off + @off = read/write offset
- */
-struct azure_op_data {
-	enum azure_op_data_type type;
-	uint8_t *buf;
-	uint64_t len;
-	uint64_t off;
-	uint64_t base_off;
-	union {
-		struct {
-			/* @buf is allocated io buffer of size @len */
-		} iov;
-		struct {
-			/* @buf is io file path, file is @len bytes in size */
-			int fd;
-		} file;
-	};
 };
 
 struct azure_op_hdr {
@@ -459,7 +432,7 @@ struct azure_op {
 			struct s3_req_part_put part_put;
 		};
 		uint64_t read_cbs;
-		struct azure_op_data *data;
+		struct elasto_data *data;
 		uint32_t num_hdrs;
 		struct list_head hdrs;
 	} req;
@@ -503,7 +476,7 @@ struct azure_op {
 		bool clen_recvd;
 		uint64_t clen;
 		uint64_t write_cbs;
-		struct azure_op_data *data;
+		struct elasto_data *data;
 		bool recv_cb_alloced;	/* data buffer alloced by conn cb */
 		uint32_t num_hdrs;
 		struct list_head hdrs;
@@ -519,28 +492,6 @@ int
 azure_op_rsp_hdr_add(struct azure_op *op,
 		     const char *key,
 		     const char *val);
-
-void
-azure_op_data_destroy(struct azure_op_data **data);
-
-int
-azure_op_data_file_new(char *path,
-		       uint64_t file_len,
-		       uint64_t base_off,
-		       int open_flags,
-		       mode_t create_mode,
-		       struct azure_op_data **data);
-
-int
-azure_op_data_iov_new(uint8_t *buf,
-		      uint64_t buf_len,
-		      uint64_t base_off,
-		      bool buf_alloc,
-		      struct azure_op_data **data);
-
-int
-azure_op_data_iov_grow(struct azure_op_data *data,
-		       uint64_t grow_by);
 
 int
 azure_op_acc_keys_get(const char *sub_id,
@@ -592,7 +543,7 @@ int
 azure_op_blob_put(const char *account,
 		  const char *container,
 		  const char *bname,
-		  enum azure_op_data_type data_type,
+		  enum elasto_data_type data_type,
 		  uint8_t *buf,
 		  uint64_t len,
 		  bool insecure_http,
@@ -603,7 +554,7 @@ azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
 		  bool is_page,
-		  struct azure_op_data *data,
+		  struct elasto_data *data,
 		  uint64_t req_off,
 		  uint64_t req_len,
 		  bool insecure_http,
@@ -624,7 +575,7 @@ azure_op_block_put(const char *account,
 		   const char *container,
 		   const char *bname,
 		   const char *blk_id,
-		   struct azure_op_data *data,
+		   struct elasto_data *data,
 		   bool insecure_http,
 		   struct azure_op *op);
 
@@ -688,14 +639,14 @@ s3_op_bkt_del(const char *bkt_name,
 int
 s3_op_obj_put(const char *bkt_name,
 	      const char *obj_name,
-	      struct azure_op_data *data,
+	      struct elasto_data *data,
 	      bool insecure_http,
 	      struct azure_op *op);
 
 int
 s3_op_obj_get(const char *bkt_name,
 	      const char *obj_name,
-	      struct azure_op_data *data,
+	      struct elasto_data *data,
 	      bool insecure_http,
 	      struct azure_op *op);
 
@@ -739,7 +690,7 @@ s3_op_part_put(const char *bkt,
 	       const char *obj,
 	       const char *upload_id,
 	       uint32_t pnum,
-	       struct azure_op_data *data,
+	       struct elasto_data *data,
 	       bool insecure_http,
 	       struct azure_op *op);
 

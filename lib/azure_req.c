@@ -33,6 +33,7 @@
 #include "base64.h"
 #include "util.h"
 #include "azure_xml.h"
+#include "data.h"
 #include "azure_req.h"
 
 static int
@@ -133,117 +134,6 @@ azure_op_hdrs_free(struct list_head *hdrs)
 		free(hdr->val);
 		free(hdr);
 	}
-}
-
-void
-azure_op_data_destroy(struct azure_op_data **data)
-{
-	struct azure_op_data *adata = *data;
-	if (adata == NULL)
-		return;
-	free(adata->buf);
-	if (adata->type == AOP_DATA_FILE)
-		close(adata->file.fd);
-	free(adata);
-	*data = NULL;
-}
-
-/*
- * allocate a file based data structure, opening the underlying file
- */
-int
-azure_op_data_file_new(char *path,
-		       uint64_t file_len,
-		       uint64_t base_off,
-		       int open_flags,
-		       mode_t create_mode,
-		       struct azure_op_data **data)
-{
-	struct azure_op_data *adata;
-
-	adata = malloc(sizeof(*adata));
-	if (adata == NULL)
-		return -ENOMEM;
-
-	adata->type = AOP_DATA_FILE;
-	if (open_flags | O_CREAT)
-		adata->file.fd = open(path, open_flags, create_mode);
-	else
-		adata->file.fd = open(path, open_flags);
-
-	if (adata->file.fd == -1) {
-		free(adata);
-		return -errno;
-	}
-	adata->buf = (uint8_t *)path;
-	adata->len = file_len;
-	adata->off = 0;
-	adata->base_off = base_off;
-	*data = adata;
-
-	return 0;
-}
-
-/*
- * allocate an iov based data structure
- * if @buf_alloc is set then allocate @buf_len, ignoring @buf and @base_off
- */
-int
-azure_op_data_iov_new(uint8_t *buf,
-		      uint64_t buf_len,
-		      uint64_t base_off,
-		      bool buf_alloc,
-		      struct azure_op_data **data)
-{
-	struct azure_op_data *adata;
-
-	adata = malloc(sizeof(*adata));
-	if (adata == NULL)
-		return -ENOMEM;
-
-	adata->type = AOP_DATA_IOV;
-	if (buf_alloc) {
-		assert(buf_len > 0);
-		adata->buf = malloc(buf_len);
-		if (adata->buf == NULL) {
-			free(adata);
-			return -ENOMEM;
-		}
-		adata->base_off = 0;
-	} else {
-		adata->buf = buf;
-		adata->base_off = base_off;
-	}
-	adata->len = buf_len;
-	adata->off = 0;
-	*data = adata;
-
-	return 0;
-}
-
-int
-azure_op_data_iov_grow(struct azure_op_data *data,
-		       uint64_t grow_by)
-{
-	uint8_t *buf_old;
-	if (data->type != AOP_DATA_IOV) {
-		dbg(0, "invalid data type %d\n", data->type);
-		return -EINVAL;
-	}
-
-	if (grow_by == 0) {
-		return 0;
-	}
-
-	buf_old = data->buf;
-	data->buf = realloc(data->buf, data->len + grow_by);
-	if (data->buf == NULL) {
-		data->buf = buf_old;
-		return -ENOMEM;
-	}
-
-	data->len += grow_by;
-	return 0;
 }
 
 static char *
@@ -380,7 +270,7 @@ azure_rsp_acc_keys_get_process(struct azure_op *op)
 	struct apr_xml_doc *xdoc;
 
 	assert(op->opcode == AOP_ACC_KEYS_GET);
-	assert(op->rsp.data->type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
 	rv = apr_pool_create(&pool, NULL);
 	if (rv != APR_SUCCESS) {
@@ -572,7 +462,7 @@ azure_rsp_acc_list_process(struct azure_op *op)
 	struct azure_account *acc_n;
 
 	assert(op->opcode == AOP_ACC_LIST);
-	assert(op->rsp.data->type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
 	rv = apr_pool_create(&pool, NULL);
 	if (rv != APR_SUCCESS) {
@@ -652,17 +542,17 @@ azure_op_acc_create_fill_hdr(struct azure_op *op)
  */
 static int
 azure_op_acc_create_fill_body(struct azure_account *acc,
-			      struct azure_op_data **req_data_out)
+			      struct elasto_data **req_data_out)
 {
 	int ret;
 	char *b64_label;
 	char *xml_data;
 	int buf_remain;
-	struct azure_op_data *req_data;
+	struct elasto_data *req_data;
 
 	/* 2k buf, should be strlen calculated */
 	buf_remain = 2048;
-	ret = azure_op_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -725,7 +615,7 @@ azure_op_acc_create_fill_body(struct azure_account *acc,
 
 	return 0;
 err_buf_free:
-	azure_op_data_destroy(&req_data);
+	elasto_data_destroy(&req_data);
 err_out:
 	return ret;
 }
@@ -970,7 +860,7 @@ azure_op_ctnr_list(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	ret = azure_op_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
 	if (ret < 0) {
 		goto err_url_free;
 	}
@@ -985,7 +875,7 @@ azure_op_ctnr_list(const char *account,
 	return 0;
 
 err_buf_free:
-	azure_op_data_destroy(&op->rsp.data);
+	elasto_data_destroy(&op->rsp.data);
 err_url_free:
 	free(op->url);
 err_acc_free:
@@ -1034,7 +924,7 @@ azure_rsp_ctnr_list_process(struct azure_op *op)
 	struct azure_ctnr *ctnr_n;
 
 	assert(op->opcode == AOP_CONTAINER_LIST);
-	assert(op->rsp.data->type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
 	rv = apr_pool_create(&pool, NULL);
 	if (rv != APR_SUCCESS) {
@@ -1294,7 +1184,7 @@ azure_op_blob_list(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	ret = azure_op_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
 	if (ret < 0) {
 		goto err_url_free;
 	}
@@ -1309,7 +1199,7 @@ azure_op_blob_list(const char *account,
 	return 0;
 
 err_buf_free:
-	azure_op_data_destroy(&op->rsp.data);
+	elasto_data_destroy(&op->rsp.data);
 err_url_free:
 	free(op->url);
 err_ctnr_free:
@@ -1380,7 +1270,7 @@ azure_rsp_blob_list_process(struct azure_op *op)
 	struct azure_blob *blob_n;
 
 	assert(op->opcode == AOP_BLOB_LIST);
-	assert(op->rsp.data->type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
 	rv = apr_pool_create(&pool, NULL);
 	if (rv != APR_SUCCESS) {
@@ -1482,16 +1372,16 @@ err_out:
 }
 
 /*
- * if @data_type is AOP_DATA_NONE, then @len corresponds to the page blob
+ * if @data_type is ELASTO_DATA_NONE, then @len corresponds to the page blob
  * length, @buf must be NULL.
- * For a block blob, @len bytes from @buf are put if @data_type is AOP_DATA_IOV,
- * or @len bytes from the file at path @buf if @data_type is AOP_DATA_FILE.
+ * For a block blob, @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV,
+ * or @len bytes from the file at path @buf if @data_type is ELASTO_DATA_FILE.
  */
 int
 azure_op_blob_put(const char *account,
 		  const char *container,
 		  const char *bname,
-		  enum azure_op_data_type data_type,
+		  enum elasto_data_type data_type,
 		  uint8_t *buf,
 		  uint64_t len,
 		  bool insecure_http,
@@ -1501,7 +1391,7 @@ azure_op_blob_put(const char *account,
 	struct azure_req_blob_put *bl_put_req;
 
 	/* TODO input validation */
-	if ((data_type == AOP_DATA_NONE)
+	if ((data_type == ELASTO_DATA_NONE)
 	 && (((len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != len)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1531,22 +1421,22 @@ azure_op_blob_put(const char *account,
 		goto err_free_container;
 	}
 
-	if (data_type == AOP_DATA_NONE) {
+	if (data_type == ELASTO_DATA_NONE) {
 		bl_put_req->type = BLOB_TYPE_PAGE;
 		bl_put_req->pg_len = len;
 		assert(buf == NULL);	/* block only */
-	} else if (data_type == AOP_DATA_IOV) {
+	} else if (data_type == ELASTO_DATA_IOV) {
 		bl_put_req->type = BLOB_TYPE_BLOCK;
 
-		ret = azure_op_data_iov_new(buf, len, 0, false, &op->req.data);
+		ret = elasto_data_iov_new(buf, len, 0, false, &op->req.data);
 		if (ret < 0) {
 			goto err_free_bname;
 		}
 
-	} else if (data_type == AOP_DATA_FILE) {
+	} else if (data_type == ELASTO_DATA_FILE) {
 		bl_put_req->type = BLOB_TYPE_BLOCK;
 
-		ret = azure_op_data_file_new((char *)buf, len, 0, O_RDONLY, 0,
+		ret = elasto_data_file_new((char *)buf, len, 0, O_RDONLY, 0,
 					     &op->req.data);
 		if (ret < 0) {
 			goto err_free_bname;
@@ -1578,7 +1468,7 @@ err_data_close:
 	/* should not free data.buf given by the caller on error */
 	if (op->req.data != NULL) {
 		op->req.data->buf = NULL;
-		azure_op_data_destroy(&op->req.data);
+		elasto_data_destroy(&op->req.data);
 	}
 err_free_bname:
 	free(bl_put_req->bname);
@@ -1648,7 +1538,7 @@ azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
 		  bool is_page,
-		  struct azure_op_data *data,
+		  struct elasto_data *data,
 		  uint64_t req_off,
 		  uint64_t req_len,
 		  bool insecure_http,
@@ -1846,7 +1736,7 @@ azure_op_page_put(const char *account,
 		pg_put_req->clear_data = true;
 	} else {
 		pg_put_req->clear_data = false;
-		ret = azure_op_data_iov_new(buf, len, 0, false, &op->req.data);
+		ret = elasto_data_iov_new(buf, len, 0, false, &op->req.data);
 		if (ret < 0) {
 			goto err_free_bname;
 		}
@@ -1877,7 +1767,7 @@ err_data_close:
 	/* should not free data.buf given by the caller on error */
 	if (op->req.data != NULL) {
 		op->req.data->buf = NULL;
-		azure_op_data_destroy(&op->req.data);
+		elasto_data_destroy(&op->req.data);
 	}
 err_free_bname:
 	free(pg_put_req->bname);
@@ -1905,8 +1795,8 @@ azure_op_block_put_fill_hdr(struct azure_op *op)
 }
 
 /*
- * @len bytes from @buf are put if @data_type is AOP_DATA_IOV, or @len bytes
- * fom the file at path @buf if @data_type is AOP_DATA_FILE.
+ * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
+ * fom the file at path @buf if @data_type is ELASTO_DATA_FILE.
  * Note: For a given blob, the length of the value specified for the blockid
  *	 parameter must be the same size for each block.
  */
@@ -1915,7 +1805,7 @@ azure_op_block_put(const char *account,
 		   const char *container,
 		   const char *bname,
 		   const char *blk_id,
-		   struct azure_op_data *data,
+		   struct elasto_data *data,
 		   bool insecure_http,
 		   struct azure_op *op)
 {
@@ -1923,7 +1813,7 @@ azure_op_block_put(const char *account,
 	struct azure_req_block_put *blk_put_req;
 	char *b64_blk_id;
 
-	if ((data == NULL) || (data->type == AOP_DATA_NONE)) {
+	if ((data == NULL) || (data->type == ELASTO_DATA_NONE)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -2038,17 +1928,17 @@ azure_op_block_list_put_fill_hdr(struct azure_op *op)
 
 static int
 azure_op_block_list_put_fill_body(struct list_head *blks,
-				  struct azure_op_data **req_data_out)
+				  struct elasto_data **req_data_out)
 {
 	int ret;
 	struct azure_block *blk;
 	char *xml_data;
 	int buf_remain;
-	struct azure_op_data *req_data;
+	struct elasto_data *req_data;
 
 	/* 2k buf, should be listlen calculated */
 	buf_remain = 2048;
-	ret = azure_op_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -2122,7 +2012,7 @@ azure_op_block_list_put_fill_body(struct list_head *blks,
 
 	return 0;
 err_buf_free:
-	azure_op_data_destroy(&req_data);
+	elasto_data_destroy(&req_data);
 err_out:
 	return ret;
 }
@@ -2273,7 +2163,7 @@ azure_op_block_list_get(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	ret = azure_op_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
 	if (ret < 0) {
 		goto err_url_free;
 	}
@@ -2287,7 +2177,7 @@ azure_op_block_list_get(const char *account,
 
 	return 0;
 err_buf_free:
-	azure_op_data_destroy(&op->rsp.data);
+	elasto_data_destroy(&op->rsp.data);
 err_url_free:
 	free(op->url);
 err_bname_free:
@@ -2370,7 +2260,7 @@ azure_rsp_block_list_get_process(struct azure_op *op)
 	struct azure_block *blk_n;
 
 	assert(op->opcode == AOP_BLOCK_LIST_GET);
-	assert(op->rsp.data->type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
 	rv = apr_pool_create(&pool, NULL);
 	if (rv != APR_SUCCESS) {
@@ -2774,7 +2664,7 @@ azure_rsp_status_get_process(struct azure_op *op)
 	char *xml_val;
 
 	assert(op->opcode == AOP_STATUS_GET);
-	assert(op->rsp.data->type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
 	rv = apr_pool_create(&pool, NULL);
 	if (rv != APR_SUCCESS) {
@@ -3060,7 +2950,7 @@ s3_rsp_svc_list_process(struct azure_op *op)
 	struct s3_bucket *bkt_n;
 
 	assert(op->opcode == S3OP_SVC_LIST);
-	assert(op->rsp.data->type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 	svc_list_rsp = &op->rsp.svc_list;
 
 	rv = apr_pool_create(&pool, NULL);
@@ -3261,7 +3151,7 @@ s3_rsp_bkt_list_process(struct azure_op *op)
 	struct s3_object *obj_n;
 
 	assert(op->opcode == S3OP_BKT_LIST);
-	assert(op->rsp.data->type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 	bkt_list_rsp = &op->rsp.bkt_list;
 
 	rv = apr_pool_create(&pool, NULL);
@@ -3329,12 +3219,12 @@ s3_req_bkt_create_free(struct s3_req_bkt_create *bkt_create)
 
 static int
 s3_op_bkt_create_fill_body(const char *location,
-			   struct azure_op_data **req_data_out)
+			   struct elasto_data **req_data_out)
 {
 	int ret;
 	char *xml_data;
 	int buf_remain;
-	struct azure_op_data *req_data;
+	struct elasto_data *req_data;
 
 	if (location == NULL) {
 		dbg(2, "bucket location not specified, using S3 default\n");
@@ -3343,7 +3233,7 @@ s3_op_bkt_create_fill_body(const char *location,
 
 	/* 2k buf, should be strlen calculated */
 	buf_remain = 2048;
-	ret = azure_op_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -3374,7 +3264,7 @@ s3_op_bkt_create_fill_body(const char *location,
 
 	return 0;
 err_buf_free:
-	azure_op_data_destroy(&req_data);
+	elasto_data_destroy(&req_data);
 err_out:
 	return ret;
 }
@@ -3501,20 +3391,20 @@ s3_req_obj_put_free(struct s3_req_obj_put *obj_put)
 }
 
 /*
- * @len bytes from @buf are put if @data_type is AOP_DATA_IOV, or @len bytes
- * fom the file at path @buf if @data_type is AOP_DATA_FILE.
+ * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
+ * fom the file at path @buf if @data_type is ELASTO_DATA_FILE.
  */
 int
 s3_op_obj_put(const char *bkt_name,
 	      const char *obj_name,
-	      struct azure_op_data *data,
+	      struct elasto_data *data,
 	      bool insecure_http,
 	      struct azure_op *op)
 {
 	int ret;
 	struct s3_req_obj_put *obj_put_req;
 
-	if ((data == NULL) || (data->type == AOP_DATA_NONE)) {
+	if ((data == NULL) || (data->type == ELASTO_DATA_NONE)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -3576,20 +3466,20 @@ s3_req_obj_get_free(struct s3_req_obj_get *obj_get)
 }
 
 /*
- * @len bytes from @buf are put if @data_type is AOP_DATA_IOV, or @len bytes
- * fom the file at path @buf if @data_type is AOP_DATA_FILE.
+ * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
+ * fom the file at path @buf if @data_type is ELASTO_DATA_FILE.
  */
 int
 s3_op_obj_get(const char *bkt_name,
 	      const char *obj_name,
-	      struct azure_op_data *data,
+	      struct elasto_data *data,
 	      bool insecure_http,
 	      struct azure_op *op)
 {
 	int ret;
 	struct s3_req_obj_get *obj_get_req;
 
-	if ((data == NULL) || (data->type == AOP_DATA_NONE)) {
+	if ((data == NULL) || (data->type == ELASTO_DATA_NONE)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -3894,7 +3784,7 @@ s3_rsp_mp_start_process(struct azure_op *op)
 	struct apr_xml_doc *xdoc;
 
 	assert(op->opcode == S3OP_MULTIPART_START);
-	assert(op->rsp.data->type == AOP_DATA_IOV);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 	mp_start_rsp = &op->rsp.mp_start;
 
 	rv = apr_pool_create(&pool, NULL);
@@ -3952,17 +3842,17 @@ s3_req_mp_done_free(struct s3_req_mp_done *mp_done_req)
 
 static int
 s3_op_mp_done_fill_body(struct list_head *parts,
-			struct azure_op_data **req_data_out)
+			struct elasto_data **req_data_out)
 {
 	int ret;
 	struct s3_part *part;
 	char *xml_data;
 	int buf_remain;
-	struct azure_op_data *req_data;
+	struct elasto_data *req_data;
 
 	/* 2k buf, should be listlen calculated */
 	buf_remain = 2048;
-	ret = azure_op_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -4016,7 +3906,7 @@ s3_op_mp_done_fill_body(struct list_head *parts,
 
 	return 0;
 err_buf_free:
-	azure_op_data_destroy(&req_data);
+	elasto_data_destroy(&req_data);
 err_out:
 	return ret;
 }
@@ -4182,7 +4072,7 @@ s3_op_part_put(const char *bkt,
 	       const char *obj,
 	       const char *upload_id,
 	       uint32_t pnum,
-	       struct azure_op_data *data,
+	       struct elasto_data *data,
 	       bool insecure_http,
 	       struct azure_op *op)
 {
@@ -4272,7 +4162,7 @@ static void
 azure_req_free(struct azure_op *op)
 {
 	azure_op_hdrs_free(&op->req.hdrs);
-	azure_op_data_destroy(&op->req.data);
+	elasto_data_destroy(&op->req.data);
 
 	switch (op->opcode) {
 	case AOP_ACC_KEYS_GET:
@@ -4373,7 +4263,7 @@ static void
 azure_rsp_free(struct azure_op *op)
 {
 	azure_op_hdrs_free(&op->rsp.hdrs);
-	azure_op_data_destroy(&op->rsp.data);
+	elasto_data_destroy(&op->rsp.data);
 
 	if (op->rsp.is_error) {
 		/* error response only, no aop data */
