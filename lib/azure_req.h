@@ -543,9 +543,8 @@ int
 azure_op_blob_put(const char *account,
 		  const char *container,
 		  const char *bname,
-		  enum elasto_data_type data_type,
-		  uint8_t *buf,
-		  uint64_t len,
+		  struct elasto_data *data,
+		  uint64_t page_len,
 		  bool insecure_http,
 		  struct azure_op *op);
 

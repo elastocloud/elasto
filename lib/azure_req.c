@@ -1372,18 +1372,15 @@ err_out:
 }
 
 /*
- * if @data_type is ELASTO_DATA_NONE, then @len corresponds to the page blob
- * length, @buf must be NULL.
- * For a block blob, @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV,
- * or @len bytes from the file at path @buf if @data_type is ELASTO_DATA_FILE.
+ * if @data is NULL, then @page_len corresponds to the page blob length,
+ * otherwise it is ignored and @data is uploaded as a block blob.
  */
 int
 azure_op_blob_put(const char *account,
 		  const char *container,
 		  const char *bname,
-		  enum elasto_data_type data_type,
-		  uint8_t *buf,
-		  uint64_t len,
+		  struct elasto_data *data,
+		  uint64_t page_len,
 		  bool insecure_http,
 		  struct azure_op *op)
 {
@@ -1391,8 +1388,11 @@ azure_op_blob_put(const char *account,
 	struct azure_req_blob_put *bl_put_req;
 
 	/* TODO input validation */
-	if ((data_type == ELASTO_DATA_NONE)
-	 && (((len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != len)) {
+	if ((data == NULL)
+	 && (((page_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != page_len)) {
+		ret = -EINVAL;
+		goto err_out;
+	} else if (data->type == ELASTO_DATA_NONE) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -1421,26 +1421,13 @@ azure_op_blob_put(const char *account,
 		goto err_free_container;
 	}
 
-	if (data_type == ELASTO_DATA_NONE) {
+	if (data == NULL) {
 		bl_put_req->type = BLOB_TYPE_PAGE;
-		bl_put_req->pg_len = len;
-		assert(buf == NULL);	/* block only */
-	} else if (data_type == ELASTO_DATA_IOV) {
+		bl_put_req->pg_len = page_len;
+	} else {
 		bl_put_req->type = BLOB_TYPE_BLOCK;
-
-		ret = elasto_data_iov_new(buf, len, 0, false, &op->req.data);
-		if (ret < 0) {
-			goto err_free_bname;
-		}
-
-	} else if (data_type == ELASTO_DATA_FILE) {
-		bl_put_req->type = BLOB_TYPE_BLOCK;
-
-		ret = elasto_data_file_new((char *)buf, len, 0, O_RDONLY, 0,
-					     &op->req.data);
-		if (ret < 0) {
-			goto err_free_bname;
-		}
+		op->req.data = data;
+		/* TODO add a foreign flag so @req.data is not freed with @op */
 	}
 
 	op->method = REQ_METHOD_PUT;
@@ -1450,7 +1437,7 @@ azure_op_blob_put(const char *account,
 		       account, container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_data_close;
+		goto err_free_bname;
 	}
 
 	/* mandatory headers */
@@ -1464,12 +1451,6 @@ azure_op_blob_put(const char *account,
 	return 0;
 err_free_url:
 	free(op->url);
-err_data_close:
-	/* should not free data.buf given by the caller on error */
-	if (op->req.data != NULL) {
-		op->req.data->buf = NULL;
-		elasto_data_destroy(&op->req.data);
-	}
 err_free_bname:
 	free(bl_put_req->bname);
 err_free_container:

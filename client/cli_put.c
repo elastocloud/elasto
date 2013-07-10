@@ -301,12 +301,20 @@ cli_put_blob_handle(struct cli_args *cli_args)
 	       cli_args->az.blob_name);
 
 	if (st.st_size < BLOCK_THRESHOLD) {
+		struct elasto_data *op_data;
+
+		ret = elasto_data_file_new(cli_args->put.local_path,
+					   st.st_size, 0, O_RDONLY, 0,
+					   &op_data);
+		if (ret < 0) {
+			goto err_conn_free;
+		}
+
 		ret = azure_op_blob_put(cli_args->az.blob_acc,
 					cli_args->az.ctnr_name,
 					cli_args->az.blob_name,
-					ELASTO_DATA_FILE,
-					(uint8_t *)cli_args->put.local_path,
-					st.st_size,
+					op_data,
+					0,
 					cli_args->insecure_http,
 					&op);
 		if (ret < 0) {
