@@ -353,6 +353,8 @@ cli_ls_sub_handle(struct elasto_conn *econn,
 	printf("Accounts for subscription %s:\n", sub_id);
 	list_for_each(&op.rsp.acc_list.accs, acc, list) {
 			printf("\t%s\n", acc->svc_name);
+			if (acc->label != NULL)
+				printf("\t\tlabel = %s\n", acc->label);
 			if (acc->desc != NULL)
 				printf("\t\tdescription = %s\n", acc->desc);
 			if (acc->affin_grp != NULL)
