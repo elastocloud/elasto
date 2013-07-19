@@ -1,0 +1,95 @@
+.\" -*- coding: us-ascii -*-
+.if \n(.g .ds T< \\FC
+.if \n(.g .ds T> \\F[\n[.fam]]
+.de URL
+\\$2 \(la\\$1\(ra\\$3
+..
+.if \n(.g .mso www.tmac
+.TH elasto_cli 1 "July 5th, 2013" "" ""
+.SH NAME
+elasto_cli \- Cloud Storage Client Utility
+.SH SYNOPSIS
+'nh
+.fi
+.ad l
+\fBelasto_cli\fR \kx
+.if (\nx>(\n(.l/2)) .nr x (\n(.l/5)
+'in \n(.iu+\nxu
+[\fB-?\fR] [\fB-s\fR \fIAzure publish settings file\fR] [\fB-k\fR \fIS3 key duo\fR] [\fB-d\fR \fIlog level\fR] [\fB-i\fR] [-- \fIcommand\fR]
+'in \n(.iu-\nxu
+.ad b
+'hy
+.SH DESCRIPTION
+elasto_cli is a command line utility for the manipulation of
+cloud storage objects.
+.SH OPTIONS
+.TP 
+\*(T<\fB\-?\fR\*(T>
+Print help message and exit.
+.TP 
+\*(T<\fB\-s\fR\*(T> \fIAzure publish settings file\fR
+Azure account credentials. Must be provided for Azure cloud access.
+.TP 
+\*(T<\fB\-k\fR\*(T> \fIAmazon S3 key duo\fR
+S3 key ID and key secret, separated by a comma. Must be provided for Amazon S3 cloud access.
+.TP 
+\*(T<\fB\-d\fR\*(T> \fIlog level\fR
+Print debugging information.
+.TP 
+\*(T<\fB\-i\fR\*(T>
+Use HTTP instead of HTTPS where possible, for improved
+performance.
+.TP 
+\fIcommand\fR
+Client command to execute, refer to list below.
+.SH "AZURE COMMANDS"
+.TP 
+ls \fI[account[/container[/blob]]]\fR
+When run without arguments, lists all accounts associated with the given Azure subscription. Otherwise lists all entities under the provided \fIaccount\fR, \fIcontainer\fR, or \fIblob\fR.
+.TP 
+put \fI<local path> <account/container/blob>\fR
+Uploads the file at \fIlocal path\fR to \fIblob\fR at the provided remote \fIpath\fR.
+.TP 
+get \fI<account/container/blob> <local path>\fR
+Downloads \fIblob\fR, storing it as a file at \fIlocal path\fR.
+.TP 
+del \fI<account>[/container[/blob]]\fR
+Deletes the given \fIblob\fR, \fIcontainer\fR, or \fIaccount\fR.
+The operation is recursive, e.g. on container deletion, any nested blobs are also removed.
+.TP 
+cp \fI<src account/src container/src blob>\fR \fI<dest account/dest container/dest blob>\fR
+Copies the given \fIsrc blob\fR to \fIdest blob\fR.
+The copy is performed remotely, such that blob-data does not travel between client and cloud.
+.TP 
+create \fI<-l label> [-d description] <[-L location] | [-A affinity group]> <account>\fR
+Creates an Azure account with the provided attributes. The account name must be unique within Azures namespace. Either a \fIlocation\fR or an \fIaffinity group\fR must be provided. If specified, \fIlocation\fR must match one of Azure's datacenter location names.
+.TP 
+create \fI<account/container>\fR
+Creates the given \fIcontainer\fR.
+.SH "AMAZON S3 COMMANDS"
+.TP 
+ls \fI[bucket]\fR
+When run without arguments, lists all buckets associated with the given S3 account. Otherwise lists all objects under the given \fIbucket\fR.
+.TP 
+put \fI<local path> <bucket/object>\fR
+Uploads the file at \fIlocal path\fR to \fIobject\fR at the provided remote \fIpath\fR.
+.TP 
+get \fI<bucket/object> <local path>\fR
+Downloads \fIobject\fR, storing it as a file at \fIlocal path\fR.
+.TP 
+del \fI<bucket>[/object]\fR
+Deletes the given \fIobject\fR or \fIbucket\fR.
+The operation is recursive.
+.TP 
+cp \fI<src bucket/src object>\fR \fI<dest bucket/dest object>\fR
+Copies the given \fIsrc object\fR to \fIdest object\fR.
+The copy is performed remotely, such that object-data does not travel between client and cloud.
+.TP 
+create \fI<bucket>\fR
+Creates the given \fIbucket\fR.
+.SH BUGS
+Please report bugs via the 
+.URL http://code.google.com/p/elasto/issues/list "issue tracker"
+\&.
+.SH AUTHORS
+The Elasto cloud project was created by David Disseldorp.

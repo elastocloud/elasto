@@ -1,0 +1,208 @@
+<?xml version="1.0" ?>
+<!-- vim:set ts=4 noet syntax=xml: -->
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd"
+[
+<!ENTITY elasto_cli "<application>elasto_cli</application>">
+]>
+
+<refentry id="elasto_cli">
+
+<refentryinfo>
+	<title>elasto_cli User Manual</title>
+	<date>July 5th, 2013</date>
+	<productname>Elasto Cloud</productname>
+</refentryinfo>
+
+<refmeta>
+	<refentrytitle>elasto_cli</refentrytitle>
+	<manvolnum>1</manvolnum>
+</refmeta>
+
+<refnamediv>
+	<refname>elasto_cli</refname>
+	<refpurpose>Cloud Storage Client Utility</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv>
+	<cmdsynopsis>
+	<command>elasto_cli</command>
+	<arg><option>-?</option></arg>
+	<arg><option>-s</option><replaceable class="parameter">Azure publish settings file</replaceable></arg>
+	<arg><option>-k</option><replaceable class="parameter">S3 key duo</replaceable></arg>
+	<arg><option>-d</option><replaceable class="parameter">log level</replaceable></arg>
+	<arg><option>-i</option></arg>
+	<arg>-- <replaceable class="parameter">command</replaceable></arg>
+	</cmdsynopsis>
+</refsynopsisdiv>
+
+<refsect1>
+	<title>Description</title>
+	<para>&elasto_cli; is a command line utility for the manipulation of
+	cloud storage objects.</para>
+</refsect1>
+
+<refsect1>
+<title>Options</title>
+
+<variablelist>
+
+<varlistentry>
+	<term><option>-?</option></term>
+	<listitem><para>Print help message and exit.</para></listitem>
+</varlistentry>
+
+<varlistentry>
+	<term><option>-s</option>
+	<replaceable>Azure publish settings file</replaceable></term>
+	<listitem><para>Azure account credentials. Must be provided for Azure cloud access.
+	</para></listitem>
+</varlistentry>
+
+<varlistentry>
+	<term><option>-k</option>
+	<replaceable>Amazon S3 key duo</replaceable></term>
+	<listitem><para>S3 key ID and key secret, separated by a comma. Must be provided for Amazon S3 cloud access.
+	</para></listitem>
+</varlistentry>
+
+<varlistentry>
+	<term><option>-d</option>
+	<replaceable>log level</replaceable></term>
+	<listitem><para>Print debugging information.
+	</para></listitem>
+</varlistentry>
+
+<varlistentry>
+	<term><option>-i</option></term>
+	<listitem><para>Use HTTP instead of HTTPS where possible, for improved
+	performance.</para></listitem>
+</varlistentry>
+
+<varlistentry>
+	<term><replaceable>command</replaceable></term>
+	<listitem><para>Client command to execute, refer to list below.</para></listitem>
+</varlistentry>
+
+</variablelist>
+
+</refsect1>
+
+<refsect1>
+	<title>Azure Commands</title>
+	<variablelist>
+	<varlistentry>
+		<term>ls <replaceable class="parameter">[account[/container[/blob]]]</replaceable></term>
+		<listitem>
+			<para>When run without arguments, lists all accounts associated with the given Azure subscription. Otherwise lists all entities under the provided <replaceable>account</replaceable>, <replaceable>container</replaceable>, or <replaceable>blob</replaceable>.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>put <replaceable class="parameter">&lt;local path&gt; &lt;account/container/blob&gt;</replaceable></term>
+		<listitem>
+			<para>Uploads the file at <replaceable>local path</replaceable> to <replaceable>blob</replaceable> at the provided remote <replaceable>path</replaceable>.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>get <replaceable class="parameter">&lt;account/container/blob&gt; &lt;local path&gt;</replaceable></term>
+		<listitem>
+			<para>Downloads <replaceable>blob</replaceable>, storing it as a file at <replaceable>local path</replaceable>.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>del <replaceable class="parameter">&lt;account&gt;[/container[/blob]]</replaceable></term>
+		<listitem>
+			<para>Deletes the given <replaceable>blob</replaceable>, <replaceable>container</replaceable>, or <replaceable>account</replaceable>.
+			The operation is recursive, e.g. on container deletion, any nested blobs are also removed.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>cp <replaceable class="parameter">&lt;src account/src container/src blob&gt;</replaceable>
+			 <replaceable class="parameter">&lt;dest account/dest container/dest blob&gt;</replaceable></term>
+		<listitem>
+			<para>Copies the given <replaceable>src blob</replaceable> to <replaceable>dest blob</replaceable>.
+			The copy is performed remotely, such that blob-data does not travel between client and cloud.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>create <replaceable class="parameter">&lt;-l label&gt; [-d description] &lt;[-L location] | [-A affinity group]&gt; &lt;account&gt;</replaceable></term>
+		<listitem>
+			<para>Creates an Azure account with the provided attributes. The account name must be unique within Azures namespace. Either a <replaceable>location</replaceable> or an <replaceable>affinity group</replaceable> must be provided. If specified, <replaceable>location</replaceable> must match one of Azure's datacenter location names.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>create <replaceable class="parameter">&lt;account/container&gt;</replaceable></term>
+		<listitem>
+			<para>Creates the given <replaceable>container</replaceable>.</para>
+		</listitem>
+	</varlistentry>
+	</variablelist>
+</refsect1>
+
+<refsect1>
+	<title>Amazon S3 Commands</title>
+	<variablelist>
+	<varlistentry>
+		<term>ls <replaceable class="parameter">[bucket]</replaceable></term>
+		<listitem>
+			<para>When run without arguments, lists all buckets associated with the given S3 account. Otherwise lists all objects under the given <replaceable>bucket</replaceable>.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>put <replaceable class="parameter">&lt;local path&gt; &lt;bucket/object&gt;</replaceable></term>
+		<listitem>
+			<para>Uploads the file at <replaceable>local path</replaceable> to <replaceable>object</replaceable> at the provided remote <replaceable>path</replaceable>.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>get <replaceable class="parameter">&lt;bucket/object&gt; &lt;local path&gt;</replaceable></term>
+		<listitem>
+			<para>Downloads <replaceable>object</replaceable>, storing it as a file at <replaceable>local path</replaceable>.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>del <replaceable class="parameter">&lt;bucket&gt;[/object]</replaceable></term>
+		<listitem>
+			<para>Deletes the given <replaceable>object</replaceable> or <replaceable>bucket</replaceable>.
+			The operation is recursive.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>cp <replaceable class="parameter">&lt;src bucket/src object&gt;</replaceable>
+			 <replaceable class="parameter">&lt;dest bucket/dest object&gt;</replaceable></term>
+		<listitem>
+			<para>Copies the given <replaceable>src object</replaceable> to <replaceable>dest object</replaceable>.
+			The copy is performed remotely, such that object-data does not travel between client and cloud.</para>
+		</listitem>
+	</varlistentry>
+
+	<varlistentry>
+		<term>create <replaceable class="parameter">&lt;bucket&gt;</replaceable></term>
+		<listitem>
+			<para>Creates the given <replaceable>bucket</replaceable>.</para>
+		</listitem>
+	</varlistentry>
+	</variablelist>
+</refsect1>
+<refsect1>
+	<title>Bugs</title>
+	<para>
+	Please report bugs via the <ulink url="http://code.google.com/p/elasto/issues/list">issue tracker</ulink>.
+	</para>
+</refsect1>
+<refsect1>
+	<title>Authors</title>
+	<para>
+	The Elasto cloud project was created by David Disseldorp.
+	</para>
+</refsect1>
+</refentry>

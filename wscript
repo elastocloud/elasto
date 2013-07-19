@@ -17,9 +17,11 @@ def configure(conf):
 	conf.recurse('lib')
 	conf.recurse('client')
 	conf.recurse('test')
+	conf.recurse('doc')
 
 def build(bld):
 	bld.recurse('ccan')
 	bld.recurse('lib')
 	bld.recurse('client')
 	bld.recurse('test')
+	bld.recurse('doc')

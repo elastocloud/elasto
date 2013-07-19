@@ -1,0 +1,15 @@
+def options(opt):
+	opt.load('compiler_c')
+
+def configure(conf):
+	conf.load('compiler_c')
+	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
+	conf.find_program('docbook-to-man', mandatory=False, var='D2M')
+
+def build(bld):
+	if not bld.env.D2M:
+		print("Skipping documentation build: "
+		      "docbook-to-man binary required")
+		return
+	bld(rule='${D2M} ${SRC}', source='elasto_cli.xml')
+	bld.install_files('${MANDIR}', ['elasto_cli.1'])
