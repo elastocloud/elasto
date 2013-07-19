@@ -147,6 +147,61 @@ err_out:
 	return ret;
 }
 
+static int
+cli_put_single_blob_handle(struct elasto_conn *econn,
+			   struct cli_args *cli_args,
+			   struct stat *src_st)
+{
+	int ret;
+	struct elasto_data *op_data;
+	struct azure_op op;
+
+	ret = elasto_data_file_new(cli_args->put.local_path,
+				   src_st->st_size, 0, O_RDONLY, 0,
+				   &op_data);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_op_blob_put(cli_args->az.blob_acc,
+				cli_args->az.ctnr_name,
+				cli_args->az.blob_name,
+				op_data,
+				0,
+				cli_args->insecure_http,
+				&op);
+	if (ret < 0) {
+		op_data->buf = NULL;
+		elasto_data_destroy(&op_data);
+		goto err_out;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op.rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op.rsp.err_code);
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	/* data buffer contains cli_args->put.local_path */
+	if (op.req.data)
+		op.req.data->buf = NULL;
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 
 static int
@@ -175,8 +230,8 @@ cli_put_blocks(struct elasto_conn *econn,
 	}
 
 	ret = elasto_data_file_new(cli_args->put.local_path,
-				     min(BLOB_BLOCK_MAX, size), 0, O_RDONLY, 0,
-				     &op_data);
+				   min(BLOB_BLOCK_MAX, size), 0, O_RDONLY, 0,
+				   &op_data);
 	if (ret < 0) {
 		return ret;
 	}
@@ -259,6 +314,7 @@ err_op_free:
 	azure_op_free(&op);
 err_blks_free:
 	list_for_each_safe(blks, blk, blk_n, list) {
+		/* FIXME remove uploaded blocks */
 		free(blk->id);
 		free(blk);
 	}
@@ -267,11 +323,61 @@ err_blks_free:
 }
 
 static int
+cli_put_blocks_handle(struct elasto_conn *econn,
+		      struct cli_args *cli_args,
+		      struct stat *src_st)
+{
+	int ret;
+	struct azure_op op;
+	struct list_head *blks;
+
+	ret = cli_put_blocks(econn, cli_args, src_st->st_size, &blks);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_op_block_list_put(cli_args->az.blob_acc,
+				      cli_args->az.ctnr_name,
+				      cli_args->az.blob_name,
+				      blks,
+				      cli_args->insecure_http,
+				      &op);
+	if (ret < 0) {
+		struct azure_block *blk;
+		struct azure_block *blk_n;
+		list_for_each_safe(blks, blk, blk_n, list) {
+			free(blk->id);
+			free(blk);
+		}
+		/* FIXME cleanup uploaded blob blocks */
+		goto err_out;
+	}
+
+	ret = elasto_conn_send_op(econn, &op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = azure_rsp_process(&op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	/* data buffer contains cli_args->put.local_path */
+	if (op.req.data)
+		op.req.data->buf = NULL;
+	azure_op_free(&op);
+err_out:
+	return ret;
+}
+
+static int
 cli_put_blob_handle(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
 	struct stat st;
-	struct azure_op op;
 	int ret;
 
 	assert(cli_args->type == CLI_TYPE_AZURE);
@@ -301,58 +407,15 @@ cli_put_blob_handle(struct cli_args *cli_args)
 	       cli_args->az.blob_name);
 
 	if (st.st_size < BLOCK_THRESHOLD) {
-		struct elasto_data *op_data;
-
-		ret = elasto_data_file_new(cli_args->put.local_path,
-					   st.st_size, 0, O_RDONLY, 0,
-					   &op_data);
-		if (ret < 0) {
-			goto err_conn_free;
-		}
-
-		ret = azure_op_blob_put(cli_args->az.blob_acc,
-					cli_args->az.ctnr_name,
-					cli_args->az.blob_name,
-					op_data,
-					0,
-					cli_args->insecure_http,
-					&op);
-		if (ret < 0) {
-			goto err_conn_free;
-		}
+		ret = cli_put_single_blob_handle(econn, cli_args, &st);
 	} else {
-		struct list_head *blks;
-		ret = cli_put_blocks(econn, cli_args, st.st_size, &blks);
-		if (ret < 0) {
-			goto err_conn_free;
-		}
-		ret = azure_op_block_list_put(cli_args->az.blob_acc,
-					      cli_args->az.ctnr_name,
-					      cli_args->az.blob_name,
-					      blks,
-					      cli_args->insecure_http,
-					      &op);
-		if (ret < 0) {
-			goto err_conn_free;
-		}
+		ret = cli_put_blocks_handle(econn, cli_args, &st);
 	}
-
-	ret = elasto_conn_send_op(econn, &op);
 	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = azure_rsp_process(&op);
-	if (ret < 0) {
-		goto err_op_free;
+		goto err_conn_free;
 	}
 
 	ret = 0;
-err_op_free:
-	/* data buffer contains cli_args->put.local_path */
-	if (op.req.data)
-		op.req.data->buf = NULL;
-	azure_op_free(&op);
 err_conn_free:
 	elasto_conn_free(econn);
 err_out:
