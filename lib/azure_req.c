@@ -322,6 +322,7 @@ azure_acc_free(struct azure_account **pacc)
 	struct azure_account *acc = *pacc;
 
 	free(acc->svc_name);
+	free(acc->label);
 	free(acc->url);
 	free(acc->affin_grp);
 	free(acc->location);
@@ -396,6 +397,7 @@ azure_rsp_acc_iter_process(struct apr_xml_elem *xel,
 {
 	int ret;
 	struct azure_account *acc;
+	char *label_b64 = NULL;
 
 	acc = malloc(sizeof(*acc));
 	if (acc == NULL) {
@@ -426,15 +428,39 @@ azure_rsp_acc_iter_process(struct apr_xml_elem *xel,
 		goto err_desc_free;
 	}
 
-	ret = azure_xml_path_get(xel, "StorageServiceProperties/Location",
-				 &acc->location);
+	ret = azure_xml_path_get(xel, "StorageServiceProperties/Label",
+				 &label_b64);
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_affin_free;
 	}
+	if (label_b64 && (strlen(label_b64) > 0)) {
+		acc->label = malloc(strlen(label_b64) + 1);
+		if (acc->label == NULL) {
+			free(label_b64);
+			goto err_affin_free;
+		}
+		ret = base64_decode(label_b64, acc->label);
+		free(label_b64);
+		if (ret < 0) {
+			dbg(0, "failed to decode account label\n");
+			goto err_label_free;
+		}
+		/* zero terminate */
+		acc->label[ret] = '\0';
+	}
+
+	ret = azure_xml_path_get(xel, "StorageServiceProperties/Location",
+				 &acc->location);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_label_free;
+	}
+
 	*acc_ret = acc;
 
 	return 0;
 
+err_label_free:
+	free(acc->label);
 err_affin_free:
 	free(acc->affin_grp);
 err_desc_free:
@@ -638,6 +664,8 @@ azure_op_acc_create(const char *sub_id,
 	if ((sub_id == NULL) || (svc_name == NULL) || (label == NULL)) {
 		return -EINVAL;
 	} else if ((affin_grp == NULL) && (location == NULL)) {
+		return -EINVAL;
+	} else if ((affin_grp != NULL) && (location != NULL)) {
 		return -EINVAL;
 	}
 
