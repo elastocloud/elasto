@@ -178,8 +178,7 @@ static int
 cli_del_blob_handle(struct elasto_conn *econn,
 		   const char *acc_name,
 		   const char *ctnr_name,
-		   const char *blob_name,
-		   bool insecure_http)
+		   const char *blob_name)
 {
 	struct azure_op op;
 	int ret;
@@ -188,7 +187,7 @@ cli_del_blob_handle(struct elasto_conn *econn,
 	ret = azure_op_blob_del(acc_name,
 				ctnr_name,
 				blob_name,
-				insecure_http, &op);
+				&op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -219,8 +218,7 @@ err_out:
 static int
 cli_del_ctnr_handle(struct elasto_conn *econn,
 		    const char *acc_name,
-		    const char *ctnr_name,
-		    bool insecure_http)
+		    const char *ctnr_name)
 {
 	struct azure_op op;
 	int ret;
@@ -229,7 +227,7 @@ cli_del_ctnr_handle(struct elasto_conn *econn,
 
 	ret = azure_op_ctnr_del(acc_name,
 				ctnr_name,
-				insecure_http, &op);
+				&op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -258,15 +256,14 @@ err_out:
 }
 
 static int
-cli_del_bkt_handle(char *bkt_name,
-		   bool insecure_http,
-		   struct elasto_conn *econn)
+cli_del_bkt_handle(struct elasto_conn *econn,
+		   char *bkt_name)
 {
 	struct azure_op op;
 	int ret;
 
 	memset(&op, 0, sizeof(op));
-	ret = s3_op_bkt_del(bkt_name, insecure_http, &op);
+	ret = s3_op_bkt_del(bkt_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -297,14 +294,13 @@ err_out:
 static int
 cli_del_obj_handle(struct elasto_conn *econn,
 		   char *bkt_name,
-		   char *obj_name,
-		   bool insecure_http)
+		   char *obj_name)
 {
 	struct azure_op op;
 	int ret;
 
 	memset(&op, 0, sizeof(op));
-	ret = s3_op_obj_del(bkt_name, obj_name, insecure_http, &op);
+	ret = s3_op_obj_del(bkt_name, obj_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -338,7 +334,8 @@ cli_del_az_handle(struct cli_args *cli_args)
 	struct elasto_conn *econn;
 	int ret;
 
-	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
+				  cli_args->insecure_http, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -362,12 +359,10 @@ cli_del_az_handle(struct cli_args *cli_args)
 	if (cli_args->az.blob_name != NULL) {
 		ret = cli_del_blob_handle(econn, cli_args->az.blob_acc,
 					  cli_args->az.ctnr_name,
-					  cli_args->az.blob_name,
-					  cli_args->insecure_http);
+					  cli_args->az.blob_name);
 	} else {
 		ret = cli_del_ctnr_handle(econn, cli_args->az.blob_acc,
-					  cli_args->az.ctnr_name,
-					  cli_args->insecure_http);
+					  cli_args->az.ctnr_name);
 	}
 
 err_conn_free:
@@ -383,17 +378,16 @@ cli_del_s3_handle(struct cli_args *cli_args)
 	int ret;
 
 	ret = elasto_conn_init_s3(cli_args->s3.key_id,
-				  cli_args->s3.secret, &econn);
+				  cli_args->s3.secret,
+				  cli_args->insecure_http, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
 	if (cli_args->s3.obj_name != NULL) {
 		ret = cli_del_obj_handle(econn, cli_args->s3.bkt_name,
-					 cli_args->s3.obj_name,
-					 cli_args->insecure_http);
+					 cli_args->s3.obj_name);
 	} else {
-		ret = cli_del_bkt_handle(cli_args->s3.bkt_name,
-					 cli_args->insecure_http, econn);
+		ret = cli_del_bkt_handle(econn, cli_args->s3.bkt_name);
 	}
 	elasto_conn_free(econn);
 err_out:

@@ -498,9 +498,17 @@ elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
 	int ret;
 	struct curl_slist *http_hdr = NULL;
 	struct azure_op_hdr *hdr;
+	char *url;
 
 	curl_easy_setopt(econn->curl, CURLOPT_CUSTOMREQUEST, op->method);
-	curl_easy_setopt(econn->curl, CURLOPT_URL, op->url);
+	ret = asprintf(&url, "http%s://%s%s",
+		 ((econn->insecure_http && !op->url_https_only) ? "" : "s"),
+		 op->url_host, op->url_path);
+	if (ret < 0) {
+		return -ENOMEM;
+	}
+	curl_easy_setopt(econn->curl, CURLOPT_URL, url);
+	free(url);
 	curl_easy_setopt(econn->curl, CURLOPT_HEADERFUNCTION, curl_hdr_cb);
 	curl_easy_setopt(econn->curl, CURLOPT_HEADERDATA, op);
 	curl_easy_setopt(econn->curl, CURLOPT_WRITEDATA, op);
@@ -591,13 +599,15 @@ elasto_conn_send_op(struct elasto_conn *econn,
 }
 
 static int
-elasto_conn_init_common(struct elasto_conn **econn_out)
+elasto_conn_init_common(bool insecure_http,
+			struct elasto_conn **econn_out)
 {
 	uint32_t debug_level;
 	struct elasto_conn *econn = malloc(sizeof(*econn));
 	if (econn == NULL) {
 		return -ENOMEM;
 	}
+	memset(econn, 0, sizeof(*econn));
 
 	econn->curl = curl_easy_init();
 	if (econn->curl == NULL) {
@@ -605,11 +615,15 @@ elasto_conn_init_common(struct elasto_conn **econn_out)
 		return -ENOMEM;
 	}
 
+	if (insecure_http) {
+		dbg(1, "Using HTTP instead of HTTPS where available\n");
+		econn->insecure_http = true;
+	}
+
 	debug_level = dbg_level_get();
 	if (debug_level > 2) {
 		curl_easy_setopt(econn->curl, CURLOPT_VERBOSE, 1);
 	}
-	memset(&econn->sign, 0, sizeof(econn->sign));
 	*econn_out = econn;
 
 	return 0;
@@ -618,12 +632,13 @@ elasto_conn_init_common(struct elasto_conn **econn_out)
 int
 elasto_conn_init_az(const char *pem_file,
 		    const char *pem_pw,
+		    bool insecure_http,
 		    struct elasto_conn **econn_out)
 {
 	struct elasto_conn *econn;
 	int ret;
 
-	ret = elasto_conn_init_common(&econn);
+	ret = elasto_conn_init_common(insecure_http, &econn);
 	if (ret < 0) {
 		return ret;
 	}
@@ -645,12 +660,13 @@ elasto_conn_init_az(const char *pem_file,
 int
 elasto_conn_init_s3(const char *id,
 		    const char *secret,
+		    bool insecure_http,
 		    struct elasto_conn **econn_out)
 {
 	struct elasto_conn *econn;
 	int ret;
 
-	ret = elasto_conn_init_common(&econn);
+	ret = elasto_conn_init_common(insecure_http, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}

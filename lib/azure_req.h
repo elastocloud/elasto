@@ -47,6 +47,8 @@ enum azure_opcode {
 	S3OP_PART_PUT,
 };
 
+#define REQ_HOST_AZURE_MGMT "management.core.windows.net"
+
 struct azure_req_acc_keys_get {
 	char *sub_id;
 	char *service_name;
@@ -396,7 +398,9 @@ struct azure_op {
 	bool sign;
 	char *sig_src;	/* debug, compare with signing error response */
 	const char *method;
-	char *url;
+	bool url_https_only;	/* overrides conn insecure_http setting */
+	char *url_host;
+	char *url_path;
 
 	struct {
 		union {
@@ -518,25 +522,21 @@ azure_op_acc_del(const char *sub_id,
 
 int
 azure_op_ctnr_list(const char *account,
-		   bool insecure_http,
-		   struct azure_op *op);
+		   		   struct azure_op *op);
 
 int
 azure_op_ctnr_create(const char *account,
 		     const char *ctnr,
-		     bool insecure_http,
 		     struct azure_op *op);
 
 int
 azure_op_ctnr_del(const char *account,
 		  const char *container,
-		  bool insecure_http,
 		  struct azure_op *op);
 
 int
 azure_op_blob_list(const char *account,
 		   const char *ctnr,
-		   bool insecure_http,
 		   struct azure_op *op);
 
 int
@@ -545,7 +545,6 @@ azure_op_blob_put(const char *account,
 		  const char *bname,
 		  struct elasto_data *data,
 		  uint64_t page_len,
-		  bool insecure_http,
 		  struct azure_op *op);
 
 int
@@ -556,7 +555,6 @@ azure_op_blob_get(const char *account,
 		  struct elasto_data *data,
 		  uint64_t req_off,
 		  uint64_t req_len,
-		  bool insecure_http,
 		  struct azure_op *op);
 
 int
@@ -566,7 +564,6 @@ azure_op_page_put(const char *account,
 		  uint8_t *buf,
 		  uint64_t off,
 		  uint64_t len,
-		  bool insecure_http,
 		  struct azure_op *op);
 
 int
@@ -575,7 +572,6 @@ azure_op_block_put(const char *account,
 		   const char *bname,
 		   const char *blk_id,
 		   struct elasto_data *data,
-		   bool insecure_http,
 		   struct azure_op *op);
 
 int
@@ -583,21 +579,18 @@ azure_op_block_list_put(const char *account,
 			const char *container,
 			const char *bname,
 			struct list_head *blks,
-			bool insecure_http,
 			struct azure_op *op);
 
 int
 azure_op_block_list_get(const char *account,
 			const char *container,
 			const char *bname,
-			bool insecure_http,
 			struct azure_op *op);
 
 int
 azure_op_blob_del(const char *account,
 		  const char *ctnr,
 		  const char *bname,
-		  bool insecure_http,
 		  struct azure_op *op);
 
 int
@@ -607,7 +600,6 @@ azure_op_blob_cp(const char *src_account,
 		 const char *dst_account,
 		 const char *dst_ctnr,
 		 const char *dst_bname,
-		 bool insecure_http,
 		 struct azure_op *op);
 
 int
@@ -616,43 +608,36 @@ azure_op_status_get(const char *sub_id,
 		    struct azure_op *op);
 
 int
-s3_op_svc_list(bool insecure_http,
-	       struct azure_op *op);
+s3_op_svc_list(struct azure_op *op);
 
 int
 s3_op_bkt_list(const char *bkt_name,
-	       bool insecure_http,
 	       struct azure_op *op);
 
 int
 s3_op_bkt_create(const char *bkt_name,
 		 const char *location,
-		 bool insecure_http,
 		 struct azure_op *op);
 
 int
 s3_op_bkt_del(const char *bkt_name,
-	      bool insecure_http,
 	      struct azure_op *op);
 
 int
 s3_op_obj_put(const char *bkt_name,
 	      const char *obj_name,
 	      struct elasto_data *data,
-	      bool insecure_http,
 	      struct azure_op *op);
 
 int
 s3_op_obj_get(const char *bkt_name,
 	      const char *obj_name,
 	      struct elasto_data *data,
-	      bool insecure_http,
 	      struct azure_op *op);
 
 int
 s3_op_obj_del(const char *bkt_name,
 	      const char *obj_name,
-	      bool insecure_http,
 	      struct azure_op *op);
 
 int
@@ -660,13 +645,11 @@ s3_op_obj_cp(const char *src_bkt,
 	     const char *src_obj,
 	     const char *dst_bkt,
 	     const char *dst_obj,
-	     bool insecure_http,
 	     struct azure_op *op);
 
 int
 s3_op_mp_start(const char *bkt,
 	       const char *obj,
-	       bool insecure_http,
 	       struct azure_op *op);
 
 int
@@ -674,14 +657,12 @@ s3_op_mp_done(const char *bkt,
 	      const char *obj,
 	      const char *upload_id,
 	      struct list_head *parts,
-	      bool insecure_http,
 	      struct azure_op *op);
 
 int
 s3_op_mp_abort(const char *bkt,
 	       const char *obj,
 	       const char *upload_id,
-	       bool insecure_http,
 	       struct azure_op *op);
 
 int
@@ -690,7 +671,6 @@ s3_op_part_put(const char *bkt,
 	       const char *upload_id,
 	       uint32_t pnum,
 	       struct elasto_data *data,
-	       bool insecure_http,
 	       struct azure_op *op);
 
 bool

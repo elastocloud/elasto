@@ -52,7 +52,8 @@ cm_sign_s3_object_get(void **state)
 	memset(&op, 0, sizeof(op));
 	list_head_init(&op.req.hdrs);
 	op.method = REQ_METHOD_GET;
-	op.url = "https://johnsmith.s3.amazonaws.com/photos/puppy.jpg";
+	op.url_host = strdup("johnsmith.s3.amazonaws.com");
+	op.url_path = strdup("/photos/puppy.jpg");
 	ret = azure_op_req_hdr_add(&op,
 				   "Date", "Tue, 27 Mar 2007 19:36:42 +0000");
 	assert_int_equal(ret, 0);
@@ -81,7 +82,8 @@ cm_sign_s3_object_put(void **state)
 	memset(&op, 0, sizeof(op));
 	list_head_init(&op.req.hdrs);
 	op.method = REQ_METHOD_PUT;
-	op.url = "https://johnsmith.s3.amazonaws.com/photos/puppy.jpg";
+	op.url_host = strdup("johnsmith.s3.amazonaws.com");
+	op.url_path = strdup("/photos/puppy.jpg");
 	azure_op_req_hdr_add(&op, "Content-Type", "image/jpeg");
 	azure_op_req_hdr_add(&op, "Content-Length", "94328");
 	azure_op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 21:15:45 +0000");
@@ -106,7 +108,8 @@ cm_sign_s3_list(void **state)
 	memset(&op, 0, sizeof(op));
 	list_head_init(&op.req.hdrs);
 	op.method = REQ_METHOD_GET;
-	op.url = "https://johnsmith.s3.amazonaws.com/?prefix=photos&max-keys=50&marker=puppy";
+	op.url_host = strdup("johnsmith.s3.amazonaws.com");
+	op.url_path = strdup("/?prefix=photos&max-keys=50&marker=puppy");
 	azure_op_req_hdr_add(&op, "User-Agent", "Mozilla/5.0");
 	azure_op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 19:42:41 +0000");
 
@@ -130,7 +133,8 @@ cm_sign_s3_fetch(void **state)
 	memset(&op, 0, sizeof(op));
 	list_head_init(&op.req.hdrs);
 	op.method = REQ_METHOD_GET;
-	op.url = "https://johnsmith.s3.amazonaws.com/?acl";
+	op.url_host = strdup("johnsmith.s3.amazonaws.com");
+	op.url_path = strdup("/?acl");
 	azure_op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 19:44:46 +0000");
 
 	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
@@ -153,7 +157,8 @@ cm_sign_s3_object_del(void **state)
 	memset(&op, 0, sizeof(op));
 	list_head_init(&op.req.hdrs);
 	op.method = REQ_METHOD_DELETE;
-	op.url = "https://s3.amazonaws.com/johnsmith/photos/puppy.jpg";
+	op.url_host = strdup("s3.amazonaws.com");
+	op.url_path = strdup("/johnsmith/photos/puppy.jpg");
 	azure_op_req_hdr_add(&op, "User-Agent", "dotnet");
 	azure_op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 21:20:27 +0000");
 	azure_op_req_hdr_add(&op,
@@ -179,7 +184,8 @@ cm_sign_s3_object_upload(void **state)
 	memset(&op, 0, sizeof(op));
 	list_head_init(&op.req.hdrs);
 	op.method = REQ_METHOD_PUT;
-	op.url = "http://static.johnsmith.net:8080/db-backup.dat.gz";
+	op.url_host = strdup("static.johnsmith.net:8080");
+	op.url_path = strdup("/db-backup.dat.gz");
 	azure_op_req_hdr_add(&op, "User-Agent", "curl/7.15.5");
 	azure_op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 21:06:08 +0000");
 	azure_op_req_hdr_add(&op, "x-amz-acl", "public-read");
@@ -215,7 +221,8 @@ cm_sign_s3_bucket_list_all(void **state)
 	memset(&op, 0, sizeof(op));
 	list_head_init(&op.req.hdrs);
 	op.method = REQ_METHOD_GET;
-	op.url = "https://s3.amazonaws.com/";
+	op.url_host = strdup("s3.amazonaws.com");
+	op.url_path = strdup("/");
 	ret = azure_op_req_hdr_add(&op,
 				   "Date", "Wed, 28 Mar 2007 01:29:59 +0000");
 
@@ -239,7 +246,8 @@ cm_sign_s3_unicode_keys(void **state)
 	memset(&op, 0, sizeof(op));
 	list_head_init(&op.req.hdrs);
 	op.method = REQ_METHOD_GET;
-	op.url = "https://s3.amazonaws.com/dictionary/fran%C3%A7ais/pr%c3%a9f%c3%a8re";
+	op.url_host = strdup("s3.amazonaws.com");
+	op.url_path = strdup("/dictionary/fran%C3%A7ais/pr%c3%a9f%c3%a8re");
 	ret = azure_op_req_hdr_add(&op,
 				   "Date", "Wed, 28 Mar 2007 01:49:49 +0000");
 

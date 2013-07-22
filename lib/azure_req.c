@@ -236,22 +236,31 @@ azure_op_acc_keys_get(const char *sub_id,
 		goto err_free_sub;
 	}
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url, "https://management.core.windows.net/"
-		       "%s/services/storageservices/%s/keys",
-		       sub_id, service_name);
-	if (ret < 0) {
+	op->url_https_only = true;
+	op->url_host = strdup(REQ_HOST_AZURE_MGMT);
+	if (op->url_host == NULL) {
 		ret = -ENOMEM;
 		goto err_free_svc;
 	}
 
+	ret = asprintf(&op->url_path,
+		       "/%s/services/storageservices/%s/keys",
+		       sub_id, service_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
 	ret = azure_op_acc_keys_get_fill_hdr(op);
 	if (ret < 0) {
-		goto err_free_url;
+		goto err_upath_free;
 	}
 
 	return 0;
-err_free_url:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_free_svc:
 	free(acc_keys_get_req->service_name);
 err_free_sub:
@@ -369,22 +378,31 @@ azure_op_acc_list(const char *sub_id,
 	}
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url, "https://management.core.windows.net/"
-		       "%s/services/storageservices",
-		       sub_id);
-	if (ret < 0) {
+	op->url_https_only = true;
+	op->url_host = strdup(REQ_HOST_AZURE_MGMT);
+	if (op->url_host == NULL) {
 		ret = -ENOMEM;
 		goto err_sub_free;
 	}
 
+	ret = asprintf(&op->url_path,
+		       "/%s/services/storageservices",
+		       sub_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
 	ret = azure_op_acc_list_fill_hdr(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_sub_free:
 	free(acc_list_req->sub_id);
 err_out:
@@ -723,28 +741,39 @@ azure_op_acc_create(const char *sub_id,
 	}
 
 	op->method = REQ_METHOD_POST;
-	ret = asprintf(&op->url, "https://management.core.windows.net/"
-		       "%s/services/storageservices",
-		       sub_id);
-	if (ret < 0) {
+	op->url_https_only = true;
+	op->url_host = strdup(REQ_HOST_AZURE_MGMT);
+	if (op->url_host == NULL) {
 		ret = -ENOMEM;
 		goto err_loc_free;
 	}
 
+	ret = asprintf(&op->url_path,
+		       "/%s/services/storageservices",
+		       sub_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
 	ret = azure_op_acc_create_fill_hdr(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	ret = azure_op_acc_create_fill_body(acc_create_req->acc,
 					    &op->req.data);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_hdrs_free;
 	}
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_hdrs_free:
+	azure_op_hdrs_free(&op->req.hdrs);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_loc_free:
 	free(acc_create_req->acc->location);
 	free(acc_create_req->acc->affin_grp);
@@ -803,23 +832,31 @@ azure_op_acc_del(const char *sub_id,
 	}
 
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url,
-		       "https://management.core.windows.net/%s"
-		       "/services/storageservices/%s",
+	op->url_https_only = true;
+	op->url_host = strdup(REQ_HOST_AZURE_MGMT);
+	if (op->url_host == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	ret = asprintf(&op->url_path,
+		       "/%s/services/storageservices/%s",
 		       sub_id, account);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_acc_free;
+		goto err_uhost_free;
 	}
 
 	/* mandatory headers */
 	ret = azure_op_acc_del_fill_hdr(op);
 	if (ret < 0)
-		goto err_url_free;
+		goto err_upath_free;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_acc_free:
 	free(acc_del_req->account);
 err_sub_free:
@@ -856,7 +893,6 @@ azure_op_ctnr_list_fill_hdr(struct azure_op *op)
 
 int
 azure_op_ctnr_list(const char *account,
-		   bool insecure_http,
 		   struct azure_op *op)
 {
 
@@ -878,19 +914,22 @@ azure_op_ctnr_list(const char *account,
 	}
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net/?comp=list",
-		       (insecure_http ? "http" : "https"),
-		       account);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_acc_free;
+	}
+	ret = asprintf(&op->url_path, "/?comp=list");
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
 	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	ret = azure_op_ctnr_list_fill_hdr(op);
@@ -904,8 +943,10 @@ azure_op_ctnr_list(const char *account,
 
 err_buf_free:
 	elasto_data_destroy(&op->rsp.data);
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_acc_free:
 	free(ctnr_list_req->account);
 err_out:
@@ -1024,7 +1065,6 @@ azure_op_ctnr_create_fill_hdr(struct azure_op *op)
 int
 azure_op_ctnr_create(const char *account,
 		     const char *ctnr,
-		     bool insecure_http,
 		     struct azure_op *op)
 {
 
@@ -1051,21 +1091,33 @@ azure_op_ctnr_create(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net/%s?restype=container",
-		       (insecure_http ? "http" : "https"),
-		       account, ctnr);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_ctnr_free;
 	}
+	ret = asprintf(&op->url_path, "/%s?restype=container",
+		       ctnr);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
-	azure_op_ctnr_create_fill_hdr(op);
+	ret = azure_op_ctnr_create_fill_hdr(op);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
 
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_ctnr_free:
 	free(ctnr_create_req->ctnr);
 err_acc_free:
@@ -1090,7 +1142,6 @@ azure_op_ctnr_del_fill_hdr(struct azure_op *op)
 int
 azure_op_ctnr_del(const char *account,
 		  const char *container,
-		  bool insecure_http,
 		  struct azure_op *op)
 {
 	int ret;
@@ -1115,26 +1166,32 @@ azure_op_ctnr_del(const char *account,
 	}
 
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net/%s?restype=container",
-		       (insecure_http ? "http" : "https"),
-		       account, container);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_free_container;
+	}
+	ret = asprintf(&op->url_path, "/%s?restype=container",
+		       container);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
 	}
 
 	/* mandatory headers */
 	ret = azure_op_ctnr_del_fill_hdr(op);
 	if (ret < 0)
-		goto err_free_url;
+		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
-err_free_url:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_free_container:
 	free(ctnr_del_req->container);
 err_free_account:
@@ -1173,7 +1230,6 @@ azure_op_blob_list_fill_hdr(struct azure_op *op)
 int
 azure_op_blob_list(const char *account,
 		   const char *ctnr,
-		   bool insecure_http,
 		   struct azure_op *op)
 {
 
@@ -1201,20 +1257,23 @@ azure_op_blob_list(const char *account,
 	}
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net"
-		       "/%s?restype=container&comp=list",
-		       (insecure_http ? "http" : "https"),
-		       account, ctnr);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_ctnr_free;
+	}
+	ret = asprintf(&op->url_path, "/%s?restype=container&comp=list",
+		       ctnr);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
 	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	ret = azure_op_blob_list_fill_hdr(op);
@@ -1228,8 +1287,10 @@ azure_op_blob_list(const char *account,
 
 err_buf_free:
 	elasto_data_destroy(&op->rsp.data);
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_ctnr_free:
 	free(blob_list_req->ctnr);
 err_acc_free:
@@ -1409,7 +1470,6 @@ azure_op_blob_put(const char *account,
 		  const char *bname,
 		  struct elasto_data *data,
 		  uint64_t page_len,
-		  bool insecure_http,
 		  struct azure_op *op)
 {
 	int ret;
@@ -1459,26 +1519,32 @@ azure_op_blob_put(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net/%s/%s",
-		       (insecure_http ? "http" : "https"),
-		       account, container, bname);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_free_bname;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s",
+		       container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
 	}
 
 	/* mandatory headers */
 	ret = azure_op_blob_put_fill_hdr(op);
 	if (ret < 0)
-		goto err_free_url;
+		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
-err_free_url:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_free_bname:
 	free(bl_put_req->bname);
 err_free_container:
@@ -1550,7 +1616,6 @@ azure_op_blob_get(const char *account,
 		  struct elasto_data *data,
 		  uint64_t req_off,
 		  uint64_t req_len,
-		  bool insecure_http,
 		  struct azure_op *op)
 {
 	int ret;
@@ -1606,26 +1671,32 @@ azure_op_blob_get(const char *account,
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net/%s/%s",
-		       (insecure_http ? "http" : "https"),
-		       account, container, bname);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_bname_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s",
+		       container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
 	}
 
 	/* mandatory headers */
 	ret = azure_op_blob_get_fill_hdr(op);
 	if (ret < 0)
-		goto err_url_free;
+		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_bname_free:
 	free(get_req->bname);
 err_ctnr_free:
@@ -1697,7 +1768,6 @@ azure_op_page_put(const char *account,
 		  uint8_t *buf,
 		  uint64_t off,
 		  uint64_t len,
-		  bool insecure_http,
 		  struct azure_op *op)
 {
 	int ret;
@@ -1752,26 +1822,32 @@ azure_op_page_put(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net/%s/%s",
-		       (insecure_http ? "http" : "https"),
-		       account, container, bname);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_data_close;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s",
+		       container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
 	}
 
 	/* mandatory headers */
 	ret = azure_op_page_put_fill_hdr(op);
 	if (ret < 0)
-		goto err_free_url;
+		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
-err_free_url:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_data_close:
 	/* should not free data.buf given by the caller on error */
 	if (op->req.data != NULL) {
@@ -1815,7 +1891,6 @@ azure_op_block_put(const char *account,
 		   const char *bname,
 		   const char *blk_id,
 		   struct elasto_data *data,
-		   bool insecure_http,
 		   struct azure_op *op)
 {
 	int ret;
@@ -1879,30 +1954,35 @@ azure_op_block_put(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net"
-		       "/%s/%s?comp=block&blockid=%s",
-		       (insecure_http ? "http" : "https"),
-		       account, container, bname, b64_blk_id);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		free(b64_blk_id);
+		goto err_data_close;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s?comp=block&blockid=%s",
+		       container, bname, b64_blk_id);
 	free(b64_blk_id);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_id_free;
+		goto err_uhost_free;
 	}
 
 	ret = azure_op_block_put_fill_hdr(op);
 	if (ret < 0)
-		goto err_url_free;
+		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_data_close:
 	op->req.data = NULL;
-err_id_free:
 	free(blk_put_req->blk_id);
 err_bname_free:
 	free(blk_put_req->bname);
@@ -2034,7 +2114,6 @@ azure_op_block_list_put(const char *account,
 			const char *container,
 			const char *bname,
 			struct list_head *blks,
-			bool insecure_http,
 			struct azure_op *op)
 {
 	int ret;
@@ -2065,23 +2144,26 @@ azure_op_block_list_put(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net"
-		       "/%s/%s?comp=blocklist",
-		       (insecure_http ? "http" : "https"),
-		       account, container, bname);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+	ret = asprintf(&op->url_path, "/%s/%s?comp=blocklist",
+		       container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = azure_op_block_list_put_fill_hdr(op);
 	if (ret < 0)
-		goto err_url_free;
+		goto err_upath_free;
 
 	ret = azure_op_block_list_put_fill_body(blks, &op->req.data);
 	if (ret < 0)
-		goto err_url_free;
+		goto err_hdrs_free;
 
 	blk_list_put_req->blks = blks;
 
@@ -2089,8 +2171,12 @@ azure_op_block_list_put(const char *account,
 	op->sign = true;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_hdrs_free:
+	azure_op_hdrs_free(&op->req.hdrs);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_bname_free:
 	free(blk_list_put_req->bname);
 err_container_free:
@@ -2130,7 +2216,6 @@ int
 azure_op_block_list_get(const char *account,
 			const char *container,
 			const char *bname,
-			bool insecure_http,
 			struct azure_op *op)
 {
 	int ret;
@@ -2161,20 +2246,23 @@ azure_op_block_list_get(const char *account,
 	}
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net"
-		       "/%s/%s?comp=blocklist&blocklisttype=all",
-		       (insecure_http ? "http" : "https"),
-		       account, container, bname);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_bname_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s?comp=blocklist&blocklisttype=all",
+		       container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
 	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	ret = azure_op_block_list_get_fill_hdr(op);
@@ -2187,8 +2275,10 @@ azure_op_block_list_get(const char *account,
 	return 0;
 err_buf_free:
 	elasto_data_destroy(&op->rsp.data);
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_bname_free:
 	free(blk_list_get_req->bname);
 err_container_free:
@@ -2360,7 +2450,6 @@ int
 azure_op_blob_del(const char *account,
 		   const char *container,
 		   const char *bname,
-		   bool insecure_http,
 		   struct azure_op *op)
 {
 	int ret;
@@ -2391,26 +2480,32 @@ azure_op_blob_del(const char *account,
 	}
 
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net/%s/%s",
-		       (insecure_http ? "http" : "https"),
-		       account, container, bname);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_free_bname;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s",
+		       container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
 	}
 
 	/* mandatory headers */
 	ret = azure_op_blob_del_fill_hdr(op);
 	if (ret < 0)
-		goto err_free_url;
+		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
-err_free_url:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_free_bname:
 	free(bl_del_req->bname);
 err_free_container:
@@ -2433,8 +2528,7 @@ azure_req_blob_cp_free(struct azure_req_blob_cp *bl_cp_req)
 }
 
 static int
-azure_op_blob_cp_fill_hdr(struct azure_op *op,
-			  bool insecure_http)
+azure_op_blob_cp_fill_hdr(struct azure_op *op)
 {
 	int ret;
 	char *hdr_str;
@@ -2444,9 +2538,9 @@ azure_op_blob_cp_fill_hdr(struct azure_op *op,
 		goto err_out;
 	}
 
+	/* tell server to always use https when dealing with the src blob */
 	ret = asprintf(&hdr_str,
-		       "%s://%s.blob.core.windows.net/%s/%s",
-		       (insecure_http ? "http" : "https"),
+		       "https://%s.blob.core.windows.net/%s/%s",
 		       op->req.blob_cp.src.account,
 		       op->req.blob_cp.src.container,
 		       op->req.blob_cp.src.bname);
@@ -2460,7 +2554,6 @@ azure_op_blob_cp_fill_hdr(struct azure_op *op,
 	return 0;
 
 err_out:
-	/* the slist is leaked on failure here */
 	return ret;
 }
 
@@ -2471,7 +2564,6 @@ azure_op_blob_cp(const char *src_account,
 		 const char *dst_account,
 		 const char *dst_container,
 		 const char *dst_bname,
-		 bool insecure_http,
 		 struct azure_op *op)
 {
 	int ret;
@@ -2520,26 +2612,32 @@ azure_op_blob_cp(const char *src_account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url,
-		       "%s://%s.blob.core.windows.net/%s/%s",
-		       (insecure_http ? "http" : "https"),
-		       dst_account, dst_container, dst_bname);
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", dst_account);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_dst_blb_free;
 	}
+	ret = asprintf(&op->url_path, "/%s/%s",
+		       dst_container, dst_bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	/* mandatory headers */
-	ret = azure_op_blob_cp_fill_hdr(op, insecure_http);
+	ret = azure_op_blob_cp_fill_hdr(op);
 	if (ret < 0)
-		goto err_free_url;
+		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
-err_free_url:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_dst_blb_free:
 	free(bl_cp_req->dst.bname);
 err_dst_ctnr_free:
@@ -2598,22 +2696,30 @@ azure_op_status_get(const char *sub_id,
 	}
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url,
-		       "https://management.core.windows.net"
-		       "/%s/operations/%s",
-		       sub_id, req_id);
-	if (ret < 0) {
+	op->url_https_only = true;
+	op->url_host = strdup(REQ_HOST_AZURE_MGMT);
+	if (op->url_host == NULL) {
 		ret = -ENOMEM;
 		goto err_req_free;
 	}
 
+	ret = asprintf(&op->url_path,
+		       "/%s/operations/%s",
+		       sub_id, req_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
 	ret = azure_op_fill_hdr_common(op, true);
 	if (ret < 0)
-		goto err_url_free;
+		goto err_upath_free;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_req_free:
 	free(sts_get_req->req_id);
 err_sub_free:
@@ -2879,8 +2985,7 @@ s3_rsp_svc_list_free(struct s3_rsp_svc_list *svc_list_rsp)
 }
 
 int
-s3_op_svc_list(bool insecure_http,
-	       struct azure_op *op)
+s3_op_svc_list(struct azure_op *op)
 {
 	int ret;
 
@@ -2891,23 +2996,29 @@ s3_op_svc_list(bool insecure_http,
 	/* no arguments */
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url, "%s://s3.amazonaws.com/",
-		       (insecure_http ? "http" : "https"));
+	ret = asprintf(&op->url_path, "s3.amazonaws.com");
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
+	ret = asprintf(&op->url_path, "/");
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 	/* the connection layer must sign this request before sending */
 	op->sign = true;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_out:
 	return ret;
 }
@@ -3056,7 +3167,6 @@ s3_rsp_bkt_list_free(struct s3_rsp_bkt_list *bkt_list_rsp)
 
 int
 s3_op_bkt_list(const char *bkt_name,
-	       bool insecure_http,
 	       struct azure_op *op)
 {
 	int ret;
@@ -3075,25 +3185,30 @@ s3_op_bkt_list(const char *bkt_name,
 	}
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/",
-		       (insecure_http ? "http" : "https"),
-		       bkt_name);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_name_free;
 	}
+	ret = asprintf(&op->url_path, "/");
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	op->sign = true;
 
 	return 0;
 
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_name_free:
 	free(bkt_list_req->bkt_name);
 err_out:
@@ -3281,7 +3396,6 @@ err_out:
 int
 s3_op_bkt_create(const char *bkt_name,
 		 const char *location,
-		 bool insecure_http,
 		 struct azure_op *op)
 {
 	int ret;
@@ -3308,30 +3422,36 @@ s3_op_bkt_create(const char *bkt_name,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/",
-		       (insecure_http ? "http" : "https"),
-		       bkt_name);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_loc_free;
 	}
 
+	ret = asprintf(&op->url_path, "/");
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	ret = s3_op_bkt_create_fill_body(location, &op->req.data);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	op->sign = true;
 
 	return 0;
 
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_loc_free:
 	free(bkt_create_req->location);
 err_bkt_free:
@@ -3348,7 +3468,6 @@ s3_req_bkt_del_free(struct s3_req_bkt_del *bkt_del)
 
 int
 s3_op_bkt_del(const char *bkt_name,
-	      bool insecure_http,
 	      struct azure_op *op)
 {
 	int ret;
@@ -3367,25 +3486,30 @@ s3_op_bkt_del(const char *bkt_name,
 	}
 
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/",
-		       (insecure_http ? "http" : "https"),
-		       bkt_name);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_name_free;
 	}
+	ret = asprintf(&op->url_path, "/");
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	op->sign = true;
 
 	return 0;
 
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_name_free:
 	free(bkt_del_req->bkt_name);
 err_out:
@@ -3407,7 +3531,6 @@ int
 s3_op_obj_put(const char *bkt_name,
 	      const char *obj_name,
 	      struct elasto_data *data,
-	      bool insecure_http,
 	      struct azure_op *op)
 {
 	int ret;
@@ -3440,24 +3563,29 @@ s3_op_obj_put(const char *bkt_name,
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s",
-		       (insecure_http ? "http" : "https"),
-		       bkt_name, obj_name);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_data_close;
 	}
+	ret = asprintf(&op->url_path, "/%s", obj_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	op->sign = true;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_data_close:
 	op->req.data = NULL;
 	free(obj_put_req->obj_name);
@@ -3482,7 +3610,6 @@ int
 s3_op_obj_get(const char *bkt_name,
 	      const char *obj_name,
 	      struct elasto_data *data,
-	      bool insecure_http,
 	      struct azure_op *op)
 {
 	int ret;
@@ -3518,24 +3645,29 @@ s3_op_obj_get(const char *bkt_name,
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s",
-		       (insecure_http ? "http" : "https"),
-		       bkt_name, obj_name);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_data_close;
 	}
+	ret = asprintf(&op->url_path, "/%s", obj_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	op->sign = true;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_data_close:
 	op->req.data = NULL;
 	free(obj_get_req->obj_name);
@@ -3555,7 +3687,6 @@ s3_req_obj_del_free(struct s3_req_obj_del *obj_del)
 int
 s3_op_obj_del(const char *bkt_name,
 	      const char *obj_name,
-	      bool insecure_http,
 	      struct azure_op *op)
 {
 	int ret;
@@ -3580,24 +3711,29 @@ s3_op_obj_del(const char *bkt_name,
 	}
 
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s",
-		       (insecure_http ? "http" : "https"),
-		       bkt_name, obj_name);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_obj_free;
 	}
+	ret = asprintf(&op->url_path, "/%s", obj_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	op->sign = true;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_obj_free:
 	free(obj_del_req->obj_name);
 err_bkt_free:
@@ -3649,7 +3785,6 @@ s3_op_obj_cp(const char *src_bkt,
 	     const char *src_obj,
 	     const char *dst_bkt,
 	     const char *dst_obj,
-	     bool insecure_http,
 	     struct azure_op *op)
 {
 	int ret;
@@ -3686,24 +3821,29 @@ s3_op_obj_cp(const char *src_bkt,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s",
-		       (insecure_http ? "http" : "https"),
-		       dst_bkt, dst_obj);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", dst_bkt);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_dst_obj_free;
 	}
+	ret = asprintf(&op->url_path, "/%s", dst_obj);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = s3_req_obj_cp_hdr_fill(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	op->sign = true;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_dst_obj_free:
 	free(obj_cp_req->dst.obj_name);
 err_dst_bkt_free:
@@ -3732,7 +3872,6 @@ s3_rsp_mp_start_free(struct s3_rsp_mp_start *mp_start_rsp)
 int
 s3_op_mp_start(const char *bkt,
 	       const char *obj,
-	       bool insecure_http,
 	       struct azure_op *op)
 {
 	int ret;
@@ -3757,24 +3896,30 @@ s3_op_mp_start(const char *bkt,
 	}
 
 	op->method = REQ_METHOD_POST;
-	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s?uploads",
-		       (insecure_http ? "http" : "https"),
-		       bkt, obj);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_obj_free;
 	}
+	ret = asprintf(&op->url_path, "/%s?uploads",
+		       obj);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	op->sign = true;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_obj_free:
 	free(mp_start_req->obj_name);
 err_bkt_free:
@@ -3925,7 +4070,6 @@ s3_op_mp_done(const char *bkt,
 	      const char *obj,
 	      const char *upload_id,
 	      struct list_head *parts,
-	      bool insecure_http,
 	      struct azure_op *op)
 {
 	int ret;
@@ -3956,17 +4100,21 @@ s3_op_mp_done(const char *bkt,
 	}
 
 	op->method = REQ_METHOD_POST;
-	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s?uploadId=%s",
-		       (insecure_http ? "http" : "https"),
-		       bkt, obj, upload_id);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_obj_free;
+		goto err_upload_free;
+	}
+	ret = asprintf(&op->url_path, "/%s?uploadId=%s",
+		       obj, upload_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	ret = s3_op_mp_done_fill_body(parts, &op->req.data);
@@ -3982,8 +4130,12 @@ s3_op_mp_done(const char *bkt,
 
 err_hdr_free:
 	azure_op_hdrs_free(&op->req.hdrs);
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_upload_free:
+	free(mp_done_req->upload_id);
 err_obj_free:
 	free(mp_done_req->obj_name);
 err_bkt_free:
@@ -4004,7 +4156,6 @@ int
 s3_op_mp_abort(const char *bkt,
 	       const char *obj,
 	       const char *upload_id,
-	       bool insecure_http,
 	       struct azure_op *op)
 {
 	int ret;
@@ -4035,25 +4186,30 @@ s3_op_mp_abort(const char *bkt,
 	}
 
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url, "%s://%s.s3.amazonaws.com/%s?uploadId=%s",
-		       (insecure_http ? "http" : "https"),
-		       bkt, obj, upload_id);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_obj_free;
 	}
+	ret = asprintf(&op->url_path, "/%s?uploadId=%s", obj, upload_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	op->sign = true;
 
 	return 0;
 
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_obj_free:
 	free(mp_abort_req->obj_name);
 err_bkt_free:
@@ -4082,7 +4238,6 @@ s3_op_part_put(const char *bkt,
 	       const char *upload_id,
 	       uint32_t pnum,
 	       struct elasto_data *data,
-	       bool insecure_http,
 	       struct azure_op *op)
 {
 	int ret;
@@ -4118,25 +4273,30 @@ s3_op_part_put(const char *bkt,
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url,
-		       "%s://%s.s3.amazonaws.com/%s?partNumber=%u&uploadId=%s",
-		       (insecure_http ? "http" : "https"),
-		       bkt, obj, (unsigned int)pnum, upload_id);
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uploadid_free;
 	}
+	ret = asprintf(&op->url_path, "/%s?partNumber=%u&uploadId=%s",
+		       obj, (unsigned int)pnum, upload_id);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_url_free;
+		goto err_upath_free;
 	}
 
 	op->sign = true;
 
 	return 0;
-err_url_free:
-	free(op->url);
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
 err_uploadid_free:
 	free(part_put_req->upload_id);
 err_obj_free:
@@ -4344,7 +4504,8 @@ void
 azure_op_free(struct azure_op *op)
 {
 	free(op->sig_src);
-	free(op->url);
+	free(op->url_host);
+	free(op->url_path);
 	azure_req_free(op);
 	azure_rsp_free(op);
 	memset(op, 0, sizeof(*op));

@@ -154,7 +154,8 @@ cli_get_blob_handle(struct cli_args *cli_args)
 
 	assert(cli_args->type == CLI_TYPE_AZURE);
 
-	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
+				  cli_args->insecure_http, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -193,7 +194,6 @@ cli_get_blob_handle(struct cli_args *cli_args)
 				false,
 				op_data,
 				0, 0,
-				cli_args->insecure_http,
 				&op);
 	if (ret < 0) {
 		op_data->buf = NULL;
@@ -235,7 +235,8 @@ cli_get_obj_handle(struct cli_args *cli_args)
 	assert(cli_args->type == CLI_TYPE_S3);
 
 	ret = elasto_conn_init_s3(cli_args->s3.key_id,
-				  cli_args->s3.secret, &econn);
+				  cli_args->s3.secret,
+				  cli_args->insecure_http, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -263,7 +264,6 @@ cli_get_obj_handle(struct cli_args *cli_args)
 	ret = s3_op_obj_get(cli_args->s3.bkt_name,
 			    cli_args->s3.obj_name,
 			    op_data,
-			    cli_args->insecure_http,
 			    &op);
 	if (ret < 0) {
 		op_data->buf = NULL;

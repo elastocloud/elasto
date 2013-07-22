@@ -50,7 +50,8 @@ cm_sign_az_list(void **state)
 	memset(&op, 0, sizeof(op));
 	list_head_init(&op.req.hdrs);
 	op.method = REQ_METHOD_GET;
-	op.url = strdup("https://ddiss.blob.core.windows.net/test?restype=container&comp=list");
+	op.url_host = strdup("ddiss.blob.core.windows.net");
+	op.url_path = strdup("/test?restype=container&comp=list");
 	ret = azure_op_req_hdr_add(&op, "Accept", "*/*");
 	assert_int_equal(ret, 0);
 	ret = azure_op_req_hdr_add(&op, "x-ms-date",

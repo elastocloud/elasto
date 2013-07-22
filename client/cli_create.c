@@ -190,7 +190,8 @@ cli_create_handle_acc(struct cli_args *cli_args)
 	int ret;
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
+					  cli_args->insecure_http, &econn);
 	} else {
 		ret = -ENOTSUP;
 	}
@@ -261,7 +262,8 @@ cli_create_handle_ctnr(struct cli_args *cli_args)
 	int ret;
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
+					  cli_args->insecure_http, &econn);
 	} else {
 		ret = -ENOTSUP;
 	}
@@ -279,7 +281,6 @@ cli_create_handle_ctnr(struct cli_args *cli_args)
 	memset(&op, 0, sizeof(op));
 	ret = azure_op_ctnr_create(cli_args->az.blob_acc,
 				   cli_args->az.ctnr_name,
-				   cli_args->insecure_http,
 				   &op);
 	if (ret < 0) {
 		goto err_conn_free;
@@ -318,7 +319,8 @@ cli_create_handle_bkt(struct cli_args *cli_args)
 	int ret;
 
 	ret = elasto_conn_init_s3(cli_args->s3.key_id,
-				  cli_args->s3.secret, &econn);
+				  cli_args->s3.secret,
+				  cli_args->insecure_http, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -326,7 +328,6 @@ cli_create_handle_bkt(struct cli_args *cli_args)
 	memset(&op, 0, sizeof(op));
 	ret = s3_op_bkt_create(cli_args->s3.bkt_name,
 			       cli_args->create.location,
-			       cli_args->insecure_http,
 			       &op);
 	if (ret < 0) {
 		goto err_conn_free;

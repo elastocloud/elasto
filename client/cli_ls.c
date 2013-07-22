@@ -152,16 +152,14 @@ static int
 cli_ls_blob_handle(struct elasto_conn *econn,
 		   const char *acc_name,
 		   const char *ctnr_name,
-		   const char *blob_name,
-		   bool insecure_http)
+		   const char *blob_name)
 {
 	struct azure_op op;
 	struct azure_block *blk;
 	int ret;
 
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_block_list_get(acc_name, ctnr_name, blob_name,
-				      insecure_http, &op);
+	ret = azure_op_block_list_get(acc_name, ctnr_name, blob_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -210,15 +208,14 @@ err_out:
 static int
 cli_ls_ctnr_handle(struct elasto_conn *econn,
 		   const char *acc_name,
-		   const char *ctnr_name,
-		   bool insecure_http)
+		   const char *ctnr_name)
 {
 	struct azure_op op;
 	struct azure_blob *blob;
 	int ret;
 
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_blob_list(acc_name, ctnr_name, insecure_http, &op);
+	ret = azure_op_blob_list(acc_name, ctnr_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -266,8 +263,7 @@ err_out:
 
 static int
 cli_ls_acc_handle(struct elasto_conn *econn,
-		  const char *acc_name,
-		  bool insecure_http)
+		  const char *acc_name)
 {
 	struct azure_op op;
 	struct azure_ctnr *ctnr;
@@ -275,7 +271,7 @@ cli_ls_acc_handle(struct elasto_conn *econn,
 	int ret;
 
 	memset(&op, 0, sizeof(op));
-	ret = azure_op_ctnr_list(acc_name, insecure_http, &op);
+	ret = azure_op_ctnr_list(acc_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -371,15 +367,14 @@ err_out:
 }
 
 static int
-cli_ls_svc_handle(struct elasto_conn *econn,
-		  bool insecure_http)
+cli_ls_svc_handle(struct elasto_conn *econn)
 {
 	struct azure_op op;
 	struct s3_bucket *bkt;
 	int ret;
 
 	memset(&op, 0, sizeof(op));
-	ret = s3_op_svc_list(insecure_http, &op);
+	ret = s3_op_svc_list(&op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -421,7 +416,6 @@ err_out:
 
 static int
 cli_ls_bkt_handle(struct elasto_conn *econn,
-		  bool insecure_http,
 		  const char *bkt_name)
 {
 	struct azure_op op;
@@ -429,7 +423,7 @@ cli_ls_bkt_handle(struct elasto_conn *econn,
 	int ret;
 
 	memset(&op, 0, sizeof(op));
-	ret = s3_op_bkt_list(bkt_name, insecure_http, &op);
+	ret = s3_op_bkt_list(bkt_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -476,7 +470,9 @@ cli_ls_az_handle(struct cli_args *cli_args)
 	struct elasto_conn *econn;
 	int ret;
 
-	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
+				  cli_args->insecure_http,
+				  &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -500,17 +496,14 @@ cli_ls_az_handle(struct cli_args *cli_args)
 		/* list blocks for a specific blob */
 		ret = cli_ls_blob_handle(econn, cli_args->az.blob_acc,
 					 cli_args->az.ctnr_name,
-					 cli_args->az.blob_name,
-					 cli_args->insecure_http);
+					 cli_args->az.blob_name);
 	} else if (cli_args->az.ctnr_name != NULL) {
 		/* list specific container */
 		ret = cli_ls_ctnr_handle(econn, cli_args->az.blob_acc,
-					 cli_args->az.ctnr_name,
-					 cli_args->insecure_http);
+					 cli_args->az.ctnr_name);
 	} else if (cli_args->az.blob_acc != NULL) {
 		/* list all containers for account */
-		ret = cli_ls_acc_handle(econn, cli_args->az.blob_acc,
-					cli_args->insecure_http);
+		ret = cli_ls_acc_handle(econn, cli_args->az.blob_acc);
 	}
 	if (ret < 0) {
 		goto err_conn_free;
@@ -530,18 +523,20 @@ cli_ls_s3_handle(struct cli_args *cli_args)
 	int ret;
 
 	ret = elasto_conn_init_s3(cli_args->s3.key_id,
-				  cli_args->s3.secret, &econn);
+				  cli_args->s3.secret,
+				  cli_args->insecure_http,
+				  &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	if ((cli_args->s3.bkt_name == NULL)
 	 && (cli_args->s3.obj_name == NULL)) {
-		ret = cli_ls_svc_handle(econn, cli_args->insecure_http);
+		ret = cli_ls_svc_handle(econn);
 	} else if (cli_args->s3.obj_name != NULL) {
 		ret = -ENOTSUP;
 	} else if (cli_args->s3.bkt_name != NULL) {
-		ret = cli_ls_bkt_handle(econn, cli_args->insecure_http,
+		ret = cli_ls_bkt_handle(econn,
 					cli_args->s3.bkt_name);
 	}
 	if (ret < 0) {

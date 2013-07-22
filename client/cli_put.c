@@ -168,7 +168,6 @@ cli_put_single_blob_handle(struct elasto_conn *econn,
 				cli_args->az.blob_name,
 				op_data,
 				0,
-				cli_args->insecure_http,
 				&op);
 	if (ret < 0) {
 		op_data->buf = NULL;
@@ -274,7 +273,6 @@ cli_put_blocks(struct elasto_conn *econn,
 					 cli_args->az.blob_name,
 					 blk->id,
 					 op_data,
-					 cli_args->insecure_http,
 					 &op);
 		if (ret < 0) {
 			goto err_blks_free;
@@ -340,7 +338,6 @@ cli_put_blocks_handle(struct elasto_conn *econn,
 				      cli_args->az.ctnr_name,
 				      cli_args->az.blob_name,
 				      blks,
-				      cli_args->insecure_http,
 				      &op);
 	if (ret < 0) {
 		struct azure_block *blk;
@@ -382,7 +379,8 @@ cli_put_blob_handle(struct cli_args *cli_args)
 
 	assert(cli_args->type == CLI_TYPE_AZURE);
 
-	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL, &econn);
+	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
+				  cli_args->insecure_http, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -441,7 +439,6 @@ cli_put_single_obj_handle(struct elasto_conn *econn,
 	ret = s3_op_obj_put(cli_args->s3.bkt_name,
 			    cli_args->s3.obj_name,
 			    op_data,
-			    cli_args->insecure_http,
 			    &op);
 	if (ret < 0) {
 		op_data->buf = NULL;
@@ -479,8 +476,7 @@ static int
 cli_put_multi_part_abort(struct elasto_conn *econn,
 			 const char *bkt,
 			 const char *obj,
-			 const char *upload_id,
-			 bool insecure_http)
+			 const char *upload_id)
 {
 	int ret;
 	struct azure_op op;
@@ -490,7 +486,6 @@ cli_put_multi_part_abort(struct elasto_conn *econn,
 	ret = s3_op_mp_abort(bkt,
 			     obj,
 			     upload_id,
-			     insecure_http,
 			     &op);
 	if (ret < 0) {
 		goto err_out;
@@ -525,7 +520,6 @@ cli_put_part_handle(struct elasto_conn *econn,
 		    const char *upload_id,
 		    int pnum,
 		    struct elasto_data *op_data,
-		    bool insecure_http,
 		    struct s3_part **_part)
 {
 	int ret;
@@ -543,7 +537,6 @@ cli_put_part_handle(struct elasto_conn *econn,
 			     upload_id,
 			     pnum,
 			     op_data,
-			     insecure_http,
 			     &op);
 	if (ret < 0) {
 		goto err_part_free;
@@ -601,7 +594,6 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 
 	ret = s3_op_mp_start(cli_args->s3.bkt_name,
 			     cli_args->s3.obj_name,
-			     cli_args->insecure_http,
 			     &op);
 	if (ret < 0) {
 		goto err_out;
@@ -653,7 +645,6 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 					  upload_id,
 					  parts_put + 1, /* pnum must be > 0 */
 					  op_data,
-					  cli_args->insecure_http,
 					  &part);
 		if (ret < 0) {
 			goto err_upload_abort;
@@ -675,7 +666,6 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 			    cli_args->s3.obj_name,
 			    upload_id,
 			    &parts,
-			    cli_args->insecure_http,
 			    &op);
 	if (ret < 0) {
 		goto err_upload_abort;
@@ -710,8 +700,7 @@ err_upload_abort:
 	cli_put_multi_part_abort(econn,
 				 cli_args->s3.bkt_name,
 				 cli_args->s3.obj_name,
-				 upload_id,
-				 cli_args->insecure_http);
+				 upload_id);
 	free(upload_id);
 	return ret;
 }
@@ -726,7 +715,9 @@ cli_put_obj_handle(struct cli_args *cli_args)
 	assert(cli_args->type == CLI_TYPE_S3);
 
 	ret = elasto_conn_init_s3(cli_args->s3.key_id,
-				  cli_args->s3.secret, &econn);
+				  cli_args->s3.secret,
+				  cli_args->insecure_http,
+				  &econn);
 	if (ret < 0) {
 		goto err_out;
 	}

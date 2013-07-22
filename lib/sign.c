@@ -303,12 +303,12 @@ err_out:
  * ?comp=metadata). No other parameters should be included on the query string.
  * ----
  *
- * @url is modified in place to pull out the comp parameter. Could be optimized
- * greatly, but simple code is nicer.
+ * @url_path is modified in place to pull out the comp parameter. Could be
+ * optimized greatly, but simple code is nicer.
  */
 static char *
 canon_rsc_gen_lite(const char *account,
-		   const char *url)
+		   const char *url_path)
 {
 	int ret;
 	char *s;
@@ -317,10 +317,7 @@ canon_rsc_gen_lite(const char *account,
 	char *rsc_str = NULL;
 
 	/* find the first forward slash after the protocol */
-	s = strstr(url, "://");
-	assert(s != NULL);
-	s += sizeof("://") - 1;
-	s = strchrnul(s, '/');
+	s = strchrnul(url_path, '/');
 
 	q = strchr(s, '?');
 	if (q == NULL) {
@@ -379,7 +376,7 @@ sign_gen_lite_azure(const char *account,
 		goto err_out;
 	}
 
-	canon_rsc = canon_rsc_gen_lite(account, op->url);
+	canon_rsc = canon_rsc_gen_lite(account, op->url_path);
 	if (canon_rsc == NULL) {
 		ret = -ENOMEM;
 		goto err_hdrs_free;
@@ -450,21 +447,30 @@ canon_rsc_path_get(const char *slash_after_hostname)
 
 #define URL_S3_BASE "s3.amazonaws.com"
 /*
- * @slash_url_host points to the last forward slash after the protocol string
+ * @url_host points to the hostname after the protocol prefix
  */
 static char *
-canon_rsc_bucket_get(const char *slash_url_host)
+canon_rsc_bucket_get(const char *url_host)
 {
+	int buf_len;
+	char *buf;
 	char *d;
 
-	if (strncmp(slash_url_host + 1, URL_S3_BASE,
-		    sizeof(URL_S3_BASE) - 1) == 0) {
+	if (strncmp(url_host, URL_S3_BASE, sizeof(URL_S3_BASE) - 1) == 0) {
 		/* base URL only */
 		return strdup("");
 	}
 
+	/* add 2 for '/' prefix and zero-term */
+	buf_len = strlen(url_host) + 2;
+	buf = malloc(buf_len);
+	if (buf == NULL) {
+		return NULL;
+	}
+	buf[0] = '/';
+
 	/* find the first dot, up to which may be the bucket name */
-	d = strchr(slash_url_host, '.');
+	d = strchr(url_host, '.');
 	if ((d != NULL)
 	 && (strncmp(d + 1, URL_S3_BASE, sizeof(URL_S3_BASE) - 1) == 0)) {
 		dbg(6, "bucket prefix in S3 host path\n");
@@ -472,21 +478,23 @@ canon_rsc_bucket_get(const char *slash_url_host)
 		 * There is a bucket name before the aws hostname, ensure the
 		 * required '/' prefix is included in the bucket string.
 		 */
-		return strndup(slash_url_host, (d - slash_url_host));
+		assert(1 + d - url_host < buf_len);
+		strncpy(buf + 1, url_host, d - url_host);
+		buf[1 + d - url_host] = '\0';
+		return buf;
 	} else {
 		const char *sep = NULL;
 		dbg(2, "non S3 host, assuming CNAME bucket alias\n");
 		/* copy up to port, path or query sep */
-		sep = strchr(slash_url_host + 1, ':');
-		if (sep == NULL)
-			sep = strchr(slash_url_host + 1, '/');
-		if (sep == NULL)
-			sep = strchr(slash_url_host + 1, '?');
-
+		sep = strchr(url_host + 1, ':');
 		if (sep == NULL) {
-			return strdup(slash_url_host);
+			strcpy(buf + 1, url_host);
+			return buf;
 		} else {
-			return strndup(slash_url_host, sep - slash_url_host);
+			assert(1 + sep - url_host < buf_len);
+			strncpy(buf + 1, url_host, sep - url_host);
+			buf[1 + sep - url_host] = '\0';
+			return buf;
 		}
 	}
 	dbg(0, "rsc bucket unhandled!\n");
@@ -654,7 +662,8 @@ err_cleanup:
 }
 
 static char *
-canon_rsc_gen_s3(const char *url)
+canon_rsc_gen_s3(const char *url_host,
+		 const char *url_path)
 {
 	int ret;
 	char *s;
@@ -663,11 +672,7 @@ canon_rsc_gen_s3(const char *url)
 	char *sub_rsc_part = NULL;
 	char *rsc_str = NULL;
 
-	s = strstr(url, "://");
-	assert(s != NULL);
-	s += sizeof("://") - 1;
-
-	bucket = canon_rsc_bucket_get(s - 1);
+	bucket = canon_rsc_bucket_get(url_host);
 	if (bucket == NULL) {
 		dbg(0, "error generating resource bucket string");
 		goto err_out;
@@ -676,7 +681,7 @@ canon_rsc_gen_s3(const char *url)
 	dbg(4, "got resource bucket: \"%s\"\n", bucket);
 
 	/* find the first forward slash after the protocol */
-	s = strchrnul(s, '/');
+	s = strchrnul(url_path, '/');
 	if (s != NULL) {
 		path_part = canon_rsc_path_get(s);
 		if (path_part == NULL) {
@@ -687,7 +692,7 @@ canon_rsc_gen_s3(const char *url)
 	}
 
 	/* find the sub-resource */
-	s = strchr(url, '?');
+	s = strchr(url_path, '?');
 	if (s != NULL) {
 		sub_rsc_part = canon_rsc_sub_get(s);
 		if (sub_rsc_part == NULL) {
@@ -737,7 +742,7 @@ sign_gen_s3(const uint8_t *secret,
 	int md_len;
 	char *md_b64;
 
-	canon_rsc = canon_rsc_gen_s3(op->url);
+	canon_rsc = canon_rsc_gen_s3(op->url_host, op->url_path);
 	if (canon_rsc == NULL) {
 		ret = -ENOMEM;
 		goto err_out;

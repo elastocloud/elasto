@@ -21,6 +21,7 @@ enum elasto_conn_type {
 
 struct elasto_conn {
 	enum elasto_conn_type type;
+	bool insecure_http;
 	CURL *curl;
 	struct {
 		char *account;
@@ -41,11 +42,13 @@ elasto_conn_send_op(struct elasto_conn *econn,
 int
 elasto_conn_init_az(const char *pem_file,
 		    const char *pem_pw,
+		    bool insecure_http,
 		    struct elasto_conn **econn);
 
 int
 elasto_conn_init_s3(const char *id,
 		    const char *secret,
+		    bool insecure_http,
 		    struct elasto_conn **econn);
 
 void
