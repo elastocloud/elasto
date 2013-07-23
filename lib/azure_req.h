@@ -561,9 +561,9 @@ int
 azure_op_page_put(const char *account,
 		  const char *container,
 		  const char *bname,
-		  uint8_t *buf,
-		  uint64_t off,
-		  uint64_t len,
+		  struct elasto_data *src_data,
+		  uint64_t dest_off,
+		  uint64_t dest_len,
 		  struct azure_op *op);
 
 int

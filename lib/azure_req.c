@@ -1606,16 +1606,16 @@ err_out:
 }
 
 /*
- * if @req_len is zero then ignore @req_off and retrieve entire blob
+ * if @src_len is zero then ignore @req_off and retrieve entire blob
  */
 int
 azure_op_blob_get(const char *account,
 		  const char *container,
 		  const char *bname,
 		  bool is_page,
-		  struct elasto_data *data,
-		  uint64_t req_off,
-		  uint64_t req_len,
+		  struct elasto_data *dest_data,
+		  uint64_t src_off,
+		  uint64_t src_len,
 		  struct azure_op *op)
 {
 	int ret;
@@ -1623,8 +1623,8 @@ azure_op_blob_get(const char *account,
 
 	/* check for correct alignment */
 	if (is_page
-	 && ((((req_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != req_len)
-	  || (((req_off / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != req_off))) {
+	 && ((((src_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != src_len)
+	  || (((src_off / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != src_off))) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -1658,16 +1658,16 @@ azure_op_blob_get(const char *account,
 	} else {
 		get_req->type = BLOB_TYPE_BLOCK;
 	}
-	if (req_len > 0) {
+	if (src_len > 0) {
 		/* retrieve a specific range */
-		get_req->off = req_off;
-		get_req->len = req_len;
+		get_req->off = src_off;
+		get_req->len = src_len;
 	}
 
-	if (data == NULL) {
+	if (dest_data == NULL) {
 		dbg(3, "no recv buffer, allocating on arrival\n");
 	}
-	op->rsp.data = data;
+	op->rsp.data = dest_data;
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_GET;
@@ -1758,27 +1758,27 @@ err_out:
 	return ret;
 }
 /*
- * update or clear @len bytes of page data at @off.
- * if @buf is null then clear the byte range, otherwise update.
+ * update or clear @dest_len bytes of page data at @dest_off.
+ * if @src_data is null then clear the byte range, otherwise update.
  */
 int
 azure_op_page_put(const char *account,
 		  const char *container,
 		  const char *bname,
-		  uint8_t *buf,
-		  uint64_t off,
-		  uint64_t len,
+		  struct elasto_data *src_data,
+		  uint64_t dest_off,
+		  uint64_t dest_len,
 		  struct azure_op *op)
 {
 	int ret;
 	struct azure_req_page_put *pg_put_req;
 
 	/* check for correct alignment */
-	if (((len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != len) {
+	if (((dest_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != dest_len) {
 		ret = -EINVAL;
 		goto err_out;
 	}
-	if (((off / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != off) {
+	if (((dest_off / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != dest_off) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -1809,16 +1809,14 @@ azure_op_page_put(const char *account,
 		goto err_free_container;
 	}
 
-	pg_put_req->off = off;
-	pg_put_req->len = len;
-	if (buf == NULL) {
+	pg_put_req->off = dest_off;
+	pg_put_req->len = dest_len;
+	if (src_data == NULL) {
 		pg_put_req->clear_data = true;
 	} else {
 		pg_put_req->clear_data = false;
-		ret = elasto_data_iov_new(buf, len, 0, false, &op->req.data);
-		if (ret < 0) {
-			goto err_free_bname;
-		}
+		op->req.data = src_data;
+		/* TODO add a foreign flag so @req.data is not freed with @op */
 	}
 
 	op->method = REQ_METHOD_PUT;
@@ -1851,10 +1849,8 @@ err_uhost_free:
 err_data_close:
 	/* should not free data.buf given by the caller on error */
 	if (op->req.data != NULL) {
-		op->req.data->buf = NULL;
-		elasto_data_destroy(&op->req.data);
+		op->req.data = NULL;
 	}
-err_free_bname:
 	free(pg_put_req->bname);
 err_free_container:
 	free(pg_put_req->container);
