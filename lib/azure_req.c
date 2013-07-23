@@ -123,6 +123,32 @@ azure_op_hdr_val_lookup(struct list_head *hdrs,
 	return -ENOENT;
 }
 
+static int
+azure_op_hdr_u64_val_lookup(struct list_head *hdrs,
+			    const char *key,
+			    uint64_t *_val)
+{
+	int ret;
+	char *sval;
+	char *sval_end;
+	uint64_t val;
+
+	ret = azure_op_hdr_val_lookup(hdrs, key, &sval);
+	if (ret < 0) {
+		return ret;
+	}
+
+	val = strtoull(sval, &sval_end, 10);
+	if (sval_end == sval) {
+		dbg(0, "non-numeric at %s: %s\n",
+		    key, sval);
+		return -EINVAL;
+	}
+	*_val = val;
+
+	return 0;
+}
+
 void
 azure_op_hdrs_free(struct list_head *hdrs)
 {
@@ -2651,6 +2677,178 @@ err_out:
 }
 
 static void
+azure_req_blob_prop_get_free(struct azure_req_blob_prop_get *blob_prop_get_req)
+{
+	free(blob_prop_get_req->account);
+	free(blob_prop_get_req->container);
+	free(blob_prop_get_req->bname);
+}
+
+static void
+azure_rsp_blob_prop_get_free(struct azure_rsp_blob_prop_get *blob_prop_get_rsp)
+{
+	free(blob_prop_get_rsp->cp_id);
+	free(blob_prop_get_rsp->content_type);
+}
+
+int
+azure_op_blob_prop_get(const char *account,
+		       const char *container,
+		       const char *bname,
+		       struct azure_op *op)
+{
+	int ret;
+	struct azure_req_blob_prop_get *get_prop_req;
+
+	memset(op, 0, sizeof(*op));
+	list_head_init(&op->req.hdrs);
+	list_head_init(&op->rsp.hdrs);
+	op->opcode = AOP_BLOB_PROP_GET;
+	get_prop_req = &op->req.blob_prop_get;
+
+	get_prop_req->account = strdup(account);
+	if (get_prop_req->account == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	get_prop_req->container = strdup(container);
+	if (get_prop_req->container == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	get_prop_req->bname = strdup(bname);
+	if (get_prop_req->bname == NULL) {
+		ret = -ENOMEM;
+		goto err_ctnr_free;
+	}
+
+	op->method = REQ_METHOD_HEAD;
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_bname_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s",
+		       container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	/* mandatory headers */
+	ret = azure_op_fill_hdr_common(op, false);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	/* the connection layer must sign this request before sending */
+	op->sign = true;
+
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_bname_free:
+	free(get_prop_req->bname);
+err_ctnr_free:
+	free(get_prop_req->container);
+err_acc_free:
+	free(get_prop_req->account);
+err_out:
+	return ret;
+}
+
+static int
+azure_rsp_blob_prop_get_process(struct azure_op *op)
+{
+	int ret;
+	char *hdr_val;
+	struct azure_rsp_blob_prop_get *blob_prop_get_rsp;
+
+	assert(op->opcode == AOP_BLOB_PROP_GET);
+	blob_prop_get_rsp = &op->rsp.blob_prop_get;
+
+	ret = azure_op_hdr_val_lookup(&op->rsp.hdrs,
+				      "x-ms-blob-type",
+				      &hdr_val);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (!strcmp(hdr_val, BLOB_TYPE_BLOCK)) {
+		blob_prop_get_rsp->is_page = false;
+	} else if (!strcmp(hdr_val, BLOB_TYPE_PAGE)) {
+		blob_prop_get_rsp->is_page = true;
+	} else {
+		dbg(0, "unknown blob type %s\n", hdr_val);
+		free(hdr_val);
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
+	ret = azure_op_hdr_u64_val_lookup(&op->rsp.hdrs,
+					  "Content-Length",
+					  &blob_prop_get_rsp->len);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = azure_op_hdr_val_lookup(&op->rsp.hdrs,
+				      "Content-Type",
+				      &blob_prop_get_rsp->content_type);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_out;
+	}
+
+	ret = azure_op_hdr_val_lookup(&op->rsp.hdrs,
+				      "x-ms-copy-id",
+				      &blob_prop_get_rsp->cp_id);
+	if (ret == -ENOENT) {
+		/* cp ID only present if blob was a cp destination */
+		goto done;
+	} else if (ret < 0) {
+		goto err_ctype_free;
+	}
+
+	ret = azure_op_hdr_val_lookup(&op->rsp.hdrs,
+				      "x-ms-copy-status",
+				      &hdr_val);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_cid_free;
+	} else if (ret == 0) {
+		if (!strcmp(hdr_val, "pending")) {
+			blob_prop_get_rsp->cp_status = AOP_CP_STATUS_PENDING;
+		} else if (!strcmp(hdr_val, "success")) {
+			blob_prop_get_rsp->cp_status = AOP_CP_STATUS_SUCCESS;
+		} else if (!strcmp(hdr_val, "aborted")) {
+			blob_prop_get_rsp->cp_status = AOP_CP_STATUS_ABORTED;
+		} else if (!strcmp(hdr_val, "failed")) {
+			blob_prop_get_rsp->cp_status = AOP_CP_STATUS_FAILED;
+		} else {
+			dbg(0, "unknown blob cp status %s\n", hdr_val);
+			free(hdr_val);
+			ret = -EINVAL;
+			goto err_cid_free;
+		}
+		free(hdr_val);
+	}
+done:
+	return 0;
+
+err_cid_free:
+	free(blob_prop_get_rsp->cp_id);
+err_ctype_free:
+	free(blob_prop_get_rsp->content_type);
+err_out:
+	return ret;
+}
+
+
+static void
 azure_req_status_get_free(struct azure_req_status_get *sts_get_req)
 {
 	free(sts_get_req->sub_id);
@@ -4378,6 +4576,9 @@ azure_req_free(struct azure_op *op)
 	case AOP_BLOB_CP:
 		azure_req_blob_cp_free(&op->req.blob_cp);
 		break;
+	case AOP_BLOB_PROP_GET:
+		azure_req_blob_prop_get_free(&op->req.blob_prop_get);
+		break;
 	case AOP_STATUS_GET:
 		azure_req_status_get_free(&op->req.sts_get);
 		break;
@@ -4453,6 +4654,9 @@ azure_rsp_free(struct azure_op *op)
 		break;
 	case AOP_BLOCK_LIST_GET:
 		azure_rsp_block_list_get_free(&op->rsp.block_list_get);
+		break;
+	case AOP_BLOB_PROP_GET:
+		azure_rsp_blob_prop_get_free(&op->rsp.blob_prop_get);
 		break;
 	case AOP_STATUS_GET:
 		azure_rsp_status_get_free(&op->rsp.sts_get);
@@ -4551,6 +4755,9 @@ azure_rsp_process(struct azure_op *op)
 		break;
 	case AOP_BLOCK_LIST_GET:
 		ret = azure_rsp_block_list_get_process(op);
+		break;
+	case AOP_BLOB_PROP_GET:
+		ret = azure_rsp_blob_prop_get_process(op);
 		break;
 	case AOP_STATUS_GET:
 		ret = azure_rsp_status_get_process(op);

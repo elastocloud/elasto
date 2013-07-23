@@ -31,6 +31,7 @@ enum azure_opcode {
 	AOP_BLOCK_LIST_GET,
 	AOP_BLOB_DEL,
 	AOP_BLOB_CP,
+	AOP_BLOB_PROP_GET,
 	AOP_STATUS_GET,
 	/* Amazon S3 ops below this point */
 	S3OP_SVC_LIST,
@@ -238,6 +239,25 @@ struct azure_req_blob_cp {
 	} dst;
 };
 
+enum azure_cp_status {
+	AOP_CP_STATUS_PENDING,
+	AOP_CP_STATUS_SUCCESS,
+	AOP_CP_STATUS_ABORTED,
+	AOP_CP_STATUS_FAILED,
+};
+struct azure_req_blob_prop_get {
+	char *account;
+	char *container;
+	char *bname;
+};
+struct azure_rsp_blob_prop_get {
+	bool is_page;
+	uint64_t len;
+	char *content_type;
+	char *cp_id;
+	enum azure_cp_status cp_status;
+};
+
 struct azure_req_status_get {
 	char *sub_id;
 	char *req_id;
@@ -392,6 +412,7 @@ struct azure_op_hdr {
 #define REQ_METHOD_PUT		"PUT"
 #define REQ_METHOD_DELETE	"DELETE"
 #define REQ_METHOD_POST		"POST"
+#define REQ_METHOD_HEAD		"HEAD"
 struct azure_op {
 	struct elasto_conn *econn;
 	enum azure_opcode opcode;
@@ -420,6 +441,7 @@ struct azure_op {
 			struct azure_req_block_list_get block_list_get;
 			struct azure_req_blob_del blob_del;
 			struct azure_req_blob_cp blob_cp;
+			struct azure_req_blob_prop_get blob_prop_get;
 			struct azure_req_status_get sts_get;
 
 			struct s3_req_svc_list svc_list;
@@ -452,6 +474,7 @@ struct azure_op {
 			struct azure_rsp_ctnr_list ctnr_list;
 			struct azure_rsp_blob_list blob_list;
 			struct azure_rsp_block_list_get block_list_get;
+			struct azure_rsp_blob_prop_get blob_prop_get;
 			struct azure_rsp_status_get sts_get;
 
 			struct s3_rsp_svc_list svc_list;
@@ -601,6 +624,12 @@ azure_op_blob_cp(const char *src_account,
 		 const char *dst_ctnr,
 		 const char *dst_bname,
 		 struct azure_op *op);
+
+int
+azure_op_blob_prop_get(const char *account,
+		       const char *container,
+		       const char *bname,
+		       struct azure_op *op);
 
 int
 azure_op_status_get(const char *sub_id,
