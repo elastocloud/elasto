@@ -7,9 +7,10 @@ def configure(conf):
 	conf.find_program('docbook-to-man', mandatory=False, var='D2M')
 
 def build(bld):
-	if not bld.env.D2M:
+	if bld.env.D2M:
+		bld(rule='${D2M} ${SRC}', source='elasto_cli.xml')
+	else:
 		print("Skipping documentation build: "
 		      "docbook-to-man binary required")
-		return
-	bld(rule='${D2M} ${SRC}', source='elasto_cli.xml')
+		# install pre-built man page
 	bld.install_files('${MANDIR}', ['elasto_cli.1'])
