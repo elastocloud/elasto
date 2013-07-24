@@ -541,23 +541,69 @@ cli_cmd_line_completion(const char *line,
 
 #define ARGS_MAX 20
 static int
+cli_cmd_tokenize(char *line,
+		 char **argv,
+		 int *_argc)
+{
+	int argc = *_argc;
+	char space = ' ';
+	char *end_char = NULL;
+	char *str_start = NULL;
+	char *c;
+
+	for (c = line; (*c != '\0') && (argc < ARGS_MAX); c++) {
+		if ((end_char == NULL) && (*c == ' ')) {
+			continue;
+		} else if ((end_char == NULL) && (*c == '\"')) {
+			str_start = c + 1;
+			end_char = c;
+		} else if (end_char == NULL) {
+			/* non-space */
+			str_start = c;
+			end_char = &space;
+		} else if ((end_char != NULL) && (*c == *end_char)) {
+			/* overwrite token for str terminator */
+			*c = '\0';
+			if (strlen(str_start) == 0) {
+				fprintf(stderr, "ignoring empty argument %d\n",
+					argc);
+			} else {
+				/* got a full word */
+				argv[argc++] = str_start;
+			}
+			str_start = NULL;
+			end_char = NULL;
+		}
+	}
+	if ((end_char != NULL) && (*end_char == ' ')) {
+		/* still processing space-separated token */
+		argv[argc++] = str_start;
+	} else if ((end_char != NULL) && (*end_char == '\"')) {
+		fprintf(stderr, "no matching quote for string: %s\n",
+			str_start);
+		return -EINVAL;
+	}
+
+	*_argc = argc;
+	return 0;
+}
+
+static int
 cli_cmd_line_run(struct cli_args *cli_args,
 		 char *line)
 {
 	int ret;
 	int argc = 0;
 	char *argv[ARGS_MAX];
-	char *token;
 	const struct cli_cmd_spec *cmd;
 
 	/* add to history before tokenising */
 	linenoiseHistoryAdd(line);
 	linenoiseHistorySave(".elasto_history");
 
-	token = strtok(line, " ");
-	while (token && (argc < ARGS_MAX)) {
-		argv[argc++] = token;
-		token = strtok(NULL, " ");
+	ret = cli_cmd_tokenize(line, argv, &argc);
+	if (ret < 0) {
+		return ret;
 	}
 	ret = cli_cmd_parse(argc, argv,
 			    cli_args, &cmd);
