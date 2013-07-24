@@ -133,8 +133,8 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_CREATE,
 		.name = "create",
-		.help = "-l <label> -d <desc> -L <location> "
-			"-A <affinity group> <account>\n"
+		.help = "-l <label> [-d <desc>] [-L <location>] "
+			"[-A <affinity group>] <account>\n"
 			"\t\t<account>/<container>\n"
 			"\t\t[-L <location>] <bucket>",
 		.arg_min = 1,
