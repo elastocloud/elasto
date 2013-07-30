@@ -528,6 +528,14 @@ elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
 		curl_easy_setopt(econn->curl, CURLOPT_READDATA, op);
 		curl_easy_setopt(econn->curl, CURLOPT_READFUNCTION,
 				 curl_read_cb);
+	} else if (strcmp(op->method, REQ_METHOD_HEAD) == 0) {
+		/* No body component with HEAD requests */
+		curl_easy_setopt(econn->curl, CURLOPT_HTTPGET, 0);
+		curl_easy_setopt(econn->curl, CURLOPT_NOBODY, 1);
+		curl_easy_setopt(econn->curl, CURLOPT_UPLOAD, 0);
+		curl_easy_setopt(econn->curl, CURLOPT_INFILESIZE_LARGE, 0);
+		curl_easy_setopt(econn->curl, CURLOPT_READFUNCTION,
+				 curl_fail_cb);
 	} else {
 		/* DELETE, etc. must set Content-Length hdr */
 		curl_easy_setopt(econn->curl, CURLOPT_INFILESIZE_LARGE, 0);
