@@ -1501,12 +1501,11 @@ azure_op_blob_put(const char *account,
 	int ret;
 	struct azure_req_blob_put *bl_put_req;
 
-	/* TODO input validation */
 	if ((data == NULL)
 	 && (((page_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != page_len)) {
 		ret = -EINVAL;
 		goto err_out;
-	} else if (data->type == ELASTO_DATA_NONE) {
+	} else if ((data != NULL) && (data->type == ELASTO_DATA_NONE)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -1852,7 +1851,7 @@ azure_op_page_put(const char *account,
 		ret = -ENOMEM;
 		goto err_data_close;
 	}
-	ret = asprintf(&op->url_path, "/%s/%s",
+	ret = asprintf(&op->url_path, "/%s/%s?comp=page",
 		       container, bname);
 	if (ret < 0) {
 		ret = -ENOMEM;
