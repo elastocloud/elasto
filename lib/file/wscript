@@ -1,0 +1,14 @@
+def options(opt):
+	opt.load('compiler_c')
+
+def configure(conf):
+	conf.load('compiler_c')
+	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
+
+def build(bld):
+	bld.shlib(source='''handle.c  io.c  open.c  xmit.c''',
+		  target='elasto_file0',
+		  lib=['curl', 'xml2', 'crypto'],
+		  use=['elasto', 'ccan'],
+		  includes = '. .. ../../')
+	bld.install_as('${INCLUDEDIR}/elasto/file.h', 'file_api.h')

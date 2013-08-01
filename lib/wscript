@@ -3,7 +3,7 @@ def options(opt):
 
 def configure(conf):
 	conf.load('compiler_c')
-	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
+	conf.env.append_unique('CFLAGS', ['-Wall', '-g', '-fPIC'])
 
 def build(bld):
 	bld.stlib(source='''azure_xml.c azure_req.c sign.c base64.c
