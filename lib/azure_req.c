@@ -33,7 +33,7 @@
 #include "base64.h"
 #include "util.h"
 #include "azure_xml.h"
-#include "data.h"
+#include "data_api.h"
 #include "azure_req.h"
 
 static int

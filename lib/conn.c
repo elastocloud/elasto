@@ -29,7 +29,7 @@
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
-#include "data.h"
+#include "data_api.h"
 #include "azure_req.h"
 #include "sign.h"
 #include "util.h"

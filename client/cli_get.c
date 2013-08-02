@@ -28,7 +28,7 @@
 
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
-#include "lib/data.h"
+#include "lib/data_api.h"
 #include "lib/azure_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"

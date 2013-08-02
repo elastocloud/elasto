@@ -12,3 +12,4 @@ def build(bld):
 		  lib=['curl','xml2','crypto'],
 		  use=['ccan'],
 		  includes = '. ..')
+	bld.install_as('${INCLUDEDIR}/elasto/data.h', 'data_api.h')
