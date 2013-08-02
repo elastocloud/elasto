@@ -3189,7 +3189,7 @@ s3_op_svc_list(struct azure_op *op)
 	/* no arguments */
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url_path, "s3.amazonaws.com");
+	ret = asprintf(&op->url_host, "s3.amazonaws.com");
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
