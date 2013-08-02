@@ -149,6 +149,39 @@ azure_op_hdr_u64_val_lookup(struct list_head *hdrs,
 	return 0;
 }
 
+static int
+azure_op_hdr_del(struct list_head *hdrs,
+		 const char *key)
+{
+	struct azure_op_hdr *hdr;
+
+	list_for_each(hdrs, hdr, list) {
+		if (strcmp(hdr->key, key) == 0) {
+			list_del_from(hdrs, &hdr->list);
+			free(hdr->key);
+			free(hdr->val);
+			free(hdr);
+			return 0;
+		}
+	}
+
+	return -ENOENT;
+}
+
+static int
+azure_op_req_hdr_del(struct azure_op *op,
+		     const char *key)
+{
+	int ret = azure_op_hdr_del(&op->req.hdrs, key);
+	if (ret < 0) {
+		return ret;
+	}
+	op->req.num_hdrs--;
+	dbg(4, "deleted req hdr(%u): \"%s\"\n", op->req.num_hdrs, key);
+
+	return 0;
+}
+
 void
 azure_op_hdrs_free(struct list_head *hdrs)
 {
