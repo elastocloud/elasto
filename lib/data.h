@@ -26,23 +26,24 @@ enum elasto_data_type {
  */
 struct elasto_data {
 	enum elasto_data_type type;
-	uint8_t *buf;
 	uint64_t len;
 	uint64_t off;
 	uint64_t base_off;
 	union {
 		struct {
 			/* @buf is allocated io buffer of size @len */
+			uint8_t *buf;
 		} iov;
 		struct {
-			/* @buf is io file path, file is @len bytes in size */
+			/* file is @len bytes in size */
+			char *path;
 			int fd;
 		} file;
 	};
 };
 
 void
-elasto_data_destroy(struct elasto_data **data);
+elasto_data_free(struct elasto_data *data);
 
 int
 elasto_data_file_new(char *path,
@@ -50,14 +51,14 @@ elasto_data_file_new(char *path,
 		     uint64_t base_off,
 		     int open_flags,
 		     mode_t create_mode,
-		     struct elasto_data **data);
+		     struct elasto_data **_data);
 
 int
 elasto_data_iov_new(uint8_t *buf,
 		    uint64_t buf_len,
 		    uint64_t base_off,
 		    bool buf_alloc,
-		    struct elasto_data **data);
+		    struct elasto_data **_data);
 
 int
 elasto_data_iov_grow(struct elasto_data *data,

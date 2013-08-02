@@ -170,8 +170,8 @@ cli_put_single_blob_handle(struct elasto_conn *econn,
 				0,
 				&op);
 	if (ret < 0) {
-		op_data->buf = NULL;
-		elasto_data_destroy(&op_data);
+		op_data->iov.buf = NULL;
+		elasto_data_free(op_data);
 		goto err_out;
 	}
 
@@ -195,7 +195,7 @@ cli_put_single_blob_handle(struct elasto_conn *econn,
 err_op_free:
 	/* data buffer contains cli_args->put.local_path */
 	if (op.req.data)
-		op.req.data->buf = NULL;
+		op.req.data->iov.buf = NULL;
 	azure_op_free(&op);
 err_out:
 	return ret;
@@ -238,8 +238,8 @@ cli_put_blocks(struct elasto_conn *econn,
 	blks = malloc(sizeof(*blks));
 	if (blks == NULL) {
 		/* don't free the args filename */
-		op_data->buf = NULL;
-		elasto_data_destroy(&op_data);
+		op_data->iov.buf = NULL;
+		elasto_data_free(op_data);
 		return -ENOMEM;
 	}
 
@@ -300,15 +300,15 @@ cli_put_blocks(struct elasto_conn *econn,
 	}
 	assert(blks_put == num_blks);
 	/* don't free the args filename */
-	op_data->buf = NULL;
-	elasto_data_destroy(&op_data);
+	op_data->iov.buf = NULL;
+	elasto_data_free(op_data);
 	*blks_ret = blks;
 
 	return 0;
 
 err_op_free:
 	/* don't free the args filename */
-	op_data->buf = NULL;
+	op_data->iov.buf = NULL;
 	azure_op_free(&op);
 err_blks_free:
 	list_for_each_safe(blks, blk, blk_n, list) {
@@ -364,7 +364,7 @@ cli_put_blocks_handle(struct elasto_conn *econn,
 err_op_free:
 	/* data buffer contains cli_args->put.local_path */
 	if (op.req.data)
-		op.req.data->buf = NULL;
+		op.req.data->iov.buf = NULL;
 	azure_op_free(&op);
 err_out:
 	return ret;
@@ -441,8 +441,8 @@ cli_put_single_obj_handle(struct elasto_conn *econn,
 			    op_data,
 			    &op);
 	if (ret < 0) {
-		op_data->buf = NULL;
-		elasto_data_destroy(&op_data);
+		op_data->iov.buf = NULL;
+		elasto_data_free(op_data);
 		goto err_out;
 	}
 
@@ -466,7 +466,7 @@ cli_put_single_obj_handle(struct elasto_conn *econn,
 err_op_free:
 	/* data buffer contains cli_args->put.local_path */
 	if (op.req.data)
-		op.req.data->buf = NULL;
+		op.req.data->iov.buf = NULL;
 	azure_op_free(&op);
 err_out:
 	return ret;
@@ -659,8 +659,8 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 		parts_put++;
 	}
 
-	op_data->buf = NULL;
-	elasto_data_destroy(&op_data);
+	op_data->iov.buf = NULL;
+	elasto_data_free(op_data);
 
 	ret = s3_op_mp_done(cli_args->s3.bkt_name,
 			    cli_args->s3.obj_name,

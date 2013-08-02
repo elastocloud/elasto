@@ -206,7 +206,7 @@ curl_read_cb(char *ptr,
 	}
 
 	if (op->req.data->type == ELASTO_DATA_IOV) {
-		memcpy(ptr, (void *)(op->req.data->buf + read_off), num_bytes);
+		memcpy(ptr, (void *)(op->req.data->iov.buf + read_off), num_bytes);
 	} else if (op->req.data->type == ELASTO_DATA_FILE) {
 		ssize_t ret;
 		ret = pread(op->req.data->file.fd, ptr, num_bytes, read_off);
@@ -356,7 +356,7 @@ curl_write_std(struct azure_op *op,
 			       "\n", op->rsp.data->len, write_off, num_bytes);
 			return -E2BIG;
 		}
-		memcpy((void *)(op->rsp.data->buf + write_off), data, num_bytes);
+		memcpy((void *)(op->rsp.data->iov.buf + write_off), data, num_bytes);
 		break;
 	case ELASTO_DATA_FILE:
 		if (write_off + num_bytes > op->rsp.data->len) {

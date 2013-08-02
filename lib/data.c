@@ -35,16 +35,17 @@
 #include "data.h"
 
 void
-elasto_data_destroy(struct elasto_data **data)
+elasto_data_free(struct elasto_data *data)
 {
-	struct elasto_data *adata = *data;
-	if (adata == NULL)
+	if (data == NULL)
 		return;
-	free(adata->buf);
-	if (adata->type == ELASTO_DATA_FILE)
-		close(adata->file.fd);
-	free(adata);
-	*data = NULL;
+	if (data->type == ELASTO_DATA_IOV) {
+		free(data->iov.buf);
+	} else if (data->type == ELASTO_DATA_FILE) {
+		free(data->file.path);
+		close(data->file.fd);
+	}
+	free(data);
 }
 
 /*
@@ -52,35 +53,49 @@ elasto_data_destroy(struct elasto_data **data)
  */
 int
 elasto_data_file_new(char *path,
-		       uint64_t file_len,
-		       uint64_t base_off,
-		       int open_flags,
-		       mode_t create_mode,
-		       struct elasto_data **data)
+		     uint64_t file_len,
+		     uint64_t base_off,
+		     int open_flags,
+		     mode_t create_mode,
+		     struct elasto_data **_data)
 {
-	struct elasto_data *adata;
+	int ret;
+	struct elasto_data *data;
 
-	adata = malloc(sizeof(*adata));
-	if (adata == NULL)
-		return -ENOMEM;
-
-	adata->type = ELASTO_DATA_FILE;
-	if (open_flags | O_CREAT)
-		adata->file.fd = open(path, open_flags, create_mode);
-	else
-		adata->file.fd = open(path, open_flags);
-
-	if (adata->file.fd == -1) {
-		free(adata);
-		return -errno;
+	data = malloc(sizeof(*data));
+	if (data == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
 	}
-	adata->buf = (uint8_t *)path;
-	adata->len = file_len;
-	adata->off = 0;
-	adata->base_off = base_off;
-	*data = adata;
+
+	data->type = ELASTO_DATA_FILE;
+	if (open_flags | O_CREAT)
+		data->file.fd = open(path, open_flags, create_mode);
+	else
+		data->file.fd = open(path, open_flags);
+
+	if (data->file.fd == -1) {
+		ret = -errno;
+		goto err_data_free;
+	}
+	data->file.path = strdup(path);
+	if (data->file.path == NULL) {
+		ret = -ENOMEM;
+		goto err_fd_close;
+	}
+	data->len = file_len;
+	data->off = 0;
+	data->base_off = base_off;
+	*_data = data;
 
 	return 0;
+
+err_fd_close:
+	close(data->file.fd);
+err_data_free:
+	free(data);
+err_out:
+	return ret;
 }
 
 /*
@@ -89,40 +104,40 @@ elasto_data_file_new(char *path,
  */
 int
 elasto_data_iov_new(uint8_t *buf,
-		      uint64_t buf_len,
-		      uint64_t base_off,
-		      bool buf_alloc,
-		      struct elasto_data **data)
+		    uint64_t buf_len,
+		    uint64_t base_off,
+		    bool buf_alloc,
+		    struct elasto_data **_data)
 {
-	struct elasto_data *adata;
+	struct elasto_data *data;
 
-	adata = malloc(sizeof(*adata));
-	if (adata == NULL)
+	data = malloc(sizeof(*data));
+	if (data == NULL)
 		return -ENOMEM;
 
-	adata->type = ELASTO_DATA_IOV;
+	data->type = ELASTO_DATA_IOV;
 	if (buf_alloc) {
 		assert(buf_len > 0);
-		adata->buf = malloc(buf_len);
-		if (adata->buf == NULL) {
-			free(adata);
+		data->iov.buf = malloc(buf_len);
+		if (data->iov.buf == NULL) {
+			free(data);
 			return -ENOMEM;
 		}
-		adata->base_off = 0;
+		data->base_off = 0;
 	} else {
-		adata->buf = buf;
-		adata->base_off = base_off;
+		data->iov.buf = buf;
+		data->base_off = base_off;
 	}
-	adata->len = buf_len;
-	adata->off = 0;
-	*data = adata;
+	data->len = buf_len;
+	data->off = 0;
+	*_data = data;
 
 	return 0;
 }
 
 int
 elasto_data_iov_grow(struct elasto_data *data,
-		       uint64_t grow_by)
+		     uint64_t grow_by)
 {
 	uint8_t *buf_old;
 	if (data->type != ELASTO_DATA_IOV) {
@@ -134,10 +149,10 @@ elasto_data_iov_grow(struct elasto_data *data,
 		return 0;
 	}
 
-	buf_old = data->buf;
-	data->buf = realloc(data->buf, data->len + grow_by);
-	if (data->buf == NULL) {
-		data->buf = buf_old;
+	buf_old = data->iov.buf;
+	data->iov.buf = realloc(data->iov.buf, data->len + grow_by);
+	if (data->iov.buf == NULL) {
+		data->iov.buf = buf_old;
 		return -ENOMEM;
 	}
 

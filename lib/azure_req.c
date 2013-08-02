@@ -314,7 +314,7 @@ azure_rsp_acc_keys_get_process(struct azure_op *op)
 	}
 
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
@@ -541,7 +541,7 @@ azure_rsp_acc_list_process(struct azure_op *op)
 	}
 
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
@@ -634,7 +634,7 @@ azure_op_acc_create_fill_body(struct azure_account *acc,
 		goto err_buf_free;
 	}
 
-	xml_data = (char *)req_data->buf;
+	xml_data = (char *)req_data->iov.buf;
 	ret = snprintf(xml_data, buf_remain,
 		       "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
 		       "<CreateStorageServiceInput "
@@ -680,12 +680,12 @@ azure_op_acc_create_fill_body(struct azure_account *acc,
 	req_data->len = req_data->len - buf_remain;
 
 	dbg(4, "sending account creation req data: %s\n",
-	    (char *)req_data->buf);
+	    (char *)req_data->iov.buf);
 	*req_data_out = req_data;
 
 	return 0;
 err_buf_free:
-	elasto_data_destroy(&req_data);
+	elasto_data_free(req_data);
 err_out:
 	return ret;
 }
@@ -968,7 +968,7 @@ azure_op_ctnr_list(const char *account,
 	return 0;
 
 err_buf_free:
-	elasto_data_destroy(&op->rsp.data);
+	elasto_data_free(op->rsp.data);
 err_upath_free:
 	free(op->url_path);
 err_uhost_free:
@@ -1028,7 +1028,7 @@ azure_rsp_ctnr_list_process(struct azure_op *op)
 	}
 
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
@@ -1312,7 +1312,7 @@ azure_op_blob_list(const char *account,
 	return 0;
 
 err_buf_free:
-	elasto_data_destroy(&op->rsp.data);
+	elasto_data_free(op->rsp.data);
 err_upath_free:
 	free(op->url_path);
 err_uhost_free:
@@ -1394,7 +1394,7 @@ azure_rsp_blob_list_process(struct azure_op *op)
 	}
 
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_out;
@@ -2054,7 +2054,7 @@ azure_op_block_list_put_fill_body(struct list_head *blks,
 		goto err_out;
 	}
 
-	xml_data = (char *)req_data->buf;
+	xml_data = (char *)req_data->iov.buf;
 	ret = snprintf(xml_data, buf_remain,
 		       "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
 		       "<BlockList>");
@@ -2117,12 +2117,12 @@ azure_op_block_list_put_fill_body(struct list_head *blks,
 	req_data->len = req_data->len - buf_remain;
 
 	dbg(4, "sending account creation req data: %s\n",
-	    (char *)req_data->buf);
+	    (char *)req_data->iov.buf);
 	*req_data_out = req_data;
 
 	return 0;
 err_buf_free:
-	elasto_data_destroy(&req_data);
+	elasto_data_free(req_data);
 err_out:
 	return ret;
 }
@@ -2295,7 +2295,7 @@ azure_op_block_list_get(const char *account,
 
 	return 0;
 err_buf_free:
-	elasto_data_destroy(&op->rsp.data);
+	elasto_data_free(op->rsp.data);
 err_upath_free:
 	free(op->url_path);
 err_uhost_free:
@@ -2390,7 +2390,7 @@ azure_rsp_block_list_get_process(struct azure_op *op)
 
 	/* parse response */
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_out;
@@ -2982,7 +2982,7 @@ azure_rsp_status_get_process(struct azure_op *op)
 
 	/* parse response */
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_out;
@@ -3273,7 +3273,7 @@ s3_rsp_svc_list_process(struct azure_op *op)
 	}
 
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
@@ -3478,7 +3478,7 @@ s3_rsp_bkt_list_process(struct azure_op *op)
 	}
 
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
@@ -3556,7 +3556,7 @@ s3_op_bkt_create_fill_body(const char *location,
 		goto err_out;
 	}
 
-	xml_data = (char *)req_data->buf;
+	xml_data = (char *)req_data->iov.buf;
 	ret = snprintf(xml_data, buf_remain,
 		       "<CreateBucketConfiguration "
 			  "xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
@@ -3576,12 +3576,12 @@ s3_op_bkt_create_fill_body(const char *location,
 	req_data->len = req_data->len - buf_remain;
 
 	dbg(4, "sending bucket creation req data: %s\n",
-	    (char *)req_data->buf);
+	    (char *)req_data->iov.buf);
 	*req_data_out = req_data;
 
 	return 0;
 err_buf_free:
-	elasto_data_destroy(&req_data);
+	elasto_data_free(req_data);
 err_out:
 	return ret;
 }
@@ -4141,7 +4141,7 @@ s3_rsp_mp_start_process(struct azure_op *op)
 	}
 
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->buf, op->rsp.data->off,
+	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
@@ -4205,7 +4205,7 @@ s3_op_mp_done_fill_body(struct list_head *parts,
 		goto err_out;
 	}
 
-	xml_data = (char *)req_data->buf;
+	xml_data = (char *)req_data->iov.buf;
 	ret = snprintf(xml_data, buf_remain,
 		       "<CompleteMultipartUpload>");
 	if ((ret < 0) || (ret >= buf_remain)) {
@@ -4248,12 +4248,12 @@ s3_op_mp_done_fill_body(struct list_head *parts,
 	req_data->len = req_data->len - buf_remain;
 
 	dbg(4, "sending multipart upload complete req data: %s\n",
-	    (char *)req_data->buf);
+	    (char *)req_data->iov.buf);
 	*req_data_out = req_data;
 
 	return 0;
 err_buf_free:
-	elasto_data_destroy(&req_data);
+	elasto_data_free(req_data);
 err_out:
 	return ret;
 }
@@ -4524,7 +4524,7 @@ static void
 azure_req_free(struct azure_op *op)
 {
 	azure_op_hdrs_free(&op->req.hdrs);
-	elasto_data_destroy(&op->req.data);
+	elasto_data_free(op->req.data);
 
 	switch (op->opcode) {
 	case AOP_ACC_KEYS_GET:
@@ -4628,7 +4628,7 @@ static void
 azure_rsp_free(struct azure_op *op)
 {
 	azure_op_hdrs_free(&op->rsp.hdrs);
-	elasto_data_destroy(&op->rsp.data);
+	elasto_data_free(op->rsp.data);
 
 	if (op->rsp.is_error) {
 		/* error response only, no aop data */

@@ -196,8 +196,8 @@ cli_get_blob_handle(struct cli_args *cli_args)
 				0, 0,
 				&op);
 	if (ret < 0) {
-		op_data->buf = NULL;
-		elasto_data_destroy(&op_data);
+		op_data->iov.buf = NULL;
+		elasto_data_free(op_data);
 		goto err_conn_free;
 	}
 
@@ -215,7 +215,7 @@ cli_get_blob_handle(struct cli_args *cli_args)
 err_op_free:
 	/* data buffer contains cli_args->get.local_path */
 	if (op.rsp.data)
-		op.rsp.data->buf = NULL;
+		op.rsp.data->iov.buf = NULL;
 	azure_op_free(&op);
 err_conn_free:
 	elasto_conn_free(econn);
@@ -266,8 +266,8 @@ cli_get_obj_handle(struct cli_args *cli_args)
 			    op_data,
 			    &op);
 	if (ret < 0) {
-		op_data->buf = NULL;
-		elasto_data_destroy(&op_data);
+		op_data->iov.buf = NULL;
+		elasto_data_free(op_data);
 		goto err_conn_free;
 	}
 
@@ -285,7 +285,7 @@ cli_get_obj_handle(struct cli_args *cli_args)
 err_op_free:
 	/* data buffer contains cli_args->get.local_path */
 	if (op.rsp.data)
-		op.rsp.data->buf = NULL;
+		op.rsp.data->iov.buf = NULL;
 	azure_op_free(&op);
 err_conn_free:
 	elasto_conn_free(econn);
