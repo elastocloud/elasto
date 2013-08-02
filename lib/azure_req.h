@@ -422,6 +422,7 @@ struct azure_op {
 	bool url_https_only;	/* overrides conn insecure_http setting */
 	char *url_host;
 	char *url_path;
+	int redirs;
 
 	struct {
 		union {
@@ -704,6 +705,9 @@ s3_op_part_put(const char *bkt,
 
 bool
 azure_rsp_is_error(enum azure_opcode opcode, int err_code);
+
+int
+azure_op_req_redirect(struct azure_op *op);
 
 void
 azure_op_free(struct azure_op *op);

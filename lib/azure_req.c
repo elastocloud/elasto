@@ -4743,6 +4743,49 @@ azure_op_free(struct azure_op *op)
 	memset(op, 0, sizeof(*op));
 }
 
+int
+azure_op_req_redirect(struct azure_op *op)
+{
+	struct elasto_data *data;
+
+	if (!op->rsp.is_error || (op->rsp.err_code != 307)) {
+		dbg(0, "no redirect response for op\n");
+		return -EINVAL;
+	}
+	if (op->rsp.err.redir_endpoint == NULL) {
+		dbg(0, "no endpoint for redirect\n");
+		return -EFAULT;
+	}
+
+	dbg(1, "redirecting %d request from %s to %s\n",
+	    op->opcode, op->url_host, op->rsp.err.redir_endpoint);
+	free(op->url_host);
+	op->url_host = op->rsp.err.redir_endpoint;
+	op->rsp.err.redir_endpoint = NULL;
+
+	if (op->sign) {
+		int ret;
+		/*
+		 * Remove existing auth hdr added by conn layer
+		 */
+		ret = azure_op_req_hdr_del(op, "Authorization");
+		if (ret < 0) {
+			dbg(0, "no auth header for redirected req\n");
+		}
+	}
+
+	/* save rsp data buffer */
+	data = op->rsp.data;
+	op->rsp.data = NULL;
+	azure_rsp_free(op);
+	memset(&op->rsp, 0, sizeof(op->rsp));
+	list_head_init(&op->rsp.hdrs);
+	op->rsp.data = data;
+	op->redirs++;
+
+	return 0;
+}
+
 /*
  * unmarshall response data
  */
