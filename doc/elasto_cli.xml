@@ -60,8 +60,8 @@
 
 <varlistentry>
 	<term><option>-k</option>
-	<replaceable>Amazon S3 key duo</replaceable></term>
-	<listitem><para>S3 key ID and key secret, separated by a comma. Must be provided for Amazon S3 cloud access.
+	<replaceable>S3 key ID[, secret access key]</replaceable></term>
+	<listitem><para>Amazon S3 account key ID and optional secret access key, separated by a comma. If the secret access key is not present, then it will be requested on startup. The S3 key ID must be provided for Amazon S3 cloud access.
 	</para></listitem>
 </varlistentry>
 
@@ -80,7 +80,7 @@
 
 <varlistentry>
 	<term><replaceable>command</replaceable></term>
-	<listitem><para>Client command to execute, refer to list below.</para></listitem>
+	<listitem><para>Client command to execute, refer to list below. If no command is present, then the Elasto command line prompt will be entered.</para></listitem>
 </varlistentry>
 
 </variablelist>

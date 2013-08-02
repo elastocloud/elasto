@@ -188,7 +188,7 @@ cli_args_usage(const char *progname,
 "Usage: %s [options] <cmd> <cmd args>\n\n"
 "Options:\n"
 "-s publish_settings:	Azure PublishSettings file\n"
-"-k s3_key_id,secret:	Amazon S3 access key ID and secret access key duo\n"
+"-k s3_key_id[,secret]:	Amazon S3 access key ID and secret access key duo\n"
 "-d log_level:		Log debug messages (default: 0)\n"
 "-i			Insecure, use HTTP where possible "
 "(default: HTTPS only)\n\n",
@@ -457,7 +457,10 @@ cli_args_parse(int argc,
 				goto err_out;
 			}
 			sep = strchr(s3_id, ',');
-			if ((sep == NULL) || (strlen(sep) <= 1)) {
+			if (sep == NULL) {
+				break;
+			}
+			if (strlen(sep) <= 1) {
 				ret = -EINVAL;
 				goto err_out;
 			}
@@ -486,7 +489,7 @@ cli_args_parse(int argc,
 	 || ((pub_settings != NULL) && (s3_id != NULL))) {
 		cli_args_usage(argv[0], CLI_FL_BIN_ARG,
 			       "Either an Azure PublishSettings file, or "
-			       "Amazon S3 key-duo is required");
+			       "Amazon S3 key is required");
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -498,7 +501,25 @@ cli_args_parse(int argc,
 		assert(s3_id != NULL);
 		cli_args->type = CLI_TYPE_S3;
 		cli_args->s3.key_id = s3_id;
-		cli_args->s3.secret = s3_secret;
+		if (s3_secret != NULL) {
+			/* provided as arg */
+			cli_args->s3.secret = s3_secret;
+		} else {
+			s3_secret = getpass("S3 secret access key: ");
+			if (s3_secret == NULL) {
+				cli_args_usage(argv[0], CLI_FL_BIN_ARG,
+					       "Invalid S3 key secret\n");
+				ret = -EINVAL;
+				goto err_out;
+			}
+			cli_args->s3.secret = strdup(s3_secret);
+			if (cli_args->s3.secret == NULL) {
+				ret = -ENOMEM;
+				goto err_out;
+			}
+			/* free heap alloc on exit */
+			s3_secret = cli_args->s3.secret;
+		}
 	}
 	cli_args->progname = progname;
 

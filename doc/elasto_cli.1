@@ -30,8 +30,8 @@ Print help message and exit.
 \*(T<\fB\-s\fR\*(T> \fIAzure publish settings file\fR
 Azure account credentials. Must be provided for Azure cloud access.
 .TP 
-\*(T<\fB\-k\fR\*(T> \fIAmazon S3 key duo\fR
-S3 key ID and key secret, separated by a comma. Must be provided for Amazon S3 cloud access.
+\*(T<\fB\-k\fR\*(T> \fIS3 key ID[, secret access key]\fR
+Amazon S3 account key ID and optional secret access key, separated by a comma. If the secret access key is not present, then it will be requested on startup. The S3 key ID must be provided for Amazon S3 cloud access.
 .TP 
 \*(T<\fB\-d\fR\*(T> \fIlog level\fR
 Print debugging information.
@@ -41,7 +41,7 @@ Use HTTP instead of HTTPS where possible, for improved
 performance.
 .TP 
 \fIcommand\fR
-Client command to execute, refer to list below.
+Client command to execute, refer to list below. If no command is present, then the Elasto command line prompt will be entered.
 .SH "AZURE COMMANDS"
 .TP 
 ls \fI[account[/container[/blob]]]\fR
