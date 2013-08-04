@@ -28,7 +28,9 @@
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
 #include "lib/data_api.h"
+#include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
@@ -41,46 +43,53 @@ int
 cli_op_wait(struct elasto_conn *econn,
 	    const char *sub_id,
 	    const char *req_id,
-	    enum azure_op_status *status,
+	    enum az_req_status *status,
 	    int *err_code)
 {
-	struct azure_op op;
+	struct op *op;
+	struct az_rsp_status_get *sts_get_rsp;
 	int ret;
 	int i;
 
 	for (i = 0; i < CLI_OP_POLL_TIMEOUT; i++) {
-		ret = azure_op_status_get(sub_id, req_id, &op);
+		ret = az_req_status_get(sub_id, req_id, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
 
-		ret = elasto_conn_send_op(econn, &op);
+		ret = elasto_conn_send_op(econn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
 
-		ret = azure_rsp_process(&op);
+		ret = op_rsp_process(op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
 
-		if (op.rsp.is_error) {
+		if (op->rsp.is_error) {
 			ret = -EIO;
 			printf("failed get status response: %d\n",
-			       op.rsp.err_code);
+			       op->rsp.err_code);
 			goto err_op_free;
 		}
 
-		if (op.rsp.sts_get.status != AOP_STATUS_IN_PROGRESS) {
-			*status = op.rsp.sts_get.status;
-			if (op.rsp.sts_get.status == AOP_STATUS_FAILED) {
-				*err_code = op.rsp.sts_get.err.code;
+		sts_get_rsp = az_rsp_status_get(op);
+		if (sts_get_rsp == NULL) {
+			ret = -ENOMEM;
+			goto err_op_free;
+		}
+
+		if (sts_get_rsp->status != AOP_STATUS_IN_PROGRESS) {
+			*status = sts_get_rsp->status;
+			if (sts_get_rsp->status == AOP_STATUS_FAILED) {
+				*err_code = sts_get_rsp->err.code;
 			}
-			azure_op_free(&op);
+			op_free(op);
 			break;
 		}
 
-		azure_op_free(&op);
+		op_free(op);
 
 		sleep(CLI_OP_POLL_PERIOD);
 	}
@@ -94,7 +103,7 @@ cli_op_wait(struct elasto_conn *econn,
 	return 0;
 
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }

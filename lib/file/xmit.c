@@ -30,6 +30,7 @@
 
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
+#include "lib/op.h"
 #include "lib/azure_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -39,7 +40,7 @@
 
 int
 elasto_fop_send_recv(struct elasto_conn *conn,
-		     struct azure_op *op)
+		     struct op *op)
 {
 	int ret;
 
@@ -48,7 +49,7 @@ elasto_fop_send_recv(struct elasto_conn *conn,
 		return ret;
 	}
 
-	ret = azure_rsp_process(op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		return ret;
 	}

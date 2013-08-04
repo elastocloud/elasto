@@ -25,7 +25,7 @@
 
 #include "ccan/list/list.h"
 #include "base64.h"
-#include "azure_req.h"
+#include "op.h"
 #include "dbg.h"
 #include "util.h"
 #include "sign.h"
@@ -132,7 +132,7 @@ canon_hdrs_gen(uint32_t num_hdrs,
 	       char **content_md5_out,
 	       char **date_out)
 {
-	struct azure_op_hdr *hdr;
+	struct op_hdr *hdr;
 	int count = 0;
 	int i;
 	int ret;
@@ -356,7 +356,7 @@ int
 sign_gen_lite_azure(const char *account,
 		    const uint8_t *key,
 		    int key_len,
-		    struct azure_op *op,
+		    struct op *op,
 		    char **sig_src,
 		    char **sig_str)
 {
@@ -726,7 +726,7 @@ err_out:
 int
 sign_gen_s3(const uint8_t *secret,
 	    int secret_len,
-	    struct azure_op *op,
+	    struct op *op,
 	    char **sig_src,
 	    char **sig_str)
 {

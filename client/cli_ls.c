@@ -29,7 +29,9 @@
 #include "ccan/list/list.h"
 #include "lib/util.h"
 #include "lib/azure_xml.h"
+#include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
@@ -154,37 +156,43 @@ cli_ls_blob_handle(struct elasto_conn *econn,
 		   const char *ctnr_name,
 		   const char *blob_name)
 {
-	struct azure_op op;
+	struct op *op;
+	struct az_rsp_block_list_get *block_list_get_rsp;
 	struct azure_block *blk;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_block_list_get(acc_name, ctnr_name, blob_name, &op);
+	ret = az_req_block_list_get(acc_name, ctnr_name, blob_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error && (op.rsp.err_code == 404)) {
+	if (op->rsp.is_error && (op->rsp.err_code == 404)) {
 		printf("Blob %s Not Found\n", blob_name);
 		ret = -ENOENT;
 		goto err_op_free;
-	} else if (op.rsp.is_error) {
+	} else if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
-	if (op.rsp.block_list_get.num_blks == 0) {
+	block_list_get_rsp = az_rsp_block_list_get(op);
+	if (block_list_get_rsp == NULL) {
+		ret = -ENOMEM;
+		goto err_op_free;
+	}
+
+	if (block_list_get_rsp->num_blks == 0) {
 		printf("Blob %s does not have any associated blocks\n",
 		       blob_name);
 		ret = 0;
@@ -192,15 +200,15 @@ cli_ls_blob_handle(struct elasto_conn *econn,
 	}
 
 	printf("Blob %s has %d associated blocks (^ = uncommitted)\n",
-	       blob_name, op.rsp.block_list_get.num_blks);
-	list_for_each(&op.rsp.block_list_get.blks, blk, list) {
+	       blob_name, block_list_get_rsp->num_blks);
+	list_for_each(&block_list_get_rsp->blks, blk, list) {
 		printf("%" PRIu64 "\t%s%s\n",
 		       blk->len, blk->id,
 		       (blk->state == BLOCK_STATE_UNCOMMITED ? "^" : ""));
 	}
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -210,44 +218,50 @@ cli_ls_ctnr_handle(struct elasto_conn *econn,
 		   const char *acc_name,
 		   const char *ctnr_name)
 {
-	struct azure_op op;
+	struct op *op;
 	struct azure_blob *blob;
+	struct az_rsp_blob_list *blob_list_rsp;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_blob_list(acc_name, ctnr_name, &op);
+	ret = az_req_blob_list(acc_name, ctnr_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error && (op.rsp.err_code == 404)) {
+	if (op->rsp.is_error && (op->rsp.err_code == 404)) {
 		printf("Container %s Not Found\n", ctnr_name);
 		ret = -ENOENT;
 		goto err_op_free;
-	} else if (op.rsp.is_error) {
+	} else if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
-	if (op.rsp.blob_list.num_blobs == 0) {
+	blob_list_rsp = az_rsp_blob_list(op);
+	if (blob_list_rsp == NULL) {
+		ret = -ENOMEM;
+		goto err_op_free;
+	}
+
+	if (blob_list_rsp->num_blobs == 0) {
 		printf("Container %s is empty\n", ctnr_name);
 		ret = 0;
 		goto err_op_free;
 	}
 
 	printf("Contents of container %s (*= page blob):\n", ctnr_name);
-	list_for_each(&op.rsp.blob_list.blobs, blob, list) {
+	list_for_each(&blob_list_rsp->blobs, blob, list) {
 		char buf[20];
 		human_size(blob->len, buf, ARRAY_SIZE(buf));
 		printf("%*s\t%s%s\n",
@@ -256,7 +270,7 @@ cli_ls_ctnr_handle(struct elasto_conn *econn,
 	}
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -265,36 +279,42 @@ static int
 cli_ls_acc_handle(struct elasto_conn *econn,
 		  const char *acc_name)
 {
-	struct azure_op op;
+	struct op *op;
+	struct az_rsp_ctnr_list *ctnr_list_rsp;
 	struct azure_ctnr *ctnr;
 	bool ctnr_exists;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_ctnr_list(acc_name, &op);
+	ret = az_req_ctnr_list(acc_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
+		goto err_op_free;
+	}
+
+	ctnr_list_rsp = az_rsp_ctnr_list(op);
+	if (ctnr_list_rsp == NULL) {
+		ret = -ENOMEM;
 		goto err_op_free;
 	}
 
 	ctnr_exists = false;
 	printf("Containers under account %s\n", acc_name);
-	list_for_each(&op.rsp.ctnr_list.ctnrs, ctnr, list) {
+	list_for_each(&ctnr_list_rsp->ctnrs, ctnr, list) {
 			/* list all containers */
 			printf("\t%s/\n", ctnr->name);
 			ctnr_exists = true;
@@ -305,7 +325,7 @@ cli_ls_acc_handle(struct elasto_conn *econn,
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -314,40 +334,46 @@ static int
 cli_ls_sub_handle(struct elasto_conn *econn,
 		  const char *sub_id)
 {
-	struct azure_op op;
+	struct op *op;
+	struct az_rsp_acc_list *acc_list_rsp;
 	struct azure_account *acc;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_acc_list(sub_id, &op);
+	ret = az_req_acc_list(sub_id, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
-	if (op.rsp.acc_list.num_accs == 0) {
+	acc_list_rsp = az_rsp_acc_list(op);
+	if (acc_list_rsp == NULL) {
+		ret = -ENOMEM;
+		goto err_op_free;
+	}
+
+	if (acc_list_rsp->num_accs == 0) {
 		printf("No storage accounts for subscription %s\n", sub_id);
 		ret = 0;
 		goto err_op_free;
 	}
 
 	printf("Accounts for subscription %s:\n", sub_id);
-	list_for_each(&op.rsp.acc_list.accs, acc, list) {
+	list_for_each(&acc_list_rsp->accs, acc, list) {
 			printf("\t%s\n", acc->svc_name);
 			if (acc->label != NULL)
 				printf("\t\tlabel = %s\n", acc->label);
@@ -361,7 +387,7 @@ cli_ls_sub_handle(struct elasto_conn *econn,
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -369,47 +395,53 @@ err_out:
 static int
 cli_ls_svc_handle(struct elasto_conn *econn)
 {
-	struct azure_op op;
+	struct op *op;
+	struct s3_rsp_svc_list *svc_list_rsp;
 	struct s3_bucket *bkt;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
-	ret = s3_op_svc_list(&op);
+	ret = s3_req_svc_list(&op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
-	if (op.rsp.svc_list.num_bkts == 0) {
+	svc_list_rsp = s3_rsp_svc_list(op);
+	if (svc_list_rsp == NULL) {
+		ret = -ENOMEM;
+		goto err_op_free;
+	}
+
+	if (svc_list_rsp->num_bkts == 0) {
 		printf("No buckets assigned to owner %s\n",
-		       op.rsp.svc_list.disp_name);
+		       svc_list_rsp->disp_name);
 		ret = 0;
 		goto err_op_free;
 	}
 
-	printf("Buckets for owner %s:\n", op.rsp.svc_list.disp_name);
-	list_for_each(&op.rsp.svc_list.bkts, bkt, list) {
+	printf("Buckets for owner %s:\n", svc_list_rsp->disp_name);
+	list_for_each(&svc_list_rsp->bkts, bkt, list) {
 		printf("%s\t%s\n",
 		       bkt->create_date, bkt->name);
 	}
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -418,40 +450,46 @@ static int
 cli_ls_bkt_handle(struct elasto_conn *econn,
 		  const char *bkt_name)
 {
-	struct azure_op op;
+	struct op *op;
+	struct s3_rsp_bkt_list *bkt_list_rsp;
 	struct s3_object *obj;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
-	ret = s3_op_bkt_list(bkt_name, &op);
+	ret = s3_req_bkt_list(bkt_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
-	if (op.rsp.bkt_list.num_objs == 0) {
+	bkt_list_rsp = s3_rsp_bkt_list(op);
+	if (bkt_list_rsp == NULL) {
+		ret = -ENOMEM;
+		goto err_op_free;
+	}
+
+	if (bkt_list_rsp->num_objs == 0) {
 		printf("Bucket %s is empty\n", bkt_name);
 		ret = 0;
 		goto err_op_free;
 	}
 
 	printf("Contents of bucket %s:\n", bkt_name);
-	list_for_each(&op.rsp.bkt_list.objs, obj, list) {
+	list_for_each(&bkt_list_rsp->objs, obj, list) {
 		char buf[20];
 		human_size(obj->size, buf, ARRAY_SIZE(buf));
 		printf("%*s\t%s\t%s\n",
@@ -459,7 +497,7 @@ cli_ls_bkt_handle(struct elasto_conn *econn,
 	}
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }

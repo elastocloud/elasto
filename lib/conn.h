@@ -37,7 +37,7 @@ elasto_conn_sign_setkey(struct elasto_conn *econn,
 
 int
 elasto_conn_send_op(struct elasto_conn *econn,
-		    struct azure_op *op);
+		    struct op *op);
 
 int
 elasto_conn_init_az(const char *pem_file,

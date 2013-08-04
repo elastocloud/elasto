@@ -28,7 +28,9 @@
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
 #include "lib/data_api.h"
+#include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
@@ -141,35 +143,34 @@ cli_del_acc_handle(struct elasto_conn *econn,
 		   const char *sub_id,
 		   const char *acc_name)
 {
-	struct azure_op op;
+	struct op *op;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_acc_del(sub_id,
+	ret = az_req_acc_del(sub_id,
 			       acc_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -180,11 +181,10 @@ cli_del_blob_handle(struct elasto_conn *econn,
 		   const char *ctnr_name,
 		   const char *blob_name)
 {
-	struct azure_op op;
+	struct op *op;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_blob_del(acc_name,
+	ret = az_req_blob_del(acc_name,
 				ctnr_name,
 				blob_name,
 				&op);
@@ -192,25 +192,25 @@ cli_del_blob_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -220,37 +220,36 @@ cli_del_ctnr_handle(struct elasto_conn *econn,
 		    const char *acc_name,
 		    const char *ctnr_name)
 {
-	struct azure_op op;
+	struct op *op;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
 
-	ret = azure_op_ctnr_del(acc_name,
+	ret = az_req_ctnr_del(acc_name,
 				ctnr_name,
 				&op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -259,34 +258,33 @@ static int
 cli_del_bkt_handle(struct elasto_conn *econn,
 		   char *bkt_name)
 {
-	struct azure_op op;
+	struct op *op;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
-	ret = s3_op_bkt_del(bkt_name, &op);
+	ret = s3_req_bkt_del(bkt_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -296,34 +294,33 @@ cli_del_obj_handle(struct elasto_conn *econn,
 		   char *bkt_name,
 		   char *obj_name)
 {
-	struct azure_op op;
+	struct op *op;
 	int ret;
 
-	memset(&op, 0, sizeof(op));
-	ret = s3_op_obj_del(bkt_name, obj_name, &op);
+	ret = s3_req_obj_del(bkt_name, obj_name, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }

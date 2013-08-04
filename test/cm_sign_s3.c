@@ -29,7 +29,8 @@
 
 #include "ccan/list/list.h"
 #include "base64.h"
-#include "azure_req.h"
+#include "op.h"
+#include "s3_req.h"
 #include "dbg.h"
 #include "sign.h"
 
@@ -45,7 +46,7 @@ static void
 cm_sign_s3_object_get(void **state)
 {
 	int ret;
-	struct azure_op op;
+	struct op op;
 	char *sig_src = NULL;
 	char *sig_str = NULL;
 
@@ -54,8 +55,7 @@ cm_sign_s3_object_get(void **state)
 	op.method = REQ_METHOD_GET;
 	op.url_host = strdup("johnsmith.s3.amazonaws.com");
 	op.url_path = strdup("/photos/puppy.jpg");
-	ret = azure_op_req_hdr_add(&op,
-				   "Date", "Tue, 27 Mar 2007 19:36:42 +0000");
+	ret = op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 19:36:42 +0000");
 	assert_int_equal(ret, 0);
 
 	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
@@ -75,7 +75,7 @@ static void
 cm_sign_s3_object_put(void **state)
 {
 	int ret;
-	struct azure_op op;
+	struct op op;
 	char *sig_src = NULL;
 	char *sig_str = NULL;
 
@@ -84,9 +84,9 @@ cm_sign_s3_object_put(void **state)
 	op.method = REQ_METHOD_PUT;
 	op.url_host = strdup("johnsmith.s3.amazonaws.com");
 	op.url_path = strdup("/photos/puppy.jpg");
-	azure_op_req_hdr_add(&op, "Content-Type", "image/jpeg");
-	azure_op_req_hdr_add(&op, "Content-Length", "94328");
-	azure_op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 21:15:45 +0000");
+	op_req_hdr_add(&op, "Content-Type", "image/jpeg");
+	op_req_hdr_add(&op, "Content-Length", "94328");
+	op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 21:15:45 +0000");
 
 	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
@@ -101,7 +101,7 @@ static void
 cm_sign_s3_list(void **state)
 {
 	int ret;
-	struct azure_op op;
+	struct op op;
 	char *sig_src = NULL;
 	char *sig_str = NULL;
 
@@ -110,8 +110,8 @@ cm_sign_s3_list(void **state)
 	op.method = REQ_METHOD_GET;
 	op.url_host = strdup("johnsmith.s3.amazonaws.com");
 	op.url_path = strdup("/?prefix=photos&max-keys=50&marker=puppy");
-	azure_op_req_hdr_add(&op, "User-Agent", "Mozilla/5.0");
-	azure_op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 19:42:41 +0000");
+	op_req_hdr_add(&op, "User-Agent", "Mozilla/5.0");
+	op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 19:42:41 +0000");
 
 	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
@@ -126,7 +126,7 @@ static void
 cm_sign_s3_fetch(void **state)
 {
 	int ret;
-	struct azure_op op;
+	struct op op;
 	char *sig_src = NULL;
 	char *sig_str = NULL;
 
@@ -135,7 +135,7 @@ cm_sign_s3_fetch(void **state)
 	op.method = REQ_METHOD_GET;
 	op.url_host = strdup("johnsmith.s3.amazonaws.com");
 	op.url_path = strdup("/?acl");
-	azure_op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 19:44:46 +0000");
+	op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 19:44:46 +0000");
 
 	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
@@ -150,7 +150,7 @@ static void
 cm_sign_s3_object_del(void **state)
 {
 	int ret;
-	struct azure_op op;
+	struct op op;
 	char *sig_src = NULL;
 	char *sig_str = NULL;
 
@@ -159,9 +159,9 @@ cm_sign_s3_object_del(void **state)
 	op.method = REQ_METHOD_DELETE;
 	op.url_host = strdup("s3.amazonaws.com");
 	op.url_path = strdup("/johnsmith/photos/puppy.jpg");
-	azure_op_req_hdr_add(&op, "User-Agent", "dotnet");
-	azure_op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 21:20:27 +0000");
-	azure_op_req_hdr_add(&op,
+	op_req_hdr_add(&op, "User-Agent", "dotnet");
+	op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 21:20:27 +0000");
+	op_req_hdr_add(&op,
 			     "x-amz-date", "Tue, 27 Mar 2007 21:20:26 +0000");
 
 	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
@@ -177,7 +177,7 @@ static void
 cm_sign_s3_object_upload(void **state)
 {
 	int ret;
-	struct azure_op op;
+	struct op op;
 	char *sig_src = NULL;
 	char *sig_str = NULL;
 
@@ -186,20 +186,20 @@ cm_sign_s3_object_upload(void **state)
 	op.method = REQ_METHOD_PUT;
 	op.url_host = strdup("static.johnsmith.net:8080");
 	op.url_path = strdup("/db-backup.dat.gz");
-	azure_op_req_hdr_add(&op, "User-Agent", "curl/7.15.5");
-	azure_op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 21:06:08 +0000");
-	azure_op_req_hdr_add(&op, "x-amz-acl", "public-read");
-	azure_op_req_hdr_add(&op, "content-type", "application/x-download");
-	azure_op_req_hdr_add(&op, "Content-MD5", "4gJE4saaMU4BqNR0kLY+lw==");
-	azure_op_req_hdr_add(&op, "X-Amz-Meta-ReviewedBy", "joe@johnsmith.net");
-	azure_op_req_hdr_add(&op,
+	op_req_hdr_add(&op, "User-Agent", "curl/7.15.5");
+	op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 21:06:08 +0000");
+	op_req_hdr_add(&op, "x-amz-acl", "public-read");
+	op_req_hdr_add(&op, "content-type", "application/x-download");
+	op_req_hdr_add(&op, "Content-MD5", "4gJE4saaMU4BqNR0kLY+lw==");
+	op_req_hdr_add(&op, "X-Amz-Meta-ReviewedBy", "joe@johnsmith.net");
+	op_req_hdr_add(&op,
 			     "X-Amz-Meta-ReviewedBy", "jane@johnsmith.net");
-	azure_op_req_hdr_add(&op, "X-Amz-Meta-FileChecksum", "0x02661779");
-	azure_op_req_hdr_add(&op, "X-Amz-Meta-ChecksumAlgorithm", "crc32");
-	azure_op_req_hdr_add(&op, "Content-Disposition",
+	op_req_hdr_add(&op, "X-Amz-Meta-FileChecksum", "0x02661779");
+	op_req_hdr_add(&op, "X-Amz-Meta-ChecksumAlgorithm", "crc32");
+	op_req_hdr_add(&op, "Content-Disposition",
 			     "attachment; filename=database.dat");
-	azure_op_req_hdr_add(&op, "Content-Encoding", "gzip");
-	azure_op_req_hdr_add(&op, "Content-Length", "5913339");
+	op_req_hdr_add(&op, "Content-Encoding", "gzip");
+	op_req_hdr_add(&op, "Content-Length", "5913339");
 
 	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
@@ -214,7 +214,7 @@ static void
 cm_sign_s3_bucket_list_all(void **state)
 {
 	int ret;
-	struct azure_op op;
+	struct op op;
 	char *sig_src = NULL;
 	char *sig_str = NULL;
 
@@ -223,7 +223,7 @@ cm_sign_s3_bucket_list_all(void **state)
 	op.method = REQ_METHOD_GET;
 	op.url_host = strdup("s3.amazonaws.com");
 	op.url_path = strdup("/");
-	ret = azure_op_req_hdr_add(&op,
+	ret = op_req_hdr_add(&op,
 				   "Date", "Wed, 28 Mar 2007 01:29:59 +0000");
 
 	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
@@ -239,7 +239,7 @@ static void
 cm_sign_s3_unicode_keys(void **state)
 {
 	int ret;
-	struct azure_op op;
+	struct op op;
 	char *sig_src = NULL;
 	char *sig_str = NULL;
 
@@ -248,7 +248,7 @@ cm_sign_s3_unicode_keys(void **state)
 	op.method = REQ_METHOD_GET;
 	op.url_host = strdup("s3.amazonaws.com");
 	op.url_path = strdup("/dictionary/fran%C3%A7ais/pr%c3%a9f%c3%a8re");
-	ret = azure_op_req_hdr_add(&op,
+	ret = op_req_hdr_add(&op,
 				   "Date", "Wed, 28 Mar 2007 01:49:49 +0000");
 
 	ret = sign_gen_s3((const uint8_t *)S3_SECRET,

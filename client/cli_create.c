@@ -27,7 +27,9 @@
 
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
+#include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
@@ -186,7 +188,7 @@ static int
 cli_create_handle_acc(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
-	struct azure_op op;
+	struct op *op;
 	int ret;
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
@@ -199,8 +201,7 @@ cli_create_handle_acc(struct cli_args *cli_args)
 		goto err_out;
 	}
 
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_acc_create(cli_args->az.sub_id,
+	ret = az_req_acc_create(cli_args->az.sub_id,
 				  cli_args->az.blob_acc,
 				  cli_args->create.label,
 				  cli_args->create.desc,
@@ -211,27 +212,27 @@ cli_create_handle_acc(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
-	if (op.rsp.err_code == 202) {
-		enum azure_op_status status;
+	if (op->rsp.err_code == 202) {
+		enum az_req_status status;
 		int err_code;
 		/* asynchronously handled */
-		ret = cli_op_wait(econn, cli_args->az.sub_id, op.rsp.req_id,
+		ret = cli_op_wait(econn, cli_args->az.sub_id, op->rsp.req_id,
 				  &status, &err_code);
 		if (ret < 0) {
 			goto err_op_free;
@@ -247,7 +248,7 @@ cli_create_handle_acc(struct cli_args *cli_args)
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_conn_free:
 	elasto_conn_free(econn);
 err_out:
@@ -258,7 +259,7 @@ static int
 cli_create_handle_ctnr(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
-	struct azure_op op;
+	struct op *op;
 	int ret;
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
@@ -278,33 +279,32 @@ cli_create_handle_ctnr(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_ctnr_create(cli_args->az.blob_acc,
+	ret = az_req_ctnr_create(cli_args->az.blob_acc,
 				   cli_args->az.ctnr_name,
 				   &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_conn_free:
 	elasto_conn_free(econn);
 err_out:
@@ -315,7 +315,7 @@ static int
 cli_create_handle_bkt(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
-	struct azure_op op;
+	struct op *op;
 	int ret;
 
 	ret = elasto_conn_init_s3(cli_args->s3.key_id,
@@ -325,33 +325,32 @@ cli_create_handle_bkt(struct cli_args *cli_args)
 		goto err_out;
 	}
 
-	memset(&op, 0, sizeof(op));
-	ret = s3_op_bkt_create(cli_args->s3.bkt_name,
+	ret = s3_req_bkt_create(cli_args->s3.bkt_name,
 			       cli_args->create.location,
 			       &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_conn_free:
 	elasto_conn_free(econn);
 err_out:

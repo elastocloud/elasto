@@ -18,14 +18,14 @@ int
 sign_gen_lite_azure(const char *account,
 		    const uint8_t *key,
 		    int key_len,
-		    struct azure_op *op,
+		    struct op *op,
 		    char **sig_src,
 		    char **sig_str);
 
 int
 sign_gen_s3(const uint8_t *secret,
 	    int secret_len,
-	    struct azure_op *op,
+	    struct op *op,
 	    char **sig_src,
 	    char **sig_str);
 

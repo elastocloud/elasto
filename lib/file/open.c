@@ -30,6 +30,7 @@
 
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
+#include "lib/op.h"
 #include "lib/azure_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -150,27 +151,32 @@ elasto_fsign_conn_setup(struct elasto_conn *econn,
 			const char *acc)
 {
 	int ret;
-	struct azure_op op;
+	struct op *op;
+	struct az_rsp_acc_keys_get *acc_keys_get_rsp;
 
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_acc_keys_get(sub_id, acc, &op);
+	ret = az_req_acc_keys_get(sub_id, acc, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(econn, &op);
+	ret = elasto_fop_send_recv(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = elasto_conn_sign_setkey(econn, acc, op.rsp.acc_keys_get.primary);
+	acc_keys_get_rsp = az_rsp_acc_keys_get(op);
+	if (acc_keys_get_rsp == NULL) {
+		goto err_op_free;
+	}
+
+	ret = elasto_conn_sign_setkey(econn, acc, acc_keys_get_rsp->primary);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -184,7 +190,7 @@ elasto_fcreate(const struct elasto_fauth *auth,
 	int ret;
 	struct elasto_fh *fh;
 	struct elasto_fh_priv *fh_priv;
-	struct azure_op op;
+	struct op *op;
 	apr_status_t rv;
 
 	if (auth->type != ELASTO_FILE_AZURE) {
@@ -220,15 +226,15 @@ elasto_fcreate(const struct elasto_fauth *auth,
 		goto err_path_free;
 	}
 
-	ret = azure_op_blob_put(fh_priv->az.path.acc, fh_priv->az.path.ctnr,
-				fh_priv->az.path.blob, NULL, len,
-				&op);
+	ret = az_req_blob_put(fh_priv->az.path.acc, fh_priv->az.path.ctnr,
+			      fh_priv->az.path.blob, NULL, len,
+			      &op);
 	if (ret < 0) {
 		goto err_path_free;
 	}
 
-	ret = elasto_fop_send_recv(fh_priv->conn, &op);
-	azure_op_free(&op);
+	ret = elasto_fop_send_recv(fh_priv->conn, op);
+	op_free(op);
 	if (ret < 0) {
 		goto err_path_free;
 	}
@@ -257,7 +263,8 @@ elasto_fopen(const struct elasto_fauth *auth,
 	int ret;
 	struct elasto_fh *fh;
 	struct elasto_fh_priv *fh_priv;
-	struct azure_op op;
+	struct op *op;
+	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
 
 	if (auth->type != ELASTO_FILE_AZURE) {
 		ret = -ENOTSUP;
@@ -281,32 +288,37 @@ elasto_fopen(const struct elasto_fauth *auth,
 		goto err_path_free;
 	}
 
-	ret = azure_op_blob_prop_get(fh_priv->az.path.acc,
-				     fh_priv->az.path.ctnr,
-				     fh_priv->az.path.blob,
-				     &op);
+	ret = az_req_blob_prop_get(fh_priv->az.path.acc,
+				   fh_priv->az.path.ctnr,
+				   fh_priv->az.path.blob,
+				   &op);
 	if (ret < 0) {
 		goto err_path_free;
 	}
 
-	ret = elasto_fop_send_recv(fh_priv->conn, &op);
+	ret = elasto_fop_send_recv(fh_priv->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (!op.rsp.blob_prop_get.is_page) {
+	blob_prop_get_rsp = az_rsp_blob_prop_get(op);
+	if (blob_prop_get_rsp == NULL) {
+		goto err_op_free;
+	}
+
+	if (!blob_prop_get_rsp->is_page) {
 		dbg(0, "request to open unsupported non-page blob\n");
 		ret = -EINVAL;
 		goto err_op_free;
 	}
-	fh_priv->len = op.rsp.blob_prop_get.len;
+	fh_priv->len = blob_prop_get_rsp->len;
 
-	azure_op_free(&op);
+	op_free(op);
 	*_fh = fh;
 	return 0;
 
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_path_free:
 	elasto_fpath_az_free(&fh_priv->az.path);
 err_fhconn_free:

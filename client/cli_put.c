@@ -30,7 +30,9 @@
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
 #include "lib/data_api.h"
+#include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
@@ -154,7 +156,7 @@ cli_put_single_blob_handle(struct elasto_conn *econn,
 {
 	int ret;
 	struct elasto_data *op_data;
-	struct azure_op op;
+	struct op *op;
 
 	ret = elasto_data_file_new(cli_args->put.local_path,
 				   src_st->st_size, 0, O_RDONLY, 0,
@@ -163,7 +165,7 @@ cli_put_single_blob_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = azure_op_blob_put(cli_args->az.blob_acc,
+	ret = az_req_blob_put(cli_args->az.blob_acc,
 				cli_args->az.ctnr_name,
 				cli_args->az.blob_name,
 				op_data,
@@ -175,28 +177,28 @@ cli_put_single_blob_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
 	/* data buffer contains cli_args->put.local_path */
-	if (op.req.data)
-		op.req.data->iov.buf = NULL;
-	azure_op_free(&op);
+	if (op->req.data)
+		op->req.data->iov.buf = NULL;
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -217,7 +219,7 @@ cli_put_blocks(struct elasto_conn *econn,
 	struct azure_block *blk_n;
 	uint64_t bytes_put = 0;
 	int blks_put = 0;
-	struct azure_op op;
+	struct op *op;
 
 	if ((num_blks > 100000) || size > INT64_MAX) {
 		/*
@@ -244,7 +246,6 @@ cli_put_blocks(struct elasto_conn *econn,
 	}
 
 	list_head_init(blks);
-	memset(&op, 0, sizeof(op));
 	while (bytes_put < size) {
 		blk = malloc(sizeof(*blk));
 		if (blk == NULL) {
@@ -268,7 +269,7 @@ cli_put_blocks(struct elasto_conn *econn,
 
 		list_add_tail(blks, &blk->list);
 
-		ret = azure_op_block_put(cli_args->az.blob_acc,
+		ret = az_req_block_put(cli_args->az.blob_acc,
 					 cli_args->az.ctnr_name,
 					 cli_args->az.blob_name,
 					 blk->id,
@@ -278,18 +279,18 @@ cli_put_blocks(struct elasto_conn *econn,
 			goto err_blks_free;
 		}
 
-		ret = elasto_conn_send_op(econn, &op);
+		ret = elasto_conn_send_op(econn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
 
-		ret = azure_rsp_process(&op);
+		ret = op_rsp_process(op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
 		/* ensure data is not freed */
-		op.req.data = NULL;
-		azure_op_free(&op);
+		op->req.data = NULL;
+		op_free(op);
 
 		blk->state = BLOCK_STATE_UNCOMMITED;
 		bytes_put += op_data->off;
@@ -309,7 +310,7 @@ cli_put_blocks(struct elasto_conn *econn,
 err_op_free:
 	/* don't free the args filename */
 	op_data->iov.buf = NULL;
-	azure_op_free(&op);
+	op_free(op);
 err_blks_free:
 	list_for_each_safe(blks, blk, blk_n, list) {
 		/* FIXME remove uploaded blocks */
@@ -326,7 +327,7 @@ cli_put_blocks_handle(struct elasto_conn *econn,
 		      struct stat *src_st)
 {
 	int ret;
-	struct azure_op op;
+	struct op *op;
 	struct list_head *blks;
 
 	ret = cli_put_blocks(econn, cli_args, src_st->st_size, &blks);
@@ -334,7 +335,7 @@ cli_put_blocks_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = azure_op_block_list_put(cli_args->az.blob_acc,
+	ret = az_req_block_list_put(cli_args->az.blob_acc,
 				      cli_args->az.ctnr_name,
 				      cli_args->az.blob_name,
 				      blks,
@@ -350,12 +351,12 @@ cli_put_blocks_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -363,9 +364,9 @@ cli_put_blocks_handle(struct elasto_conn *econn,
 	ret = 0;
 err_op_free:
 	/* data buffer contains cli_args->put.local_path */
-	if (op.req.data)
-		op.req.data->iov.buf = NULL;
-	azure_op_free(&op);
+	if (op->req.data)
+		op->req.data->iov.buf = NULL;
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -427,7 +428,7 @@ cli_put_single_obj_handle(struct elasto_conn *econn,
 {
 	int ret;
 	struct elasto_data *op_data;
-	struct azure_op op;
+	struct op *op;
 
 	ret = elasto_data_file_new(cli_args->put.local_path,
 				     src_st->st_size, 0, O_RDONLY, 0,
@@ -436,7 +437,7 @@ cli_put_single_obj_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = s3_op_obj_put(cli_args->s3.bkt_name,
+	ret = s3_req_obj_put(cli_args->s3.bkt_name,
 			    cli_args->s3.obj_name,
 			    op_data,
 			    &op);
@@ -446,28 +447,28 @@ cli_put_single_obj_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
 	/* data buffer contains cli_args->put.local_path */
-	if (op.req.data)
-		op.req.data->iov.buf = NULL;
-	azure_op_free(&op);
+	if (op->req.data)
+		op->req.data->iov.buf = NULL;
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -479,36 +480,36 @@ cli_put_multi_part_abort(struct elasto_conn *econn,
 			 const char *upload_id)
 {
 	int ret;
-	struct azure_op op;
+	struct op *op;
 
 	printf("aborting upload %s\n", upload_id);
 
-	ret = s3_op_mp_abort(bkt,
+	ret = s3_req_mp_abort(bkt,
 			     obj,
 			     upload_id,
 			     &op);
 	if (ret < 0) {
 		goto err_out;
 	}
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
 		printf("failed to abort upload %s: %d\n",
-		       upload_id, op.rsp.err_code);
+		       upload_id, op->rsp.err_code);
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -523,7 +524,8 @@ cli_put_part_handle(struct elasto_conn *econn,
 		    struct s3_part **_part)
 {
 	int ret;
-	struct azure_op op;
+	struct op *op;
+	struct s3_rsp_part_put *part_put_rsp;
 	struct s3_part *part;
 
 	part = malloc(sizeof(*part));
@@ -532,7 +534,7 @@ cli_put_part_handle(struct elasto_conn *econn,
 	}
 	memset(part, 0, sizeof(*part));
 
-	ret = s3_op_part_put(bkt,
+	ret = s3_req_part_put(bkt,
 			     obj,
 			     upload_id,
 			     pnum,
@@ -541,37 +543,43 @@ cli_put_part_handle(struct elasto_conn *econn,
 	if (ret < 0) {
 		goto err_part_free;
 	}
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
+		goto err_op_free;
+	}
+
+	part_put_rsp = s3_rsp_part_put(op);
+	if (part_put_rsp == NULL) {
+		ret = -ENOMEM;
 		goto err_op_free;
 	}
 
 	part->pnum = pnum;
-	part->etag = strdup(op.rsp.part_put.etag);
+	part->etag = strdup(part_put_rsp->etag);
 	if (part->etag == NULL) {
 		ret = -ENOMEM;
 		goto err_op_free;
 	}
 	*_part = part;
-	op.req.data = NULL;
-	azure_op_free(&op);
+	op->req.data = NULL;
+	op_free(op);
 
 	return 0;
 
 err_op_free:
-	op.req.data = NULL;
-	azure_op_free(&op);
+	op->req.data = NULL;
+	op_free(op);
 err_part_free:
 	free(part);
 err_out:
@@ -589,42 +597,50 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 	int parts_put;
 	char *upload_id = NULL;
 	struct elasto_data *op_data;
-	struct azure_op op;
+	struct op *op;
+	struct s3_rsp_part_put *part_put_rsp;
 	struct list_head parts;
 
-	ret = s3_op_mp_start(cli_args->s3.bkt_name,
+	ret = s3_req_mp_start(cli_args->s3.bkt_name,
 			     cli_args->s3.obj_name,
 			     &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
-		azure_op_free(&op);
+		op_free(op);
 		goto err_out;
 	}
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
-		azure_op_free(&op);
+		op_free(op);
 		goto err_out;
 	}
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed mp_start response: %d\n", op.rsp.err_code);
-		azure_op_free(&op);
+		printf("failed mp_start response: %d\n", op->rsp.err_code);
+		op_free(op);
 		goto err_out;
 	}
 
-	upload_id = strdup(op.rsp.part_put.etag);
+	part_put_rsp = s3_rsp_part_put(op);
+	if (part_put_rsp == NULL) {
+		ret = -ENOMEM;
+		op_free(op);
+		goto err_out;
+	}
+
+	upload_id = strdup(part_put_rsp->etag);
 	if (upload_id == NULL) {
 		ret = -ENOMEM;
-		azure_op_free(&op);
+		op_free(op);
 		goto err_out;
 	}
 
 	printf("multipart upload %s started\n", upload_id);
-	azure_op_free(&op);
+	op_free(op);
 
 	ret = elasto_data_file_new(cli_args->put.local_path,
 				     min(PART_LEN, src_st->st_size),
@@ -662,7 +678,7 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 	op_data->iov.buf = NULL;
 	elasto_data_free(op_data);
 
-	ret = s3_op_mp_done(cli_args->s3.bkt_name,
+	ret = s3_req_mp_done(cli_args->s3.bkt_name,
 			    cli_args->s3.obj_name,
 			    upload_id,
 			    &parts,
@@ -671,22 +687,22 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 		goto err_upload_abort;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
-		azure_op_free(&op);
+		op_free(op);
 		goto err_upload_abort;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
-		azure_op_free(&op);
+		op_free(op);
 		goto err_upload_abort;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed mp_done response: %d\n", op.rsp.err_code);
-		azure_op_free(&op);
+		printf("failed mp_done response: %d\n", op->rsp.err_code);
+		op_free(op);
 		goto err_upload_abort;
 	}
 	printf("multipart upload %s done\n", upload_id);

@@ -29,6 +29,7 @@
 
 #include "ccan/list/list.h"
 #include "base64.h"
+#include "op.h"
 #include "azure_req.h"
 #include "dbg.h"
 #include "sign.h"
@@ -43,7 +44,7 @@ static void
 cm_sign_az_list(void **state)
 {
 	int ret;
-	struct azure_op op;
+	struct op op;
 	char *sig_src = NULL;
 	char *sig_str = NULL;
 
@@ -52,12 +53,12 @@ cm_sign_az_list(void **state)
 	op.method = REQ_METHOD_GET;
 	op.url_host = strdup("ddiss.blob.core.windows.net");
 	op.url_path = strdup("/test?restype=container&comp=list");
-	ret = azure_op_req_hdr_add(&op, "Accept", "*/*");
+	ret = op_req_hdr_add(&op, "Accept", "*/*");
 	assert_int_equal(ret, 0);
-	ret = azure_op_req_hdr_add(&op, "x-ms-date",
+	ret = op_req_hdr_add(&op, "x-ms-date",
 				   "Thu, 11 Apr 2013 11:28:15 GMT");
 	assert_int_equal(ret, 0);
-	ret = azure_op_req_hdr_add(&op, "x-ms-version", "2009-09-19");
+	ret = op_req_hdr_add(&op, "x-ms-version", "2009-09-19");
 	assert_int_equal(ret, 0);
 
 	ret = sign_gen_lite_azure(AZ_ACC,

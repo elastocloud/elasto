@@ -30,6 +30,7 @@
 
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
+#include "lib/op.h"
 #include "lib/azure_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -46,7 +47,7 @@ elasto_fwrite(struct elasto_fh *fh,
 	      struct elasto_data *src_data)
 {
 	int ret;
-	struct azure_op op;
+	struct op *op;
 	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
 	if (fh_priv == NULL) {
 		ret = -EINVAL;
@@ -57,26 +58,26 @@ elasto_fwrite(struct elasto_fh *fh,
 	    (src_data == NULL ? "clearing" : "writing"),
 	    dest_off, dest_len);
 
-	ret = azure_op_page_put(fh_priv->az.path.acc,
-				fh_priv->az.path.ctnr,
-				fh_priv->az.path.blob,
-				src_data,
-				dest_off,
-				dest_len,
-				&op);
+	ret = az_req_page_put(fh_priv->az.path.acc,
+			      fh_priv->az.path.ctnr,
+			      fh_priv->az.path.blob,
+			      src_data,
+			      dest_off,
+			      dest_len,
+			      &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(fh_priv->conn, &op);
+	ret = elasto_fop_send_recv(fh_priv->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 	ret = 0;
 
 err_op_free:
-	op.req.data = NULL;
-	azure_op_free(&op);
+	op->req.data = NULL;
+	op_free(op);
 err_out:
 	return ret;
 }
@@ -88,7 +89,7 @@ elasto_fread(struct elasto_fh *fh,
 	     struct elasto_data *dest_data)
 {
 	int ret;
-	struct azure_op op;
+	struct op *op;
 	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
 	if (fh_priv == NULL) {
 		ret = -EINVAL;
@@ -98,27 +99,27 @@ elasto_fread(struct elasto_fh *fh,
 	dbg(3, "reading range at %" PRIu64 ", len %" PRIu64 "\n",
 	    src_off, src_len);
 
-	ret = azure_op_blob_get(fh_priv->az.path.acc,
-				fh_priv->az.path.ctnr,
-				fh_priv->az.path.blob,
-				true,
-				dest_data,
-				src_off,
-				src_len,
-				&op);
+	ret = az_req_blob_get(fh_priv->az.path.acc,
+			      fh_priv->az.path.ctnr,
+			      fh_priv->az.path.blob,
+			      true,
+			      dest_data,
+			      src_off,
+			      src_len,
+			      &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(fh_priv->conn, &op);
+	ret = elasto_fop_send_recv(fh_priv->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 	ret = 0;
 
 err_op_free:
-	op.rsp.data = NULL;
-	azure_op_free(&op);
+	op->rsp.data = NULL;
+	op_free(op);
 err_out:
 	return ret;
 }

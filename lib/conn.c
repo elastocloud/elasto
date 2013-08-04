@@ -30,7 +30,7 @@
 #include "dbg.h"
 #include "base64.h"
 #include "data_api.h"
-#include "azure_req.h"
+#include "op.h"
 #include "sign.h"
 #include "util.h"
 #include "conn.h"
@@ -87,7 +87,7 @@ err_out:
  * @num_bytes:	length of @hdr_str.
  */
 static int
-curl_hdr_process(struct azure_op *op,
+curl_hdr_process(struct op *op,
 		 char *hdr_str,
 		 uint64_t num_bytes)
 {
@@ -128,7 +128,7 @@ curl_hdr_process(struct azure_op *op,
 	*(s + 1) = '\0';
 
 	*c = '\0';	/* zero terminate key */
-	ret = azure_op_rsp_hdr_add(op, hdr_str, val);
+	ret = op_rsp_hdr_add(op, hdr_str, val);
 	if (ret < 0) {
 		goto err_cln_fill;
 	}
@@ -168,7 +168,7 @@ curl_hdr_cb(char *ptr,
 	    size_t nmemb,
 	    void *userdata)
 {
-	struct azure_op *op = (struct azure_op *)userdata;
+	struct op *op = (struct op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
 	int ret;
 
@@ -186,7 +186,7 @@ curl_read_cb(char *ptr,
 	     size_t nmemb,
 	     void *userdata)
 {
-	struct azure_op *op = (struct azure_op *)userdata;
+	struct op *op = (struct op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
 	uint64_t read_off;
 
@@ -224,10 +224,10 @@ curl_read_cb(char *ptr,
  * number of bytes expected across all callbacks, but may not be known.
  */
 static int
-curl_write_alloc_err(struct azure_op *op,
+curl_write_alloc_err(struct op *op,
 		     uint64_t cb_nbytes)
 {
-	struct azure_rsp_error *err = &op->rsp.err;
+	struct op_rsp_error *err = &op->rsp.err;
 
 	if ((err->buf != NULL) && (cb_nbytes > (err->len - err->off))) {
 		dbg(6, "error buffer already alloced but not big enough\n");
@@ -256,7 +256,7 @@ curl_write_alloc_err(struct azure_op *op,
  * to the request structure and removing all data buffer types.
  */
 static int
-curl_write_alloc_std(struct azure_op *op,
+curl_write_alloc_std(struct op *op,
 		     uint64_t cb_nbytes)
 
 {
@@ -320,7 +320,7 @@ curl_write_alloc_std(struct azure_op *op,
 }
 
 static int
-curl_write_err(struct azure_op *op,
+curl_write_err(struct op *op,
 	       uint8_t *data,
 	       uint64_t num_bytes)
 {
@@ -338,7 +338,7 @@ curl_write_err(struct azure_op *op,
 }
 
 static int
-curl_write_std(struct azure_op *op,
+curl_write_std(struct op *op,
 	       uint8_t *data,
 	       uint64_t num_bytes)
 {
@@ -385,7 +385,7 @@ curl_write_cb(char *ptr,
 	      size_t nmemb,
 	      void *userdata)
 {
-	struct azure_op *op = (struct azure_op *)userdata;
+	struct op *op = (struct op *)userdata;
 	uint64_t num_bytes = (size * nmemb);
 	int ret;
 
@@ -402,7 +402,7 @@ curl_write_cb(char *ptr,
 		}
 
 		op->rsp.err_code = ret_code;
-		op->rsp.is_error = azure_rsp_is_error(op->opcode, ret_code);
+		op->rsp.is_error = op_rsp_is_error(op->opcode, ret_code);
 
 		if (op->rsp.is_error) {
 			ret = curl_write_alloc_err(op, num_bytes);
@@ -438,7 +438,7 @@ curl_fail_cb(char *ptr,
 
 static int
 elasto_conn_send_sign(struct elasto_conn *econn,
-		      struct azure_op *op)
+		      struct op *op)
 {
 	int ret;
 	char *sig_str;
@@ -482,7 +482,7 @@ elasto_conn_send_sign(struct elasto_conn *econn,
 		return -ENOTSUP;
 	}
 
-	ret = azure_op_req_hdr_add(op, "Authorization", hdr_str);
+	ret = op_req_hdr_add(op, "Authorization", hdr_str);
 	free(hdr_str);
 	if (ret < 0) {
 		return ret;
@@ -493,11 +493,11 @@ elasto_conn_send_sign(struct elasto_conn *econn,
 
 /* a bit ugly, the signature src string is stored in @op for debugging */
 static int
-elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
+elasto_conn_send_prepare(struct elasto_conn *econn, struct op *op)
 {
 	int ret;
 	struct curl_slist *http_hdr = NULL;
-	struct azure_op_hdr *hdr;
+	struct op_hdr *hdr;
 	char *url;
 
 	curl_easy_setopt(econn->curl, CURLOPT_CUSTOMREQUEST, op->method);
@@ -572,7 +572,7 @@ elasto_conn_send_prepare(struct elasto_conn *econn, struct azure_op *op)
 
 int
 elasto_conn_send_op(struct elasto_conn *econn,
-		   struct azure_op *op)
+		   struct op *op)
 {
 	int ret;
 	CURLcode res;
@@ -597,7 +597,7 @@ elasto_conn_send_op(struct elasto_conn *econn,
 		/* write callback already sets this, otherwise still needed */
 		curl_easy_getinfo(econn->curl, CURLINFO_RESPONSE_CODE,
 				  &op->rsp.err_code);
-		op->rsp.is_error = azure_rsp_is_error(op->opcode,
+		op->rsp.is_error = op_rsp_is_error(op->opcode,
 						      op->rsp.err_code);
 	}
 

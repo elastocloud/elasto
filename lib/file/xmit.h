@@ -16,6 +16,6 @@
 
 int
 elasto_fop_send_recv(struct elasto_conn *conn,
-		     struct azure_op *op);
+		     struct op *op);
 
 #endif /* _XMIT_H_ */

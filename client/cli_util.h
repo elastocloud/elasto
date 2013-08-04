@@ -18,7 +18,7 @@ int
 cli_op_wait(struct elasto_conn *econn,
 	    const char *sub_id,
 	    const char *req_id,
-	    enum azure_op_status *status,
+	    enum az_req_status *status,
 	    int *err_code);
 
 #endif /* ifdef _CLI_UTIL_H_ */

@@ -29,7 +29,9 @@
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
 #include "lib/data_api.h"
+#include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
@@ -148,7 +150,7 @@ cli_get_blob_handle(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
 	struct stat st;
-	struct azure_op op;
+	struct op *op;
 	struct elasto_data *op_data;
 	int ret;
 
@@ -173,7 +175,6 @@ cli_get_blob_handle(struct cli_args *cli_args)
 		       cli_args->get.local_path);
 		goto err_conn_free;
 	}
-	memset(&op, 0, sizeof(op));
 	printf("getting container %s blob %s for %s\n",
 	       cli_args->az.ctnr_name,
 	       cli_args->az.blob_name,
@@ -188,7 +189,7 @@ cli_get_blob_handle(struct cli_args *cli_args)
 	}
 
 
-	ret = azure_op_blob_get(cli_args->az.blob_acc,
+	ret = az_req_blob_get(cli_args->az.blob_acc,
 				cli_args->az.ctnr_name,
 				cli_args->az.blob_name,
 				false,
@@ -201,12 +202,12 @@ cli_get_blob_handle(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -214,9 +215,9 @@ cli_get_blob_handle(struct cli_args *cli_args)
 	ret = 0;
 err_op_free:
 	/* data buffer contains cli_args->get.local_path */
-	if (op.rsp.data)
-		op.rsp.data->iov.buf = NULL;
-	azure_op_free(&op);
+	if (op->rsp.data)
+		op->rsp.data->iov.buf = NULL;
+	op_free(op);
 err_conn_free:
 	elasto_conn_free(econn);
 err_out:
@@ -228,7 +229,7 @@ cli_get_obj_handle(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
 	struct stat st;
-	struct azure_op op;
+	struct op *op;
 	struct elasto_data *op_data;
 	int ret;
 
@@ -247,7 +248,6 @@ cli_get_obj_handle(struct cli_args *cli_args)
 		       cli_args->get.local_path);
 		goto err_conn_free;
 	}
-	memset(&op, 0, sizeof(op));
 	printf("getting bucket %s container %s for %s\n",
 	       cli_args->s3.bkt_name,
 	       cli_args->s3.obj_name,
@@ -261,7 +261,7 @@ cli_get_obj_handle(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = s3_op_obj_get(cli_args->s3.bkt_name,
+	ret = s3_req_obj_get(cli_args->s3.bkt_name,
 			    cli_args->s3.obj_name,
 			    op_data,
 			    &op);
@@ -271,12 +271,12 @@ cli_get_obj_handle(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -284,9 +284,9 @@ cli_get_obj_handle(struct cli_args *cli_args)
 	ret = 0;
 err_op_free:
 	/* data buffer contains cli_args->get.local_path */
-	if (op.rsp.data)
-		op.rsp.data->iov.buf = NULL;
-	azure_op_free(&op);
+	if (op->rsp.data)
+		op->rsp.data->iov.buf = NULL;
+	op_free(op);
 err_conn_free:
 	elasto_conn_free(econn);
 err_out:

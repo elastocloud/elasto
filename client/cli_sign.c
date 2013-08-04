@@ -28,7 +28,9 @@
 #include "ccan/list/list.h"
 #include "lib/azure_xml.h"
 #include "lib/data_api.h"
+#include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
@@ -40,39 +42,45 @@ cli_sign_conn_setup(struct elasto_conn *econn,
 		    const char *sub_id)
 {
 	int ret;
-	struct azure_op op;
+	struct op *op;
+	struct az_rsp_acc_keys_get *acc_keys_get_rsp;
 
-	memset(&op, 0, sizeof(op));
-	ret = azure_op_acc_keys_get(sub_id, blob_acc, &op);
+	ret = az_req_acc_keys_get(sub_id, blob_acc, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, &op);
+	ret = elasto_conn_send_op(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = azure_rsp_process(&op);
+	ret = op_rsp_process(op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	if (op.rsp.is_error) {
+	if (op->rsp.is_error) {
 		ret = -EIO;
-		printf("failed response: %d\n", op.rsp.err_code);
+		printf("failed response: %d\n", op->rsp.err_code);
+		goto err_op_free;
+	}
+
+	acc_keys_get_rsp = az_rsp_acc_keys_get(op);
+	if (acc_keys_get_rsp == NULL) {
+		ret = -ENOMEM;
 		goto err_op_free;
 	}
 
 	ret = elasto_conn_sign_setkey(econn, blob_acc,
-				     op.rsp.acc_keys_get.primary);
+				      acc_keys_get_rsp->primary);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
 	ret = 0;
 err_op_free:
-	azure_op_free(&op);
+	op_free(op);
 err_out:
 	return ret;
 }
