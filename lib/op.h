@@ -36,6 +36,10 @@ struct op_rsp_error {
 #define REQ_METHOD_HEAD		"HEAD"
 
 struct op;
+typedef int (*req_sign_cb_t)(const char *acc,
+			     const uint8_t *key,
+			     int key_len,
+			     struct op *op);
 typedef void (*req_free_cb_t)(struct op *op);
 typedef void (*rsp_free_cb_t)(struct op *op);
 typedef int (*rsp_process_cb_t)(struct op *op);
@@ -44,7 +48,6 @@ typedef void (*ebo_free_cb_t)(struct op *op);
 struct op {
 	struct elasto_conn *econn;
 	int opcode;
-	bool sign;
 	char *sig_src;	/* debug, compare with signing error response */
 	const char *method;
 	bool url_https_only;	/* overrides conn insecure_http setting */
@@ -73,6 +76,7 @@ struct op {
 		struct list_head hdrs;
 	} rsp;
 
+	req_sign_cb_t req_sign;
 	req_free_cb_t req_free;
 	rsp_free_cb_t rsp_free;
 	rsp_process_cb_t rsp_process;

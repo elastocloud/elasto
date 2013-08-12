@@ -356,7 +356,7 @@ op_req_redirect(struct op *op)
 	op->url_host = op->rsp.err.redir_endpoint;
 	op->rsp.err.redir_endpoint = NULL;
 
-	if (op->sign) {
+	if (op->req_sign != NULL) {
 		int ret;
 		/*
 		 * Remove existing auth hdr added by conn layer

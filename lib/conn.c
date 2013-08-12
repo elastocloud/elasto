@@ -436,61 +436,6 @@ curl_fail_cb(char *ptr,
 	return 0;
 }
 
-static int
-elasto_conn_send_sign(struct elasto_conn *econn,
-		      struct op *op)
-{
-	int ret;
-	char *sig_str;
-	char *hdr_str = NULL;
-
-	if (econn->sign.key == NULL) {
-		dbg(0, "op requires signing, but conn key not set\n");
-		return -EINVAL;
-	}
-
-	if (econn->type == CONN_TYPE_AZURE) {
-		ret = sign_gen_lite_azure(econn->sign.account,
-					  econn->sign.key, econn->sign.key_len,
-					  op, &op->sig_src, &sig_str);
-		if (ret < 0) {
-			dbg(0, "Azure signing failed: %s\n",
-			    strerror(-ret));
-			return ret;
-		}
-		ret = asprintf(&hdr_str, "SharedKeyLite %s:%s",
-			       econn->sign.account, sig_str);
-		free(sig_str);
-		if (ret < 0) {
-			return -ENOMEM;
-		}
-	} else if (econn->type == CONN_TYPE_S3) {
-		ret = sign_gen_s3(econn->sign.key, econn->sign.key_len,
-				  op, &op->sig_src, &sig_str);
-		if (ret < 0) {
-			dbg(0, "S3 signing failed: %s\n",
-			    strerror(-ret));
-			return ret;
-		}
-		ret = asprintf(&hdr_str, "AWS %s:%s",
-			       econn->sign.account, sig_str);
-		free(sig_str);
-		if (ret < 0) {
-			return -ENOMEM;
-		}
-	} else {
-		return -ENOTSUP;
-	}
-
-	ret = op_req_hdr_add(op, "Authorization", hdr_str);
-	free(hdr_str);
-	if (ret < 0) {
-		return ret;
-	}
-
-	return 0;
-}
-
 /* a bit ugly, the signature src string is stored in @op for debugging */
 static int
 elasto_conn_send_prepare(struct elasto_conn *econn, struct op *op)
@@ -542,8 +487,10 @@ elasto_conn_send_prepare(struct elasto_conn *econn, struct op *op)
 		curl_easy_setopt(econn->curl, CURLOPT_UPLOAD, 0);
 	}
 
-	if (op->sign) {
-		ret = elasto_conn_send_sign(econn, op);
+	if (op->req_sign != NULL) {
+		ret = op->req_sign(econn->sign.account,
+			       econn->sign.key, econn->sign.key_len,
+			       op);
 		if (ret < 0) {
 			return ret;
 		}

@@ -47,6 +47,43 @@ struct az_ebo {
 	struct op op;
 };
 
+static int
+az_req_sign(const char *acc,
+	    const uint8_t *key,
+	    int key_len,
+	    struct op *op)
+{
+	int ret;
+	char *sig_str;
+	char *hdr_str;
+
+	if (key == NULL) {
+		return -EINVAL;
+	}
+
+	ret = sign_gen_lite_azure(acc, key, key_len,
+				  op, &op->sig_src, &sig_str);
+	if (ret < 0) {
+		dbg(0, "Azure signing failed: %s\n",
+		    strerror(-ret));
+		return ret;
+	}
+	ret = asprintf(&hdr_str, "SharedKeyLite %s:%s",
+		       acc, sig_str);
+	free(sig_str);
+	if (ret < 0) {
+		return -ENOMEM;
+	}
+
+	ret = op_req_hdr_add(op, "Authorization", hdr_str);
+	free(hdr_str);
+	if (ret < 0) {
+		return ret;
+	}
+
+	return 0;
+}
+
 static void
 az_req_free(struct op *op);
 static void
@@ -80,6 +117,7 @@ az_ebo_init(enum az_opcode opcode,
 	ebo->op.rsp_free = az_rsp_free;
 	ebo->op.rsp_process = az_rsp_process;
 	ebo->op.ebo_free = az_ebo_free;
+	/* sign callback set conditionally per-op */
 	*_ebo = ebo;
 	return 0;
 }
@@ -904,7 +942,7 @@ az_req_ctnr_list(const char *account,
 		goto err_buf_free;
 	}
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -1082,7 +1120,7 @@ az_req_ctnr_create(const char *account,
 	}
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -1162,7 +1200,7 @@ az_req_ctnr_del(const char *account,
 		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -1264,7 +1302,7 @@ az_req_blob_list(const char *account,
 		goto err_buf_free;
 	}
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -1525,7 +1563,7 @@ az_req_blob_put(const char *account,
 		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -1683,7 +1721,7 @@ az_req_blob_get(const char *account,
 		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -1838,7 +1876,7 @@ az_req_page_put(const char *account,
 		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -1975,7 +2013,7 @@ az_req_block_put(const char *account,
 		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -2175,7 +2213,7 @@ az_req_block_list_put(const char *account,
 	blk_list_put_req->blks = blks;
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -2283,7 +2321,7 @@ az_req_block_list_get(const char *account,
 		goto err_buf_free;
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -2516,7 +2554,7 @@ az_req_blob_del(const char *account,
 		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -2654,7 +2692,7 @@ az_req_blob_cp(const char *src_account,
 		goto err_upath_free;
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
@@ -2751,7 +2789,7 @@ az_req_blob_prop_get(const char *account,
 	}
 
 	/* the connection layer must sign this request before sending */
-	op->sign = true;
+	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;

@@ -35,6 +35,7 @@
 #include "azure_xml.h"
 #include "data_api.h"
 #include "op.h"
+#include "sign.h"
 #include "s3_req.h"
 
 /*
@@ -46,6 +47,43 @@ struct s3_ebo {
 	struct s3_rsp rsp;
 	struct op op;
 };
+
+static int
+s3_req_sign(const char *acc,
+	    const uint8_t *key,
+	    int key_len,
+	    struct op *op)
+{
+	int ret;
+	char *sig_str;
+	char *hdr_str;
+
+	if (key == NULL) {
+		return -EINVAL;
+	}
+
+	ret = sign_gen_s3(key, key_len,
+			  op, &op->sig_src, &sig_str);
+	if (ret < 0) {
+		dbg(0, "S3 signing failed: %s\n",
+		    strerror(-ret));
+		return ret;
+	}
+	ret = asprintf(&hdr_str, "AWS %s:%s",
+		       acc, sig_str);
+	free(sig_str);
+	if (ret < 0) {
+		return -ENOMEM;
+	}
+
+	ret = op_req_hdr_add(op, "Authorization", hdr_str);
+	free(hdr_str);
+	if (ret < 0) {
+		return ret;
+	}
+
+	return 0;
+}
 
 static void
 s3_req_free(struct op *op);
@@ -76,6 +114,7 @@ s3_ebo_init(enum s3_opcode opcode,
 	ebo->opcode = opcode;
 	op_init(opcode, &ebo->op);
 
+	ebo->op.req_sign = s3_req_sign;	/* all S3 reqs are signed */
 	ebo->op.req_free = s3_req_free;
 	ebo->op.rsp_free = s3_rsp_free;
 	ebo->op.rsp_process = s3_rsp_process;
@@ -167,8 +206,6 @@ s3_req_svc_list(struct op **_op)
 	if (ret < 0) {
 		goto err_upath_free;
 	}
-	/* the connection layer must sign this request before sending */
-	op->sign = true;
 
 	*_op = op;
 	return 0;
@@ -360,8 +397,6 @@ s3_req_bkt_list(const char *bkt_name,
 	if (ret < 0) {
 		goto err_upath_free;
 	}
-
-	op->sign = true;
 
 	*_op = op;
 	return 0;
@@ -609,8 +644,6 @@ s3_req_bkt_create(const char *bkt_name,
 		goto err_upath_free;
 	}
 
-	op->sign = true;
-
 	*_op = op;
 	return 0;
 
@@ -672,8 +705,6 @@ s3_req_bkt_del(const char *bkt_name,
 	if (ret < 0) {
 		goto err_upath_free;
 	}
-
-	op->sign = true;
 
 	*_op = op;
 	return 0;
@@ -755,8 +786,6 @@ s3_req_obj_put(const char *bkt_name,
 	if (ret < 0) {
 		goto err_upath_free;
 	}
-
-	op->sign = true;
 
 	*_op = op;
 	return 0;
@@ -844,8 +873,6 @@ s3_req_obj_get(const char *bkt_name,
 		goto err_upath_free;
 	}
 
-	op->sign = true;
-
 	*_op = op;
 	return 0;
 err_upath_free:
@@ -915,8 +942,6 @@ s3_req_obj_del(const char *bkt_name,
 	if (ret < 0) {
 		goto err_upath_free;
 	}
-
-	op->sign = true;
 
 	*_op = op;
 	return 0;
@@ -1033,8 +1058,6 @@ s3_req_obj_cp(const char *src_bkt,
 		goto err_upath_free;
 	}
 
-	op->sign = true;
-
 	*_op = op;
 	return 0;
 err_upath_free:
@@ -1114,8 +1137,6 @@ s3_req_mp_start(const char *bkt,
 	if (ret < 0) {
 		goto err_upath_free;
 	}
-
-	op->sign = true;
 
 	*_op = op;
 	return 0;
@@ -1331,8 +1352,6 @@ s3_req_mp_done(const char *bkt,
 	/* XXX should copy list */
 	mp_done_req->parts = parts;
 
-	op->sign = true;
-
 	*_op = op;
 	return 0;
 
@@ -1414,8 +1433,6 @@ s3_req_mp_abort(const char *bkt,
 	if (ret < 0) {
 		goto err_upath_free;
 	}
-
-	op->sign = true;
 
 	*_op = op;
 	return 0;
@@ -1508,8 +1525,6 @@ s3_req_part_put(const char *bkt,
 	if (ret < 0) {
 		goto err_upath_free;
 	}
-
-	op->sign = true;
 
 	*_op = op;
 	return 0;
