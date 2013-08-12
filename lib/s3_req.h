@@ -93,11 +93,11 @@ struct s3_req_obj_cp {
 	struct {
 		char *bkt_name;
 		char *obj_name;
-	} src;
+	} dst;
 	struct {
 		char *bkt_name;
 		char *obj_name;
-	} dst;
+	} src;
 };
 
 struct s3_req_mp_start {
@@ -142,6 +142,10 @@ struct s3_rsp_part_put {
 
 struct s3_req {
 	union {
+		struct {
+			/* first item is always the bucket name, if non-NULL */
+			char *bkt_name;
+		} generic;
 		struct s3_req_svc_list svc_list;
 		struct s3_req_bkt_list bkt_list;
 		struct s3_req_bkt_create bkt_create;

@@ -445,19 +445,19 @@ canon_rsc_path_get(const char *slash_after_hostname)
 	return path_part;
 }
 
-#define URL_S3_BASE "s3.amazonaws.com"
 /*
  * @url_host points to the hostname after the protocol prefix
  */
 static char *
-canon_rsc_bucket_get(const char *url_host)
+canon_rsc_bucket_get(const char *bkt_name,
+		     const char *url_host)
 {
 	int buf_len;
 	char *buf;
 	char *d;
 
-	if (strncmp(url_host, URL_S3_BASE, sizeof(URL_S3_BASE) - 1) == 0) {
-		/* base URL only */
+	if (bkt_name == NULL) {
+		/* assume base URL only */
 		return strdup("");
 	}
 
@@ -472,7 +472,7 @@ canon_rsc_bucket_get(const char *url_host)
 	/* find the first dot, up to which may be the bucket name */
 	d = strchr(url_host, '.');
 	if ((d != NULL)
-	 && (strncmp(d + 1, URL_S3_BASE, sizeof(URL_S3_BASE) - 1) == 0)) {
+	 && (strncmp(url_host, bkt_name, d - url_host) == 0)) {
 		dbg(6, "bucket prefix in S3 host path\n");
 		/*
 		 * There is a bucket name before the aws hostname, ensure the
@@ -662,7 +662,8 @@ err_cleanup:
 }
 
 static char *
-canon_rsc_gen_s3(const char *url_host,
+canon_rsc_gen_s3(const char *bkt_name,
+		 const char *url_host,
 		 const char *url_path)
 {
 	int ret;
@@ -672,7 +673,7 @@ canon_rsc_gen_s3(const char *url_host,
 	char *sub_rsc_part = NULL;
 	char *rsc_str = NULL;
 
-	bucket = canon_rsc_bucket_get(url_host);
+	bucket = canon_rsc_bucket_get(bkt_name, url_host);
 	if (bucket == NULL) {
 		dbg(0, "error generating resource bucket string");
 		goto err_out;
@@ -724,7 +725,8 @@ err_out:
 }
 
 int
-sign_gen_s3(const uint8_t *secret,
+sign_gen_s3(const char *bkt_name,
+	    const uint8_t *secret,
 	    int secret_len,
 	    struct op *op,
 	    char **sig_src,
@@ -742,7 +744,7 @@ sign_gen_s3(const uint8_t *secret,
 	int md_len;
 	char *md_b64;
 
-	canon_rsc = canon_rsc_gen_s3(op->url_host, op->url_path);
+	canon_rsc = canon_rsc_gen_s3(bkt_name, op->url_host, op->url_path);
 	if (canon_rsc == NULL) {
 		ret = -ENOMEM;
 		goto err_out;

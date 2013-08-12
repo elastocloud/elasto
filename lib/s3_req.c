@@ -57,12 +57,13 @@ s3_req_sign(const char *acc,
 	int ret;
 	char *sig_str;
 	char *hdr_str;
+	struct s3_ebo *ebo = container_of(op, struct s3_ebo, op);
 
 	if (key == NULL) {
 		return -EINVAL;
 	}
 
-	ret = sign_gen_s3(key, key_len,
+	ret = sign_gen_s3(ebo->req.generic.bkt_name, key, key_len,
 			  op, &op->sig_src, &sig_str);
 	if (ret < 0) {
 		dbg(0, "S3 signing failed: %s\n",

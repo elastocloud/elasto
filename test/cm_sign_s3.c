@@ -58,7 +58,8 @@ cm_sign_s3_object_get(void **state)
 	ret = op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 19:36:42 +0000");
 	assert_int_equal(ret, 0);
 
-	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+	ret = sign_gen_s3("johnsmith",
+			  (const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
 			  &op,
 			  &sig_src,
@@ -88,7 +89,8 @@ cm_sign_s3_object_put(void **state)
 	op_req_hdr_add(&op, "Content-Length", "94328");
 	op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 21:15:45 +0000");
 
-	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+	ret = sign_gen_s3("johnsmith",
+			  (const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
 			  &op,
 			  &sig_src,
@@ -113,7 +115,8 @@ cm_sign_s3_list(void **state)
 	op_req_hdr_add(&op, "User-Agent", "Mozilla/5.0");
 	op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 19:42:41 +0000");
 
-	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+	ret = sign_gen_s3("johnsmith",
+	(const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
 			  &op,
 			  &sig_src,
@@ -137,7 +140,8 @@ cm_sign_s3_fetch(void **state)
 	op.url_path = strdup("/?acl");
 	op_req_hdr_add(&op, "Date", "Tue, 27 Mar 2007 19:44:46 +0000");
 
-	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+	ret = sign_gen_s3("johnsmith",
+	(const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
 			  &op,
 			  &sig_src,
@@ -164,7 +168,8 @@ cm_sign_s3_object_del(void **state)
 	op_req_hdr_add(&op,
 			     "x-amz-date", "Tue, 27 Mar 2007 21:20:26 +0000");
 
-	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+	ret = sign_gen_s3(NULL,
+			  (const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
 			  &op,
 			  &sig_src,
@@ -201,7 +206,8 @@ cm_sign_s3_object_upload(void **state)
 	op_req_hdr_add(&op, "Content-Encoding", "gzip");
 	op_req_hdr_add(&op, "Content-Length", "5913339");
 
-	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+	ret = sign_gen_s3("cnamealiasbucket", /* XXX */
+			  (const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
 			  &op,
 			  &sig_src,
@@ -226,7 +232,8 @@ cm_sign_s3_bucket_list_all(void **state)
 	ret = op_req_hdr_add(&op,
 				   "Date", "Wed, 28 Mar 2007 01:29:59 +0000");
 
-	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+	ret = sign_gen_s3(NULL,
+			  (const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
 			  &op,
 			  &sig_src,
@@ -251,7 +258,8 @@ cm_sign_s3_unicode_keys(void **state)
 	ret = op_req_hdr_add(&op,
 				   "Date", "Wed, 28 Mar 2007 01:49:49 +0000");
 
-	ret = sign_gen_s3((const uint8_t *)S3_SECRET,
+	ret = sign_gen_s3(NULL,
+			  (const uint8_t *)S3_SECRET,
 			  sizeof(S3_SECRET) - 1,
 			  &op,
 			  &sig_src,
