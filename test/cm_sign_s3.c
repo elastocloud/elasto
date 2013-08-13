@@ -268,6 +268,32 @@ cm_sign_s3_unicode_keys(void **state)
 	assert_string_equal(sig_str, "DNEZGsoieTZ92F3bUfSPQcbGmlM=");
 }
 
+static void
+cm_sign_s3_redir(void **state)
+{
+	int ret;
+	struct azure_op op;
+	char *sig_src = NULL;
+	char *sig_str = NULL;
+
+	memset(&op, 0, sizeof(op));
+	list_head_init(&op.req.hdrs);
+	op.method = REQ_METHOD_DEL;
+	op.url_host = strdup("elastotest1029.s3-external-3.amazonaws.com");
+	op.url_path = strdup("/");
+	ret = azure_op_req_hdr_add(&op,
+				   "Date", "Wed, 28 Mar 2007 01:49:49 +0000");
+
+	ret = sign_gen_s3("elastotest1029",
+			  (const uint8_t *)S3_SECRET,
+			  sizeof(S3_SECRET) - 1,
+			  &op,
+			  &sig_src,
+			  &sig_str);
+	assert_int_equal(ret, 0);
+	assert_string_equal(sig_str, "DNEZGsoieTZ92F3bUfSPQcbGmlM=");
+}
+
 static const UnitTest cm_sign_s3_tests[] = {
 	unit_test(cm_sign_s3_object_get),
 	unit_test(cm_sign_s3_object_put),
@@ -277,5 +303,6 @@ static const UnitTest cm_sign_s3_tests[] = {
 	unit_test(cm_sign_s3_object_upload),
 	unit_test(cm_sign_s3_bucket_list_all),
 	unit_test(cm_sign_s3_unicode_keys),
+	unit_test(cm_sign_s3_redir),
 };
 
