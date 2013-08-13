@@ -272,17 +272,17 @@ static void
 cm_sign_s3_redir(void **state)
 {
 	int ret;
-	struct azure_op op;
+	struct op op;
 	char *sig_src = NULL;
 	char *sig_str = NULL;
 
 	memset(&op, 0, sizeof(op));
 	list_head_init(&op.req.hdrs);
-	op.method = REQ_METHOD_DEL;
+	op.method = REQ_METHOD_DELETE;
 	op.url_host = strdup("elastotest1029.s3-external-3.amazonaws.com");
 	op.url_path = strdup("/");
-	ret = azure_op_req_hdr_add(&op,
-				   "Date", "Wed, 28 Mar 2007 01:49:49 +0000");
+	ret = op_req_hdr_add(&op,
+			     "Date", "Wed, 28 Mar 2007 01:49:49 +0000");
 
 	ret = sign_gen_s3("elastotest1029",
 			  (const uint8_t *)S3_SECRET,
@@ -291,7 +291,7 @@ cm_sign_s3_redir(void **state)
 			  &sig_src,
 			  &sig_str);
 	assert_int_equal(ret, 0);
-	assert_string_equal(sig_str, "DNEZGsoieTZ92F3bUfSPQcbGmlM=");
+	assert_string_equal(sig_str, "6C8kD9KDok53JJkBfV2STjB1CcQ=");
 }
 
 static const UnitTest cm_sign_s3_tests[] = {
