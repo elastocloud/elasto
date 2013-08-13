@@ -15,6 +15,7 @@
 /* ugly: include .c files to generate UnitTest arrays */
 #include "cm_sign_s3.c"
 #include "cm_sign_azure.c"
+#include "cm_data.c"
 
 int
 main(void)
@@ -25,6 +26,7 @@ main(void)
 	sign_init();
 	ret = run_tests(cm_sign_s3_tests);
 	ret = run_tests(cm_sign_azure_tests);
+	ret = run_tests(cm_data_tests);
 	sign_deinit();
 	return ret;
 }
