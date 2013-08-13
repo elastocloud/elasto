@@ -36,7 +36,7 @@ elasto_conn_sign_setkey(struct elasto_conn *econn,
 		       const char *key_b64);
 
 int
-elasto_conn_send_op(struct elasto_conn *econn,
+elasto_conn_op_txrx(struct elasto_conn *econn,
 		    struct op *op);
 
 int

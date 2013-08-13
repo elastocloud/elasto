@@ -50,12 +50,7 @@ cli_sign_conn_setup(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}

@@ -518,37 +518,56 @@ elasto_conn_send_prepare(struct elasto_conn *econn, struct op *op)
 }
 
 int
-elasto_conn_send_op(struct elasto_conn *econn,
-		   struct op *op)
+elasto_conn_op_txrx(struct elasto_conn *econn,
+		    struct op *op)
 {
 	int ret;
 	CURLcode res;
+	int redirects = 0;
+	bool redirect;
 
-	op->econn = econn;
-	ret = elasto_conn_send_prepare(econn, op);
-	if (ret < 0) {
+	do {
+		redirect = false;
+		op->econn = econn;
+		ret = elasto_conn_send_prepare(econn, op);
+		if (ret < 0) {
+			op->econn = NULL;
+			return ret;
+		}
+
+		/* dispatch */
+		res = curl_easy_perform(econn->curl);
+		if (res != CURLE_OK) {
+			dbg(0, "curl_easy_perform() failed: %s\n",
+			       curl_easy_strerror(res));
+			op->econn = NULL;
+			return -EBADF;
+		}
+
+		if (op->rsp.write_cbs == 0) {
+			/* write callback already sets this, otherwise still needed */
+			curl_easy_getinfo(econn->curl, CURLINFO_RESPONSE_CODE,
+					  &op->rsp.err_code);
+			op->rsp.is_error = op_rsp_is_error(op->opcode,
+							      op->rsp.err_code);
+		}
+
 		op->econn = NULL;
-		return ret;
-	}
-
-	/* dispatch */
-	res = curl_easy_perform(econn->curl);
-	if (res != CURLE_OK) {
-		dbg(0, "curl_easy_perform() failed: %s\n",
-		       curl_easy_strerror(res));
-		op->econn = NULL;
-		return -EBADF;
-	}
-
-	if (op->rsp.write_cbs == 0) {
-		/* write callback already sets this, otherwise still needed */
-		curl_easy_getinfo(econn->curl, CURLINFO_RESPONSE_CODE,
-				  &op->rsp.err_code);
-		op->rsp.is_error = op_rsp_is_error(op->opcode,
-						      op->rsp.err_code);
-	}
-
-	op->econn = NULL;
+		ret = op_rsp_process(op);
+		if (ret == -EAGAIN) {
+			/* response is a redirect, resend */
+			ret = op_req_redirect(op);
+			if (ret < 0) {
+				return ret;
+			}
+			if (++redirects > 2) {
+				return -ELOOP;
+			}
+			redirect = true;
+		} else if (ret < 0) {
+			return ret;
+		}
+	} while (redirect);
 
 	return 0;
 }

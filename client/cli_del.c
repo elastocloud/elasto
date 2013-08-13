@@ -152,12 +152,7 @@ cli_del_acc_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -192,12 +187,7 @@ cli_del_blob_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -231,12 +221,7 @@ cli_del_ctnr_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -266,12 +251,7 @@ cli_del_bkt_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -302,12 +282,7 @@ cli_del_obj_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}

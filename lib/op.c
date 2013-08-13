@@ -263,6 +263,10 @@ op_free(struct op *op)
 	op->ebo_free(op);
 }
 
+/*
+ * Process error response and return 0, or -EAGAIN in the case of a redirect.
+ * Error information is stored under op->rsp.err.
+ */
 static int
 op_rsp_error_process(struct op *op)
 {
@@ -309,24 +313,28 @@ op_rsp_error_process(struct op *op)
 		goto err_pool_free;
 	}
 
-	dbg(0, "got error msg: %s\n", op->rsp.err.msg);
-
 	if (op->rsp.err_code == 307) {
 		/* temporary redirect, fill location */
 		ret = azure_xml_path_get(xdoc->root, "/Error/Endpoint",
 					 &op->rsp.err.redir_endpoint);
 		if (ret == -ENOENT) {
 			dbg(1, "got redirect response without endpoint\n");
+			goto err_msg_free;
 		} else if (ret < 0) {
 			goto err_msg_free;
 		} else {
 			dbg(3, "redirect response endpoint: %s\n",
 			    op->rsp.err.redir_endpoint);
 		}
+		/* EAGAIN implies resend with redirect */
+		ret = -EAGAIN;
+	} else {
+		dbg(0, "got error msg: %s\n", op->rsp.err.msg);
+		ret = 0;
 	}
 
 	apr_pool_destroy(pool);
-	return 0;
+	return ret;
 
 err_msg_free:
 	free(op->rsp.err.msg);

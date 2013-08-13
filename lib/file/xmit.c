@@ -44,12 +44,7 @@ elasto_fop_send_recv(struct elasto_conn *conn,
 {
 	int ret;
 
-	ret = elasto_conn_send_op(conn, op);
-	if (ret < 0) {
-		return ret;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(conn, op);
 	if (ret < 0) {
 		return ret;
 	}

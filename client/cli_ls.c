@@ -166,12 +166,7 @@ cli_ls_blob_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -228,12 +223,7 @@ cli_ls_ctnr_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -290,12 +280,7 @@ cli_ls_acc_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -344,12 +329,7 @@ cli_ls_sub_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -405,12 +385,7 @@ cli_ls_svc_handle(struct elasto_conn *econn)
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -460,12 +435,7 @@ cli_ls_bkt_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}

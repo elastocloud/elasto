@@ -202,15 +202,12 @@ cli_get_blob_handle(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = op_rsp_process(op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
+	/* TODO handle error */
 
 	ret = 0;
 err_op_free:
@@ -271,15 +268,12 @@ cli_get_obj_handle(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = op_rsp_process(op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
+	/* TODO handle error */
 
 	ret = 0;
 err_op_free:

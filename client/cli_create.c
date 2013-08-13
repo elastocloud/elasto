@@ -212,12 +212,7 @@ cli_create_handle_acc(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -286,12 +281,7 @@ cli_create_handle_ctnr(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -332,12 +322,7 @@ cli_create_handle_bkt(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}

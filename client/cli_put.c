@@ -177,12 +177,7 @@ cli_put_single_blob_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -279,15 +274,12 @@ cli_put_blocks(struct elasto_conn *econn,
 			goto err_blks_free;
 		}
 
-		ret = elasto_conn_send_op(econn, op);
+		ret = elasto_conn_op_txrx(econn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
+		/* XXX error rsp */
 
-		ret = op_rsp_process(op);
-		if (ret < 0) {
-			goto err_op_free;
-		}
 		/* ensure data is not freed */
 		op->req.data = NULL;
 		op_free(op);
@@ -351,12 +343,7 @@ cli_put_blocks_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -447,12 +434,7 @@ cli_put_single_obj_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -491,15 +473,11 @@ cli_put_multi_part_abort(struct elasto_conn *econn,
 	if (ret < 0) {
 		goto err_out;
 	}
-	ret = elasto_conn_send_op(econn, op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = op_rsp_process(op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
 	if (op->rsp.is_error) {
 		ret = -EIO;
 		printf("failed to abort upload %s: %d\n",
@@ -543,12 +521,7 @@ cli_put_part_handle(struct elasto_conn *econn,
 	if (ret < 0) {
 		goto err_part_free;
 	}
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -608,12 +581,7 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 		goto err_out;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		op_free(op);
-		goto err_out;
-	}
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		op_free(op);
 		goto err_out;
@@ -687,13 +655,7 @@ cli_put_multi_part_handle(struct elasto_conn *econn,
 		goto err_upload_abort;
 	}
 
-	ret = elasto_conn_send_op(econn, op);
-	if (ret < 0) {
-		op_free(op);
-		goto err_upload_abort;
-	}
-
-	ret = op_rsp_process(op);
+	ret = elasto_conn_op_txrx(econn, op);
 	if (ret < 0) {
 		op_free(op);
 		goto err_upload_abort;
