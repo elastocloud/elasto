@@ -28,7 +28,7 @@
 
 #include "ccan/list/list.h"
 #include "lib/util.h"
-#include "lib/azure_xml.h"
+#include "lib/xml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
 #include "lib/s3_req.h"

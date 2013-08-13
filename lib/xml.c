@@ -22,7 +22,7 @@
 #include "dbg.h"
 
 int
-azure_xml_slurp(apr_pool_t *pool,
+xml_slurp(apr_pool_t *pool,
 		bool is_file,
 		const uint8_t *buf,
 		uint64_t buf_len,
@@ -79,7 +79,7 @@ err_out:
 
 /* find element at the same level as @xel */
 static int
-azure_xml_elem_lev_find(struct apr_xml_elem *xel,
+xml_elem_lev_find(struct apr_xml_elem *xel,
 			const char *name,
 			struct apr_xml_elem **xel_found_out)
 {
@@ -100,7 +100,7 @@ azure_xml_elem_lev_find(struct apr_xml_elem *xel,
  *	/grandparent/parent/child
  */
 int
-azure_xml_path_el_get(struct apr_xml_elem *xel_parent,
+xml_path_el_get(struct apr_xml_elem *xel_parent,
 		      const char *xp_expr,
 		      struct apr_xml_elem **xel_child_out)
 {
@@ -119,7 +119,7 @@ azure_xml_path_el_get(struct apr_xml_elem *xel_parent,
 	xel_next = xel_parent;
 	while ((component != NULL) && (xel_next != NULL)) {
 		/* check for index */
-		ret = azure_xml_elem_lev_find(xel_next, component, &xel);
+		ret = xml_elem_lev_find(xel_next, component, &xel);
 		if (ret < 0) {
 			dbg(4, "could not find %s xpath component of %s\n",
 			    component, xp_expr);
@@ -141,14 +141,14 @@ err_out:
 
 /* get string value at corresponding xpath */
 int
-azure_xml_path_get(struct apr_xml_elem *xel_parent,
+xml_path_get(struct apr_xml_elem *xel_parent,
 		   const char *xp_expr,
 		   char **value)
 {
 	int ret;
 	struct apr_xml_elem *xel;
 
-	ret = azure_xml_path_el_get(xel_parent, xp_expr, &xel);
+	ret = xml_path_el_get(xel_parent, xp_expr, &xel);
 	if (ret < 0) {
 		return ret;
 	}
@@ -169,7 +169,7 @@ azure_xml_path_get(struct apr_xml_elem *xel_parent,
 
 /* get integer value at corresponding xpath */
 int
-azure_xml_path_i32_get(struct apr_xml_elem *xel_parent,
+xml_path_i32_get(struct apr_xml_elem *xel_parent,
 		       const char *xp_expr,
 		       int32_t *value)
 {
@@ -178,7 +178,7 @@ azure_xml_path_i32_get(struct apr_xml_elem *xel_parent,
 	char *sval_end;
 	int32_t val;
 
-	ret = azure_xml_path_el_get(xel_parent, xp_expr, &xel);
+	ret = xml_path_el_get(xel_parent, xp_expr, &xel);
 	if (ret < 0) {
 		return ret;
 	}
@@ -199,7 +199,7 @@ azure_xml_path_i32_get(struct apr_xml_elem *xel_parent,
 }
 
 int
-azure_xml_path_i64_get(struct apr_xml_elem *xel_parent,
+xml_path_i64_get(struct apr_xml_elem *xel_parent,
 		       const char *xp_expr,
 		       int64_t *value)
 {
@@ -208,7 +208,7 @@ azure_xml_path_i64_get(struct apr_xml_elem *xel_parent,
 	char *sval_end;
 	int64_t val;
 
-	ret = azure_xml_path_el_get(xel_parent, xp_expr, &xel);
+	ret = xml_path_el_get(xel_parent, xp_expr, &xel);
 	if (ret < 0) {
 		return ret;
 	}
@@ -229,7 +229,7 @@ azure_xml_path_i64_get(struct apr_xml_elem *xel_parent,
 }
 
 int
-azure_xml_path_u64_get(struct apr_xml_elem *xel_parent,
+xml_path_u64_get(struct apr_xml_elem *xel_parent,
 		       const char *xp_expr,
 		       uint64_t *value)
 {
@@ -238,7 +238,7 @@ azure_xml_path_u64_get(struct apr_xml_elem *xel_parent,
 	char *sval_end;
 	uint64_t val;
 
-	ret = azure_xml_path_el_get(xel_parent, xp_expr, &xel);
+	ret = xml_path_el_get(xel_parent, xp_expr, &xel);
 	if (ret < 0) {
 		return ret;
 	}
@@ -259,7 +259,7 @@ azure_xml_path_u64_get(struct apr_xml_elem *xel_parent,
 }
 
 int
-azure_xml_path_bool_get(struct apr_xml_elem *xel_parent,
+xml_path_bool_get(struct apr_xml_elem *xel_parent,
 			const char *xp_expr,
 			bool *value)
 {
@@ -267,7 +267,7 @@ azure_xml_path_bool_get(struct apr_xml_elem *xel_parent,
 	char *bool_str;
 	bool val;
 
-	ret = azure_xml_path_get(xel_parent, xp_expr, &bool_str);
+	ret = xml_path_get(xel_parent, xp_expr, &bool_str);
 	if (ret < 0) {
 		return ret;
 	}
@@ -288,7 +288,7 @@ azure_xml_path_bool_get(struct apr_xml_elem *xel_parent,
 }
 
 int
-azure_xml_attr_get(struct apr_xml_elem *xel,
+xml_attr_get(struct apr_xml_elem *xel,
 		   const char *key,
 		   char **value)
 {

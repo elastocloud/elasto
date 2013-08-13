@@ -32,7 +32,7 @@
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
-#include "azure_xml.h"
+#include "xml.h"
 #include "op.h"
 #include "conn.h"
 
@@ -154,13 +154,13 @@ azure_ssl_pubset_process(const char *ps_file,
 		goto err_ps_free;
 	}
 
-	ret = azure_xml_slurp(pool, true, (uint8_t *)ps_file, strlen(ps_file),
+	ret = xml_slurp(pool, true, (uint8_t *)ps_file, strlen(ps_file),
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
 	}
 
-	ret = azure_xml_path_el_get(xdoc->root,
+	ret = xml_path_el_get(xdoc->root,
 				    "/PublishData/PublishProfile/Subscription",
 				    &xel);
 	if (ret < 0) {
@@ -169,7 +169,7 @@ azure_ssl_pubset_process(const char *ps_file,
 		goto err_pool_free;
 	}
 
-	ret = azure_xml_attr_get(xel, "Id", &sid);
+	ret = xml_attr_get(xel, "Id", &sid);
 	if (ret < 0) {
 		dbg(0, "Failed to read Azure Subscription ID from %s\n",
 		    ps_file);
@@ -177,14 +177,14 @@ azure_ssl_pubset_process(const char *ps_file,
 	}
 
 
-	ret = azure_xml_attr_get(xel, "Name", &sname);
+	ret = xml_attr_get(xel, "Name", &sname);
 	if (ret < 0) {
 		dbg(0, "Failed to read Azure Subscription Name from %s\n",
 		    ps_file);
 		goto err_sid_free;
 	}
 
-	ret = azure_xml_path_el_get(xdoc->root,
+	ret = xml_path_el_get(xdoc->root,
 				    "/PublishData/PublishProfile", &xel);
 	if (ret < 0) {
 		dbg(0, "Failed to find Azure Subscription data in %s\n",
@@ -192,7 +192,7 @@ azure_ssl_pubset_process(const char *ps_file,
 		goto err_sname_free;
 	}
 
-	ret = azure_xml_attr_get(xel, "ManagementCertificate", &mcert_b64);
+	ret = xml_attr_get(xel, "ManagementCertificate", &mcert_b64);
 	if (ret < 0) {
 		dbg(0, "Failed to read Azure ManagementCertificate from %s\n",
 		    ps_file);

@@ -29,7 +29,7 @@
 #include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
-#include "lib/azure_xml.h"
+#include "lib/xml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
 #include "lib/conn.h"

@@ -32,7 +32,7 @@
 #include "dbg.h"
 #include "base64.h"
 #include "util.h"
-#include "azure_xml.h"
+#include "xml.h"
 #include "data_api.h"
 #include "op.h"
 
@@ -294,13 +294,13 @@ op_rsp_error_process(struct op *op)
 		goto err_out;
 	}
 
-	ret = azure_xml_slurp(pool, false, op->rsp.err.buf, op->rsp.err.off,
+	ret = xml_slurp(pool, false, op->rsp.err.buf, op->rsp.err.off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
 	}
 
-	ret = azure_xml_path_get(xdoc->root, "/Error/Message",
+	ret = xml_path_get(xdoc->root, "/Error/Message",
 				 &op->rsp.err.msg);
 	if (ret == -ENOENT) {
 		/* data attached, but no error description XML */
@@ -315,7 +315,7 @@ op_rsp_error_process(struct op *op)
 
 	if (op->rsp.err_code == 307) {
 		/* temporary redirect, fill location */
-		ret = azure_xml_path_get(xdoc->root, "/Error/Endpoint",
+		ret = xml_path_get(xdoc->root, "/Error/Endpoint",
 					 &op->rsp.err.redir_endpoint);
 		if (ret == -ENOENT) {
 			dbg(1, "got redirect response without endpoint\n");

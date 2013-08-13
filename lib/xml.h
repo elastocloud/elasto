@@ -15,44 +15,44 @@
 #define _AZURE_XML_H_
 
 int
-azure_xml_slurp(apr_pool_t *pool,
+xml_slurp(apr_pool_t *pool,
 		bool is_file,
 		const uint8_t *buf,
 		uint64_t buf_len,
 		struct apr_xml_doc **xdoc_out);
 
 int
-azure_xml_path_get(struct apr_xml_elem *xel_parent,
+xml_path_get(struct apr_xml_elem *xel_parent,
 		   const char *xp_expr,
 		   char **value);
 
 int
-azure_xml_path_i32_get(struct apr_xml_elem *xel_parent,
+xml_path_i32_get(struct apr_xml_elem *xel_parent,
 		       const char *xp_expr,
 		       int32_t *value);
 
 int
-azure_xml_path_i64_get(struct apr_xml_elem *xel_parent,
+xml_path_i64_get(struct apr_xml_elem *xel_parent,
 		       const char *xp_expr,
 		       int64_t *value);
 
 int
-azure_xml_path_u64_get(struct apr_xml_elem *xel_parent,
+xml_path_u64_get(struct apr_xml_elem *xel_parent,
 		       const char *xp_expr,
 		       uint64_t *value);
 
 int
-azure_xml_path_bool_get(struct apr_xml_elem *xel_parent,
+xml_path_bool_get(struct apr_xml_elem *xel_parent,
 			const char *xp_expr,
 			bool *value);
 
 int
-azure_xml_path_el_get(struct apr_xml_elem *xel_parent,
+xml_path_el_get(struct apr_xml_elem *xel_parent,
 		      const char *xp_expr,
 		      struct apr_xml_elem **xel_child_out);
 
 int
-azure_xml_attr_get(struct apr_xml_elem *xel,
+xml_attr_get(struct apr_xml_elem *xel,
 		   const char *key,
 		   char **value);
 #endif /* _AZURE_XML_H_ */

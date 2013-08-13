@@ -32,7 +32,7 @@
 #include "dbg.h"
 #include "base64.h"
 #include "util.h"
-#include "azure_xml.h"
+#include "xml.h"
 #include "data_api.h"
 #include "op.h"
 #include "sign.h"
@@ -233,12 +233,12 @@ s3_rsp_bkt_iter_process(struct apr_xml_elem *xel,
 		goto err_out;
 	}
 
-	ret = azure_xml_path_get(xel, "Name", &bkt->name);
+	ret = xml_path_get(xel, "Name", &bkt->name);
 	if (ret < 0) {
 		goto err_blk_free;
 	}
 
-	ret = azure_xml_path_get(xel, "CreationDate", &bkt->create_date);
+	ret = xml_path_get(xel, "CreationDate", &bkt->create_date);
 	if (ret < 0) {
 		goto err_name_free;
 	}
@@ -276,19 +276,19 @@ s3_rsp_svc_list_process(struct op *op,
 	}
 
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
+	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
 	}
 
-	ret = azure_xml_path_get(xdoc->root, "/ListAllMyBucketsResult/Owner/ID",
+	ret = xml_path_get(xdoc->root, "/ListAllMyBucketsResult/Owner/ID",
 				 &svc_list_rsp->id);
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_pool_free;
 	}
 
-	ret = azure_xml_path_get(xdoc->root, "/ListAllMyBucketsResult/Owner/DisplayName",
+	ret = xml_path_get(xdoc->root, "/ListAllMyBucketsResult/Owner/DisplayName",
 				 &svc_list_rsp->disp_name);
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_pool_free;
@@ -297,7 +297,7 @@ s3_rsp_svc_list_process(struct op *op,
 	list_head_init(&svc_list_rsp->bkts);
 
 	/* get the first, if present */
-	ret = azure_xml_path_el_get(xdoc->root,
+	ret = xml_path_el_get(xdoc->root,
 				    "/ListAllMyBucketsResult/Buckets/Bucket",
 				    &xel);
 	if (ret == -ENOENT) {
@@ -427,22 +427,22 @@ s3_rsp_obj_iter_process(struct apr_xml_elem *xel,
 		goto err_out;
 	}
 
-	ret = azure_xml_path_get(xel, "Key", &obj->key);
+	ret = xml_path_get(xel, "Key", &obj->key);
 	if (ret < 0) {
 		goto err_obj_free;
 	}
 
-	ret = azure_xml_path_get(xel, "LastModified", &obj->last_mod);
+	ret = xml_path_get(xel, "LastModified", &obj->last_mod);
 	if (ret < 0) {
 		goto err_key_free;
 	}
 
-	ret = azure_xml_path_u64_get(xel, "Size", &obj->size);
+	ret = xml_path_u64_get(xel, "Size", &obj->size);
 	if (ret < 0) {
 		goto err_mod_free;
 	}
 
-	ret = azure_xml_path_get(xel, "StorageClass", &obj->store_class);
+	ret = xml_path_get(xel, "StorageClass", &obj->store_class);
 	if (ret < 0) {
 		goto err_mod_free;
 	}
@@ -483,13 +483,13 @@ s3_rsp_bkt_list_process(struct op *op,
 	}
 
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
+	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
 	}
 
-	ret = azure_xml_path_bool_get(xdoc->root,
+	ret = xml_path_bool_get(xdoc->root,
 				      "/ListBucketResult/IsTruncated",
 				      &bkt_list_rsp->truncated);
 	if (ret < 0) {
@@ -499,7 +499,7 @@ s3_rsp_bkt_list_process(struct op *op,
 	list_head_init(&bkt_list_rsp->objs);
 
 	/* get the first, if present */
-	ret = azure_xml_path_el_get(xdoc->root,
+	ret = xml_path_el_get(xdoc->root,
 				    "/ListBucketResult/Contents",
 				    &xel);
 	if (ret == -ENOENT) {
@@ -1174,13 +1174,13 @@ s3_rsp_mp_start_process(struct op *op,
 	}
 
 	assert(op->rsp.data->base_off == 0);
-	ret = azure_xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
+	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
 			      &xdoc);
 	if (ret < 0) {
 		goto err_pool_free;
 	}
 
-	ret = azure_xml_path_get(xdoc->root, "/InitiateMultipartUploadResult/UploadId",
+	ret = xml_path_get(xdoc->root, "/InitiateMultipartUploadResult/UploadId",
 				 &mp_start_rsp->upload_id);
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_pool_free;
