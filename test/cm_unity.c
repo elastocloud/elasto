@@ -26,6 +26,9 @@
 #include <apr-1/apr_general.h>
 #include <apr-1/apr_xml.h>
 
+#include <setjmp.h>
+#include <cmocka.h>
+
 #include "ccan/list/list.h"
 #include "lib/xml.h"
 #include "lib/op.h"
@@ -37,7 +40,37 @@
 #include "lib/dbg.h"
 #include "cm_test.h"
 
-void cm_unity_usage(const char *progname)
+struct cm_unity_state *cm_ustate;
+
+struct cm_unity_state *
+cm_unity_state_get(void)
+{
+	assert_non_null(cm_ustate);
+	return cm_ustate;
+}
+
+static int
+cm_unity_state_init(void)
+{
+	int ret;
+
+	cm_ustate = malloc(sizeof(*cm_ustate));
+	if (cm_ustate == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(cm_ustate, 0, sizeof(*cm_ustate));
+	cm_ustate->insecure_http = false;
+	cm_ustate->acc = strdup("elastotest");
+	cm_ustate->ctnr = strdup("testctnr");
+
+	ret = 0;
+err_out:
+	return ret;
+}
+
+static void
+cm_unity_usage(const char *progname)
 {
 	printf("Usage: %s [-s publish settings] [-k S3 key-duo]"
 	       " [-d debug_level] [-i]\n", progname);
@@ -52,28 +85,29 @@ main(int argc,
 	extern char *optarg;
 	extern int optind;
 	int debug_level = 1;
-	char *pub_settings = NULL;
-	char *s3_id = NULL;
-	char *s3_secret = NULL;
-	bool insecure_http = false;
+
+	ret = cm_unity_state_init();
+	if (ret < 0) {
+		goto err_out;
+	}
 
 	while ((opt = getopt(argc, argv, "s:k:d:?i")) != -1) {
 		char *sep;
 		switch (opt) {
 		case 's':
-			pub_settings = strdup(optarg);
-			if (pub_settings == NULL) {
+			cm_ustate->pub_settings = strdup(optarg);
+			if (cm_ustate->pub_settings == NULL) {
 				ret = -ENOMEM;
 				goto err_out;
 			}
 			break;
 		case 'k':
-			s3_id = strdup(optarg);
-			if (s3_id == NULL) {
+			cm_ustate->s3_id = strdup(optarg);
+			if (cm_ustate->s3_id == NULL) {
 				ret = -ENOMEM;
 				goto err_out;
 			}
-			sep = strchr(s3_id, ',');
+			sep = strchr(cm_ustate->s3_id, ',');
 			if (sep == NULL) {
 				break;
 			}
@@ -81,8 +115,8 @@ main(int argc,
 				ret = -EINVAL;
 				goto err_out;
 			}
-			s3_secret = strdup(sep + 1);
-			if (s3_secret == NULL) {
+			cm_ustate->s3_secret = strdup(sep + 1);
+			if (cm_ustate->s3_secret == NULL) {
 				ret = -ENOMEM;
 				goto err_out;
 			}
@@ -92,7 +126,7 @@ main(int argc,
 			debug_level = (uint32_t)strtol(optarg, NULL, 10);
 			break;
 		case 'i':
-			insecure_http = true;
+			cm_ustate->insecure_http = true;
 			break;
 		case '?':
 		default:
@@ -103,15 +137,15 @@ main(int argc,
 		}
 	}
 
-	if ((s3_id != NULL) && (s3_secret == NULL)) {
+	if ((cm_ustate->s3_id != NULL) && (cm_ustate->s3_secret == NULL)) {
 		char *sak;
 		sak = getpass("S3 secret access key: ");
 		if (sak == NULL) {
 			ret = -EINVAL;
 			goto err_out;
 		}
-		s3_secret = strdup(sak);
-		if (s3_secret == NULL) {
+		cm_ustate->s3_secret = strdup(sak);
+		if (cm_ustate->s3_secret == NULL) {
 			ret = -ENOMEM;
 			goto err_out;
 		}

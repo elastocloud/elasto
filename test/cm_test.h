@@ -14,6 +14,18 @@
 #ifndef _CM_TEST_H_
 #define _CM_TEST_H_
 
+struct cm_unity_state {
+	char *pub_settings;
+	char *s3_id;
+	char *s3_secret;
+	bool insecure_http;
+	char *acc;
+	char *ctnr;
+};
+
+struct cm_unity_state *
+cm_unity_state_get(void);
+
 int
 cm_sign_s3_run(void);
 
@@ -23,4 +35,4 @@ cm_sign_azure_run(void);
 int
 cm_data_run(void);
 
-#endif /* _HANDLE_H_ */
+#endif /* _CM_TEST_H_ */
