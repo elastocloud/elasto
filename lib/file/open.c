@@ -41,7 +41,7 @@
 #include "xmit.h"
 
 /* XXX dup of path parsing code in elasto_cli.c */
-static int
+int
 elasto_fpath_az_parse(const char *path,
 		      struct elasto_fh_az_path *az_path)
 {
@@ -136,7 +136,7 @@ err_out:
 	return ret;
 }
 
-static void
+void
 elasto_fpath_az_free(struct elasto_fh_az_path *az_path)
 {
 	free(az_path->acc);
@@ -145,7 +145,7 @@ elasto_fpath_az_free(struct elasto_fh_az_path *az_path)
 }
 
 /* XXX dup of cli_sign_conn_setup */
-static int
+int
 elasto_fsign_conn_setup(struct elasto_conn *econn,
 			const char *sub_id,
 			const char *acc)

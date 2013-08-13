@@ -33,6 +33,14 @@ struct elasto_fauth {
 };
 
 int
+elasto_fmkdir(const struct elasto_fauth *auth,
+	      const char *path);
+
+int
+elasto_frmdir(const struct elasto_fauth *auth,
+	      const char *path);
+
+int
 elasto_fcreate(const struct elasto_fauth *auth,
 	       const char *path,
 	       uint64_t size,

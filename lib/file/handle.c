@@ -101,7 +101,9 @@ elasto_fh_free(struct elasto_fh *fh)
 {
 	struct elasto_fh_priv *fh_priv = fh->priv;
 
-	elasto_conn_free(fh_priv->conn);
+	if (fh_priv->conn != NULL) {
+		elasto_conn_free(fh_priv->conn);
+	}
 	free(fh_priv->az.pem_path);
 	free(fh_priv->az.sub_id);
 	free(fh_priv->az.sub_name);

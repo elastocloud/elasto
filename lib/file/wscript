@@ -6,7 +6,7 @@ def configure(conf):
 	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 
 def build(bld):
-	bld.shlib(source='''handle.c  io.c  open.c  xmit.c''',
+	bld.shlib(source='''handle.c io.c open.c xmit.c dir.c''',
 		  target='elasto_file0',
 		  lib=['curl', 'xml2', 'crypto'],
 		  use=['elasto', 'ccan'],
