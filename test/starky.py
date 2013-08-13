@@ -38,6 +38,7 @@ class StarkyContext:
 	s3_key_duo = None
 	acc_prefix = "elastotest"
 	acc_loc = "West Europe"
+	bkt_loc = "eu-west-1"
 	ctnr = "starky"
 
 	def __init__(self, options):
@@ -76,6 +77,9 @@ class StarkyContext:
 		# TODO check for uniqueness, must be valid and unique within the
 		# azure.com DNS namespace
 		return self.acc_prefix + str(random.randint(0, 10000))
+
+	def bkt_name_get(self):
+		return self.acc_name_get()
 
 
 class StarkyTestAzureCreate(unittest.TestCase):
@@ -281,6 +285,183 @@ class StarkyTestAzureIo(unittest.TestCase):
 
 		self.assertEqual(src_md5, xfer_md5, "md5sums do not match")
 
+class StarkyTestS3Create(unittest.TestCase):
+	"Amazon S3 creation tests"
+
+	def __init__(self, testname, test_ctx):
+		super(StarkyTestS3Create, self).__init__(testname)
+		self.ctx = test_ctx
+
+	def test_bucket(self):
+		'''
+		Create a bucket, then check for its existence using ls.
+		'''
+		bkt_name = self.ctx.bkt_name_get()
+		sp = subprocess
+		cmd = "%s -- create %s" \
+		      % (self.ctx.cli_s3_cmd, bkt_name)
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "create failed with "
+					+ str(e.returncode) + e.output)
+
+		cmd = self.ctx.cli_s3_cmd + " -- ls " + bkt_name
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "ls failed with "
+					+ str(e.returncode))
+
+		cmd = self.ctx.cli_s3_cmd + " -- del " + bkt_name
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "del failed with "
+					+ str(e.returncode))
+
+class StarkyTestS3Io(unittest.TestCase):
+	"S3 object IO tests"
+
+	def __init__(self, testname, test_ctx):
+		super(StarkyTestS3Io, self).__init__(testname)
+		self.ctx = test_ctx
+		self.tmp_dir_created = False
+
+	def setUp(self):
+		try:
+			self.tmp_dir = tempfile.mkdtemp(prefix='elasto_tmp')
+		except:
+			self.assertTrue(False, "failed to create tmpdir")
+		self.tmp_dir_created = True
+
+		self.bkt_name = self.ctx.bkt_name_get()
+		sp = subprocess
+		cmd = "%s -- create -L %s %s" \
+		      % (self.ctx.cli_s3_cmd, self.ctx.bkt_loc, self.bkt_name)
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "create failed with "
+					+ str(e.returncode) + e.output)
+
+	def tearDown(self):
+		if (self.tmp_dir_created == True):
+			shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+		sp = subprocess
+		cmd = "%s -- del %s" \
+		      % (self.ctx.cli_s3_cmd, self.bkt_name)
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "del failed with "
+					+ str(e.returncode) + e.output)
+
+	def test_put_get_obj_md5(self):
+		tmp_path = self.tmp_dir + "/" + "got_obj"
+		sp = subprocess
+		# put the elasto client binary
+		cmd = "%s -- put \"%s\" %s/%s" \
+		      % (self.ctx.cli_s3_cmd,
+			 self.ctx.cli_bin, self.bkt_name, "obj")
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "put object failed with "
+					+ str(e.returncode))
+
+		# read back binary
+		cmd = "%s -- get %s/%s %s" \
+		      % (self.ctx.cli_s3_cmd,
+			 self.bkt_name, "obj", tmp_path)
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "get object failed with "
+					+ str(e.returncode))
+
+		# compare md5 on each file
+		f = open(self.ctx.cli_bin, "r")
+		src_md5 = md5_for_file(f)
+		f.close()
+		f = open(tmp_path, "r")
+		xfer_md5 = md5_for_file(f)
+		f.close()
+
+		self.assertEqual(src_md5, xfer_md5, "md5sums do not match")
+
+		# clean-up, otherwise bucket delete on teardown will fail
+		cmd = "%s -- del %s/%s" \
+		      % (self.ctx.cli_s3_cmd,
+			 self.bkt_name, "obj")
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "del object failed with "
+					+ str(e.returncode))
+
+	def test_cp_obj_md5(self):
+		tmp_path = self.tmp_dir + "/" + "got_cp_obj"
+		sp = subprocess
+		# put the elasto client binary
+		cmd = "%s -- put \"%s\" %s/%s" \
+		      % (self.ctx.cli_s3_cmd,
+			 self.ctx.cli_bin, self.bkt_name, "obj")
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "put object failed with "
+					+ str(e.returncode))
+
+		cmd = "%s -- cp %s/%s %s/%s" \
+		      % (self.ctx.cli_s3_cmd,
+			 self.bkt_name, "obj",
+			 self.bkt_name, "cp_obj")
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "cp object failed with "
+					+ str(e.returncode))
+
+		# read back copy of binary
+		cmd = "%s -- get %s/%s %s" \
+		      % (self.ctx.cli_s3_cmd,
+			 self.bkt_name, "cp_obj", tmp_path)
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "get object failed with "
+					+ str(e.returncode))
+
+		# compare md5 on each file
+		f = open(self.ctx.cli_bin, "r")
+		src_md5 = md5_for_file(f)
+		f.close()
+		f = open(tmp_path, "r")
+		xfer_md5 = md5_for_file(f)
+		f.close()
+
+		self.assertEqual(src_md5, xfer_md5, "md5sums do not match")
+
+		# clean-up, otherwise bucket delete on teardown will fail
+		cmd = "%s -- del %s/%s" \
+		      % (self.ctx.cli_s3_cmd,
+			 self.bkt_name, "obj")
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "del object failed with "
+					+ str(e.returncode))
+
+		cmd = "%s -- del %s/%s" \
+		      % (self.ctx.cli_s3_cmd,
+			 self.bkt_name, "cp_obj")
+		try:
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "del object failed with "
+					+ str(e.returncode))
 
 if __name__ == '__main__':
 	parser = optparse.OptionParser()
@@ -310,4 +491,7 @@ if __name__ == '__main__':
 	suite.addTest(StarkyTestAzureCreate("test_container", ctx))
 	suite.addTest(StarkyTestAzureIo("test_put_get_md5", ctx))
 	suite.addTest(StarkyTestAzureIo("test_cp_md5", ctx))
+	suite.addTest(StarkyTestS3Create("test_bucket", ctx))
+	suite.addTest(StarkyTestS3Io("test_put_get_obj_md5", ctx))
+	suite.addTest(StarkyTestS3Io("test_cp_obj_md5", ctx))
 	unittest.TextTestRunner().run(suite)
