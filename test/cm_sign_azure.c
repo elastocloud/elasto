@@ -80,3 +80,9 @@ cm_sign_az_list(void **state)
 static const UnitTest cm_sign_azure_tests[] = {
 	unit_test(cm_sign_az_list),
 };
+
+int
+cm_sign_azure_run(void)
+{
+	return run_tests(cm_sign_azure_tests);
+}

@@ -112,3 +112,9 @@ static const UnitTest cm_data_tests[] = {
 	unit_test(cm_data_iovec),
 	unit_test(cm_data_file),
 };
+
+int
+cm_data_run(void)
+{
+	return run_tests(cm_data_tests);
+}

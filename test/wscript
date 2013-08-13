@@ -11,7 +11,7 @@ def build(bld):
 	if bld.env.SKIP_TEST in ["yes"]:
 		print("Skipping test: Cmocka library required")
 		return
-	bld.program(source='cm_unity.c',      # includes all unit test .c files
+	bld.program(source='cm_unity.c cm_data.c  cm_sign_azure.c cm_sign_s3.c',
 		    target='cm_unity',
 		    lib=['curl','apr-1','aprutil-1','crypto','cmocka'],
 		    use=['ccan','elasto'],

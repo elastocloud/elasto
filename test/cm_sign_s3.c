@@ -306,3 +306,8 @@ static const UnitTest cm_sign_s3_tests[] = {
 	unit_test(cm_sign_s3_redir),
 };
 
+int
+cm_sign_s3_run(void)
+{
+	return run_tests(cm_sign_s3_tests);
+}

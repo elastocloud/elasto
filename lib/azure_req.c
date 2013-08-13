@@ -35,6 +35,7 @@
 #include "xml.h"
 #include "data_api.h"
 #include "op.h"
+#include "sign.h"
 #include "azure_req.h"
 
 /*
