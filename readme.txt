@@ -102,3 +102,6 @@ rest-client-c:	Object-oriented REST client in C.
 
 atmos-c:	C library for EMC Atmos cloud storage.
 		http://code.google.com/p/atmos-c/
+
+Droplet:	Cloud storage client library
+		https://github.com/scality/Droplet
