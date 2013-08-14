@@ -63,6 +63,7 @@ cm_unity_state_init(void)
 	cm_ustate->insecure_http = false;
 	cm_ustate->acc = strdup("elastotest");
 	cm_ustate->ctnr = strdup("testctnr");
+	cm_ustate->ctnr_suffix = rand();
 
 	ret = 0;
 err_out:
@@ -84,7 +85,7 @@ main(int argc,
 	int opt;
 	extern char *optarg;
 	extern int optind;
-	int debug_level = 1;
+	int debug_level = 0;
 
 	ret = cm_unity_state_init();
 	if (ret < 0) {
@@ -95,8 +96,8 @@ main(int argc,
 		char *sep;
 		switch (opt) {
 		case 's':
-			cm_ustate->pub_settings = strdup(optarg);
-			if (cm_ustate->pub_settings == NULL) {
+			cm_ustate->ps_file = strdup(optarg);
+			if (cm_ustate->ps_file == NULL) {
 				ret = -ENOMEM;
 				goto err_out;
 			}
@@ -156,7 +157,13 @@ main(int argc,
 	cm_sign_s3_run();
 	cm_sign_azure_run();
 	cm_data_run();
+	if (cm_ustate->ps_file == NULL) {
+		printf("skipping cm_file tests, no publish settings file\n");
+	} else {
+		cm_file_run();
+	}
 	sign_deinit();
+	ret = 0;
 
 err_out:
 	return ret;

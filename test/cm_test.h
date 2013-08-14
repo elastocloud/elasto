@@ -14,13 +14,19 @@
 #ifndef _CM_TEST_H_
 #define _CM_TEST_H_
 
+/*
+ * Each container create-delete cycle should bump the @ctnr-suffix. Otherwise
+ * subsequent attempts to create the same (deleted) container can fail with
+ * 409 - The specified container is being deleted. Try operation later.
+ */
 struct cm_unity_state {
-	char *pub_settings;
+	char *ps_file;
 	char *s3_id;
 	char *s3_secret;
 	bool insecure_http;
 	char *acc;
 	char *ctnr;
+	int ctnr_suffix;
 };
 
 struct cm_unity_state *
@@ -34,5 +40,8 @@ cm_sign_azure_run(void);
 
 int
 cm_data_run(void);
+
+int
+cm_file_run(void);
 
 #endif /* _CM_TEST_H_ */
