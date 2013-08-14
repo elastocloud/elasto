@@ -127,6 +127,8 @@ cli_ls_args_parse_s3(int argc,
 					  NULL);
 		if (ret < 0)
 			goto err_out;
+	} else {
+		cli_args->s3.bkt_name = NULL;
 	}
 	cli_args->s3.obj_name = NULL;
 

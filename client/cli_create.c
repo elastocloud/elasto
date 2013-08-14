@@ -115,6 +115,7 @@ cli_create_args_parse(int argc,
 	/* reset index to start scanning again */
 	optind = 1;
 
+	memset(&cli_args->create, 0, sizeof(cli_args->create));
 	while ((opt = getopt(argc, argv, "l:d:A:L:")) != -1) {
 		switch (opt) {
 		case 'l':
