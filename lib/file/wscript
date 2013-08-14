@@ -8,7 +8,7 @@ def configure(conf):
 def build(bld):
 	bld.shlib(source='''handle.c io.c open.c xmit.c dir.c''',
 		  target='elasto_file0',
-		  lib=['curl', 'xml2', 'crypto'],
+		  lib=['curl', 'apr-1', 'aprutil-1', 'crypto'],
 		  use=['elasto', 'ccan'],
 		  includes = '. .. ../../')
 	bld.install_as('${INCLUDEDIR}/elasto/file.h', 'file_api.h')
