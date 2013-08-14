@@ -5,6 +5,7 @@ def configure(conf):
 	conf.load('compiler_c')
 	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 	conf.find_program('docbook-to-man', mandatory=False, var='D2M')
+	conf.find_program('gzip', mandatory=True, var='GZIP')
 
 def build(bld):
 	if bld.env.D2M:
@@ -13,4 +14,7 @@ def build(bld):
 		print("Skipping documentation build: "
 		      "docbook-to-man binary required")
 		# install pre-built man page
-	bld.install_files('${MANDIR}', ['elasto_cli.1'])
+	bld(rule='${GZIP} -c ${SRC} > ${TGT}',
+	    source='elasto_cli.1',
+	    target='elasto_cli.1.gz')
+	bld.install_files('${MANDIR}/man1/', ['elasto_cli.1.gz'])
