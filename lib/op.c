@@ -231,15 +231,14 @@ op_rsp_is_error(int opcode, int err_code)
 static void
 op_req_free(struct op *op)
 {
-	op->req_free(op);
 	op_hdrs_free(&op->req.hdrs);
 	elasto_data_free(op->req.data);
+	op->req_free(op);
 }
 
 static void
 op_rsp_free(struct op *op)
 {
-	op->rsp_free(op);
 	op_hdrs_free(&op->rsp.hdrs);
 	elasto_data_free(op->rsp.data);
 
@@ -250,6 +249,7 @@ op_rsp_free(struct op *op)
 	}
 
 	free(op->rsp.req_id);
+	op->rsp_free(op);
 }
 
 void
