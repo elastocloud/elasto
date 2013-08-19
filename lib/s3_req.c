@@ -172,6 +172,9 @@ s3_rsp_svc_list_free(struct s3_rsp_svc_list *svc_list_rsp)
 
 	free(svc_list_rsp->id);
 	free(svc_list_rsp->disp_name);
+	if (svc_list_rsp->num_bkts <= 0) {
+		return;
+	}
 	list_for_each_safe(&svc_list_rsp->bkts, bkt, bkt_n, list) {
 		s3_bkt_free(&bkt);
 	}
