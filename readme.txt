@@ -23,7 +23,15 @@ elasto source tree:
 > ./waf configure
 > ./waf build
 
-Once compiled, the client binary will be placed under ./build/client/.
+
+Installing
+----------
+
+After building, Elasto can be installed by running:
+> ./waf install
+
+Pre-build packages for GNU/Linux distributions are available via the
+Elasto project website.
 
 
 Running (short version)
@@ -35,15 +43,17 @@ Running (short version)
   2. Download the PublishSettings file for the account:
      https://windows.azure.com/download/publishprofile.aspx
 
-  3. ./elasto_cli -s Azure_PublishSettings_File
+  3. elasto_cli -s Azure_PublishSettings_File
 
 = Amazon S3 =
   1. Create Amazon S3 account
 
-  2. Obtain the S3 Access Key ID and Secret Access Key credentials:
-     https://console.aws.amazon.com/iam/home?#security_credential
+  2. Create an IAM group with S3 access, assign a new user to the group
+     https://console.aws.amazon.com/iam/home#home
 
-  3. ./elasto_cli -k S3_Access_Key_ID,S3_Secret_Access_Key
+  3. Obtain the user's Access Key ID and Secret Access Key credentials
+
+  4. elasto_cli -k S3_Access_Key_ID,S3_Secret_Access_Key
 
 
 Running (not so short version)
@@ -69,20 +79,22 @@ Running (not so short version)
   Commands can then be issued using the elasto_cli client binary, the
   PublishSettings file is given with the -s argument. E.g.
 
-  > ./elasto_cli -s PublishSettings_file <command>
+  > elasto_cli -s PublishSettings_file <command>
 
 = Amazon S3 =
   Create an Amazon S3 account at https://aws.amazon.com/s3/
 
-  The Amazon S3 Access Key ID and Secret Access Key security credentials
-  are required for an authenticated connection. These keys can be
-  obtained from:
-  https://console.aws.amazon.com/iam/home?#security_credential
+  Create an IAM group with S3 access, assign a new user to the group:
+  https://console.aws.amazon.com/iam/home#home
+  -> Create a New Group of Users
+
+  The IAM user creation wizard allows for the retrieval of security
+  credentials, by selecting "Generate an access key for each User".
 
   Commands can then be issued by running the elasto_cli client binary
   with the -k argument. E.g.
 
-  > ./elasto_cli -k S3_Access_Key_ID,S3_Secret_Access_Key <command>
+  > elasto_cli -k S3_Access_Key_ID,S3_Secret_Access_Key <command>
 
 
 Alternatives
