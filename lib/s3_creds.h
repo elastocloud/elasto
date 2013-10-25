@@ -11,6 +11,13 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
+#ifndef _S3_CREDS_H_
+#define _S3_CREDS_H_
 
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
-#define MIN(a,b) ((a)<(b)?(a):(b))
+int
+s3_creds_csv_process(const char *creds_file,
+		     char **_user_name,
+		     char **_access_key_id,
+		     char **_secret_access_key);
+
+#endif /* ifdef _S3_CREDS_H_ */
