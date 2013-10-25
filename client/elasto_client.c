@@ -33,6 +33,7 @@
 #include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
+#include "lib/s3_creds.h"
 #include "lib/dbg.h"
 #include "linenoise.h"
 #include "cli_common.h"
@@ -190,7 +191,7 @@ cli_args_usage(const char *progname,
 "Usage: %s [options] <cmd> <cmd args>\n\n"
 "Options:\n"
 "-s publish_settings:	Azure PublishSettings file\n"
-"-k s3_key_id[,secret]:	Amazon S3 access key ID and secret access key duo\n"
+"-k iam_creds:		Amazon IAM credentials file\n"
 "-d log_level:		Log debug messages (default: 0)\n"
 "-i			Insecure, use HTTP where possible "
 "(default: HTTPS only)\n\n",
@@ -415,6 +416,8 @@ cli_args_free(const struct cli_cmd_spec *cmd,
 		free(cli_args->az.ps_file);
 		free(cli_args->az.pem_file);
 	} else if (cli_args->type == CLI_TYPE_S3) {
+		free(cli_args->s3.creds_file);
+		free(cli_args->s3.iam_user);
 		free(cli_args->s3.key_id);
 		free(cli_args->s3.secret);
 	}
@@ -432,8 +435,7 @@ cli_args_parse(int argc,
 	extern char *optarg;
 	extern int optind;
 	char *pub_settings = NULL;
-	char *s3_id = NULL;
-	char *s3_secret = NULL;
+	char *s3_creds_file = NULL;
 	char *progname = strdup(argv[0]);
 	if (progname == NULL) {
 		ret = -ENOMEM;
@@ -443,7 +445,6 @@ cli_args_parse(int argc,
 
 	while ((opt = getopt(argc, argv, "s:k:d:?i")) != -1) {
 		uint32_t debug_level;
-		char *sep;
 		switch (opt) {
 		case 's':
 			pub_settings = strdup(optarg);
@@ -453,25 +454,11 @@ cli_args_parse(int argc,
 			}
 			break;
 		case 'k':
-			s3_id = strdup(optarg);
-			if (s3_id == NULL) {
+			s3_creds_file = strdup(optarg);
+			if (s3_creds_file == NULL) {
 				ret = -ENOMEM;
 				goto err_out;
 			}
-			sep = strchr(s3_id, ',');
-			if (sep == NULL) {
-				break;
-			}
-			if (strlen(sep) <= 1) {
-				ret = -EINVAL;
-				goto err_out;
-			}
-			s3_secret = strdup(sep + 1);
-			if (s3_secret == NULL) {
-				ret = -ENOMEM;
-				goto err_out;
-			}
-			*sep = 0;
 			break;
 		case 'd':
 			debug_level = (uint32_t)strtol(optarg, NULL, 10);
@@ -487,11 +474,11 @@ cli_args_parse(int argc,
 			break;
 		}
 	}
-	if (((pub_settings == NULL) && (s3_id == NULL))
-	 || ((pub_settings != NULL) && (s3_id != NULL))) {
+	if (((pub_settings == NULL) && (s3_creds_file == NULL))
+	 || ((pub_settings != NULL) && (s3_creds_file != NULL))) {
 		cli_args_usage(argv[0], CLI_FL_BIN_ARG,
 			       "Either an Azure PublishSettings file, or "
-			       "Amazon S3 key is required");
+			       "Amazon S3 key file is required");
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -500,28 +487,9 @@ cli_args_parse(int argc,
 		cli_args->type = CLI_TYPE_AZURE;
 		cli_args->az.ps_file = pub_settings;
 	} else {
-		assert(s3_id != NULL);
+		assert(s3_creds_file != NULL);
 		cli_args->type = CLI_TYPE_S3;
-		cli_args->s3.key_id = s3_id;
-		if (s3_secret != NULL) {
-			/* provided as arg */
-			cli_args->s3.secret = s3_secret;
-		} else {
-			s3_secret = getpass("S3 secret access key: ");
-			if (s3_secret == NULL) {
-				cli_args_usage(argv[0], CLI_FL_BIN_ARG,
-					       "Invalid S3 key secret\n");
-				ret = -EINVAL;
-				goto err_out;
-			}
-			cli_args->s3.secret = strdup(s3_secret);
-			if (cli_args->s3.secret == NULL) {
-				ret = -ENOMEM;
-				goto err_out;
-			}
-			/* free heap alloc on exit */
-			s3_secret = cli_args->s3.secret;
-		}
+		cli_args->s3.creds_file = s3_creds_file;
 	}
 	cli_args->progname = progname;
 
@@ -543,8 +511,7 @@ cli_args_parse(int argc,
 	return 0;
 err_out:
 	free(pub_settings);
-	free(s3_id);
-	free(s3_secret);
+	free(s3_creds_file);
 	free(progname);
 
 	return ret;
@@ -692,6 +659,14 @@ main(int argc, char * const *argv)
 					       &cli_args.az.pem_file,
 					       &cli_args.az.sub_id,
 					       &cli_args.az.sub_name);
+		if (ret < 0) {
+			goto err_global_clean;
+		}
+	} else if (cli_args.type == CLI_TYPE_S3) {
+		ret = s3_creds_csv_process(cli_args.s3.creds_file,
+					   &cli_args.s3.iam_user,
+					   &cli_args.s3.key_id,
+					   &cli_args.s3.secret);
 		if (ret < 0) {
 			goto err_global_clean;
 		}

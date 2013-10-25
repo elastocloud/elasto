@@ -58,6 +58,8 @@ struct cli_args {
 			char *blob_name;
 		} az;
 		struct {
+			char *creds_file;
+			char *iam_user;
 			char *key_id;
 			char *secret;
 			char *bkt_name;
