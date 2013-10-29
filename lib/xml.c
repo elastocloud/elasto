@@ -20,6 +20,7 @@
 #include <apr-1/apr_xml.h>
 
 #include "dbg.h"
+#include "base64.h"
 
 int
 xml_slurp(apr_pool_t *pool,
@@ -285,6 +286,59 @@ xml_path_bool_get(struct apr_xml_elem *xel_parent,
 	*value = val;
 
 	return 0;
+}
+
+/*
+ * pull base64 encoded data from XML.
+ * @_val: on return, points to an allocated buffer containing the NULL
+ *	  terminated, base64 decoded data
+ * @_len: if non-null, then contains the length of data in @_val on return
+ */
+int
+xml_path_b64_get(struct apr_xml_elem *xel_parent,
+		 const char *xp_expr,
+		 char **_val,
+		 int *_len)
+{
+	int ret;
+	char *val_b64;
+	void *val;
+
+	ret = xml_path_get(xel_parent, xp_expr, &val_b64);
+	if (ret < 0) {
+		return ret;
+	}
+
+	if ((val_b64 == NULL) || (strlen(val_b64) <= 0)) {
+		ret = -EINVAL;
+		goto err_b64_free;
+	}
+
+	val = malloc(strlen(val_b64) + 1);
+	if (val == NULL) {
+		ret = -ENOMEM;
+		goto err_b64_free;
+	}
+	ret = base64_decode(val_b64, val);
+	if (ret < 0) {
+		dbg(0, "failed to decode b64\n");
+		goto err_val_free;
+	}
+	/* zero terminate */
+	((char *)val)[ret] = '\0';
+	free(val_b64);
+
+	*_val = val;
+	if (_len != NULL) {
+		*_len = ret;
+	}
+	return 0;
+
+err_val_free:
+	free(val);
+err_b64_free:
+	free(val_b64);
+	return ret;
 }
 
 int

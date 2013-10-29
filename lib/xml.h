@@ -47,6 +47,12 @@ xml_path_bool_get(struct apr_xml_elem *xel_parent,
 			bool *value);
 
 int
+xml_path_b64_get(struct apr_xml_elem *xel_parent,
+		 const char *xp_expr,
+		 char **_val,
+		 int *_len);
+
+int
 xml_path_el_get(struct apr_xml_elem *xel_parent,
 		      const char *xp_expr,
 		      struct apr_xml_elem **xel_child_out);
