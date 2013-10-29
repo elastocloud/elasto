@@ -409,7 +409,6 @@ az_rsp_acc_iter_process(struct apr_xml_elem *xel,
 {
 	int ret;
 	struct azure_account *acc;
-	char *label_b64 = NULL;
 
 	acc = malloc(sizeof(*acc));
 	if (acc == NULL) {
@@ -440,25 +439,10 @@ az_rsp_acc_iter_process(struct apr_xml_elem *xel,
 		goto err_desc_free;
 	}
 
-	ret = xml_path_get(xel, "StorageServiceProperties/Label",
-				 &label_b64);
+	ret = xml_path_b64_get(xel, "StorageServiceProperties/Label",
+			       &acc->label, NULL);
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_affin_free;
-	}
-	if (label_b64 && (strlen(label_b64) > 0)) {
-		acc->label = malloc(strlen(label_b64) + 1);
-		if (acc->label == NULL) {
-			free(label_b64);
-			goto err_affin_free;
-		}
-		ret = base64_decode(label_b64, acc->label);
-		free(label_b64);
-		if (ret < 0) {
-			dbg(0, "failed to decode account label\n");
-			goto err_label_free;
-		}
-		/* zero terminate */
-		acc->label[ret] = '\0';
 	}
 
 	ret = xml_path_get(xel, "StorageServiceProperties/Location",
@@ -2354,7 +2338,6 @@ az_rsp_blk_iter_process(struct apr_xml_elem *xel,
 			struct azure_block **blk_ret)
 {
 	int ret;
-	char *name;
 	struct azure_block *blk;
 
 	blk = malloc(sizeof(*blk));
@@ -2363,22 +2346,10 @@ az_rsp_blk_iter_process(struct apr_xml_elem *xel,
 		goto err_out;
 	}
 
-	ret = xml_path_get(xel, "Name", &name);
+	ret = xml_path_b64_get(xel, "Name", &blk->id, NULL);
 	if (ret < 0) {
 		goto err_blk_free;
 	}
-	blk->id = malloc(strlen(name));
-	if (blk->id == NULL) {
-		ret = -ENOMEM;
-		goto err_name_free;
-	}
-	ret = base64_decode(name, blk->id);
-	if (ret < 0) {
-		ret = -EIO;
-		goto err_id_free;
-	}
-	/* zero terminate */
-	blk->id[ret] = '\0';
 
 	ret = xml_path_u64_get(xel, "Size", &blk->len);
 	if (ret < 0) {
@@ -2387,14 +2358,11 @@ az_rsp_blk_iter_process(struct apr_xml_elem *xel,
 
 	blk->state = state;
 	*blk_ret = blk;
-	free(name);
 
 	return 0;
 
 err_id_free:
 	free(blk->id);
-err_name_free:
-	free(name);
 err_blk_free:
 	free(blk);
 err_out:
