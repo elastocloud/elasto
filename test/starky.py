@@ -35,7 +35,7 @@ def md5_for_file(f, block_size=2**20):
 
 class StarkyContext:
 	pub_set_file = None
-	s3_key_duo = None
+	s3_creds_file = None
 	acc_prefix = "elastotest"
 	acc_loc = "West Europe"
 	bkt_loc = "eu-west-1"
@@ -61,13 +61,13 @@ class StarkyContext:
 				  % (self.cli_bin, options.debug_level,
 				     self.pub_set_file)
 
-		if (options.s3_key_duo == None):
-			raise Exception("S3 key duo not specified")
+		if (options.s3_creds_file == None):
+			raise Exception("S3 key file not specified")
 
-		self.s3_key_duo = options.s3_key_duo
+		self.s3_creds_file = options.s3_creds_file
 		self.cli_s3_cmd = "%s -d %d -k %s" \
 				  % (self.cli_bin, options.debug_level,
-				     options.s3_key_duo)
+				     options.s3_creds_file)
 
 		if (options.insecure == True):
 			self.cli_az_cmd += " -i"
@@ -470,9 +470,9 @@ if __name__ == '__main__':
 			  help="Azure PublishSettings file",
 			  type="string",
 			  default=None)
-	parser.add_option("-k", "--s3_key_duo",
-			  dest="s3_key_duo",
-			  help="Amazon S3 key duo (ID and secret)",
+	parser.add_option("-k", "--s3_creds_file",
+			  dest="s3_creds_file",
+			  help="Amazon IAM credentials file",
 			  type="string",
 			  default=None)
 	parser.add_option("-d", "--debug",
