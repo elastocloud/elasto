@@ -15,7 +15,7 @@ elasto_cli \- Cloud Storage Client Utility
 \fBelasto_cli\fR \kx
 .if (\nx>(\n(.l/2)) .nr x (\n(.l/5)
 'in \n(.iu+\nxu
-[\fB-?\fR] [\fB-s\fR \fIAzure publish settings file\fR] [\fB-k\fR \fIS3 key duo\fR] [\fB-d\fR \fIlog level\fR] [\fB-i\fR] [-- \fIcommand\fR]
+[\fB-?\fR] [\fB-s\fR \fIAzure publish settings file\fR] [\fB-k\fR \fIAmazon IAM credentials file\fR] [\fB-d\fR \fIlog level\fR] [\fB-i\fR] [-- \fIcommand\fR]
 'in \n(.iu-\nxu
 .ad b
 'hy
@@ -30,8 +30,8 @@ Print help message and exit.
 \*(T<\fB\-s\fR\*(T> \fIAzure publish settings file\fR
 Azure account credentials. Must be provided for Azure cloud access.
 .TP 
-\*(T<\fB\-k\fR\*(T> \fIS3 key ID[, secret access key]\fR
-Amazon S3 account key ID and optional secret access key, separated by a comma. If the secret access key is not present, then it will be requested on startup. The S3 key ID must be provided for Amazon S3 cloud access.
+\*(T<\fB\-k\fR\*(T> \fIAmazon IAM credentials file\fR
+Amazon IAM credentials.csv file, which includes the account key ID and secret access key. Must be provided for Amazon S3 cloud access.
 .TP 
 \*(T<\fB\-d\fR\*(T> \fIlog level\fR
 Print debugging information.

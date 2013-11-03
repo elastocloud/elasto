@@ -51,9 +51,9 @@ Running (short version)
   2. Create an IAM group with S3 access, assign a new user to the group
      https://console.aws.amazon.com/iam/home#home
 
-  3. Obtain the user's Access Key ID and Secret Access Key credentials
+  3. Download the user's access key (credentials.csv) file
 
-  4. elasto_cli -k S3_Access_Key_ID,S3_Secret_Access_Key
+  4. elasto_cli -k iam_creds_file
 
 
 Running (not so short version)
@@ -88,13 +88,14 @@ Running (not so short version)
   https://console.aws.amazon.com/iam/home#home
   -> Create a New Group of Users
 
-  The IAM user creation wizard allows for the retrieval of security
-  credentials, by selecting "Generate an access key for each User".
+  The IAM user creation wizard allows for the download of access
+  credentials. Select "Generate an access key for each User", and
+  subsequently "Download Credentials".
 
   Commands can then be issued by running the elasto_cli client binary
   with the -k argument. E.g.
 
-  > elasto_cli -k S3_Access_Key_ID,S3_Secret_Access_Key <command>
+  > elasto_cli -k iam_creds_file <command>
 
 
 Alternatives

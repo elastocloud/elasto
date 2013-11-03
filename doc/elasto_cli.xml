@@ -28,7 +28,7 @@
 	<command>elasto_cli</command>
 	<arg><option>-?</option></arg>
 	<arg><option>-s</option><replaceable class="parameter">Azure publish settings file</replaceable></arg>
-	<arg><option>-k</option><replaceable class="parameter">S3 key duo</replaceable></arg>
+	<arg><option>-k</option><replaceable class="parameter">Amazon IAM credentials file</replaceable></arg>
 	<arg><option>-d</option><replaceable class="parameter">log level</replaceable></arg>
 	<arg><option>-i</option></arg>
 	<arg>-- <replaceable class="parameter">command</replaceable></arg>
@@ -60,8 +60,8 @@
 
 <varlistentry>
 	<term><option>-k</option>
-	<replaceable>S3 key ID[, secret access key]</replaceable></term>
-	<listitem><para>Amazon S3 account key ID and optional secret access key, separated by a comma. If the secret access key is not present, then it will be requested on startup. The S3 key ID must be provided for Amazon S3 cloud access.
+	<replaceable>Amazon IAM credentials file</replaceable></term>
+	<listitem><para>Amazon IAM credentials.csv file, which includes the account key ID and secret access key. Must be provided for Amazon S3 cloud access.
 	</para></listitem>
 </varlistentry>
 
