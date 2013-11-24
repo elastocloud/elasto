@@ -50,6 +50,8 @@ xml_slurp(apr_pool_t *pool,
 			goto err_out;
 		}
 	} else {
+		dbg(10, "slurping data: %s\n", (const char *)buf);
+
 		xparser = apr_xml_parser_create(pool);
 		if (xparser == NULL) {
 			ret = -ENOMEM;
