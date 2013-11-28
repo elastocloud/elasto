@@ -29,46 +29,225 @@
 #include <unistd.h>
 #include <cmocka.h>
 
-#include <apr-1/apr_xml.h>
-
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "util.h"
-#include "xml.h"
+#include "exml.h"
 
-static char *cm_xml_data_basic = "<outer><inner1><str>val</str></inner1></outer>";
+static char *cm_xml_data_str_basic
+	= "<outer><inner1><str>val</str></inner1><str>blah</str></outer>";
+static char *cm_xml_data_num_basic
+	= "<outer><num>100</num><inner1><neg>-100</neg></inner1>"
+	  "<huge>18446744073709551615</huge></outer>";
+static char *cm_xml_data_bool_basic
+	= "<outer><inner1><bool>true</bool></inner1><next>false</next></outer>";
+static char *cm_xml_data_b64_basic
+	= "<outer><Label1>dGhpcyBpcyBhIGxhYmVs</Label1>"
+	  "<Label2>aXN0Z3Q=</Label2></outer>";
+
+/*
+ * TODO test:
+ * - duplicate paths, mem-leak return last
+ * - empty values
+ * - attributes
+ */
 
 /*
  * CMocka unit tests for Elasto XML decoding
  */
 static void
-cm_xml_basic_str(void **state)
+cm_xml_str_basic(void **state)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
-	char *val;
+	struct xml_doc *xdoc;
+	char *val = NULL;
 
-	rv = apr_initialize();
-	assert_true(rv == APR_SUCCESS);
-
-	rv = apr_pool_create(&pool, NULL);
-	assert_true(rv == APR_SUCCESS);
-
-	ret = xml_slurp(pool, false, (uint8_t *)cm_xml_data_basic,
-			strlen(cm_xml_data_basic), &xdoc);
+	ret = exml_slurp(cm_xml_data_str_basic,
+			strlen(cm_xml_data_str_basic), &xdoc);
 	assert_int_equal(ret, 0);
 
-	ret = xml_path_get(xdoc->root,
+	ret = exml_str_want(xdoc,
 			   "/outer/inner1/str",
-			   &val);
+			   true,
+			   &val,
+			   NULL);
 	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	assert_non_null(val);
 	assert_string_equal(val, "val");
+
+	exml_free(xdoc);
+	free(val);
+}
+
+static void
+cm_xml_two_str(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val1 = NULL;
+	char *val2 = NULL;
+	bool val2_present = false;
+
+	ret = exml_slurp(cm_xml_data_str_basic,
+			strlen(cm_xml_data_str_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/outer/inner1/str",
+			   true,
+			   &val1,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	/* not required */
+	ret = exml_str_want(xdoc,
+			   "/outer/str",
+			   false,
+			   &val2,
+			   &val2_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	assert_non_null(val1);
+	assert_string_equal(val1, "val");
+	assert_true(val2_present);
+	assert_non_null(val2);
+	assert_string_equal(val2, "blah");
+	free(val1);
+	free(val2);
+}
+
+static void
+cm_xml_num_basic(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	int32_t val1;
+	int64_t val2;
+	uint64_t val3;
+
+	ret = exml_slurp(cm_xml_data_num_basic,
+			strlen(cm_xml_data_num_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_int32_want(xdoc,
+			   "/outer/num",
+			   true,
+			   &val1,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_int64_want(xdoc,
+			   "/outer/inner1/neg",
+			   true,
+			   &val2,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_uint64_want(xdoc,
+			   "/outer/huge",
+			   true,
+			   &val3,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+	exml_free(xdoc);
+
+	assert_true(val1 == 100);
+	assert_true(val2 == -100);
+	assert_true(val3 == 18446744073709551615ULL);
+}
+
+static void
+cm_xml_bool_basic(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	bool val1;
+	bool val2;
+
+	ret = exml_slurp(cm_xml_data_bool_basic,
+			strlen(cm_xml_data_bool_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_bool_want(xdoc,
+			   "/outer/inner1/bool",
+			   true,
+			   &val1,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_bool_want(xdoc,
+			   "/outer/next",
+			   true,
+			   &val2,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	assert_true(val1);
+	assert_false(val2);
+}
+
+static void
+cm_xml_base64_basic(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val1 = NULL;
+	char *val2 = NULL;
+
+	ret = exml_slurp(cm_xml_data_b64_basic,
+			strlen(cm_xml_data_b64_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_base64_want(xdoc,
+			   "/outer/Label1",
+			   true,
+			   &val1,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_base64_want(xdoc,
+			   "/outer/Label2",
+			   true,
+			   &val2,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	assert_non_null(val1);
+	assert_string_equal(val1, "this is a label");
+	assert_non_null(val2);
+	assert_string_equal(val2, "istgt");
+	free(val1);
+	free(val2);
 }
 
 static const UnitTest cm_xml_tests[] = {
-	unit_test(cm_xml_basic_str),
+	unit_test(cm_xml_str_basic),
+	unit_test(cm_xml_two_str),
+	unit_test(cm_xml_num_basic),
+	unit_test(cm_xml_bool_basic),
+	unit_test(cm_xml_base64_basic),
 };
 
 int
