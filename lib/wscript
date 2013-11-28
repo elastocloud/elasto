@@ -8,7 +8,7 @@ def configure(conf):
 def build(bld):
 	bld.stlib(source='''xml.c azure_req.c s3_req.c op.c sign.c
 			    base64.c conn.c azure_ssl.c dbg.c data.c
-			    s3_creds.c''',
+			    s3_creds.c exml.c''',
 		  target='elasto',
 		  lib=['curl', 'apr-1', 'aprutil-1', 'crypto'],
 		  use=['ccan'],
