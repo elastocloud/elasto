@@ -33,6 +33,7 @@ enum xml_val_type {
 	XML_VAL_U64,
 	XML_VAL_BOOL,
 	XML_VAL_B64,
+	XML_VAL_CALLBACK,
 };
 
 struct xml_finder {
@@ -49,6 +50,10 @@ struct xml_finder {
 		uint64_t *u64;
 		bool *bl;
 		char **b64_decode;
+		struct {
+			exml_want_cb_t fn;
+			void *data;
+		} cb;
 	} ret_val;
 	bool *_present;
 };
@@ -178,6 +183,14 @@ exml_finder_val_stash(char *got,
 		/* zero terminate */
 		(*finder->ret_val.b64_decode)[ret] = '\0';
 		break;
+	case XML_VAL_CALLBACK:
+		ret = finder->ret_val.cb.fn(finder->search_path, got,
+					    finder->ret_val.cb.data);
+		if (ret < 0) {
+			dbg(0, "xml callback failed\n");
+			return ret;
+		}
+		break;
 	default:
 		dbg(0, "unhandled type %d for path %s\n",
 		    finder->type, finder->search_path);
@@ -226,7 +239,7 @@ exml_el_data_cb(void *priv_data,
 	ret = exml_finder_val_stash(got, finder);
 	if (ret < 0) {
 		XML_StopParser(xdoc->parser, XML_FALSE);
-		xdoc->parse_ret = -ENOMEM;
+		xdoc->parse_ret = ret;
 		return;
 	}
 	finder->got_data = true;
@@ -452,6 +465,9 @@ exml_path_get(struct xml_doc *xdoc,
 	case XML_VAL_B64:
 		finder->ret_val.b64_decode = (char **)value;
 		break;
+	case XML_VAL_CALLBACK:
+		finder->ret_val.cb.fn = (exml_want_cb_t)value;
+		break;
 	default:
 		dbg(0, "invalid type %d for path %s\n",
 		    type, finder->search_path);
@@ -540,4 +556,26 @@ exml_base64_want(struct xml_doc *xdoc,
 {
 	return exml_path_get(xdoc, xp_expr, required, XML_VAL_B64,
 			    value, present);
+}
+
+int
+exml_cb_want(struct xml_doc *xdoc,
+	     const char *xp_expr,
+	     bool required,
+	     exml_want_cb_t cb,
+	     void *cb_data,
+	     bool *present)
+{
+	int ret;
+	struct xml_finder *finder;
+
+	ret = exml_path_get(xdoc, xp_expr, required, XML_VAL_CALLBACK,
+			    cb, present);
+	if (ret < 0) {
+		return ret;
+	}
+	finder = list_tail(&xdoc->finders, struct xml_finder, list);
+	assert(finder != NULL);
+	finder->ret_val.cb.data = cb_data;
+	return 0;
 }
