@@ -242,12 +242,52 @@ cm_xml_base64_basic(void **state)
 	free(val2);
 }
 
+int cm_xml_want_cb(const char *path,
+		   const char *val,
+		   void *cb_data)
+{
+	char **str = cb_data;
+
+	asprintf(str, "got: %s", val);
+	return 0;
+}
+
+static void
+cm_xml_cb_basic(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val = NULL;
+
+	ret = exml_slurp(cm_xml_data_str_basic,
+			strlen(cm_xml_data_str_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_cb_want(xdoc,
+			   "/outer/inner1/str",
+			   true,
+			   cm_xml_want_cb,
+			   &val,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	assert_non_null(val);
+	assert_string_equal(val, "got: val");
+
+	exml_free(xdoc);
+	free(val);
+}
+
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
 	unit_test(cm_xml_two_str),
 	unit_test(cm_xml_num_basic),
 	unit_test(cm_xml_bool_basic),
 	unit_test(cm_xml_base64_basic),
+	unit_test(cm_xml_cb_basic),
 };
 
 int
