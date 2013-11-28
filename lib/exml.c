@@ -405,19 +405,20 @@ exml_free(struct xml_doc *xdoc)
 }
 
 /*
- * get string value at xpath in subsequent xml_parse() call
+ * allocate and initialise an xpath search struct for use in a subsequent
+ * xml_parse() call.
  * @xp_expr: xpath in the form of /parent/child
  * @required: trigger xml_parse() failure if the xpath is not present
- * @value: allocate value string under this pointer if found during xml_parse()
  * @present: set true if found during xml_parse(), may be NULL
+ * @_finder: initialised finder struct returned on success
  */
 static int
-exml_path_get(struct xml_doc *xdoc,
-	     const char *xp_expr,
-	     bool required,
-	     enum xml_val_type type,
-	     void *value,
-	     bool *present)
+exml_finder_init(struct xml_doc *xdoc,
+		const char *xp_expr,
+		bool required,
+		enum xml_val_type type,
+		bool *present,
+		struct xml_finder **_finder)
 {
 	int ret;
 	struct xml_finder *finder;
@@ -446,46 +447,16 @@ exml_path_get(struct xml_doc *xdoc,
 
 	finder->required = required;
 	finder->type = type;
-	switch (type) {
-	case XML_VAL_STR:
-		finder->ret_val.str = (char **)value;
-		break;
-	case XML_VAL_I32:
-		finder->ret_val.i32 = (int32_t *)value;
-		break;
-	case XML_VAL_I64:
-		finder->ret_val.i64 = (int64_t *)value;
-		break;
-	case XML_VAL_U64:
-		finder->ret_val.u64 = (uint64_t *)value;
-		break;
-	case XML_VAL_BOOL:
-		finder->ret_val.bl = (bool *)value;
-		break;
-	case XML_VAL_B64:
-		finder->ret_val.b64_decode = (char **)value;
-		break;
-	case XML_VAL_CALLBACK:
-		finder->ret_val.cb.fn = (exml_want_cb_t)value;
-		break;
-	default:
-		dbg(0, "invalid type %d for path %s\n",
-		    type, finder->search_path);
-		ret = -EIO;
-		goto err_path_free;
-		break;
-	}
 	if (present != NULL) {
 		*present = false;
 		finder->_present = present;
 	}
 	list_add_tail(&xdoc->finders, &finder->list);
 	xdoc->num_finders++;
+	*_finder = finder;
 
 	return 0;
 
-err_path_free:
-	free(finder->search_path);
 err_finder_free:
 	free(finder);
 err_out:
@@ -499,8 +470,16 @@ exml_str_want(struct xml_doc *xdoc,
 	     char **value,
 	     bool *present)
 {
-	return exml_path_get(xdoc, xp_expr, required, XML_VAL_STR,
-			    value, present);
+	int ret;
+	struct xml_finder *finder;
+
+	ret = exml_finder_init(xdoc, xp_expr, required, XML_VAL_STR,
+			present, &finder);
+	if (ret < 0) {
+		return ret;
+	}
+	finder->ret_val.str = value;
+	return 0;
 }
 
 int
@@ -510,8 +489,16 @@ exml_int32_want(struct xml_doc *xdoc,
 	     int32_t *value,
 	     bool *present)
 {
-	return exml_path_get(xdoc, xp_expr, required, XML_VAL_I32,
-			    value, present);
+	int ret;
+	struct xml_finder *finder;
+
+	ret = exml_finder_init(xdoc, xp_expr, required, XML_VAL_I32,
+			present, &finder);
+	if (ret < 0) {
+		return ret;
+	}
+	finder->ret_val.i32 = value;
+	return 0;
 }
 
 int
@@ -521,8 +508,16 @@ exml_int64_want(struct xml_doc *xdoc,
 	     int64_t *value,
 	     bool *present)
 {
-	return exml_path_get(xdoc, xp_expr, required, XML_VAL_I64,
-			    value, present);
+	int ret;
+	struct xml_finder *finder;
+
+	ret = exml_finder_init(xdoc, xp_expr, required, XML_VAL_I64,
+			present, &finder);
+	if (ret < 0) {
+		return ret;
+	}
+	finder->ret_val.i64 = value;
+	return 0;
 }
 
 int
@@ -532,8 +527,16 @@ exml_uint64_want(struct xml_doc *xdoc,
 	     uint64_t *value,
 	     bool *present)
 {
-	return exml_path_get(xdoc, xp_expr, required, XML_VAL_U64,
-			    value, present);
+	int ret;
+	struct xml_finder *finder;
+
+	ret = exml_finder_init(xdoc, xp_expr, required, XML_VAL_U64,
+			present, &finder);
+	if (ret < 0) {
+		return ret;
+	}
+	finder->ret_val.u64 = value;
+	return 0;
 }
 
 int
@@ -543,8 +546,16 @@ exml_bool_want(struct xml_doc *xdoc,
 	     bool *value,
 	     bool *present)
 {
-	return exml_path_get(xdoc, xp_expr, required, XML_VAL_BOOL,
-			    value, present);
+	int ret;
+	struct xml_finder *finder;
+
+	ret = exml_finder_init(xdoc, xp_expr, required, XML_VAL_BOOL,
+			present, &finder);
+	if (ret < 0) {
+		return ret;
+	}
+	finder->ret_val.bl = value;
+	return 0;
 }
 
 int
@@ -554,8 +565,16 @@ exml_base64_want(struct xml_doc *xdoc,
 	     char **value,
 	     bool *present)
 {
-	return exml_path_get(xdoc, xp_expr, required, XML_VAL_B64,
-			    value, present);
+	int ret;
+	struct xml_finder *finder;
+
+	ret = exml_finder_init(xdoc, xp_expr, required, XML_VAL_B64,
+			present, &finder);
+	if (ret < 0) {
+		return ret;
+	}
+	finder->ret_val.b64_decode = value;
+	return 0;
 }
 
 int
@@ -569,13 +588,12 @@ exml_cb_want(struct xml_doc *xdoc,
 	int ret;
 	struct xml_finder *finder;
 
-	ret = exml_path_get(xdoc, xp_expr, required, XML_VAL_CALLBACK,
-			    cb, present);
+	ret = exml_finder_init(xdoc, xp_expr, required, XML_VAL_CALLBACK,
+			      present, &finder);
 	if (ret < 0) {
 		return ret;
 	}
-	finder = list_tail(&xdoc->finders, struct xml_finder, list);
-	assert(finder != NULL);
+	finder->ret_val.cb.fn = cb;
 	finder->ret_val.cb.data = cb_data;
 	return 0;
 }
