@@ -242,7 +242,7 @@ cm_xml_base64_basic(void **state)
 	free(val2);
 }
 
-int cm_xml_want_cb(struct xml_doc *xdoc,
+int cm_xml_basic_want_cb(struct xml_doc *xdoc,
 		   const char *path,
 		   const char *val,
 		   void *cb_data)
@@ -267,7 +267,7 @@ cm_xml_cb_basic(void **state)
 	ret = exml_cb_want(xdoc,
 			   "/outer/inner1/str",
 			   true,
-			   cm_xml_want_cb,
+			   cm_xml_basic_want_cb,
 			   &val,
 			   NULL);
 	assert_int_equal(ret, 0);
@@ -280,6 +280,51 @@ cm_xml_cb_basic(void **state)
 
 	exml_free(xdoc);
 	free(val);
+}
+
+int cm_xml_path_want_cb(struct xml_doc *xdoc,
+		   const char *path,
+		   const char *val,
+		   void *cb_data)
+{
+	int *cb_i = cb_data;
+
+	assert_null(val);
+	/* note the trailing '/' */
+	assert_string_equal(path, "/outer/inner1/");
+	(*cb_i)++;
+
+	return 0;
+}
+
+/* add new finder from callback */
+static void
+cm_xml_path_cb_basic(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	int cb_i = 0;
+	bool called = false;
+
+	ret = exml_slurp(cm_xml_data_str_basic,
+			strlen(cm_xml_data_str_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	/* FIXME exml_cb_want() here results in val callback */
+	ret = exml_path_cbs_want(xdoc,
+			   "/outer/inner1",
+			   false,
+			   cm_xml_path_want_cb,
+			   &cb_i,
+			   &called);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+	exml_free(xdoc);
+
+	assert_true(called);
+	assert_int_equal(cb_i, 1);
 }
 
 static void
@@ -318,6 +363,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_bool_basic),
 	unit_test(cm_xml_base64_basic),
 	unit_test(cm_xml_cb_basic),
+	unit_test(cm_xml_path_cb_basic),
 	unit_test(cm_xml_xpath_relative),
 };
 
