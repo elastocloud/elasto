@@ -311,7 +311,7 @@ cm_xml_path_cb_basic(void **state)
 	assert_int_equal(ret, 0);
 
 	/* FIXME exml_cb_want() here results in val callback */
-	ret = exml_path_cbs_want(xdoc,
+	ret = exml_path_cb_want(xdoc,
 			   "/outer/inner1",
 			   false,
 			   cm_xml_path_want_cb,

@@ -65,9 +65,7 @@ struct xml_doc {
 	uint64_t buf_len;
 	int num_finders;
 	struct list_head finders;
-	int num_founds;
-	struct list_head founds;
-	struct xml_elem xel_root;
+	struct xml_finder *last_found;
 	bool parsing;
 	char *cur_path;
 	int parse_ret;
@@ -90,7 +88,6 @@ exml_slurp(const char *buf,
 	}
 	memset(xdoc, 0, sizeof(*xdoc));
 	list_head_init(&xdoc->finders);
-	list_head_init(&xdoc->founds);
 
 	xdoc->parser = XML_ParserCreate(NULL);
 	if (xdoc->parser == NULL) {
@@ -219,7 +216,7 @@ exml_el_data_cb(void *priv_data,
 	/* disable data cb */
 	XML_SetCharacterDataHandler(xdoc->parser, NULL);
 
-	finder = list_tail(&xdoc->founds, struct xml_finder, list);
+	finder = xdoc->last_found;
 	if ((finder == NULL)
 	 || (strcmp(finder->search_path, xdoc->cur_path) != 0)) {
 		dbg(0, "data cb for non-found finder\n");
@@ -308,14 +305,8 @@ exml_el_start_cb(void *priv_data,
 		return;
 	}
 
-
-	/* move to the found list */
-	list_del(&finder->list);
-	xdoc->num_finders--;
-	list_add_tail(&xdoc->founds, &finder->list);
-	xdoc->num_founds++;
-
 	/* enable data callback to stash value */
+	xdoc->last_found = finder;
 	XML_SetCharacterDataHandler(xdoc->parser, exml_el_data_cb);
 }
 
@@ -369,7 +360,6 @@ exml_parse(struct xml_doc *xdoc)
 
 	/* check for required finders that were not located */
 	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
-		/* XXX path callbacks stay on the list but inc handled */
 		if (finder->required && (finder->handled == 0)) {
 			dbg(0, "xpath (%s) not found\n", finder->search_path);
 			/* clean up on exml_free() */
@@ -383,18 +373,6 @@ exml_parse(struct xml_doc *xdoc)
 	}
 	assert(list_empty(&xdoc->finders));
 	assert(xdoc->num_finders == 0);
-
-	/* free all found, values already stashed */
-	list_for_each_safe(&xdoc->founds, finder, finder_n, list) {
-		assert(finder->handled == 1);
-		list_del(&finder->list);
-		xdoc->num_founds--;
-
-		free(finder->search_path);
-		free(finder);
-	}
-	assert(list_empty(&xdoc->founds));
-	assert(xdoc->num_founds == 0);
 
 	return 0;
 }
@@ -410,15 +388,13 @@ exml_free(struct xml_doc *xdoc)
 		return;
 	}
 	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
-		free(finder->search_path);
-		free(finder);
-	}
-	list_for_each_safe(&xdoc->founds, finder, finder_n, list) {
-		/* FIXME failed parse after finding somthing, free stash */
-		if (finder->type == XML_VAL_STR)
-			free(*finder->ret_val.str);
-		else if (finder->type == XML_VAL_B64)
-			free(*finder->ret_val.b64_decode);
+		if (finder->handled > 0) {
+			/* failed parse after finding somthing, free stash */
+			if (finder->type == XML_VAL_STR)
+				free(*finder->ret_val.str);
+			else if (finder->type == XML_VAL_B64)
+				free(*finder->ret_val.b64_decode);
+		}
 		free(finder->search_path);
 		free(finder);
 	}
@@ -634,7 +610,7 @@ exml_cb_want(struct xml_doc *xdoc,
  * callback on path find instead of value retrieval.
  */
 int
-exml_path_cbs_want(struct xml_doc *xdoc,
+exml_path_cb_want(struct xml_doc *xdoc,
 	     const char *xp_expr,
 	     bool required,
 	     exml_want_cb_t cb,

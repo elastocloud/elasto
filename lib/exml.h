@@ -15,10 +15,6 @@
 #define _AZURE_EXML_H_
 
 struct xml_doc;
-struct xml_elem {
-	struct xml_doc *xdoc;
-	const char *path;
-};
 
 int
 exml_slurp(const char *buf,
@@ -83,7 +79,7 @@ exml_cb_want(struct xml_doc *xdoc,
 	     bool *present);
 
 int
-exml_path_cbs_want(struct xml_doc *xdoc,
+exml_path_cb_want(struct xml_doc *xdoc,
 	     const char *xp_expr,
 	     bool required,
 	     exml_want_cb_t cb,
