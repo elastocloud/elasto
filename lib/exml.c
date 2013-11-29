@@ -408,7 +408,7 @@ exml_free(struct xml_doc *xdoc)
 /*
  * allocate and initialise an xpath search struct for use in a subsequent
  * xml_parse() call.
- * @xp_expr: xpath in the form of /parent/child
+ * @xp_expr: xpath in the form of /parent/child or ./relative/path
  * @required: trigger xml_parse() failure if the xpath is not present
  * @present: set true if found during xml_parse(), may be NULL
  * @_finder: initialised finder struct returned on success
@@ -423,12 +423,21 @@ exml_finder_init(struct xml_doc *xdoc,
 {
 	int ret;
 	struct xml_finder *finder;
+	bool relative_path = false;
 
 	if ((xp_expr == NULL)
 	 || (strlen(xp_expr) == 0)
-	 || (xp_expr[0] != '/')
 	 || (xp_expr[strlen(xp_expr) - 1] == '/')) {
 		dbg(0, "bad xp_expr: %s\n", (xp_expr ? xp_expr : "null"));
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (strncmp(xp_expr, "./", 2) == 0) {
+		relative_path = true;
+		xp_expr += 2;
+	} else if (xp_expr[0] != '/') {
+		dbg(0, "bad xp_expr: %s\n", xp_expr);
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -439,8 +448,8 @@ exml_finder_init(struct xml_doc *xdoc,
 		goto err_out;
 	}
 	memset(finder, 0, sizeof(*finder));
-	ret = asprintf(&finder->search_path, "%s/",
-		       xp_expr);
+	ret = asprintf(&finder->search_path, "%s%s/",
+		       (relative_path ? xdoc->cur_path : ""), xp_expr);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_finder_free;
