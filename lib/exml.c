@@ -121,7 +121,8 @@ err_out:
  * free the value buffer on success.
  */
 static int
-exml_finder_val_stash(char *got,
+exml_finder_val_stash(struct xml_doc *xdoc,
+		     char *got,
 		     struct xml_finder *finder)
 {
 	char *sval_end;
@@ -184,7 +185,7 @@ exml_finder_val_stash(char *got,
 		(*finder->ret_val.b64_decode)[ret] = '\0';
 		break;
 	case XML_VAL_CALLBACK:
-		ret = finder->ret_val.cb.fn(finder->search_path, got,
+		ret = finder->ret_val.cb.fn(xdoc, finder->search_path, got,
 					    finder->ret_val.cb.data);
 		if (ret < 0) {
 			dbg(0, "xml callback failed\n");
@@ -236,7 +237,7 @@ exml_el_data_cb(void *priv_data,
 		xdoc->parse_ret = -ENOMEM;
 		return;
 	}
-	ret = exml_finder_val_stash(got, finder);
+	ret = exml_finder_val_stash(xdoc, got, finder);
 	if (ret < 0) {
 		XML_StopParser(xdoc->parser, XML_FALSE);
 		xdoc->parse_ret = ret;

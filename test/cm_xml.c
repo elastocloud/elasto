@@ -242,7 +242,8 @@ cm_xml_base64_basic(void **state)
 	free(val2);
 }
 
-int cm_xml_want_cb(const char *path,
+int cm_xml_want_cb(struct xml_doc *xdoc,
+		   const char *path,
 		   const char *val,
 		   void *cb_data)
 {

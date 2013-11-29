@@ -70,7 +70,8 @@ exml_base64_want(struct xml_doc *xdoc,
 	     char **value,
 	     bool *present);
 
-typedef int (*exml_want_cb_t)(const char *path,
+typedef int (*exml_want_cb_t)(struct xml_doc *xdoc,
+			     const char *path,
 			     const char *val,
 			     void *cb_data);
 int
