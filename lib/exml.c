@@ -34,6 +34,7 @@ enum xml_val_type {
 	XML_VAL_BOOL,
 	XML_VAL_B64,
 	XML_VAL_CALLBACK,
+	XML_VAL_PATH_CB,
 };
 
 struct xml_finder {
@@ -42,7 +43,7 @@ struct xml_finder {
 	char *search_attr;
 	bool required;
 	enum xml_val_type type;
-	bool got_data;
+	uint32_t handled;
 	union {
 		char **str;
 		int32_t *i32;
@@ -243,7 +244,7 @@ exml_el_data_cb(void *priv_data,
 		xdoc->parse_ret = ret;
 		return;
 	}
-	finder->got_data = true;
+	finder->handled++;
 }
 
 static struct xml_finder *
@@ -288,6 +289,25 @@ exml_el_start_cb(void *priv_data,
 		/* no interest in this path */
 		return;
 	}
+
+	if (finder->type == XML_VAL_PATH_CB) {
+		/* no character handler, callback at path */
+		ret = finder->ret_val.cb.fn(xdoc, finder->search_path, NULL,
+					    finder->ret_val.cb.data);
+		if (ret < 0) {
+			dbg(0, "xml path (%s) callback failed\n", new_path);
+			XML_StopParser(xdoc->parser, XML_FALSE);
+			xdoc->parse_ret = -ENOMEM;
+			return;
+		}
+		finder->handled++;
+		if (finder->_present != NULL) {
+			*finder->_present = true;	/* TODO increment int */
+		}
+		/* keep on the finder list */
+		return;
+	}
+
 
 	/* move to the found list */
 	list_del(&finder->list);
@@ -349,7 +369,8 @@ exml_parse(struct xml_doc *xdoc)
 
 	/* check for required finders that were not located */
 	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
-		if (finder->required) {
+		/* XXX path callbacks stay on the list but inc handled */
+		if (finder->required && (finder->handled == 0)) {
 			dbg(0, "xpath (%s) not found\n", finder->search_path);
 			/* clean up on exml_free() */
 			return -ENOENT;
@@ -365,6 +386,7 @@ exml_parse(struct xml_doc *xdoc)
 
 	/* free all found, values already stashed */
 	list_for_each_safe(&xdoc->founds, finder, finder_n, list) {
+		assert(finder->handled == 1);
 		list_del(&finder->list);
 		xdoc->num_founds--;
 
@@ -599,6 +621,30 @@ exml_cb_want(struct xml_doc *xdoc,
 	struct xml_finder *finder;
 
 	ret = exml_finder_init(xdoc, xp_expr, required, XML_VAL_CALLBACK,
+			      present, &finder);
+	if (ret < 0) {
+		return ret;
+	}
+	finder->ret_val.cb.fn = cb;
+	finder->ret_val.cb.data = cb_data;
+	return 0;
+}
+
+/*
+ * callback on path find instead of value retrieval.
+ */
+int
+exml_path_cbs_want(struct xml_doc *xdoc,
+	     const char *xp_expr,
+	     bool required,
+	     exml_want_cb_t cb,
+	     void *cb_data,
+	     bool *present)
+{
+	int ret;
+	struct xml_finder *finder;
+
+	ret = exml_finder_init(xdoc, xp_expr, required, XML_VAL_PATH_CB,
 			      present, &finder);
 	if (ret < 0) {
 		return ret;

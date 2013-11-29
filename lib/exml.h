@@ -82,6 +82,14 @@ exml_cb_want(struct xml_doc *xdoc,
 	     void *cb_data,
 	     bool *present);
 
+int
+exml_path_cbs_want(struct xml_doc *xdoc,
+	     const char *xp_expr,
+	     bool required,
+	     exml_want_cb_t cb,
+	     void *cb_data,
+	     bool *present);
+
 void
 exml_free(struct xml_doc *xdoc);
 
