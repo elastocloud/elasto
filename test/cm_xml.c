@@ -282,6 +282,35 @@ cm_xml_cb_basic(void **state)
 	free(val);
 }
 
+static void
+cm_xml_xpath_relative(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val = NULL;
+
+	ret = exml_slurp(cm_xml_data_str_basic,
+			strlen(cm_xml_data_str_basic), &xdoc);
+	assert_int_equal(ret, 0);
+	/* current path is / (root) after slurp */
+
+	ret = exml_str_want(xdoc,
+			   "./outer/inner1/str",
+			   true,
+			   &val,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	assert_non_null(val);
+	assert_string_equal(val, "val");
+
+	exml_free(xdoc);
+	free(val);
+}
+
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
 	unit_test(cm_xml_two_str),
@@ -289,6 +318,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_bool_basic),
 	unit_test(cm_xml_base64_basic),
 	unit_test(cm_xml_cb_basic),
+	unit_test(cm_xml_xpath_relative),
 };
 
 int
