@@ -36,6 +36,8 @@
 
 static char *cm_xml_data_str_basic
 	= "<outer><inner1><str>val</str></inner1><str>blah</str></outer>";
+static char *cm_xml_data_str_dup
+	= "<outer><dup><str>val</str></dup><dup><str>blah</str></dup></outer>";
 static char *cm_xml_data_num_basic
 	= "<outer><num>100</num><inner1><neg>-100</neg></inner1>"
 	  "<huge>18446744073709551615</huge></outer>";
@@ -80,6 +82,37 @@ cm_xml_str_basic(void **state)
 	assert_string_equal(val, "val");
 
 	exml_free(xdoc);
+	free(val);
+}
+
+static void
+cm_xml_str_dup(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val = NULL;
+	bool val_present = false;
+
+	ret = exml_slurp(cm_xml_data_str_dup,
+			strlen(cm_xml_data_str_dup), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/outer/dup/str",
+			   true,
+			   &val,
+			   &val_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	/* should take the value for last path encountered */
+	assert_true(val_present);
+	assert_non_null(val);
+	assert_string_equal(val, "blah");
 	free(val);
 }
 
@@ -358,6 +391,7 @@ cm_xml_xpath_relative(void **state)
 
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
+	unit_test(cm_xml_str_dup),
 	unit_test(cm_xml_two_str),
 	unit_test(cm_xml_num_basic),
 	unit_test(cm_xml_bool_basic),
