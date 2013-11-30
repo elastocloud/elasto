@@ -226,9 +226,6 @@ exml_el_data_cb(void *priv_data,
 	char *got;
 	int ret;
 
-	/* disable data cb */
-	XML_SetCharacterDataHandler(xdoc->parser, NULL);
-
 	finder = xdoc->last_found;
 	if ((finder == NULL)
 	 || (strcmp(finder->search_path, xdoc->cur_path) != 0)) {
@@ -239,8 +236,8 @@ exml_el_data_cb(void *priv_data,
 	}
 
 	if (len == 0) {
-		/* do we still get a calback? */
-		dbg(0, "TODO empty value at %s\n", xdoc->cur_path);
+		/* we shouldn't have got a callback */
+		dbg(0, "empty value at %s\n", xdoc->cur_path);
 	}
 	got = strndup(content, len);
 	if (got == NULL) {
@@ -289,6 +286,10 @@ exml_el_start_cb(void *priv_data,
 	char *new_path;
 	int ret;
 	struct xml_finder *finder;
+
+	/* disable data cb here, as previous value may have been empty */
+	xdoc->last_found = NULL;
+	XML_SetCharacterDataHandler(xdoc->parser, NULL);
 
 	ret = asprintf(&new_path, "%s%s/", xdoc->cur_path, elem);
 	if (ret == -1) {
