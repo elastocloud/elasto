@@ -114,6 +114,19 @@ err_out:
 	return ret;
 }
 
+/* free a stashed value */
+static void
+exml_finder_val_free(struct xml_finder *finder)
+{
+	if (finder->type == XML_VAL_STR) {
+		free(*finder->ret_val.str);
+		*finder->ret_val.str = NULL;
+	} else if (finder->type == XML_VAL_B64) {
+		free(*finder->ret_val.b64_decode);
+		*finder->ret_val.b64_decode = NULL;
+	}
+}
+
 /*
  * stash the obtained finder value in the type specific destination.
  * free the value buffer on success.
@@ -235,6 +248,13 @@ exml_el_data_cb(void *priv_data,
 		xdoc->parse_ret = -ENOMEM;
 		return;
 	}
+
+	if (finder->handled > 0) {
+		dbg(2, "finder at (%s) handled, overwriting value\n",
+		    finder->search_path);
+		exml_finder_val_free(finder);
+	}
+
 	ret = exml_finder_val_stash(xdoc, got, finder);
 	if (ret < 0) {
 		XML_StopParser(xdoc->parser, XML_FALSE);
@@ -390,10 +410,7 @@ exml_free(struct xml_doc *xdoc)
 	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
 		if (finder->handled > 0) {
 			/* failed parse after finding somthing, free stash */
-			if (finder->type == XML_VAL_STR)
-				free(*finder->ret_val.str);
-			else if (finder->type == XML_VAL_B64)
-				free(*finder->ret_val.b64_decode);
+			exml_finder_val_free(finder);
 		}
 		free(finder->search_path);
 		free(finder);
