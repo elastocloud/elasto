@@ -261,6 +261,35 @@ exml_el_data_cb(void *priv_data,
 	finder->handled++;
 }
 
+static int
+exml_el_attr_search(const char **atts,
+		   char *search_attr,
+		   char **_attr_val)
+{
+	const char *s;
+	char *attr_val;
+	/* no char handler, only interested in attr */
+	for (s = *atts; s != NULL; s = *(++atts)) {
+		if (strcmp(s, search_attr) != 0) {
+			continue;
+		}
+		/* found, next array entry is the attrib value */
+		s = *(++atts);
+		if (s == NULL) {
+			dbg(0, "NULL attribute value for %s\n", search_attr);
+			return -EINVAL;
+		}
+		attr_val = strdup(s);
+		if (attr_val == NULL) {
+			return -ENOMEM;
+		}
+		*_attr_val = attr_val;
+		return 0;
+	}
+	dbg(2, "attr [%s] not found\n", search_attr);
+	return -ENOENT;
+}
+
 static struct xml_finder *
 exml_el_finders_search(struct list_head *finders,
 		      const char *path)
@@ -324,6 +353,28 @@ exml_el_start_cb(void *priv_data,
 		}
 		/* keep on the finder list */
 		return;
+	} else if (finder->search_attr != NULL) {
+		char *attr_val;
+		ret = exml_el_attr_search(atts, finder->search_attr, &attr_val);
+		if ((ret < 0) && (ret != -EINVAL)) {
+			XML_StopParser(xdoc->parser, XML_FALSE);
+			xdoc->parse_ret = ret;
+			return;
+		} else if (ret == -ENOENT) {
+			return;	/* ignore */
+		}
+
+		if (finder->handled > 0) {
+			exml_finder_val_free(finder);
+		}
+		ret = exml_finder_val_stash(xdoc, attr_val, finder);
+		if (ret < 0) {
+			XML_StopParser(xdoc->parser, XML_FALSE);
+			xdoc->parse_ret = ret;
+			return;
+		}
+		finder->handled++;
+		return;
 	}
 
 	/* enable data callback to stash value */
@@ -373,6 +424,7 @@ exml_parse(struct xml_doc *xdoc)
 	xret = XML_Parse(xdoc->parser, xdoc->buf, xdoc->buf_len, XML_TRUE);
 	xdoc->parsing = false;
 	if (xret != XML_STATUS_OK) {
+		dbg(0, "bad parsing status\n");
 		return -EIO;
 	} else if (xdoc->parse_ret < 0) {
 		dbg(0, "parsing failed: %s\n", strerror(-xdoc->parse_ret));
@@ -390,6 +442,7 @@ exml_parse(struct xml_doc *xdoc)
 		xdoc->num_finders--;
 
 		free(finder->search_path);
+		free(finder->search_attr);
 		free(finder);
 	}
 	assert(list_empty(&xdoc->finders));
@@ -414,11 +467,88 @@ exml_free(struct xml_doc *xdoc)
 			exml_finder_val_free(finder);
 		}
 		free(finder->search_path);
+		free(finder->search_attr);
 		free(finder);
 	}
 	free(xdoc->cur_path);
 	XML_ParserFree(xdoc->parser);
 	free(xdoc);
+}
+
+/*
+ * @xp_expr: xpath in the form of /parent/child, ./relative/path,
+ *	     /parent/child[@attribute]
+ */
+static int
+exml_xpath_parse(const char *xp_expr,
+		 const char *cur_path,
+		 char **_search_path,
+		 char **_attr,
+		 bool *_has_wildcard)
+{
+	int ret;
+	char *search_path = NULL;
+	char *attr = NULL;
+	char *s;
+	bool relative_path = false;
+
+	if ((xp_expr == NULL)
+	 || (strlen(xp_expr) == 0)
+	 || (xp_expr[strlen(xp_expr) - 1] == '/')) {
+		dbg(0, "bad xp_expr: %s\n", (xp_expr ? xp_expr : "null"));
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (strncmp(xp_expr, "./", 2) == 0) {
+		relative_path = true;
+		xp_expr += 2;
+	} else if (xp_expr[0] != '/') {
+		dbg(0, "bad xp_expr: %s\n", xp_expr);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = asprintf(&search_path, "%s%s/",
+		       (relative_path ? cur_path : ""), xp_expr);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	/* -2 to compensate for trailing slash added */
+	if (search_path[strlen(search_path) - 2] == ']') {
+		/* expecting [@attribute] component */
+		s = strstr(search_path, "[@");
+		if (s == NULL) {
+			dbg(0, "invalid attribute component in %s\n",
+			    search_path);
+			ret = -EINVAL;
+			goto err_path_free;
+		}
+		*(s++) = '/';
+		*(s++) = '\0';	/* terminate path */
+
+		attr = strdup(s);
+		if (attr == NULL) {
+			ret = -ENOMEM;
+			goto err_path_free;
+		}
+
+		s = strchr(attr, ']');
+		assert(s != NULL);	/* already seen */
+		*s = '\0';
+	}
+
+	*_search_path = search_path;
+	*_attr = attr;
+	*_has_wildcard = false;	/* TODO */
+	return 0;
+
+err_path_free:
+	free(search_path);
+err_out:
+	return ret;
 }
 
 /*
@@ -439,24 +569,7 @@ exml_finder_init(struct xml_doc *xdoc,
 {
 	int ret;
 	struct xml_finder *finder;
-	bool relative_path = false;
-
-	if ((xp_expr == NULL)
-	 || (strlen(xp_expr) == 0)
-	 || (xp_expr[strlen(xp_expr) - 1] == '/')) {
-		dbg(0, "bad xp_expr: %s\n", (xp_expr ? xp_expr : "null"));
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	if (strncmp(xp_expr, "./", 2) == 0) {
-		relative_path = true;
-		xp_expr += 2;
-	} else if (xp_expr[0] != '/') {
-		dbg(0, "bad xp_expr: %s\n", xp_expr);
-		ret = -EINVAL;
-		goto err_out;
-	}
+	bool has_wildcard = false;
 
 	finder = malloc(sizeof(*finder));
 	if (finder == NULL) {
@@ -464,12 +577,15 @@ exml_finder_init(struct xml_doc *xdoc,
 		goto err_out;
 	}
 	memset(finder, 0, sizeof(*finder));
-	ret = asprintf(&finder->search_path, "%s%s/",
-		       (relative_path ? xdoc->cur_path : ""), xp_expr);
+
+	ret = exml_xpath_parse(xp_expr, xdoc->cur_path, &finder->search_path,
+			       &finder->search_attr, &has_wildcard);
 	if (ret < 0) {
-		ret = -ENOMEM;
 		goto err_finder_free;
 	}
+	dbg(4, "new finder for (%s) [@%s]\n",
+	    finder->search_path,
+	    finder->search_attr ? finder->search_attr : "NONE");
 
 	finder->required = required;
 	finder->type = type;
