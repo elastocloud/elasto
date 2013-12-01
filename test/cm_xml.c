@@ -46,12 +46,23 @@ static char *cm_xml_data_bool_basic
 static char *cm_xml_data_b64_basic
 	= "<outer><Label1>dGhpcyBpcyBhIGxhYmVs</Label1>"
 	  "<Label2>aXN0Z3Q=</Label2></outer>";
+static char *cm_xml_data_attr_basic
+	= "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+	  "<PublishData>"
+	  "<PublishProfile\n"
+	   "PublishMethod=\"AzureServiceManagementAPI\"\n"
+	   "Url=\"https://management.core.windows.net/\">"
+	  "<Subscription\n"
+	   "Id=\"55555555-4444-3333-2222-111111111111\"\n"
+	   "Name=\"3-Month Free Trial\" />"
+	  "</PublishProfile>"
+	  "</PublishData>";
 
 /*
  * TODO test:
- * - duplicate paths, mem-leak return last
+ * - duplicate attr paths
  * - empty values
- * - attributes
+ * - empty attributes
  */
 
 /*
@@ -77,11 +88,11 @@ cm_xml_str_basic(void **state)
 
 	ret = exml_parse(xdoc);
 	assert_int_equal(ret, 0);
+	exml_free(xdoc);
 
 	assert_non_null(val);
 	assert_string_equal(val, "val");
 
-	exml_free(xdoc);
 	free(val);
 }
 
@@ -360,6 +371,36 @@ cm_xml_path_cb_basic(void **state)
 }
 
 static void
+cm_xml_attr_basic(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val = NULL;
+	bool got_attr = false;
+
+	ret = exml_slurp(cm_xml_data_attr_basic,
+			strlen(cm_xml_data_attr_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/PublishData/PublishProfile[@PublishMethod]",
+			   true,
+			   &val,
+			   &got_attr);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+	exml_free(xdoc);
+
+	assert_true(got_attr);
+	assert_non_null(val);
+	assert_string_equal(val, "AzureServiceManagementAPI");
+
+	free(val);
+}
+
+static void
 cm_xml_xpath_relative(void **state)
 {
 	int ret;
@@ -397,6 +438,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_base64_basic),
 	unit_test(cm_xml_cb_basic),
 	unit_test(cm_xml_path_cb_basic),
+	unit_test(cm_xml_attr_basic),
 	unit_test(cm_xml_xpath_relative),
 };
 
