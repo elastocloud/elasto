@@ -36,6 +36,9 @@
 
 static char *cm_xml_data_str_basic
 	= "<outer><inner1><str>val</str></inner1><str>blah</str></outer>";
+static char *cm_xml_data_str_multi
+	= "<out><in><str>val0</str></in><in><str>val1</str></in>"
+	  "<in><str>val2</str></in><out>";
 static char *cm_xml_data_str_dup
 	= "<outer><dup><str>val</str></dup><dup><str>blah</str></dup></outer>";
 static char *cm_xml_data_num_basic
@@ -63,6 +66,8 @@ static char *cm_xml_data_attr_basic
  * - duplicate attr paths
  * - empty values
  * - empty attributes
+ * - multiple parse calls
+ * - relative path invalidation on path change
  */
 
 /*
@@ -326,7 +331,8 @@ cm_xml_cb_basic(void **state)
 	free(val);
 }
 
-int cm_xml_path_want_cb(struct xml_doc *xdoc,
+static int
+cm_xml_path_want_cb(struct xml_doc *xdoc,
 		   const char *path,
 		   const char *val,
 		   void *cb_data)
@@ -368,6 +374,76 @@ cm_xml_path_cb_basic(void **state)
 
 	assert_true(called);
 	assert_int_equal(cb_i, 1);
+}
+
+static struct cm_xml_path_multi_cb_data {
+	int cb_i;
+	char *val0;
+	char *val1;
+	char *val2;
+};
+
+static int
+cm_xml_path_multi_cb(struct xml_doc *xdoc,
+		     const char *path,
+		     const char *val,
+		     void *cb_data)
+{
+	struct cm_xml_path_multi_cb_data *d = cb_data;
+
+	assert_null(val);
+	switch (d->cb_i++) {
+	case 0:
+		assert_string_equal(path, "/out/in/");
+		exml_str_want(xdoc, "./str", true, &d->val0, NULL);
+		break;
+	case 1:
+		assert_string_equal(path, "/out/in/");
+		exml_str_want(xdoc, "./str", true, &d->val1, NULL);
+		break;
+	case 2:
+		assert_string_equal(path, "/out/in/");
+		exml_str_want(xdoc, "./str", true, &d->val2, NULL);
+		break;
+	default:
+		assert_true(false);
+		break;
+	}
+
+	return 0;
+}
+
+/* add new finder from callback */
+static void
+cm_xml_path_cb_multi(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	bool called = false;
+	struct cm_xml_path_multi_cb_data cb_data;
+
+	memset(&cb_data, 0, sizeof(cb_data));
+	ret = exml_slurp(cm_xml_data_str_multi,
+			strlen(cm_xml_data_str_multi), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_path_cb_want(xdoc,
+			   "/out/in",
+			   false,
+			   cm_xml_path_multi_cb,
+			   &cb_data,
+			   &called);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+	exml_free(xdoc);
+
+	assert_true(called);
+	assert_int_equal(cb_data.cb_i, 3);
+	assert_string_equal(cb_data.val0, "val0");
+	assert_string_equal(cb_data.val1, "val1");
+	assert_string_equal(cb_data.val2, "val2");
 }
 
 static void
@@ -438,6 +514,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_base64_basic),
 	unit_test(cm_xml_cb_basic),
 	unit_test(cm_xml_path_cb_basic),
+	unit_test(cm_xml_path_cb_multi),
 	unit_test(cm_xml_attr_basic),
 	unit_test(cm_xml_xpath_relative),
 };
