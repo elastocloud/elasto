@@ -505,6 +505,56 @@ cm_xml_xpath_relative(void **state)
 	free(val);
 }
 
+static void
+cm_xml_xpath_wildcard(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val = NULL;
+
+	ret = exml_slurp(cm_xml_data_str_basic,
+			strlen(cm_xml_data_str_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	/* wildcard at end */
+	ret = exml_str_want(xdoc,
+			   "/outer/inner1/*",
+			   true,
+			   &val,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+	exml_free(xdoc);
+
+	assert_non_null(val);
+	assert_string_equal(val, "val");
+	free(val);
+	val = NULL;
+
+	ret = exml_slurp(cm_xml_data_str_basic,
+			strlen(cm_xml_data_str_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	/* wildcard at start */
+	ret = exml_str_want(xdoc,
+			   "/*/inner1/str",
+			   true,
+			   &val,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+	exml_free(xdoc);
+
+	assert_non_null(val);
+	assert_string_equal(val, "val");
+
+	free(val);
+}
+
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
 	unit_test(cm_xml_str_dup),
@@ -517,6 +567,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_path_cb_multi),
 	unit_test(cm_xml_attr_basic),
 	unit_test(cm_xml_xpath_relative),
+	unit_test(cm_xml_xpath_wildcard),
 };
 
 int
