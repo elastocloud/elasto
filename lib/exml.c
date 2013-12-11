@@ -631,7 +631,7 @@ exml_finder_init(struct xml_doc *xdoc,
 		*present = false;
 		finder->_present = present;
 	}
-	list_add_tail(&xdoc->finders, &finder->list);
+	list_add(&xdoc->finders, &finder->list);
 	xdoc->num_finders++;
 	*_finder = finder;
 
