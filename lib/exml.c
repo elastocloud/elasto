@@ -40,6 +40,7 @@ enum xml_val_type {
 struct xml_finder {
 	struct list_node list;
 	char *search_path;
+	bool path_wildcard;
 	char *search_attr;
 	bool required;
 	enum xml_val_type type;
@@ -299,6 +300,31 @@ exml_el_finders_search(struct list_head *finders,
 		if (strcmp(finder->search_path, path) == 0) {
 			dbg(6, "xpath (%s) found\n", path);
 			return finder;
+		} else if (finder->path_wildcard) {
+			char *s;
+			const char *path_after;
+			int len;
+			s = strchr(finder->search_path, '*');
+			assert(s != NULL);	/* already checked */
+			len = s - finder->search_path;
+			if ((len > 0)
+			 && (strncmp(finder->search_path, path, len) != 0)) {
+				continue; /* no match before wild */
+			}
+			/* don't consider matched part in post '*' match */
+			path_after = path + len;
+
+			len = strlen(path_after) - strlen(s + 1);
+			if (len < 0) {
+				continue;
+			}
+			if ((len > 0)
+			 && (strcmp(path_after + len, s + 1) != 0)) {
+				continue; /* no match after wild */
+			}
+			dbg(6, "wild xpath (%s) match with (%s)\n",
+			    finder->search_path, path);
+			return finder;
 		}
 	}
 	dbg(4, "xpath (%s) not found\n", path);
@@ -482,11 +508,12 @@ static int
 exml_xpath_parse(const char *xp_expr,
 		 const char *cur_path,
 		 char **_search_path,
-		 char **_attr,
-		 bool *_has_wildcard)
+		 bool *_path_wildcard,
+		 char **_attr)
 {
 	int ret;
 	char *search_path = NULL;
+	bool path_wildcard = false;
 	char *attr = NULL;
 	char *s;
 	bool relative_path = false;
@@ -539,11 +566,24 @@ exml_xpath_parse(const char *xp_expr,
 		*s = '\0';
 	}
 
+	s = strchr(search_path, '*');
+	if (s != NULL) {
+		path_wildcard = true;
+		s = strchr(s + 1, '*');
+		if (s != NULL) {
+			dbg(0, "invalid multi-wildcard in (%s)\n", search_path);
+			ret = -EINVAL;
+			goto err_attr_free;
+		}
+	}
+
 	*_search_path = search_path;
+	*_path_wildcard = path_wildcard;
 	*_attr = attr;
-	*_has_wildcard = false;	/* TODO */
 	return 0;
 
+err_attr_free:
+	free(attr);
 err_path_free:
 	free(search_path);
 err_out:
@@ -568,7 +608,6 @@ exml_finder_init(struct xml_doc *xdoc,
 {
 	int ret;
 	struct xml_finder *finder;
-	bool has_wildcard = false;
 
 	finder = malloc(sizeof(*finder));
 	if (finder == NULL) {
@@ -578,7 +617,7 @@ exml_finder_init(struct xml_doc *xdoc,
 	memset(finder, 0, sizeof(*finder));
 
 	ret = exml_xpath_parse(xp_expr, xdoc->cur_path, &finder->search_path,
-			       &finder->search_attr, &has_wildcard);
+			       &finder->path_wildcard, &finder->search_attr);
 	if (ret < 0) {
 		goto err_finder_free;
 	}
