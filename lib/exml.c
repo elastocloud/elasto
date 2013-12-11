@@ -148,7 +148,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		*finder->ret_val.i32 = strtol(got, &sval_end, 10);
 		if (sval_end == got) {
 			dbg(0, "non-numeric at %s: %s\n",
-			    finder->search_path, got);
+			    xdoc->cur_path, got);
 			return -EINVAL;
 		}
 		break;
@@ -156,7 +156,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		*finder->ret_val.i64 = strtoll(got, &sval_end, 10);
 		if (sval_end == got) {
 			dbg(0, "non-numeric at %s: %s\n",
-			    finder->search_path, got);
+			    xdoc->cur_path, got);
 			return -EINVAL;
 		}
 		break;
@@ -164,7 +164,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		*finder->ret_val.u64 = strtoull(got, &sval_end, 10);
 		if (sval_end == got) {
 			dbg(0, "non-numeric at %s: %s\n",
-			    finder->search_path, got);
+			    xdoc->cur_path, got);
 			return -EINVAL;
 		}
 		break;
@@ -196,7 +196,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		(*finder->ret_val.b64_decode)[ret] = '\0';
 		break;
 	case XML_VAL_CALLBACK:
-		ret = finder->ret_val.cb.fn(xdoc, finder->search_path, got,
+		ret = finder->ret_val.cb.fn(xdoc, xdoc->cur_path, got,
 					    finder->ret_val.cb.data);
 		if (ret < 0) {
 			dbg(0, "xml callback failed\n");
@@ -205,7 +205,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		break;
 	default:
 		dbg(0, "unhandled type %d for path %s\n",
-		    finder->type, finder->search_path);
+		    finder->type, xdoc->cur_path);
 		return -EIO;
 		break;
 	}
@@ -227,8 +227,7 @@ exml_el_data_cb(void *priv_data,
 	int ret;
 
 	finder = xdoc->last_found;
-	if ((finder == NULL)
-	 || (strcmp(finder->search_path, xdoc->cur_path) != 0)) {
+	if (finder == NULL) {
 		dbg(0, "data cb for non-found finder\n");
 		XML_StopParser(xdoc->parser, XML_FALSE);
 		xdoc->parse_ret = -EFAULT;
@@ -339,7 +338,7 @@ exml_el_start_cb(void *priv_data,
 
 	if (finder->type == XML_VAL_PATH_CB) {
 		/* no character handler, callback at path */
-		ret = finder->ret_val.cb.fn(xdoc, finder->search_path, NULL,
+		ret = finder->ret_val.cb.fn(xdoc, new_path, NULL,
 					    finder->ret_val.cb.data);
 		if (ret < 0) {
 			dbg(0, "xml path (%s) callback failed\n", new_path);
