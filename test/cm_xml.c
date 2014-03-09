@@ -444,6 +444,10 @@ cm_xml_path_cb_multi(void **state)
 	assert_string_equal(cb_data.val0, "val0");
 	assert_string_equal(cb_data.val1, "val1");
 	assert_string_equal(cb_data.val2, "val2");
+
+	free(cb_data.val0);
+	free(cb_data.val1);
+	free(cb_data.val2);
 }
 
 static void
