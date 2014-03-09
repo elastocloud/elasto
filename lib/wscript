@@ -6,11 +6,11 @@ def configure(conf):
 	conf.env.append_unique('CFLAGS', ['-Wall', '-g', '-fPIC'])
 
 def build(bld):
-	bld.stlib(source='''xml.c azure_req.c s3_req.c op.c sign.c
+	bld.stlib(source='''azure_req.c s3_req.c op.c sign.c
 			    base64.c conn.c azure_ssl.c dbg.c data.c
-			    s3_creds.c exml.c''',
+			    s3_creds.c exml.c util.c''',
 		  target='elasto',
-		  lib=['curl', 'apr-1', 'aprutil-1', 'crypto', 'expat'],
+		  lib=['curl', 'crypto', 'expat'],
 		  use=['ccan'],
 		  includes = '. ..')
 	bld.install_as('${INCLUDEDIR}/elasto/data.h', 'data_api.h')

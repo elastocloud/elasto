@@ -313,12 +313,12 @@ cm_xml_cb_basic(void **state)
 			strlen(cm_xml_data_str_basic), &xdoc);
 	assert_int_equal(ret, 0);
 
-	ret = exml_cb_want(xdoc,
-			   "/outer/inner1/str",
-			   true,
-			   cm_xml_basic_want_cb,
-			   &val,
-			   NULL);
+	ret = exml_val_cb_want(xdoc,
+			       "/outer/inner1/str",
+			       true,
+			       cm_xml_basic_want_cb,
+			       &val,
+			       NULL);
 	assert_int_equal(ret, 0);
 
 	ret = exml_parse(xdoc);

@@ -23,11 +23,9 @@
 #include <sys/stat.h>
 
 #include <curl/curl.h>
-#include <apr-1/apr_general.h>
-#include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
-#include "lib/xml.h"
+#include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
 #include "lib/s3_req.h"
@@ -634,7 +632,6 @@ main(int argc, char * const *argv)
 	struct cli_args cli_args;
 	const struct cli_cmd_spec *cmd;
 	int ret;
-	apr_status_t rv;
 
 	memset(&cli_args, 0, sizeof(cli_args));
 
@@ -643,15 +640,9 @@ main(int argc, char * const *argv)
 		goto err_out;
 	}
 
-	rv = apr_initialize();
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
-		goto err_args_free;
-	}
-
 	ret = elasto_conn_subsys_init();
 	if (ret < 0) {
-		goto err_apr_deinit;
+		goto err_args_free;
 	}
 
 	if (cli_args.type == CLI_TYPE_AZURE) {
@@ -684,8 +675,6 @@ main(int argc, char * const *argv)
 	ret = 0;
 err_global_clean:
 	elasto_conn_subsys_deinit();
-err_apr_deinit:
-	apr_terminate();
 err_args_free:
 	cli_args_free(cmd, &cli_args);
 err_out:

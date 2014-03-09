@@ -24,11 +24,10 @@
 #include <inttypes.h>
 
 #include <curl/curl.h>
-#include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
 #include "lib/util.h"
-#include "lib/xml.h"
+#include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
 #include "lib/s3_req.h"

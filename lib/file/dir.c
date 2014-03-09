@@ -25,11 +25,9 @@
 #include <sys/stat.h>
 
 #include <curl/curl.h>
-#include <apr-1/apr_general.h>
-#include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
-#include "lib/xml.h"
+#include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
 #include "lib/conn.h"
@@ -49,22 +47,15 @@ elasto_fmkdir(const struct elasto_fauth *auth,
 	struct elasto_fh *fh;
 	struct elasto_fh_priv *fh_priv;
 	struct op *op;
-	apr_status_t rv;
 
 	if (auth->type != ELASTO_FILE_AZURE) {
 		ret = -ENOTSUP;
 		goto err_out;
 	}
 
-	rv = apr_initialize();
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
-		goto err_out;
-	}
-
 	ret = elasto_conn_subsys_init();
 	if (ret < 0) {
-		goto err_apr_deinit;
+		goto err_out;
 	}
 
 	ret = elasto_fh_init(auth->az.ps_path, auth->insecure_http, &fh);
@@ -119,8 +110,6 @@ err_fhconn_free:
 	elasto_fh_free(fh);
 err_connss_deinit:
 	elasto_conn_subsys_deinit();
-err_apr_deinit:
-	apr_terminate();
 err_out:
 	return ret;
 }
@@ -133,22 +122,15 @@ elasto_frmdir(const struct elasto_fauth *auth,
 	struct elasto_fh *fh;
 	struct elasto_fh_priv *fh_priv;
 	struct op *op;
-	apr_status_t rv;
 
 	if (auth->type != ELASTO_FILE_AZURE) {
 		ret = -ENOTSUP;
 		goto err_out;
 	}
 
-	rv = apr_initialize();
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
-		goto err_out;
-	}
-
 	ret = elasto_conn_subsys_init();
 	if (ret < 0) {
-		goto err_apr_deinit;
+		goto err_out;
 	}
 
 	ret = elasto_fh_init(auth->az.ps_path, auth->insecure_http, &fh);
@@ -203,8 +185,6 @@ err_fhconn_free:
 	elasto_fh_free(fh);
 err_connss_deinit:
 	elasto_conn_subsys_deinit();
-err_apr_deinit:
-	apr_terminate();
 err_out:
 	return ret;
 }

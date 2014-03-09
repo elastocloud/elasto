@@ -10,8 +10,6 @@ def configure(conf):
 	conf.load('gnu_dirs')
 	conf.env.CFLAGS = ['-Wall', '-g', '-D_LARGEFILE64_SOURCE']
 	conf.check(lib='curl')
-	conf.check(lib='apr-1')
-	conf.check(lib='aprutil-1')
 	conf.check(lib='crypto')
 	conf.check(lib='expat')
 	conf.recurse('ccan')

@@ -26,13 +26,12 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-#include <apr-1/apr_xml.h>
-
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
 #include "util.h"
-#include "xml.h"
+#include "exml.h"
+#include "exml.h"
 #include "data_api.h"
 #include "op.h"
 #include "sign.h"
@@ -264,45 +263,44 @@ az_rsp_acc_keys_get_process(struct op *op,
 			    struct az_rsp_acc_keys_get *acc_keys_get_rsp)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
+	struct xml_doc *xdoc;
 
 	assert(op->opcode == AOP_ACC_KEYS_GET);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	rv = apr_pool_create(&pool, NULL);
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
+	assert(op->rsp.data->base_off == 0);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
 		goto err_out;
 	}
 
-	assert(op->rsp.data->base_off == 0);
-	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
-			      &xdoc);
+	ret = exml_str_want(xdoc, "/StorageService/StorageServiceKeys/Primary",
+			    true, &acc_keys_get_rsp->primary, NULL);
 	if (ret < 0) {
-		goto err_pool_free;
+		goto err_xdoc_free;
+	}
+	ret = exml_str_want(xdoc,
+			    "/StorageService/StorageServiceKeys/Secondary",
+			    true, &acc_keys_get_rsp->secondary, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
 	}
 
-	ret = xml_path_get(xdoc->root,
-				 "/StorageService/StorageServiceKeys/Primary",
-				 &acc_keys_get_rsp->primary);
+	ret = exml_parse(xdoc);
 	if (ret < 0) {
-		goto err_pool_free;
-	}
-	ret = xml_path_get(xdoc->root,
-				 "/StorageService/StorageServiceKeys/Secondary",
-				 &acc_keys_get_rsp->secondary);
-	if (ret < 0) {
-		free(acc_keys_get_rsp->primary);
-		goto err_pool_free;
+		goto err_rsp_free;
 	}
 	dbg(5, "primary key: %s, secondary key: %s\n",
 	    acc_keys_get_rsp->primary, acc_keys_get_rsp->secondary);
-	ret = 0;
 
-err_pool_free:
-	apr_pool_destroy(pool);
+	exml_free(xdoc);
+	return 0;
+
+err_rsp_free:
+	az_rsp_acc_keys_get_free(acc_keys_get_rsp);
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }
@@ -403,11 +401,14 @@ err_out:
 	return ret;
 }
 
-static int
-az_rsp_acc_iter_process(struct apr_xml_elem *xel,
-			struct azure_account **acc_ret)
+static int az_rsp_acc_iter_process(struct xml_doc *xdoc,
+				   const char *path,
+				   const char *val,
+				   void *cb_data)
 {
 	int ret;
+	struct az_rsp_acc_list *acc_list_rsp
+					= (struct az_rsp_acc_list *)cb_data;
 	struct azure_account *acc;
 
 	acc = malloc(sizeof(*acc));
@@ -417,54 +418,45 @@ az_rsp_acc_iter_process(struct apr_xml_elem *xel,
 	}
 	memset(acc, 0, sizeof(*acc));
 
-	ret = xml_path_get(xel, "ServiceName", &acc->svc_name);
+	ret = exml_str_want(xdoc, "./ServiceName", true, &acc->svc_name, NULL);
 	if (ret < 0) {
 		goto err_acc_free;
 	}
 
-	ret = xml_path_get(xel, "Url", &acc->url);
+	ret = exml_str_want(xdoc, "./Url", true, &acc->url, NULL);
 	if (ret < 0) {
-		goto err_name_free;
+		goto err_acc_free;
 	}
 
-	ret = xml_path_get(xel, "StorageServiceProperties/Description",
-				 &acc->desc);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		goto err_url_free;
+	ret = exml_str_want(xdoc, "./StorageServiceProperties/Description",
+			    false, &acc->desc, NULL);
+	if (ret < 0) {
+		goto err_acc_free;
 	}
 
-	ret = xml_path_get(xel, "StorageServiceProperties/AffinityGroup",
-				 &acc->affin_grp);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		goto err_desc_free;
+	ret = exml_str_want(xdoc, "./StorageServiceProperties/AffinityGroup",
+			    false, &acc->affin_grp, NULL);
+	if (ret < 0) {
+		goto err_acc_free;
 	}
 
-	ret = xml_path_b64_get(xel, "StorageServiceProperties/Label",
-			       &acc->label, NULL);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		goto err_affin_free;
+	ret = exml_base64_want(xdoc, "./StorageServiceProperties/Label",
+			       false, &acc->label, NULL);
+	if (ret < 0) {
+		goto err_acc_free;
 	}
 
-	ret = xml_path_get(xel, "StorageServiceProperties/Location",
-				 &acc->location);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		goto err_label_free;
+	ret = exml_str_want(xdoc, "./StorageServiceProperties/Location",
+			    false, &acc->location, NULL);
+	if (ret < 0) {
+		goto err_acc_free;
 	}
 
-	*acc_ret = acc;
+	list_add_tail(&acc_list_rsp->accs, &acc->list);
+	acc_list_rsp->num_accs++;
 
 	return 0;
 
-err_label_free:
-	free(acc->label);
-err_affin_free:
-	free(acc->affin_grp);
-err_desc_free:
-	free(acc->desc);
-err_url_free:
-	free(acc->url);
-err_name_free:
-	free(acc->svc_name);
 err_acc_free:
 	free(acc);
 err_out:
@@ -476,60 +468,45 @@ az_rsp_acc_list_process(struct op *op,
 			struct az_rsp_acc_list *acc_list_rsp)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
-	struct apr_xml_elem *xel;
+	struct xml_doc *xdoc;
 	struct azure_account *acc;
 	struct azure_account *acc_n;
 
 	assert(op->opcode == AOP_ACC_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	rv = apr_pool_create(&pool, NULL);
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
-		goto err_out;
-	}
-
 	assert(op->rsp.data->base_off == 0);
-	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
-			      &xdoc);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
-		goto err_pool_free;
+		goto err_out;
 	}
 
 	list_head_init(&acc_list_rsp->accs);
 
-	/* get the first, if present */
-	ret = xml_path_el_get(xdoc->root,
-				    "/StorageServices/StorageService", &xel);
-	if (ret == -ENOENT) {
-		goto done;
-	} else if (ret < 0) {
-		goto err_pool_free;
+	/* request callback for each storage account description */
+	ret = exml_path_cb_want(xdoc,
+				"/StorageServices/StorageService", false,
+				az_rsp_acc_iter_process, acc_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
 	}
 
-	while ((xel != NULL) && (strcmp(xel->name, "StorageService") == 0)) {
-		ret = az_rsp_acc_iter_process(xel->first_child, &acc);
-		if (ret < 0) {
-			goto err_accs_free;
-		}
-		list_add_tail(&acc_list_rsp->accs, &acc->list);
-		acc_list_rsp->num_accs++;
-
-		xel = xel->next;
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		/* need to walk list in case cb fired */
+		goto err_accs_free;
 	}
-done:
-	apr_pool_destroy(pool);
+
+	exml_free(xdoc);
 	return 0;
 
 err_accs_free:
 	list_for_each_safe(&acc_list_rsp->accs, acc, acc_n, list) {
 		azure_acc_free(&acc);
 	}
-err_pool_free:
-	apr_pool_destroy(pool);
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }
@@ -947,28 +924,35 @@ err_out:
 }
 
 static int
-az_rsp_ctnr_iter_process(struct apr_xml_elem *xel,
-			 struct azure_ctnr **ctnr)
+az_rsp_ctnr_iter_process(struct xml_doc *xdoc,
+			 const char *path,
+			 const char *val,
+			 void *cb_data)
 {
 	int ret;
-	struct azure_ctnr *ictnr;
+	struct az_rsp_ctnr_list *ctnr_list_rsp =
+					(struct az_rsp_ctnr_list *)cb_data;
+	struct azure_ctnr *ctnr;
 
-	ictnr = malloc(sizeof(*ictnr));
-	if (ictnr == NULL) {
+	ctnr = malloc(sizeof(*ctnr));
+	if (ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
+	memset(ctnr, 0, sizeof(*ctnr));
 
-	ret = xml_path_get(xel, "Name", &ictnr->name);
+	ret = exml_str_want(xdoc, "./Name", true, &ctnr->name, NULL);
 	if (ret < 0) {
 		goto err_ctnr_free;
 	}
 
-	*ctnr = ictnr;
+	list_add_tail(&ctnr_list_rsp->ctnrs, &ctnr->list);
+	ctnr_list_rsp->num_ctnrs++;
+
 	return 0;
 
 err_ctnr_free:
-	free(ictnr);
+	free(ctnr);
 err_out:
 	return ret;
 }
@@ -978,56 +962,40 @@ az_rsp_ctnr_list_process(struct op *op,
 			 struct az_rsp_ctnr_list *ctnr_list_rsp)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
-	struct apr_xml_elem *xel;
+	struct xml_doc *xdoc;
 	struct azure_ctnr *ctnr;
 	struct azure_ctnr *ctnr_n;
 
 	assert(op->opcode == AOP_CONTAINER_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	rv = apr_pool_create(&pool, NULL);
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
-		goto err_out;
-	}
-
 	assert(op->rsp.data->base_off == 0);
-	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
-			      &xdoc);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
-		goto err_pool_free;
+		goto err_out;
 	}
 
 	list_head_init(&ctnr_list_rsp->ctnrs);
 
-	/* get the first container, if present */
-	ret = xml_path_el_get(xdoc->root,
-				    "/EnumerationResults/Containers/Container",
-				    &xel);
-	if (ret == -ENOENT) {
-		goto done;
-	} else if (ret < 0) {
-		goto err_pool_free;
+	ret = exml_path_cb_want(xdoc,
+				"/EnumerationResults/Containers/Container",
+				false, az_rsp_ctnr_iter_process, ctnr_list_rsp,
+				NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
 	}
 
 	/*
 	 * Returns up to 5000 records (maxresults default),
 	 */
-	while ((xel != NULL) && (strcmp(xel->name, "Container") == 0)) {
-		ret = az_rsp_ctnr_iter_process(xel->first_child, &ctnr);
-		if (ret < 0) {
-			goto err_ctnrs_free;
-		}
-		list_add_tail(&ctnr_list_rsp->ctnrs, &ctnr->list);
-		ctnr_list_rsp->num_ctnrs++;
-
-		xel = xel->next;
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		/* need to walk list in case cb fired */
+		goto err_ctnrs_free;
 	}
-done:
-	apr_pool_destroy(pool);
+
+	exml_free(xdoc);
 	return 0;
 
 err_ctnrs_free:
@@ -1035,8 +1003,8 @@ err_ctnrs_free:
 		free(ctnr->name);
 		free(ctnr);
 	}
-err_pool_free:
-	apr_pool_destroy(pool);
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }
@@ -1308,49 +1276,67 @@ err_out:
 	return ret;
 }
 
+static int
+az_rsp_blob_iter_type_process(struct xml_doc *xdoc,
+			      const char *path,
+			      const char *val,
+			      void *cb_data)
+{
+	struct azure_blob *blob = (struct azure_blob *)cb_data;
+
+	if (val == NULL) {
+		return -EINVAL;
+	}
+	blob->is_page = (strcmp(val, BLOB_TYPE_PAGE) == 0);
+	return 0;
+}
+
 /*
  * process a single blob list iteration at @iter, return -ENOENT if no such
  * iteration exists
  */
 static int
-az_rsp_blob_iter_process(struct apr_xml_elem *xel,
-			 struct azure_blob **blob)
+az_rsp_blob_iter_process(struct xml_doc *xdoc,
+			 const char *path,
+			 const char *val,
+			 void *cb_data)
 {
 	int ret;
-	char *type;
-	struct azure_blob *iblob;
+	struct az_rsp_blob_list *blob_list_rsp
+				= (struct az_rsp_blob_list *)cb_data;
+	struct azure_blob *blob;
 
-	iblob = malloc(sizeof(*iblob));
-	if (iblob == NULL) {
+	blob = malloc(sizeof(*blob));
+	if (blob == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
+	memset(blob, 0, sizeof(*blob));
 
-	ret = xml_path_get(xel, "Name", &iblob->name);
+	ret = exml_str_want(xdoc, "./Name", true, &blob->name, NULL);
 	if (ret < 0) {
 		goto err_blob_free;
 	}
 
-	ret = xml_path_u64_get(xel, "Properties/Content-Length",
-				     &iblob->len);
+	ret = exml_uint64_want(xdoc, "./Properties/Content-Length", true,
+			       &blob->len, NULL);
 	if (ret < 0) {
-		goto err_name_free;
+		goto err_blob_free;
 	}
 
-	ret = xml_path_get(xel, "Properties/BlobType", &type);
+	ret = exml_val_cb_want(xdoc, "./Properties/BlobType", true,
+			       az_rsp_blob_iter_type_process, blob, NULL);
 	if (ret < 0) {
-		goto err_name_free;
+		goto err_blob_free;
 	}
-	iblob->is_page = (strcmp(type, BLOB_TYPE_PAGE) == 0);
 
-	*blob = iblob;
-	free(type);
+	list_add_tail(&blob_list_rsp->blobs, &blob->list);
+	blob_list_rsp->num_blobs++;
+
 	return 0;
 
-err_name_free:
-	free(iblob->name);
 err_blob_free:
-	free(iblob);
+	free(blob);
 err_out:
 	return ret;
 }
@@ -1360,52 +1346,35 @@ az_rsp_blob_list_process(struct op *op,
 			 struct az_rsp_blob_list *blob_list_rsp)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
-	struct apr_xml_elem *xel;
+	struct xml_doc *xdoc;
 	struct azure_blob *blob;
 	struct azure_blob *blob_n;
 
 	assert(op->opcode == AOP_BLOB_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	rv = apr_pool_create(&pool, NULL);
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
-		goto err_out;
-	}
-
 	assert(op->rsp.data->base_off == 0);
-	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
-			      &xdoc);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	list_head_init(&blob_list_rsp->blobs);
 
-	/* get the first blob, if present */
-	ret = xml_path_el_get(xdoc->root,
-				    "/EnumerationResults/Blobs/Blob", &xel);
-	if (ret == -ENOENT) {
-		goto done;
-	} else if (ret < 0) {
-		goto err_pool_free;
+	ret = exml_path_cb_want(xdoc, "/EnumerationResults/Blobs/Blob",
+				false, az_rsp_blob_iter_process,
+				blob_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
 	}
 
-	while ((xel != NULL) && (strcmp(xel->name, "Blob") == 0)) {
-		ret = az_rsp_blob_iter_process(xel->first_child, &blob);
-		if (ret < 0) {
-			goto err_blobs_free;
-		}
-		list_add_tail(&blob_list_rsp->blobs, &blob->list);
-		blob_list_rsp->num_blobs++;
-
-		xel = xel->next;
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_blobs_free;
 	}
-done:
-	apr_pool_destroy(pool);
+
+	exml_free(xdoc);
 	return 0;
 
 err_blobs_free:
@@ -1413,8 +1382,8 @@ err_blobs_free:
 		free(blob->name);
 		free(blob);
 	}
-err_pool_free:
-	apr_pool_destroy(pool);
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }
@@ -2328,15 +2297,14 @@ err_out:
 	return ret;
 }
 
-/*
- * process a single block list get iteration at @iter, return -ENOENT if no
- * such iteration exists
- */
 static int
-az_rsp_blk_iter_process(struct apr_xml_elem *xel,
-			enum azure_block_state state,
-			struct azure_block **blk_ret)
+az_rsp_blk_iter_process(struct xml_doc *xdoc,
+			const char *path,
+			const char *val,
+			void *cb_data)
 {
+	struct az_rsp_block_list_get *blk_list_get_rsp
+			= (struct az_rsp_block_list_get *)cb_data;
 	int ret;
 	struct azure_block *blk;
 
@@ -2345,24 +2313,33 @@ az_rsp_blk_iter_process(struct apr_xml_elem *xel,
 		ret = -ENOMEM;
 		goto err_out;
 	}
+	memset(blk, 0, sizeof(*blk));
 
-	ret = xml_path_b64_get(xel, "Name", &blk->id, NULL);
+	if (strstr(path, "/CommittedBlocks[") != NULL) {
+		blk->state = BLOCK_STATE_COMMITED;
+	} else if (strstr(path, "/UncommittedBlocks[") != NULL) {
+		blk->state = BLOCK_STATE_UNCOMMITED;
+	} else {
+		dbg(0, "Unknown block state: %s\n", path);
+		ret = -EINVAL;
+		goto err_blk_free;
+	}
+
+	ret = exml_base64_want(xdoc, "./Name", true, &blk->id, NULL);
 	if (ret < 0) {
 		goto err_blk_free;
 	}
 
-	ret = xml_path_u64_get(xel, "Size", &blk->len);
+	ret = exml_uint64_want(xdoc, "./Size", true, &blk->len, NULL);
 	if (ret < 0) {
-		goto err_id_free;
+		goto err_blk_free;
 	}
 
-	blk->state = state;
-	*blk_ret = blk;
+	list_add_tail(&blk_list_get_rsp->blks, &blk->list);
+	blk_list_get_rsp->num_blks++;
 
 	return 0;
 
-err_id_free:
-	free(blk->id);
 err_blk_free:
 	free(blk);
 err_out:
@@ -2374,73 +2351,37 @@ az_rsp_block_list_get_process(struct op *op,
 			      struct az_rsp_block_list_get *blk_list_get_rsp)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
-	struct apr_xml_elem *xel;
+	struct xml_doc *xdoc;
 	struct azure_block *blk;
 	struct azure_block *blk_n;
 
 	assert(op->opcode == AOP_BLOCK_LIST_GET);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	rv = apr_pool_create(&pool, NULL);
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
-		goto err_out;
-	}
-
-	/* parse response */
 	assert(op->rsp.data->base_off == 0);
-	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
-			      &xdoc);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	list_head_init(&blk_list_get_rsp->blks);
 
-	xel = NULL;
-	ret = xml_path_el_get(xdoc->root,
-				    "/BlockList/CommittedBlocks/Block", &xel);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		goto err_pool_free;
+	/* trigger path callback for CommittedBlocks and UncommittedBlocks */
+	ret = exml_path_cb_want(xdoc, "/BlockList/*/Block", false,
+				az_rsp_blk_iter_process, blk_list_get_rsp,
+				NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
 	}
 
-	while ((xel != NULL) && (strcmp(xel->name, "Block") == 0)) {
-		ret = az_rsp_blk_iter_process(xel->first_child,
-						 BLOCK_STATE_COMMITED,
-						 &blk);
-		if (ret < 0) {
-			goto err_blks_free;
-		}
-		list_add_tail(&blk_list_get_rsp->blks, &blk->list);
-		blk_list_get_rsp->num_blks++;
-
-		xel = xel->next;
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_blks_free;
 	}
 
-	xel = NULL;
-	ret = xml_path_el_get(xdoc->root,
-				    "BlockList/UncommittedBlocks/Block", &xel);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		goto err_pool_free;
-	}
+	exml_free(xdoc);
 
-	while ((xel != NULL) && (strcmp(xel->name, "Block") == 0)) {
-		ret = az_rsp_blk_iter_process(xel->first_child,
-						 BLOCK_STATE_UNCOMMITED,
-						 &blk);
-		if (ret < 0) {
-			goto err_blks_free;
-		}
-		list_add_tail(&blk_list_get_rsp->blks, &blk->list);
-		blk_list_get_rsp->num_blks++;
-
-		xel = xel->next;
-	}
-
-	apr_pool_destroy(pool);
 	return 0;
 
 err_blks_free:
@@ -2448,8 +2389,8 @@ err_blks_free:
 		free(blk->id);
 		free(blk);
 	}
-err_pool_free:
-	apr_pool_destroy(pool);
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }
@@ -2943,43 +2884,50 @@ err_out:
 }
 
 static int
-az_rsp_status_get_ok_process(struct apr_xml_doc *xdoc,
-			     struct az_rsp_status_get *sts_get_rsp)
+az_rsp_status_val_process(struct xml_doc *xdoc,
+			  const char *path,
+			  const char *val,
+			  void *cb_data)
 {
+	struct az_rsp_status_get *sts_get_rsp
+			= (struct az_rsp_status_get *)cb_data;
 	int ret;
 
-	ret = xml_path_i32_get(xdoc->root,
-				     "/Operation/HttpStatusCode",
-				     &sts_get_rsp->ok.http_code);
+	if (strcmp(val, "InProgress") == 0) {
+		sts_get_rsp->status = AOP_STATUS_IN_PROGRESS;
+	} else if (strcmp(val, "Succeeded") == 0) {
+		sts_get_rsp->status = AOP_STATUS_SUCCEEDED;
+		ret = exml_int32_want(xdoc, "/Operation/HttpStatusCode", true,
+				      &sts_get_rsp->ok.http_code, NULL);
+		if (ret < 0) {
+			goto err_out;
+		}
+	} else if (strcmp(val, "Failed") == 0) {
+		sts_get_rsp->status = AOP_STATUS_FAILED;
+		ret = exml_int32_want(xdoc, "/Operation/HttpStatusCode", true,
+				      &sts_get_rsp->ok.http_code, NULL);
+		if (ret < 0) {
+			goto err_out;
+		}
+		ret = exml_int32_want(xdoc, "/Operation/Error/Code", true,
+				      &sts_get_rsp->err.code, NULL);
+		if (ret < 0) {
+			goto err_out;
+		}
+		ret = exml_str_want(xdoc, "/Operation/Error/Message", true,
+				    &sts_get_rsp->err.msg, NULL);
+		if (ret < 0) {
+			goto err_out;
+		}
+	} else {
+		dbg(0, "unexpected op status: %s\n", val);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = 0;
+err_out:
 	return ret;
-}
-
-static int
-az_rsp_status_get_err_process(struct apr_xml_doc *xdoc,
-			      struct az_rsp_status_get *sts_get_rsp)
-{
-	int ret;
-
-	ret = xml_path_i32_get(xdoc->root,
-				     "/Operation/HttpStatusCode",
-				     &sts_get_rsp->err.http_code);
-	if (ret < 0) {
-		return ret;
-	}
-	ret = xml_path_i32_get(xdoc->root,
-				     "/Operation/Error/Code",
-				     &sts_get_rsp->err.code);
-	if (ret < 0) {
-		return ret;
-	}
-	ret = xml_path_get(xdoc->root,
-				 "/Operation/Error/Message",
-				 &sts_get_rsp->err.msg);
-	if (ret < 0) {
-		return ret;
-	}
-
-	return 0;
 }
 
 static int
@@ -2987,62 +2935,36 @@ az_rsp_status_get_process(struct op *op,
 			  struct az_rsp_status_get *sts_get_rsp)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
-	char *xml_val;
+	struct xml_doc *xdoc;
 
 	assert(op->opcode == AOP_STATUS_GET);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	rv = apr_pool_create(&pool, NULL);
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
-		goto err_out;
-	}
-
-	/* parse response */
 	assert(op->rsp.data->base_off == 0);
-	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
-			      &xdoc);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = xml_path_get(xdoc->root,
-				 "/Operation/Status",
-				 &xml_val);
+	ret = exml_val_cb_want(xdoc, "/Operation/Status", true,
+			       az_rsp_status_val_process, sts_get_rsp, NULL);
 	if (ret < 0) {
-		goto err_pool_free;
-	}
-	if (strcmp(xml_val, "InProgress") == 0) {
-		sts_get_rsp->status = AOP_STATUS_IN_PROGRESS;
-	} else if (strcmp(xml_val, "Succeeded") == 0) {
-		sts_get_rsp->status = AOP_STATUS_SUCCEEDED;
-		free(xml_val);
-		ret = az_rsp_status_get_ok_process(xdoc, sts_get_rsp);
-		if (ret < 0) {
-			goto err_pool_free;
-		}
-	} else if (strcmp(xml_val, "Failed") == 0) {
-		sts_get_rsp->status = AOP_STATUS_FAILED;
-		free(xml_val);
-		ret = az_rsp_status_get_err_process(xdoc, sts_get_rsp);
-		if (ret < 0) {
-			goto err_pool_free;
-		}
-	} else {
-		dbg(0, "unexpected op status: %s\n", xml_val);
-		ret = -EINVAL;
-		free(xml_val);
-		goto err_pool_free;
+		goto err_xdoc_free;
 	}
 
-	apr_pool_destroy(pool);
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_rsp_free;
+	}
+
+	exml_free(xdoc);
 	return 0;
 
-err_pool_free:
-	apr_pool_destroy(pool);
+err_rsp_free:
+	az_rsp_status_get_free(sts_get_rsp);
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }

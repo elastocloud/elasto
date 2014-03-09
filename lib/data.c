@@ -26,8 +26,6 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-#include <apr-1/apr_xml.h>
-
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"

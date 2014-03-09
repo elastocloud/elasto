@@ -26,13 +26,11 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-#include <apr-1/apr_xml.h>
-
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
 #include "util.h"
-#include "xml.h"
+#include "exml.h"
 #include "data_api.h"
 #include "op.h"
 
@@ -271,9 +269,8 @@ static int
 op_rsp_error_process(struct op *op)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
+	struct xml_doc *xdoc;
+	bool got_err_msg = false;
 
 	if (op->rsp.err_code == 0) {
 		return 0;
@@ -288,58 +285,57 @@ op_rsp_error_process(struct op *op)
 		return 0;
 	}
 
-	rv = apr_pool_create(&pool, NULL);
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
+	ret = exml_slurp((const char *)op->rsp.err.buf, op->rsp.err.off, &xdoc);
+	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = xml_slurp(pool, false, op->rsp.err.buf, op->rsp.err.off,
-			      &xdoc);
+	ret = exml_str_want(xdoc, "/Error/Message", false,
+			    &op->rsp.err.msg, &got_err_msg);
 	if (ret < 0) {
-		goto err_pool_free;
-	}
-
-	ret = xml_path_get(xdoc->root, "/Error/Message",
-				 &op->rsp.err.msg);
-	if (ret == -ENOENT) {
-		/* data attached, but no error description XML */
-		op->rsp.err.msg = strdup("no error description");
-		if (op->rsp.err.msg == NULL) {
-			ret = -ENOMEM;
-			goto err_pool_free;
-		}
-	} else if (ret < 0) {
-		goto err_pool_free;
+		goto err_xdoc_free;
 	}
 
 	if (op->rsp.err_code == 307) {
 		/* temporary redirect, fill location */
-		ret = xml_path_get(xdoc->root, "/Error/Endpoint",
-					 &op->rsp.err.redir_endpoint);
-		if (ret == -ENOENT) {
-			dbg(1, "got redirect response without endpoint\n");
-			goto err_msg_free;
-		} else if (ret < 0) {
-			goto err_msg_free;
-		} else {
-			dbg(3, "redirect response endpoint: %s\n",
-			    op->rsp.err.redir_endpoint);
-		}
-		/* EAGAIN implies resend with redirect */
-		ret = -EAGAIN;
+		ret = exml_str_want(xdoc, "/Error/Endpoint", true,
+				    &op->rsp.err.redir_endpoint, NULL);
 	} else {
 		dbg(0, "got error msg: %s\n", op->rsp.err.msg);
 		ret = 0;
 	}
 
-	apr_pool_destroy(pool);
+	ret = exml_parse(xdoc);
+	if (ret == -ENOENT) {
+		dbg(1, "got redirect response without endpoint\n");
+		goto err_msg_free;
+	} else if (ret < 0) {
+		goto err_msg_free;
+	}
+
+	ret = 0;
+	if (!got_err_msg) {
+		/* data attached, but no error description XML */
+		op->rsp.err.msg = strdup("no error description");
+		if (op->rsp.err.msg == NULL) {
+			ret = -ENOMEM;
+			goto err_xdoc_free;
+		}
+	}
+	if (op->rsp.err_code == 307) {
+		dbg(3, "redirect response endpoint: %s\n",
+		    op->rsp.err.redir_endpoint);
+		/* EAGAIN implies resend with redirect */
+		ret = -EAGAIN;
+	}
+
+	exml_free(xdoc);
 	return ret;
 
 err_msg_free:
 	free(op->rsp.err.msg);
-err_pool_free:
-	apr_pool_destroy(pool);
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }

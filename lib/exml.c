@@ -156,7 +156,7 @@ exml_el_cmp(const void *a, const void *b)
 	}
 
 	dbg(4, "paths diverge at %s and %s\n", ta, tb);
-	ret = 1;
+	ret = strcmp(ta, tb);
 out:
 	free(path_a);
 	free(path_b);
@@ -1008,12 +1008,12 @@ exml_base64_want(struct xml_doc *xdoc,
 }
 
 int
-exml_cb_want(struct xml_doc *xdoc,
-	     const char *xp_expr,
-	     bool required,
-	     exml_want_cb_t cb,
-	     void *cb_data,
-	     bool *present)
+exml_val_cb_want(struct xml_doc *xdoc,
+		 const char *xp_expr,
+		 bool required,
+		 exml_want_cb_t cb,
+		 void *cb_data,
+		 bool *present)
 {
 	int ret;
 	struct xml_finder *finder;

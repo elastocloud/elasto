@@ -23,14 +23,11 @@
 #include <sys/stat.h>
 
 #include <curl/curl.h>
-#include <apr-1/apr_general.h>
-#include <apr-1/apr_xml.h>
-
 #include <setjmp.h>
 #include <cmocka.h>
 
 #include "ccan/list/list.h"
-#include "lib/xml.h"
+#include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/sign.h"
 #include "lib/azure_req.h"

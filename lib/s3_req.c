@@ -26,13 +26,11 @@
 #include <unistd.h>
 #include <inttypes.h>
 
-#include <apr-1/apr_xml.h>
-
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
 #include "util.h"
-#include "xml.h"
+#include "exml.h"
 #include "data_api.h"
 #include "op.h"
 #include "sign.h"
@@ -224,9 +222,13 @@ err_out:
 }
 
 static int
-s3_rsp_bkt_iter_process(struct apr_xml_elem *xel,
-			struct s3_bucket **bkt_ret)
+s3_rsp_bkt_iter_process(struct xml_doc *xdoc,
+			const char *path,
+			const char *val,
+			void *cb_data)
 {
+	struct s3_rsp_svc_list *svc_list_rsp
+					= (struct s3_rsp_svc_list *)cb_data;
 	int ret;
 	struct s3_bucket *bkt;
 
@@ -235,22 +237,23 @@ s3_rsp_bkt_iter_process(struct apr_xml_elem *xel,
 		ret = -ENOMEM;
 		goto err_out;
 	}
+	memset(bkt, 0, sizeof(*bkt));
 
-	ret = xml_path_get(xel, "Name", &bkt->name);
+	ret = exml_str_want(xdoc, "./Name", true, &bkt->name, NULL);
 	if (ret < 0) {
 		goto err_blk_free;
 	}
 
-	ret = xml_path_get(xel, "CreationDate", &bkt->create_date);
+	ret = exml_str_want(xdoc, "./CreationDate", true, &bkt->create_date, NULL);
 	if (ret < 0) {
-		goto err_name_free;
+		goto err_blk_free;
 	}
-	*bkt_ret = bkt;
+
+	list_add_tail(&svc_list_rsp->bkts, &bkt->list);
+	svc_list_rsp->num_bkts++;
 
 	return 0;
 
-err_name_free:
-	free(bkt->name);
 err_blk_free:
 	free(bkt);
 err_out:
@@ -262,73 +265,56 @@ s3_rsp_svc_list_process(struct op *op,
 			struct s3_rsp_svc_list *svc_list_rsp)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
-	struct apr_xml_elem *xel;
+	struct xml_doc *xdoc;
 	struct s3_bucket *bkt;
 	struct s3_bucket *bkt_n;
 
 	assert(op->opcode == S3OP_SVC_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	rv = apr_pool_create(&pool, NULL);
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
+	assert(op->rsp.data->base_off == 0);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
 		goto err_out;
 	}
 
-	assert(op->rsp.data->base_off == 0);
-	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
-			      &xdoc);
+	ret = exml_str_want(xdoc, "/ListAllMyBucketsResult/Owner/ID", false,
+			    &svc_list_rsp->id, NULL);
 	if (ret < 0) {
-		goto err_pool_free;
+		goto err_xdoc_free;
 	}
 
-	ret = xml_path_get(xdoc->root, "/ListAllMyBucketsResult/Owner/ID",
-				 &svc_list_rsp->id);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		goto err_pool_free;
-	}
-
-	ret = xml_path_get(xdoc->root, "/ListAllMyBucketsResult/Owner/DisplayName",
-				 &svc_list_rsp->disp_name);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		goto err_pool_free;
+	ret = exml_str_want(xdoc, "/ListAllMyBucketsResult/Owner/DisplayName", false,
+			    &svc_list_rsp->disp_name, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
 	}
 
 	list_head_init(&svc_list_rsp->bkts);
 
-	/* get the first, if present */
-	ret = xml_path_el_get(xdoc->root,
-				    "/ListAllMyBucketsResult/Buckets/Bucket",
-				    &xel);
-	if (ret == -ENOENT) {
-		goto done;
-	} else if (ret < 0) {
-		goto err_pool_free;
+	ret = exml_path_cb_want(xdoc, "/ListAllMyBucketsResult/Buckets/Bucket", false,
+				s3_rsp_bkt_iter_process, svc_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
 	}
 
-	while ((xel != NULL) && (strcmp(xel->name, "Bucket") == 0)) {
-		ret = s3_rsp_bkt_iter_process(xel->first_child, &bkt);
-		if (ret < 0) {
-			goto err_bkts_free;
-		}
-		list_add_tail(&svc_list_rsp->bkts, &bkt->list);
-		svc_list_rsp->num_bkts++;
-
-		xel = xel->next;
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_bkts_free;
 	}
-done:
-	apr_pool_destroy(pool);
+
+	exml_free(xdoc);
 	return 0;
 
 err_bkts_free:
 	list_for_each_safe(&svc_list_rsp->bkts, bkt, bkt_n, list) {
 		s3_bkt_free(&bkt);
 	}
-err_pool_free:
-	apr_pool_destroy(pool);
+	free(svc_list_rsp->disp_name);
+	free(svc_list_rsp->id);
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }
@@ -418,9 +404,13 @@ err_out:
 }
 
 static int
-s3_rsp_obj_iter_process(struct apr_xml_elem *xel,
-			struct s3_object **obj_ret)
+s3_rsp_obj_iter_process(struct xml_doc *xdoc,
+			const char *path,
+			const char *val,
+			void *cb_data)
 {
+	struct s3_rsp_bkt_list *bkt_list_rsp
+				= (struct s3_rsp_bkt_list *)cb_data;
 	int ret;
 	struct s3_object *obj;
 
@@ -429,35 +419,33 @@ s3_rsp_obj_iter_process(struct apr_xml_elem *xel,
 		ret = -ENOMEM;
 		goto err_out;
 	}
+	memset(obj, 0, sizeof(*obj));
 
-	ret = xml_path_get(xel, "Key", &obj->key);
+	ret = exml_str_want(xdoc, "./Key", true, &obj->key, NULL);
 	if (ret < 0) {
 		goto err_obj_free;
 	}
 
-	ret = xml_path_get(xel, "LastModified", &obj->last_mod);
+	ret = exml_str_want(xdoc, "./LastModified", true, &obj->last_mod, NULL);
 	if (ret < 0) {
-		goto err_key_free;
+		goto err_obj_free;
 	}
 
-	ret = xml_path_u64_get(xel, "Size", &obj->size);
+	ret = exml_uint64_want(xdoc, "./Size", true, &obj->size, NULL);
 	if (ret < 0) {
-		goto err_mod_free;
+		goto err_obj_free;
 	}
 
-	ret = xml_path_get(xel, "StorageClass", &obj->store_class);
+	ret = exml_str_want(xdoc, "./StorageClass", true, &obj->store_class, NULL);
 	if (ret < 0) {
-		goto err_mod_free;
+		goto err_obj_free;
 	}
 
-	*obj_ret = obj;
+	list_add_tail(&bkt_list_rsp->objs, &obj->list);
+	bkt_list_rsp->num_objs++;
 
 	return 0;
 
-err_mod_free:
-	free(obj->last_mod);
-err_key_free:
-	free(obj->key);
 err_obj_free:
 	free(obj);
 err_out:
@@ -469,68 +457,48 @@ s3_rsp_bkt_list_process(struct op *op,
 			struct s3_rsp_bkt_list *bkt_list_rsp)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
-	struct apr_xml_elem *xel;
+	struct xml_doc *xdoc;
 	struct s3_object *obj;
 	struct s3_object *obj_n;
 
 	assert(op->opcode == S3OP_BKT_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	rv = apr_pool_create(&pool, NULL);
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
+	assert(op->rsp.data->base_off == 0);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
 		goto err_out;
 	}
 
-	assert(op->rsp.data->base_off == 0);
-	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
-			      &xdoc);
+	ret = exml_bool_want(xdoc, "/ListBucketResult/IsTruncated", true,
+			     &bkt_list_rsp->truncated, NULL);
 	if (ret < 0) {
-		goto err_pool_free;
-	}
-
-	ret = xml_path_bool_get(xdoc->root,
-				      "/ListBucketResult/IsTruncated",
-				      &bkt_list_rsp->truncated);
-	if (ret < 0) {
-		goto err_pool_free;
+		goto err_xdoc_free;
 	}
 
 	list_head_init(&bkt_list_rsp->objs);
 
-	/* get the first, if present */
-	ret = xml_path_el_get(xdoc->root,
-				    "/ListBucketResult/Contents",
-				    &xel);
-	if (ret == -ENOENT) {
-		goto done;
-	} else if (ret < 0) {
-		goto err_pool_free;
+	ret = exml_path_cb_want(xdoc, "/ListBucketResult/Contents", false,
+				s3_rsp_obj_iter_process, bkt_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
 	}
 
-	while ((xel != NULL) && (strcmp(xel->name, "Contents") == 0)) {
-		ret = s3_rsp_obj_iter_process(xel->first_child, &obj);
-		if (ret < 0) {
-			goto err_objs_free;
-		}
-		list_add_tail(&bkt_list_rsp->objs, &obj->list);
-		bkt_list_rsp->num_objs++;
-
-		xel = xel->next;
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_objs_free;
 	}
-done:
-	apr_pool_destroy(pool);
+
+	exml_free(xdoc);
 	return 0;
 
 err_objs_free:
 	list_for_each_safe(&bkt_list_rsp->objs, obj, obj_n, list) {
 		s3_obj_free(&obj);
 	}
-err_pool_free:
-	apr_pool_destroy(pool);
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }
@@ -1163,37 +1131,37 @@ s3_rsp_mp_start_process(struct op *op,
 			struct s3_rsp_mp_start *mp_start_rsp)
 {
 	int ret;
-	apr_status_t rv;
-	apr_pool_t *pool;
-	struct apr_xml_doc *xdoc;
+	struct xml_doc *xdoc;
 
 	assert(op->opcode == S3OP_MULTIPART_START);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	rv = apr_pool_create(&pool, NULL);
-	if (rv != APR_SUCCESS) {
-		ret = -APR_TO_OS_ERROR(rv);
+	assert(op->rsp.data->base_off == 0);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
 		goto err_out;
 	}
 
-	assert(op->rsp.data->base_off == 0);
-	ret = xml_slurp(pool, false, op->rsp.data->iov.buf, op->rsp.data->off,
-			      &xdoc);
+	/* FIXME element should be mandatory? */
+	ret = exml_str_want(xdoc, "/InitiateMultipartUploadResult/UploadId", false,
+			    &mp_start_rsp->upload_id, NULL);
 	if (ret < 0) {
-		goto err_pool_free;
+		goto err_xdoc_free;
 	}
 
-	ret = xml_path_get(xdoc->root, "/InitiateMultipartUploadResult/UploadId",
-				 &mp_start_rsp->upload_id);
-	if ((ret < 0) && (ret != -ENOENT)) {
-		goto err_pool_free;
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_rsp_free;
 	}
 
-	apr_pool_destroy(pool);
+	exml_free(xdoc);
 	return 0;
 
-err_pool_free:
-	apr_pool_destroy(pool);
+err_rsp_free:
+	s3_rsp_mp_start_free(mp_start_rsp);
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }

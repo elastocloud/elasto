@@ -71,12 +71,12 @@ typedef int (*exml_want_cb_t)(struct xml_doc *xdoc,
 			     const char *val,
 			     void *cb_data);
 int
-exml_cb_want(struct xml_doc *xdoc,
-	     const char *xp_expr,
-	     bool required,
-	     exml_want_cb_t cb,
-	     void *cb_data,
-	     bool *present);
+exml_val_cb_want(struct xml_doc *xdoc,
+		 const char *xp_expr,
+		 bool required,
+		 exml_want_cb_t cb,
+		 void *cb_data,
+		 bool *present);
 
 int
 exml_path_cb_want(struct xml_doc *xdoc,

@@ -23,10 +23,9 @@
 #include <sys/stat.h>
 
 #include <curl/curl.h>
-#include <apr-1/apr_xml.h>
 
 #include "ccan/list/list.h"
-#include "lib/xml.h"
+#include "lib/exml.h"
 #include "lib/data_api.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"

@@ -14,3 +14,8 @@
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define MIN(a,b) ((a)<(b)?(a):(b))
+
+int
+slurp_file(const char *path,
+	   char **_buf,
+	   uint64_t *_len);
