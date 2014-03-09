@@ -13,6 +13,7 @@ def configure(conf):
 	conf.check(lib='apr-1')
 	conf.check(lib='aprutil-1')
 	conf.check(lib='crypto')
+	conf.check(lib='expat')
 	conf.recurse('ccan')
 	conf.recurse('lib')
 	conf.recurse('lib/file')

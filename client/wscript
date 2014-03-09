@@ -10,7 +10,7 @@ def build(bld):
 			   'cli_get.c cli_del.c cli_sign.c cli_create.c '
 			   'cli_cp.c cli_util.c',
 		    target='elasto_cli',
-		    lib=['curl', 'apr-1', 'aprutil-1', 'crypto'],
+		    lib=['curl', 'apr-1', 'aprutil-1', 'crypto', 'expat'],
 		    use=['ccan', 'elasto'],
 		    includes = '. ..',
 		    install_path = '${BINDIR}')
