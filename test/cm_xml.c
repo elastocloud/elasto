@@ -68,7 +68,6 @@ static char *cm_xml_data_attr_basic
  * - empty attributes
  * - multiple parse calls
  * - valgrind memory checks
- * - index based path checks
  */
 
 /*
@@ -611,6 +610,60 @@ cm_xml_xpath_wildcard(void **state)
 	free(val);
 }
 
+static void
+cm_xml_indexed(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val0 = NULL;
+	char *val1 = NULL;
+	char *val2 = NULL;
+	bool val0_present = false;
+	bool val1_present = false;
+	bool val2_present = false;
+
+	ret = exml_slurp(cm_xml_data_str_dup,
+			strlen(cm_xml_data_str_dup), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/outer[0]/dup[0]/str",
+			   true,
+			   &val0,
+			   &val0_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/outer/dup[1]/str",
+			   true,
+			   &val1,
+			   &val1_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/outer/dup[2]/str",
+			   false,
+			   &val2,
+			   &val2_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	assert_true(val0_present);
+	assert_true(val1_present);
+	assert_false(val2_present);
+	assert_non_null(val0);
+	assert_non_null(val1);
+	assert_null(val2);
+	assert_string_equal(val0, "val");
+	assert_string_equal(val1, "blah");
+	free(val0);
+	free(val1);
+}
+
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
 	unit_test(cm_xml_str_dup),
@@ -625,6 +678,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_attr_multi),
 	unit_test(cm_xml_xpath_relative),
 	unit_test(cm_xml_xpath_wildcard),
+	unit_test(cm_xml_indexed),
 };
 
 int
