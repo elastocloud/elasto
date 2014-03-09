@@ -38,7 +38,7 @@ static char *cm_xml_data_str_basic
 	= "<outer><inner1><str>val</str></inner1><str>blah</str></outer>";
 static char *cm_xml_data_str_multi
 	= "<out><in><str>val0</str></in><in><str>val1</str></in>"
-	  "<in><str>val2</str></in><out>";
+	  "<in><str>val2</str></in></out>";
 static char *cm_xml_data_str_dup
 	= "<outer><dup><str>val</str></dup><dup><str>blah</str></dup></outer>";
 static char *cm_xml_data_num_basic
@@ -67,7 +67,8 @@ static char *cm_xml_data_attr_basic
  * - empty values
  * - empty attributes
  * - multiple parse calls
- * - relative path invalidation on path change
+ * - valgrind memory checks
+ * - index based path checks
  */
 
 /*
@@ -341,7 +342,7 @@ cm_xml_path_want_cb(struct xml_doc *xdoc,
 
 	assert_null(val);
 	/* note the trailing '/' */
-	assert_string_equal(path, "/outer/inner1/");
+	assert_string_equal(path, "/outer[0]/inner1[0]/");
 	(*cb_i)++;
 
 	return 0;
@@ -376,7 +377,7 @@ cm_xml_path_cb_basic(void **state)
 	assert_int_equal(cb_i, 1);
 }
 
-static struct cm_xml_path_multi_cb_data {
+struct cm_xml_path_multi_cb_data {
 	int cb_i;
 	char *val0;
 	char *val1;
@@ -394,15 +395,15 @@ cm_xml_path_multi_cb(struct xml_doc *xdoc,
 	assert_null(val);
 	switch (d->cb_i++) {
 	case 0:
-		assert_string_equal(path, "/out/in/");
+		assert_string_equal(path, "/out[0]/in[0]/");
 		exml_str_want(xdoc, "./str", true, &d->val0, NULL);
 		break;
 	case 1:
-		assert_string_equal(path, "/out/in/");
+		assert_string_equal(path, "/out[0]/in[1]/");
 		exml_str_want(xdoc, "./str", true, &d->val1, NULL);
 		break;
 	case 2:
-		assert_string_equal(path, "/out/in/");
+		assert_string_equal(path, "/out[0]/in[2]/");
 		exml_str_want(xdoc, "./str", true, &d->val2, NULL);
 		break;
 	default:
@@ -474,6 +475,61 @@ cm_xml_attr_basic(void **state)
 	assert_string_equal(val, "AzureServiceManagementAPI");
 
 	free(val);
+}
+
+static void
+cm_xml_attr_multi(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val1 = NULL;
+	char *val2 = NULL;
+	char *val3 = NULL;
+	bool got_attr1 = false;
+	bool got_attr2 = false;
+	bool got_attr3 = false;
+
+	ret = exml_slurp(cm_xml_data_attr_basic,
+			strlen(cm_xml_data_attr_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/PublishData[0]/PublishProfile[0][@PublishMethod]",
+			   true,
+			   &val1,
+			   &got_attr1);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/PublishData/PublishProfile[0]/Subscription[@Id]",
+			   true,
+			   &val2,
+			   &got_attr2);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,	/* no element at index [1] */
+			   "/PublishData/PublishProfile/Subscription[1][@Name]",
+			   false,
+			   &val3,
+			   &got_attr3);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+	exml_free(xdoc);
+
+	assert_true(got_attr1);
+	assert_non_null(val1);
+	assert_string_equal(val1, "AzureServiceManagementAPI");
+
+	assert_true(got_attr2);
+	assert_non_null(val2);
+	assert_string_equal(val2, "55555555-4444-3333-2222-111111111111");
+
+	assert_false(got_attr3);
+
+	free(val1);
+	free(val2);
 }
 
 static void
@@ -566,6 +622,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_path_cb_basic),
 	unit_test(cm_xml_path_cb_multi),
 	unit_test(cm_xml_attr_basic),
+	unit_test(cm_xml_attr_multi),
 	unit_test(cm_xml_xpath_relative),
 	unit_test(cm_xml_xpath_wildcard),
 };

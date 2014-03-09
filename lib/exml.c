@@ -18,6 +18,7 @@
 #include <errno.h>
 #define _GNU_SOURCE
 #include <stdio.h>
+#include <search.h>
 
 #include <expat.h>
 
@@ -60,6 +61,12 @@ struct xml_finder {
 	bool *_present;
 };
 
+struct xml_el {
+	char *path;
+	int leaf_index;
+	int max_leaf_index;
+};
+
 struct xml_doc {
 	XML_Parser parser;
 	const char *buf;
@@ -68,9 +75,147 @@ struct xml_doc {
 	struct list_head finders;
 	struct xml_finder *last_found;
 	bool parsing;
-	char *cur_path;
+	char *el_path;
 	int parse_ret;
+	void *root_el;
 };
+
+/*
+ * Compare two tree elements.
+ http://en.wikipedia.org/wiki/Binary_tree#Encoding_general_trees_as_binary_trees
+ */
+static int
+exml_el_cmp(const void *a, const void *b)
+{
+	int ret;
+	struct xml_el *el_a = (struct xml_el *)a;
+	struct xml_el *el_b = (struct xml_el *)b;
+	char *path_a;
+	char *path_b;
+	char *ta;
+	char *tb;
+	char *sa;
+	char *sb;
+
+	dbg(4, "comparing \"%s with \"%s\"\n", el_a->path, el_b->path);
+	path_a = strdup(el_a->path);
+	assert(path_a != NULL);
+	path_b = strdup(el_b->path);
+	assert(path_b != NULL);
+
+	/* find path divergence */
+	for (ta = strtok_r(path_a, "/", &sa), tb = strtok_r(path_b, "/", &sb);
+	     ((ta != NULL) && (tb != NULL)) && (strcmp(ta, tb) == 0);
+	     ta = strtok_r(NULL, "/", &sa), tb = strtok_r(NULL, "/", &sb)) {
+		dbg(6, "match with component %s\n", ta);
+	}
+
+	if ((ta == NULL) && (tb == NULL)) {
+		dbg(4, "\"%s\" and \"%s\" are identical\n",
+		    el_a->path, el_b->path);
+		ret = 0;
+		goto out;
+	} else if ((ta == NULL) && (tb != NULL)) {
+		dbg(4, "\"%s\" is a parent of \"%s\"\n",
+		    el_a->path, el_b->path);
+		ret = 1;
+		goto out;
+	} else if ((tb == NULL) && (ta != NULL)) {
+		dbg(4, "\"%s\" is nested under \"%s\"\n",
+		    el_a->path, el_b->path);
+		ret = -1;
+		goto out;
+	}
+
+	dbg(4, "paths diverge at %s and %s\n", ta, tb);
+	ret = 1;
+out:
+	free(path_a);
+	free(path_b);
+	return ret;
+}
+
+/*
+ * Add a new element to the xdoc tree, and assign a leaf index based on how
+ * many existing elements are found under the same path.
+ */
+static int
+exml_el_encounter(struct xml_doc *xdoc,
+		  const char *path,
+		  char **path_with_leaf_index)
+{
+	int ret;
+	struct xml_el *el;
+	struct xml_el *el_new;
+	void *_el_new;
+	char *term;
+	size_t index_buflen;
+
+	el = malloc(sizeof(*el));
+	if (el == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(el, 0, sizeof(*el));
+
+	/* need to accommodate for the added leaf index suffix */
+	index_buflen = sizeof("[99999]");
+	el->path = malloc(strlen(path) + index_buflen);
+	if (el->path == NULL) {
+		ret = -ENOMEM;
+		goto err_el_free;
+	}
+	strcpy(el->path, path);
+	assert(strlen(el->path) >= 1);
+	term = el->path + strlen(el->path) - 1;
+	assert(*term == '/');
+
+	/* no leaf index suffix for the root node */
+	if (strlen(el->path) != 1) {
+		/* search for first leaf index, may find existing */
+		strcpy(term, "[0]/");
+	}
+
+	_el_new = tsearch((void *)el, &xdoc->root_el, exml_el_cmp);
+	if (_el_new == NULL) {
+		dbg(0, "failed to add new tree element\n");
+		ret = -EFAULT;
+		goto err_path_free;
+	}
+	el_new = *(struct xml_el **)_el_new;
+	if (el_new != el) {
+		/* existing elements return the first index */
+		assert(el_new->leaf_index == 0);
+		el->leaf_index = ++el_new->max_leaf_index;
+		dbg(4, "collision at [0], new index suffix [%d]\n",
+		    el->leaf_index);
+		ret = snprintf(term, index_buflen, "[%d]/", el->leaf_index);
+		if ((ret < 0) || (ret >= index_buflen)) {
+			dbg(0, "failed to append index suffix\n");
+			ret = -EINVAL;
+			goto err_path_free;
+		}
+		_el_new = tsearch((void *)el, &xdoc->root_el, exml_el_cmp);
+		el_new = *(struct xml_el **)_el_new;
+		assert(el_new == el);
+	}
+	dbg(4, "added tree node: %s\n", el->path);
+
+	*path_with_leaf_index = strdup(el->path);
+	if (*path_with_leaf_index == NULL) {
+		ret = -ENOMEM;
+		goto err_path_free;
+	}
+
+	return 0;
+
+err_path_free:
+	free(el->path);
+err_el_free:
+	free(el);
+err_out:
+	return ret;
+}
 
 int
 exml_slurp(const char *buf,
@@ -97,9 +242,8 @@ exml_slurp(const char *buf,
 	}
 	xdoc->buf = buf;
 	xdoc->buf_len = buf_len;
-	xdoc->cur_path = strdup("/");
-	if (xdoc->cur_path == NULL) {
-		ret = -ENOMEM;
+	ret = exml_el_encounter(xdoc, "/", &xdoc->el_path);
+	if (ret < 0) {
 		goto err_parser_free;
 	}
 
@@ -149,7 +293,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		*finder->ret_val.i32 = strtol(got, &sval_end, 10);
 		if (sval_end == got) {
 			dbg(0, "non-numeric at %s: %s\n",
-			    xdoc->cur_path, got);
+			    xdoc->el_path, got);
 			return -EINVAL;
 		}
 		break;
@@ -157,7 +301,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		*finder->ret_val.i64 = strtoll(got, &sval_end, 10);
 		if (sval_end == got) {
 			dbg(0, "non-numeric at %s: %s\n",
-			    xdoc->cur_path, got);
+			    xdoc->el_path, got);
 			return -EINVAL;
 		}
 		break;
@@ -165,7 +309,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		*finder->ret_val.u64 = strtoull(got, &sval_end, 10);
 		if (sval_end == got) {
 			dbg(0, "non-numeric at %s: %s\n",
-			    xdoc->cur_path, got);
+			    xdoc->el_path, got);
 			return -EINVAL;
 		}
 		break;
@@ -197,7 +341,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		(*finder->ret_val.b64_decode)[ret] = '\0';
 		break;
 	case XML_VAL_CALLBACK:
-		ret = finder->ret_val.cb.fn(xdoc, xdoc->cur_path, got,
+		ret = finder->ret_val.cb.fn(xdoc, xdoc->el_path, got,
 					    finder->ret_val.cb.data);
 		if (ret < 0) {
 			dbg(0, "xml callback failed\n");
@@ -206,7 +350,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		break;
 	default:
 		dbg(0, "unhandled type %d for path %s\n",
-		    finder->type, xdoc->cur_path);
+		    finder->type, xdoc->el_path);
 		return -EIO;
 		break;
 	}
@@ -237,7 +381,7 @@ exml_el_data_cb(void *priv_data,
 
 	if (len == 0) {
 		/* we shouldn't have got a callback */
-		dbg(0, "empty value at %s\n", xdoc->cur_path);
+		dbg(0, "empty value at %s\n", xdoc->el_path);
 	}
 	got = strndup(content, len);
 	if (got == NULL) {
@@ -290,44 +434,98 @@ exml_el_attr_search(const char **atts,
 	return -ENOENT;
 }
 
+static int
+exml_el_finder_path_cmp(const char *search_path,
+			const char *el_path,
+			bool wildcard,
+			bool *_matched)
+{
+	char *spath;
+	char *epath;
+	char *stok;
+	char *etok;
+	char *ss;
+	char *es;
+
+	dbg(3, "comparing search_path \"%s\" with el_path \"%s\"\n",
+	    search_path, el_path);
+
+	spath = strdup(search_path);
+	assert(spath != NULL);
+	epath = strdup(el_path);
+	assert(epath != NULL);
+
+	for (stok = strtok_r(spath, "/", &ss), etok = strtok_r(epath, "/", &es);
+	     ((stok != NULL) && (etok != NULL));
+	     stok = strtok_r(NULL, "/", &ss), etok = strtok_r(NULL, "/", &es)) {
+		char *sep;
+		int scmp;
+		if (!strcmp(stok, etok)) {
+			dbg(5, "%s: direct match\n", stok);
+			continue;
+		}
+		if (wildcard && !strcmp(stok, "*")) {
+			dbg(5, "%s<->%s: wildcard match\n", stok, etok);
+			continue;
+		}
+
+		sep = strchr(stok, '[');
+		if (sep != NULL) {
+			dbg(5, "%s<->%s: index in non-matching search token\n",
+			    stok, etok);
+			*_matched = false;
+			goto out;
+		}
+
+		sep = strchr(etok, '[');
+		assert(sep != NULL);	/* element path must have index */
+		*sep = '\0';
+		scmp = strcmp(stok, etok);
+		*sep = '[';
+		/* no index, search just needs to match */
+		if (scmp == 0) {
+			dbg(5, "%s<->%s: match without index\n", stok, etok);
+			continue;
+		}
+		dbg(5, "%s<->%s: no match\n", stok, etok);
+		*_matched = false;
+		goto out;
+	}
+
+	if ((stok == NULL) && (etok == NULL)) {
+		dbg(3, "%s<->%s full match\n", search_path, el_path);
+		*_matched = true;
+	} else {
+		dbg(5, "%s<->%s no match\n", search_path, el_path);
+		*_matched = false;
+	}
+out:
+	free(spath);
+	free(epath);
+	return 0;
+}
+
 static struct xml_finder *
 exml_el_finders_search(struct list_head *finders,
-		      const char *path)
+		       const char *el_path)
 {
 	struct xml_finder *finder;
 
 	list_for_each(finders, finder, list) {
-		if (strcmp(finder->search_path, path) == 0) {
-			dbg(6, "xpath (%s) found\n", path);
-			return finder;
-		} else if (finder->path_wildcard) {
-			char *s;
-			const char *path_after;
-			int len;
-			s = strchr(finder->search_path, '*');
-			assert(s != NULL);	/* already checked */
-			len = s - finder->search_path;
-			if ((len > 0)
-			 && (strncmp(finder->search_path, path, len) != 0)) {
-				continue; /* no match before wild */
-			}
-			/* don't consider matched part in post '*' match */
-			path_after = path + len;
+		bool match;
+		int ret;
+		ret = exml_el_finder_path_cmp(finder->search_path, el_path,
+					      finder->path_wildcard, &match);
+		if (ret < 0) {
+			dbg(0, "finder comparison failed\n");
+			return NULL;
+		}
 
-			len = strlen(path_after) - strlen(s + 1);
-			if (len < 0) {
-				continue;
-			}
-			if ((len > 0)
-			 && (strcmp(path_after + len, s + 1) != 0)) {
-				continue; /* no match after wild */
-			}
-			dbg(6, "wild xpath (%s) match with (%s)\n",
-			    finder->search_path, path);
+		if (match) {
 			return finder;
 		}
 	}
-	dbg(4, "xpath (%s) not found\n", path);
+	dbg(4, "xpath (%s) not found\n", el_path);
 	return NULL;
 }
 
@@ -345,18 +543,24 @@ exml_el_start_cb(void *priv_data,
 	xdoc->last_found = NULL;
 	XML_SetCharacterDataHandler(xdoc->parser, NULL);
 
-	ret = asprintf(&new_path, "%s%s/", xdoc->cur_path, elem);
+	ret = asprintf(&new_path, "%s%s/", xdoc->el_path, elem);
 	if (ret == -1) {
 		XML_StopParser(xdoc->parser, XML_FALSE);
 		xdoc->parse_ret = -ENOMEM;
 		return;
 	}
+	dbg(3, "el path changing from (%s) to (%s)\n", xdoc->el_path, new_path);
 
-	dbg(4, "xpath changing from (%s) to (%s)\n", xdoc->cur_path, new_path);
-	free(xdoc->cur_path);
-	xdoc->cur_path = new_path;
+	free(xdoc->el_path);
+	ret = exml_el_encounter(xdoc, new_path, &xdoc->el_path);
+	free(new_path);
+	if (ret < 0) {
+		XML_StopParser(xdoc->parser, XML_FALSE);
+		xdoc->parse_ret = ret;
+		return;
+	}
 
-	finder = exml_el_finders_search(&xdoc->finders, new_path);
+	finder = exml_el_finders_search(&xdoc->finders, xdoc->el_path);
 	if (finder == NULL) {
 		/* no interest in this path */
 		return;
@@ -364,10 +568,11 @@ exml_el_start_cb(void *priv_data,
 
 	if (finder->type == XML_VAL_PATH_CB) {
 		/* no character handler, callback at path */
-		ret = finder->ret_val.cb.fn(xdoc, new_path, NULL,
+		ret = finder->ret_val.cb.fn(xdoc, xdoc->el_path, NULL,
 					    finder->ret_val.cb.data);
 		if (ret < 0) {
-			dbg(0, "xml path (%s) callback failed\n", new_path);
+			dbg(0, "xml path (%s) callback failed\n",
+			    xdoc->el_path);
 			XML_StopParser(xdoc->parser, XML_FALSE);
 			xdoc->parse_ret = -ENOMEM;
 			return;
@@ -413,22 +618,45 @@ exml_el_end_cb(void *priv_data,
 {
 	struct xml_doc *xdoc = priv_data;
 	int elem_len = strlen(elem);
-	int path_len = strlen(xdoc->cur_path);
+	int path_len;
+	char *tok;
 
-	/* -1 for trailing slash */
+	/* overwrite the last leaf index */
+	tok = strrchr(xdoc->el_path, '[');
+	assert(tok != NULL);
+	*tok = '\0';
+	path_len = strlen(xdoc->el_path);
 	if ((elem_len >= path_len)
-	 || (strncmp(&xdoc->cur_path[path_len - 1 - elem_len], elem,
+	 || (strncmp(&xdoc->el_path[path_len - elem_len], elem,
 		     elem_len) != 0)) {
-		dbg(0, "end element %s outside current path %s\n",
-		    elem, xdoc->cur_path);
+		dbg(0, "end element %s outside current element path %s\n",
+		    elem, xdoc->el_path);
 		XML_StopParser(xdoc->parser, XML_FALSE);
 		xdoc->parse_ret = -EINVAL;
 		return;
 	}
+	xdoc->el_path[path_len - elem_len] = '\0';
 
-	xdoc->cur_path[path_len - 1 - elem_len] = '\0';
+	dbg(3, "el_path changed to (%s)\n", xdoc->el_path);
+}
 
-	dbg(4, "xpath changed to (%s)\n", xdoc->cur_path);
+static void
+exml_el_print(const void *_el, const VISIT which, const int depth)
+{
+	struct xml_el *el = *(struct xml_el **)_el;
+
+	switch (which) {
+	case preorder:
+		break;
+	case postorder:
+		dbg(0, "branch depth: %d: %s\n", depth, el->path);
+		break;
+	case endorder:
+		break;
+	case leaf:
+		dbg(0, "leaf depth: %d: %s\n", depth, el->path);
+		break;
+	}
 }
 
 int
@@ -455,6 +683,8 @@ exml_parse(struct xml_doc *xdoc)
 		dbg(0, "parsing failed: %s\n", strerror(-xdoc->parse_ret));
 		return xdoc->parse_ret;
 	}
+
+	twalk(xdoc->root_el, exml_el_print);
 
 	/* check for required finders that were not located */
 	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
@@ -488,25 +718,30 @@ exml_free(struct xml_doc *xdoc)
 	}
 	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
 		if (finder->handled > 0) {
-			/* failed parse after finding somthing, free stash */
+			/* failed parse after finding something, free stash */
 			exml_finder_val_free(finder);
 		}
 		free(finder->search_path);
 		free(finder->search_attr);
 		free(finder);
 	}
-	free(xdoc->cur_path);
+	free(xdoc->el_path);
+	/* TODO FIXME free element tree */
 	XML_ParserFree(xdoc->parser);
 	free(xdoc);
 }
 
 /*
- * @xp_expr: xpath in the form of /parent/child, ./relative/path,
- *	     /parent/child[@attribute]
+ * @xp_expr: xpath in the form of:
+ *	/parent/child
+ *	./relative/path - (current path with indexes is prepended)
+ *	/parent/child[@attribute]
+ *	/parent[index]/child[index][@attribute]
+ * 	/ * /child - (minus the spaces around the *)
  */
 static int
 exml_xpath_parse(const char *xp_expr,
-		 const char *cur_path,
+		 const char *cur_el_path,
 		 char **_search_path,
 		 bool *_path_wildcard,
 		 char **_attr)
@@ -536,39 +771,42 @@ exml_xpath_parse(const char *xp_expr,
 	}
 
 	ret = asprintf(&search_path, "%s%s/",
-		       (relative_path ? cur_path : ""), xp_expr);
+		       (relative_path ? cur_el_path : ""), xp_expr);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
-	/* -2 to compensate for trailing slash added */
-	if (search_path[strlen(search_path) - 2] == ']') {
-		/* expecting [@attribute] component */
-		s = strstr(search_path, "[@");
-		if (s == NULL) {
-			dbg(0, "invalid attribute component in %s\n",
-			    search_path);
-			ret = -EINVAL;
-			goto err_path_free;
-		}
+	s = strstr(search_path, "[@");
+	if (s != NULL) {
 		*(s++) = '/';
 		*(s++) = '\0';	/* terminate path */
-
 		attr = strdup(s);
 		if (attr == NULL) {
 			ret = -ENOMEM;
 			goto err_path_free;
 		}
 
-		s = strchr(attr, ']');
-		assert(s != NULL);	/* already seen */
+		/* expecting [@attribute]/ enclosure */
+		s = strstr(attr, "]");
+		if ((s == NULL) || strcmp(s, "]/")) {
+			dbg(0, "invalid attribute component in %s\n",
+			    search_path);
+			ret = -EINVAL;
+			goto err_attr_free;
+		}
 		*s = '\0';
 	}
 
 	s = strchr(search_path, '*');
 	if (s != NULL) {
 		path_wildcard = true;
+		if ((*(s + 1) != '/') || (*(s - 1) != '/')) {
+			dbg(0, "invalid wildcard use (%s). Must consume one "
+			       "path component\n", search_path);
+			ret = -EINVAL;
+			goto err_attr_free;
+		}
 		s = strchr(s + 1, '*');
 		if (s != NULL) {
 			dbg(0, "invalid multi-wildcard in (%s)\n", search_path);
@@ -616,7 +854,7 @@ exml_finder_init(struct xml_doc *xdoc,
 	}
 	memset(finder, 0, sizeof(*finder));
 
-	ret = exml_xpath_parse(xp_expr, xdoc->cur_path, &finder->search_path,
+	ret = exml_xpath_parse(xp_expr, xdoc->el_path, &finder->search_path,
 			       &finder->path_wildcard, &finder->search_attr);
 	if (ret < 0) {
 		goto err_finder_free;
