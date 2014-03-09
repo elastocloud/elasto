@@ -80,6 +80,34 @@ struct xml_doc {
 	void *root_el;
 };
 
+static void
+exml_el_free(const void *_el)
+{
+	struct xml_el *el = (struct xml_el *)_el;
+
+	free(el->path);
+	free(el);
+}
+
+static void
+exml_el_print(const void *_el, const VISIT which, const int depth)
+{
+	struct xml_el *el = *(struct xml_el **)_el;
+
+	switch (which) {
+	case preorder:
+		break;
+	case postorder:
+		dbg(6, "branch depth: %d: %s\n", depth, el->path);
+		break;
+	case endorder:
+		break;
+	case leaf:
+		dbg(6, "leaf depth: %d: %s\n", depth, el->path);
+		break;
+	}
+}
+
 /*
  * Compare two tree elements.
  http://en.wikipedia.org/wiki/Binary_tree#Encoding_general_trees_as_binary_trees
@@ -640,25 +668,6 @@ exml_el_end_cb(void *priv_data,
 	dbg(3, "el_path changed to (%s)\n", xdoc->el_path);
 }
 
-static void
-exml_el_print(const void *_el, const VISIT which, const int depth)
-{
-	struct xml_el *el = *(struct xml_el **)_el;
-
-	switch (which) {
-	case preorder:
-		break;
-	case postorder:
-		dbg(0, "branch depth: %d: %s\n", depth, el->path);
-		break;
-	case endorder:
-		break;
-	case leaf:
-		dbg(0, "leaf depth: %d: %s\n", depth, el->path);
-		break;
-	}
-}
-
 int
 exml_parse(struct xml_doc *xdoc)
 {
@@ -684,7 +693,10 @@ exml_parse(struct xml_doc *xdoc)
 		return xdoc->parse_ret;
 	}
 
-	twalk(xdoc->root_el, exml_el_print);
+	if (dbg_level_get() >= 6) {
+		twalk(xdoc->root_el, exml_el_print);
+	}
+	tdestroy(xdoc->root_el, exml_el_free);
 
 	/* check for required finders that were not located */
 	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
