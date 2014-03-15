@@ -60,12 +60,39 @@ static char *cm_xml_data_attr_basic
 	   "Name=\"3-Month Free Trial\" />"
 	  "</PublishProfile>"
 	  "</PublishData>";
+static char *cm_xml_data_nil_vals
+	= "<StorageServices xmlns=\"http://schemas.microsoft.com/windowsazure\""
+		       " xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">"
+	  "<StorageService>"
+	  "<Url>https://management.core.windows.net/"
+	   "55555555-4444-3333-2222-111111111111/services/storageservices/ddiss"
+	  "</Url>"
+	  "<ServiceName>ddiss</ServiceName>"
+	  "<StorageServiceProperties>"
+	  "<Description i:nil=\"true\"/>"
+	  "<Location>West Europe</Location>"
+	  "<Label>ZGRpc3M=</Label><Status>Created</Status>"
+	  "<Endpoints>"
+	   "<Endpoint>http://ddiss.blob.core.windows.net/</Endpoint>"
+	   "<Endpoint>http://ddiss.queue.core.windows.net/</Endpoint>"
+	   "<Endpoint>http://ddiss.table.core.windows.net/</Endpoint>"
+	  "</Endpoints>"
+	  "<GeoReplicationEnabled>false</GeoReplicationEnabled>"
+	  "<GeoPrimaryRegion>West Europe</GeoPrimaryRegion>"
+	  "<GeoSecondaryRegion/></StorageServiceProperties>"
+	  "<ExtendedProperties/>"
+	  "</StorageService>"
+	  "</StorageServices>";
+static char *cm_xml_data_attr_empty
+	= "<root>"
+		"<foo empty=\"\"/>"
+		"<foo full=\"bar\"/>"
+		"<goo />"
+	"</root>";
 
 /*
  * TODO test:
- * - duplicate attr paths
- * - empty values
- * - empty attributes
+ * - attributes where val = search!!!!
  * - multiple parse calls
  * - valgrind memory checks
  */
@@ -99,6 +126,25 @@ cm_xml_str_basic(void **state)
 	assert_string_equal(val, "val");
 
 	free(val);
+	val = NULL;
+
+	/* an invalid path should fail parsing if flagged as required */
+	ret = exml_slurp(cm_xml_data_str_basic,
+			strlen(cm_xml_data_str_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/not/found",
+			   true,
+			   &val,
+			   NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_not_equal(ret, 0);
+	exml_free(xdoc);
+
+	assert_null(val);
 }
 
 static void
@@ -125,10 +171,10 @@ cm_xml_str_dup(void **state)
 
 	exml_free(xdoc);
 
-	/* should take the value for last path encountered */
+	/* should take the value for first path encountered */
 	assert_true(val_present);
 	assert_non_null(val);
-	assert_string_equal(val, "blah");
+	assert_string_equal(val, "val");
 	free(val);
 }
 
@@ -389,6 +435,7 @@ cm_xml_path_multi_cb(struct xml_doc *xdoc,
 		     const char *val,
 		     void *cb_data)
 {
+	int ret;
 	struct cm_xml_path_multi_cb_data *d = cb_data;
 
 	assert_null(val);
@@ -410,7 +457,14 @@ cm_xml_path_multi_cb(struct xml_doc *xdoc,
 		break;
 	}
 
-	return 0;
+	/* still interested in callback for this path */
+	ret = exml_path_cb_want(xdoc,
+			   "/out/in",
+			   false,
+			   cm_xml_path_multi_cb,
+			   cb_data,
+			   NULL);
+	return ret;
 }
 
 /* add new finder from callback */
@@ -488,9 +542,11 @@ cm_xml_attr_multi(void **state)
 	char *val1 = NULL;
 	char *val2 = NULL;
 	char *val3 = NULL;
+	char *val4 = NULL;
 	bool got_attr1 = false;
 	bool got_attr2 = false;
 	bool got_attr3 = false;
+	bool got_attr4 = false;
 
 	ret = exml_slurp(cm_xml_data_attr_basic,
 			strlen(cm_xml_data_attr_basic), &xdoc);
@@ -510,11 +566,18 @@ cm_xml_attr_multi(void **state)
 			   &got_attr2);
 	assert_int_equal(ret, 0);
 
+	ret = exml_str_want(xdoc,
+			   "/PublishData/PublishProfile/Subscription[0][@Name]",
+			   true,
+			   &val3,
+			   &got_attr3);
+	assert_int_equal(ret, 0);
+
 	ret = exml_str_want(xdoc,	/* no element at index [1] */
 			   "/PublishData/PublishProfile/Subscription[1][@Name]",
 			   false,
-			   &val3,
-			   &got_attr3);
+			   &val4,
+			   &got_attr4);
 	assert_int_equal(ret, 0);
 
 	ret = exml_parse(xdoc);
@@ -529,7 +592,11 @@ cm_xml_attr_multi(void **state)
 	assert_non_null(val2);
 	assert_string_equal(val2, "55555555-4444-3333-2222-111111111111");
 
-	assert_false(got_attr3);
+	assert_true(got_attr3);
+	assert_non_null(val3);
+	assert_string_equal(val3, "3-Month Free Trial");
+
+	assert_false(got_attr4);
 
 	free(val1);
 	free(val2);
@@ -668,6 +735,190 @@ cm_xml_indexed(void **state)
 	free(val1);
 }
 
+static int
+cm_xml_empty_path_cb(struct xml_doc *xdoc,
+		   const char *path,
+		   const char *val,
+		   void *cb_data)
+{
+	int *cb_i = cb_data;
+
+	assert_null(val);
+	assert_string_equal(path,
+			    "/StorageServices[0]/StorageService[0]"
+			    "/StorageServiceProperties[0]"
+			    "/GeoSecondaryRegion[0]/");
+	(*cb_i)++;
+
+	return 0;
+}
+
+/*
+ * check that value based path requests fail if the path is present without a
+ * value. Path callbacks should still succeed.
+ */
+static void
+cm_xml_empty_vals(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val0 = NULL;
+	char *val2 = NULL;
+	bool val0_present = false;
+	bool val1_present = false;
+	bool val2_present = false;
+	bool path_present = false;
+	int cb_i = 0;
+
+	ret = exml_slurp(cm_xml_data_nil_vals,
+			strlen(cm_xml_data_nil_vals), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			    "/StorageServices/StorageService"
+			    "/StorageServiceProperties/Description",
+			    false,
+			    &val0,
+			    &val0_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_val_cb_want(xdoc,
+			   "/StorageServices/StorageService"
+			   "/StorageServiceProperties/Description",
+			   false,
+			   cm_xml_empty_path_cb,
+			   &cb_i,
+			   &val1_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			    "/StorageServices/StorageService"
+			    "/StorageServiceProperties/GeoSecondaryRegion",
+			    false,
+			    &val2,
+			    &val2_present);
+	assert_int_equal(ret, 0);
+
+	/* path cb should succeed, even without an assigned value */
+	ret = exml_path_cb_want(xdoc,
+			   "/StorageServices/StorageService"
+			   "/StorageServiceProperties/GeoSecondaryRegion",
+			   true,
+			   cm_xml_empty_path_cb,
+			   &cb_i,
+			   &path_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	assert_false(val0_present);
+	assert_false(val1_present);
+	assert_false(val2_present);
+	assert_true(path_present);
+	assert_int_equal(1, cb_i);
+	assert_null(val0);
+	assert_null(val2);
+
+	/* mandatory values should cause parse failure */
+	ret = exml_slurp(cm_xml_data_nil_vals,
+			strlen(cm_xml_data_nil_vals), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			    "/StorageServices/StorageService"
+			    "/StorageServiceProperties/Description",
+			    true,
+			    &val0,
+			    &val0_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_val_cb_want(xdoc,
+			   "/StorageServices/StorageService"
+			   "/StorageServiceProperties/Description",
+			   true,
+			   cm_xml_empty_path_cb,
+			   &cb_i,
+			   &val1_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			    "/StorageServices/StorageService"
+			    "/StorageServiceProperties/GeoSecondaryRegion",
+			    true,
+			    &val2,
+			    &val2_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_not_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	assert_false(val0_present);
+	assert_false(val1_present);
+	assert_false(val2_present);
+	assert_int_equal(1, cb_i);
+	assert_null(val0);
+	assert_null(val2);
+}
+
+/*
+ * check that attr based path requests fail if the path is present without an
+ * attribute matching the requested.
+ */
+static void
+cm_xml_empty_attrs(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val0 = NULL;
+	char *val1 = NULL;
+	char *val2 = NULL;
+	bool val0_present = false;
+	bool val1_present = false;
+	bool val2_present = false;
+
+	ret = exml_slurp(cm_xml_data_attr_empty,
+			 strlen(cm_xml_data_attr_empty), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			    "/root/foo[@empty]",
+			    false,
+			    &val0,
+			    &val0_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/root/foo[@full]",
+			    false,
+			    &val1,
+			    &val1_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/root/goo[@null]",
+			    false,
+			    &val2,
+			    &val2_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	assert_false(val0_present);
+	assert_true(val1_present);
+	assert_false(val2_present);
+	assert_null(val0);
+	assert_string_equal(val1, "bar");
+	assert_null(val2);
+}
+
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
 	unit_test(cm_xml_str_dup),
@@ -683,6 +934,8 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_xpath_relative),
 	unit_test(cm_xml_xpath_wildcard),
 	unit_test(cm_xml_indexed),
+	unit_test(cm_xml_empty_vals),
+	unit_test(cm_xml_empty_attrs),
 };
 
 int
