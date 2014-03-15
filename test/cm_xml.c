@@ -89,10 +89,14 @@ static char *cm_xml_data_attr_empty
 		"<foo full=\"bar\"/>"
 		"<goo />"
 	"</root>";
+static char *cm_xml_data_attr_key_val_match
+	= "<root>"
+		"<foo key=\"okey\"\n"
+		     "okey=\"dokey\" />"
+	"</root>";
 
 /*
  * TODO test:
- * - attributes where val = search!!!!
  * - multiple parse calls
  * - valgrind memory checks
  */
@@ -919,6 +923,39 @@ cm_xml_empty_attrs(void **state)
 	assert_null(val2);
 }
 
+/*
+ * Attribute searches should only match keys, not values. Confirm this.
+ */
+static void
+cm_xml_attr_key_val_match(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val0 = NULL;
+	bool val0_present = false;
+
+	ret = exml_slurp(cm_xml_data_attr_key_val_match,
+			 strlen(cm_xml_data_attr_key_val_match), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			    "/root/foo[@okey]",
+			    false,
+			    &val0,
+			    &val0_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	assert_true(val0_present);
+	assert_non_null(val0);
+	assert_string_equal(val0, "dokey");
+}
+
+
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
 	unit_test(cm_xml_str_dup),
@@ -936,6 +973,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_indexed),
 	unit_test(cm_xml_empty_vals),
 	unit_test(cm_xml_empty_attrs),
+	unit_test(cm_xml_attr_key_val_match),
 };
 
 int
