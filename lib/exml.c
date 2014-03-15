@@ -41,6 +41,7 @@ enum xml_val_type {
 struct xml_finder {
 	struct list_node list;
 	char *search_path;
+	char *found_el_path;
 	bool path_wildcard;
 	char *search_attr;
 	bool required;
@@ -67,13 +68,22 @@ struct xml_el {
 	int max_leaf_index;
 };
 
+/*
+ * finders have the following state during parsing:
+ * not found: path not encountered, on the finders list.
+ * found await val: path encountered, awaiting value callback on
+ *		    finders_val_wait list.
+ * found: path encountered, value callback handled if needed. On the
+ *	  founders list.
+ */
 struct xml_doc {
 	XML_Parser parser;
 	const char *buf;
 	uint64_t buf_len;
 	int num_finders;
 	struct list_head finders;
-	struct xml_finder *last_found;
+	struct list_head finders_val_wait;
+	struct list_head founders;
 	bool parsing;
 	char *el_path;
 	int parse_ret;
@@ -262,6 +272,8 @@ exml_slurp(const char *buf,
 	}
 	memset(xdoc, 0, sizeof(*xdoc));
 	list_head_init(&xdoc->finders);
+	list_head_init(&xdoc->finders_val_wait);
+	list_head_init(&xdoc->founders);
 
 	xdoc->parser = XML_ParserCreate(NULL);
 	if (xdoc->parser == NULL) {
@@ -396,41 +408,40 @@ exml_el_data_cb(void *priv_data,
 {
 	struct xml_doc *xdoc = priv_data;
 	struct xml_finder *finder;
+	struct xml_finder *finder_n;
 	char *got;
 	int ret;
 
-	finder = xdoc->last_found;
-	if (finder == NULL) {
-		dbg(0, "data cb for non-found finder\n");
-		XML_StopParser(xdoc->parser, XML_FALSE);
-		xdoc->parse_ret = -EFAULT;
-		return;
+	/* walk list in case there's more than one finder for this path */
+	list_for_each_safe(&xdoc->finders_val_wait, finder, finder_n, list) {
+		if (strcmp(finder->found_el_path, xdoc->el_path) != 0) {
+			dbg(3, "ignoring unmatched finder awaiting value %s\n",
+			    finder->found_el_path);
+			continue;
+		}
+		if (len == 0) {
+			/* we shouldn't have got a callback */
+			dbg(0, "empty value at %s\n", xdoc->el_path);
+		}
+		got = strndup(content, len);
+		if (got == NULL) {
+			XML_StopParser(xdoc->parser, XML_FALSE);
+			xdoc->parse_ret = -ENOMEM;
+			return;
+		}
+
+		assert(finder->handled == 0);
+		ret = exml_finder_val_stash(xdoc, got, finder);
+		if (ret < 0) {
+			XML_StopParser(xdoc->parser, XML_FALSE);
+			xdoc->parse_ret = ret;
+			return;
+		}
+		finder->handled++;
+		list_del(&finder->list);
+		list_add_tail(&xdoc->founders, &finder->list);
 	}
 
-	if (len == 0) {
-		/* we shouldn't have got a callback */
-		dbg(0, "empty value at %s\n", xdoc->el_path);
-	}
-	got = strndup(content, len);
-	if (got == NULL) {
-		XML_StopParser(xdoc->parser, XML_FALSE);
-		xdoc->parse_ret = -ENOMEM;
-		return;
-	}
-
-	if (finder->handled > 0) {
-		dbg(2, "finder at (%s) handled, overwriting value\n",
-		    finder->search_path);
-		exml_finder_val_free(finder);
-	}
-
-	ret = exml_finder_val_stash(xdoc, got, finder);
-	if (ret < 0) {
-		XML_StopParser(xdoc->parser, XML_FALSE);
-		xdoc->parse_ret = ret;
-		return;
-	}
-	finder->handled++;
 }
 
 static int
@@ -533,28 +544,97 @@ out:
 	return 0;
 }
 
-static struct xml_finder *
-exml_el_finders_search(struct list_head *finders,
-		       const char *el_path)
+static int
+exml_el_path_found_handle(struct xml_doc *xdoc,
+			  struct xml_finder *finder,
+			  const char **atts)
+{
+	int ret;
+
+	finder->found_el_path = strdup(xdoc->el_path);
+	if (finder->found_el_path == NULL) {
+		return -ENOMEM;
+	}
+	if (finder->type == XML_VAL_PATH_CB) {
+		/* no character handler, callback at path */
+		ret = finder->ret_val.cb.fn(xdoc, finder->found_el_path, NULL,
+					    finder->ret_val.cb.data);
+		if (ret < 0) {
+			dbg(0, "xml path (%s) callback failed\n",
+			    xdoc->el_path);
+			return ret;
+		}
+		assert(finder->handled == 0);
+		finder->handled++;
+		if (finder->_present != NULL) {
+			*finder->_present = true;
+		}
+		list_del(&finder->list);
+		xdoc->num_finders--;
+		list_add_tail(&xdoc->founders, &finder->list);
+		/* cb must add another finder entry if still interested */
+		return 0;
+	} else if (finder->search_attr != NULL) {
+		char *attr_val;
+		ret = exml_el_attr_search(atts, finder->search_attr, &attr_val);
+		if ((ret < 0) && (ret != -EINVAL)) {
+			return ret;
+		} else if (ret == -ENOENT) {
+			return 0;	/* ignore */
+		}
+
+		assert(finder->handled == 0);
+		ret = exml_finder_val_stash(xdoc, attr_val, finder);
+		if (ret < 0) {
+			return ret;
+		}
+		finder->handled++;
+		list_del(&finder->list);
+		xdoc->num_finders--;
+		list_add_tail(&xdoc->founders, &finder->list);
+		return 0;
+	}
+
+	/*
+	 * enable data callback to stash value
+	 */
+	XML_SetCharacterDataHandler(xdoc->parser, exml_el_data_cb);
+	list_del(&finder->list);
+	xdoc->num_finders--;
+	list_add_tail(&xdoc->finders_val_wait, &finder->list);
+	return 0;
+}
+
+static int
+exml_el_finders_search(struct xml_doc *xdoc,
+		       const char *el_path,
+		       const char **atts)
 {
 	struct xml_finder *finder;
+	struct xml_finder *finder_n;
 
-	list_for_each(finders, finder, list) {
+	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
 		bool match;
 		int ret;
 		ret = exml_el_finder_path_cmp(finder->search_path, el_path,
 					      finder->path_wildcard, &match);
 		if (ret < 0) {
 			dbg(0, "finder comparison failed\n");
-			return NULL;
+			return ret;
 		}
 
-		if (match) {
-			return finder;
+		if (!match) {
+			continue;
+		}
+
+		/* move finder to finders_val_wait or founders list */
+		ret = exml_el_path_found_handle(xdoc, finder, atts);
+		if (ret < 0) {
+			dbg(0, "found callback failed\n");
+			return ret;
 		}
 	}
-	dbg(4, "xpath (%s) not found\n", el_path);
-	return NULL;
+	return 0;
 }
 
 static void
@@ -565,10 +645,11 @@ exml_el_start_cb(void *priv_data,
 	struct xml_doc *xdoc = priv_data;
 	char *new_path;
 	int ret;
-	struct xml_finder *finder;
 
 	/* disable data cb here, as previous value may have been empty */
-	xdoc->last_found = NULL;
+	if (!list_empty(&xdoc->finders_val_wait)) {
+		dbg(2, "finders awaiting value at start cb\n");
+	}
 	XML_SetCharacterDataHandler(xdoc->parser, NULL);
 
 	ret = asprintf(&new_path, "%s%s/", xdoc->el_path, elem);
@@ -588,56 +669,12 @@ exml_el_start_cb(void *priv_data,
 		return;
 	}
 
-	finder = exml_el_finders_search(&xdoc->finders, xdoc->el_path);
-	if (finder == NULL) {
-		/* no interest in this path */
+	ret = exml_el_finders_search(xdoc, xdoc->el_path, atts);
+	if (ret < 0) {
+		XML_StopParser(xdoc->parser, XML_FALSE);
+		xdoc->parse_ret = ret;
 		return;
 	}
-
-	if (finder->type == XML_VAL_PATH_CB) {
-		/* no character handler, callback at path */
-		ret = finder->ret_val.cb.fn(xdoc, xdoc->el_path, NULL,
-					    finder->ret_val.cb.data);
-		if (ret < 0) {
-			dbg(0, "xml path (%s) callback failed\n",
-			    xdoc->el_path);
-			XML_StopParser(xdoc->parser, XML_FALSE);
-			xdoc->parse_ret = -ENOMEM;
-			return;
-		}
-		finder->handled++;
-		if (finder->_present != NULL) {
-			*finder->_present = true;	/* TODO increment int */
-		}
-		/* keep on the finder list */
-		return;
-	} else if (finder->search_attr != NULL) {
-		char *attr_val;
-		ret = exml_el_attr_search(atts, finder->search_attr, &attr_val);
-		if ((ret < 0) && (ret != -EINVAL)) {
-			XML_StopParser(xdoc->parser, XML_FALSE);
-			xdoc->parse_ret = ret;
-			return;
-		} else if (ret == -ENOENT) {
-			return;	/* ignore */
-		}
-
-		if (finder->handled > 0) {
-			exml_finder_val_free(finder);
-		}
-		ret = exml_finder_val_stash(xdoc, attr_val, finder);
-		if (ret < 0) {
-			XML_StopParser(xdoc->parser, XML_FALSE);
-			xdoc->parse_ret = ret;
-			return;
-		}
-		finder->handled++;
-		return;
-	}
-
-	/* enable data callback to stash value */
-	xdoc->last_found = finder;
-	XML_SetCharacterDataHandler(xdoc->parser, exml_el_data_cb);
 }
 
 static void
@@ -669,11 +706,57 @@ exml_el_end_cb(void *priv_data,
 }
 
 int
-exml_parse(struct xml_doc *xdoc)
+exml_finders_walk_free(struct xml_doc *xdoc,
+		       bool check_required,
+		       bool free_vals)
 {
-	enum XML_Status xret;
 	struct xml_finder *finder;
 	struct xml_finder *finder_n;
+
+	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
+		if (check_required && finder->required) {
+			dbg(1, "required xpath (%s) not found\n",
+			    finder->search_path);
+			/* clean up on exml_free() */
+			return -ENOENT;
+		}
+		list_del(&finder->list);
+		xdoc->num_finders--;
+
+		free(finder->search_path);
+		free(finder->search_attr);
+		free(finder);
+	}
+	list_for_each_safe(&xdoc->finders_val_wait, finder, finder_n, list) {
+		if (check_required && finder->required) {
+			dbg(1, "required xpath (%s) value not found\n",
+			    finder->search_path);
+			return -ENOENT;
+		}
+		list_del(&finder->list);
+		free(finder->search_path);
+		free(finder->search_attr);
+		free(finder->found_el_path);
+		free(finder);
+	}
+	list_for_each_safe(&xdoc->founders, finder, finder_n, list) {
+		if (free_vals) {
+			exml_finder_val_free(finder);
+		}
+		list_del(&finder->list);
+		free(finder->search_path);
+		free(finder->search_attr);
+		free(finder->found_el_path);
+		free(finder);
+	}
+	return 0;
+}
+
+int
+exml_parse(struct xml_doc *xdoc)
+{
+	int ret;
+	enum XML_Status xret;
 
 	if ((xdoc == NULL) || (xdoc->parser == NULL)) {
 		return -EINVAL;
@@ -698,20 +781,12 @@ exml_parse(struct xml_doc *xdoc)
 	}
 	tdestroy(xdoc->root_el, exml_el_free);
 
-	/* check for required finders that were not located */
-	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
-		if (finder->required && (finder->handled == 0)) {
-			dbg(0, "xpath (%s) not found\n", finder->search_path);
-			/* clean up on exml_free() */
-			return -ENOENT;
-		}
-		list_del(&finder->list);
-		xdoc->num_finders--;
-
-		free(finder->search_path);
-		free(finder->search_attr);
-		free(finder);
+	/* walk list of finders, return error if required is missing */
+	ret = exml_finders_walk_free(xdoc, true, false);
+	if (ret < 0) {
+		return ret;
 	}
+
 	assert(list_empty(&xdoc->finders));
 	assert(xdoc->num_finders == 0);
 
@@ -721,22 +796,13 @@ exml_parse(struct xml_doc *xdoc)
 void
 exml_free(struct xml_doc *xdoc)
 {
-	struct xml_finder *finder;
-	struct xml_finder *finder_n;
-
 	if (xdoc->parsing) {
 		dbg(0, "attempt to free xdoc while parsing, leaking!\n");
 		return;
 	}
-	list_for_each_safe(&xdoc->finders, finder, finder_n, list) {
-		if (finder->handled > 0) {
-			/* failed parse after finding something, free stash */
-			exml_finder_val_free(finder);
-		}
-		free(finder->search_path);
-		free(finder->search_attr);
-		free(finder);
-	}
+	/* finders exist if parsing failed, need to free with found values */
+	exml_finders_walk_free(xdoc, false, true);
+
 	free(xdoc->el_path);
 	/* TODO FIXME free element tree */
 	XML_ParserFree(xdoc->parser);
