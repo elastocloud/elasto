@@ -232,6 +232,14 @@ s3_rsp_bkt_iter_process(struct xml_doc *xdoc,
 	int ret;
 	struct s3_bucket *bkt;
 
+	/* re-queue for subsequent Bucket descriptors */
+	ret = exml_path_cb_want(xdoc, "/ListAllMyBucketsResult/Buckets/Bucket",
+				false, s3_rsp_bkt_iter_process, svc_list_rsp,
+				NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	bkt = malloc(sizeof(*bkt));
 	if (bkt == NULL) {
 		ret = -ENOMEM;
@@ -285,16 +293,17 @@ s3_rsp_svc_list_process(struct op *op,
 		goto err_xdoc_free;
 	}
 
-	ret = exml_str_want(xdoc, "/ListAllMyBucketsResult/Owner/DisplayName", false,
-			    &svc_list_rsp->disp_name, NULL);
+	ret = exml_str_want(xdoc, "/ListAllMyBucketsResult/Owner/DisplayName",
+			    false, &svc_list_rsp->disp_name, NULL);
 	if (ret < 0) {
 		goto err_xdoc_free;
 	}
 
 	list_head_init(&svc_list_rsp->bkts);
 
-	ret = exml_path_cb_want(xdoc, "/ListAllMyBucketsResult/Buckets/Bucket", false,
-				s3_rsp_bkt_iter_process, svc_list_rsp, NULL);
+	ret = exml_path_cb_want(xdoc, "/ListAllMyBucketsResult/Buckets/Bucket",
+				false, s3_rsp_bkt_iter_process, svc_list_rsp,
+				NULL);
 	if (ret < 0) {
 		goto err_xdoc_free;
 	}
@@ -413,6 +422,13 @@ s3_rsp_obj_iter_process(struct xml_doc *xdoc,
 				= (struct s3_rsp_bkt_list *)cb_data;
 	int ret;
 	struct s3_object *obj;
+
+	/* re-queue cb for subsequent entries */
+	ret = exml_path_cb_want(xdoc, "/ListBucketResult/Contents", false,
+				s3_rsp_obj_iter_process, bkt_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
 
 	obj = malloc(sizeof(*obj));
 	if (obj == NULL) {

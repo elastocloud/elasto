@@ -164,34 +164,17 @@ azure_ssl_pubset_process(const char *ps_file,
 	}
 
 	ret = exml_str_want(xdoc,
-			  "/PublishData/PublishProfile[@ManagementCertificate]",
-			    true, &mcert_b64, NULL);
-	if (ret < 0) {
-		goto err_xdoc_free;
-	}
-
-	ret = exml_parse(xdoc);
-	if (ret < 0) {
-		dbg(0, "Failed to parse Azure Subscription data from %s\n",
-		    ps_file);
-		goto err_sub_free;
-	}
-
-	/*
-	 * FIXME Need to parse twice due to bug in exml: duplicate search paths
-	 * are not hanlded!
-	 */
-	exml_free(xdoc);
-	ret = exml_slurp(fbuf, len, &xdoc);
-	if (ret < 0) {
-		goto err_fbuf_free;
-	}
-
-	ret = exml_str_want(xdoc,
 			    "/PublishData/PublishProfile/Subscription[@Name]",
 			    true, &sname, NULL);
 	if (ret < 0) {
 		goto err_sub_free;
+	}
+
+	ret = exml_str_want(xdoc,
+			  "/PublishData/PublishProfile[@ManagementCertificate]",
+			    true, &mcert_b64, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
 	}
 
 	ret = exml_parse(xdoc);

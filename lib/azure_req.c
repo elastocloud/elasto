@@ -411,6 +411,14 @@ static int az_rsp_acc_iter_process(struct xml_doc *xdoc,
 					= (struct az_rsp_acc_list *)cb_data;
 	struct azure_account *acc;
 
+	/* request callback for subsequent storage account descriptions */
+	ret = exml_path_cb_want(xdoc,
+				"/StorageServices/StorageService", false,
+				az_rsp_acc_iter_process, acc_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	acc = malloc(sizeof(*acc));
 	if (acc == NULL) {
 		ret = -ENOMEM;
@@ -484,7 +492,7 @@ az_rsp_acc_list_process(struct op *op,
 
 	list_head_init(&acc_list_rsp->accs);
 
-	/* request callback for each storage account description */
+	/* request callback for first storage account description */
 	ret = exml_path_cb_want(xdoc,
 				"/StorageServices/StorageService", false,
 				az_rsp_acc_iter_process, acc_list_rsp, NULL);
@@ -934,6 +942,15 @@ az_rsp_ctnr_iter_process(struct xml_doc *xdoc,
 					(struct az_rsp_ctnr_list *)cb_data;
 	struct azure_ctnr *ctnr;
 
+	/* request callback for subsequent containers */
+	ret = exml_path_cb_want(xdoc,
+				"/EnumerationResults/Containers/Container",
+				false, az_rsp_ctnr_iter_process, ctnr_list_rsp,
+				NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	ctnr = malloc(sizeof(*ctnr));
 	if (ctnr == NULL) {
 		ret = -ENOMEM;
@@ -1305,6 +1322,14 @@ az_rsp_blob_iter_process(struct xml_doc *xdoc,
 	struct az_rsp_blob_list *blob_list_rsp
 				= (struct az_rsp_blob_list *)cb_data;
 	struct azure_blob *blob;
+
+	/* request callback for subsequent blobs */
+	ret = exml_path_cb_want(xdoc, "/EnumerationResults/Blobs/Blob",
+				false, az_rsp_blob_iter_process,
+				blob_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
 
 	blob = malloc(sizeof(*blob));
 	if (blob == NULL) {
@@ -2307,6 +2332,14 @@ az_rsp_blk_iter_process(struct xml_doc *xdoc,
 			= (struct az_rsp_block_list_get *)cb_data;
 	int ret;
 	struct azure_block *blk;
+
+	/* request callback for subsequent Block descriptors */
+	ret = exml_path_cb_want(xdoc, "/BlockList/*/Block", false,
+				az_rsp_blk_iter_process, blk_list_get_rsp,
+				NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
 
 	blk = malloc(sizeof(*blk));
 	if (blk == NULL) {
