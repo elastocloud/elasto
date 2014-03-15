@@ -458,9 +458,9 @@ exml_el_attr_search(const char **atts,
 		}
 		/* found, next array entry is the attrib value */
 		s = *(++atts);
-		if (s == NULL) {
-			dbg(0, "NULL attribute value for %s\n", search_attr);
-			return -EINVAL;
+		if ((s == NULL) || (strlen(s) == 0)) {
+			dbg(1, "empty attribute value for %s\n", search_attr);
+			continue;
 		}
 		attr_val = strdup(s);
 		if (attr_val == NULL) {
@@ -577,7 +577,7 @@ exml_el_path_found_handle(struct xml_doc *xdoc,
 	} else if (finder->search_attr != NULL) {
 		char *attr_val;
 		ret = exml_el_attr_search(atts, finder->search_attr, &attr_val);
-		if ((ret < 0) && (ret != -EINVAL)) {
+		if ((ret < 0) && (ret != -ENOENT)) {
 			return ret;
 		} else if (ret == -ENOENT) {
 			return 0;	/* ignore */
