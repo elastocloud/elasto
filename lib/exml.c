@@ -789,6 +789,7 @@ exml_parse(struct xml_doc *xdoc)
 		twalk(xdoc->root_el, exml_el_print);
 	}
 	tdestroy(xdoc->root_el, exml_el_free);
+	xdoc->root_el = NULL;
 
 	/* walk list of finders, return error if required is missing */
 	ret = exml_finders_walk_free(xdoc, true, false);
@@ -813,7 +814,10 @@ exml_free(struct xml_doc *xdoc)
 	exml_finders_walk_free(xdoc, false, true);
 
 	free(xdoc->el_path);
-	/* TODO FIXME free element tree */
+	if (xdoc->root_el != NULL) {
+		/* parsing failed, need to free element tree */
+		tdestroy(xdoc->root_el, exml_el_free);
+	}
 	XML_ParserFree(xdoc->parser);
 	free(xdoc);
 }
