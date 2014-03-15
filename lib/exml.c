@@ -454,11 +454,20 @@ exml_el_attr_search(const char **atts,
 	/* no char handler, only interested in attr */
 	for (s = *atts; s != NULL; s = *(++atts)) {
 		if (strcmp(s, search_attr) != 0) {
+			/* skip unwanted attr val */
+			if (*(++atts) == NULL) {
+				dbg(0, "attr key %s without val!", s);
+				break;
+			}
 			continue;
 		}
-		/* found, next array entry is the attrib value */
+		/* found, next array entry is the attr value */
 		s = *(++atts);
-		if ((s == NULL) || (strlen(s) == 0)) {
+		if (s == NULL) {
+			dbg(0, "attr key %s without val!", search_attr);
+			break;
+		}
+		if (strlen(s) == 0) {
 			dbg(1, "empty attribute value for %s\n", search_attr);
 			continue;
 		}
