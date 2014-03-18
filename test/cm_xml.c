@@ -97,8 +97,8 @@ static char *cm_xml_data_attr_key_val_match
 
 /*
  * TODO test:
- * - multiple parse calls
  * - valgrind memory checks
+ * - values leaked on failure
  */
 
 /*
@@ -955,6 +955,53 @@ cm_xml_attr_key_val_match(void **state)
 	assert_string_equal(val0, "dokey");
 }
 
+/* check that parse can't be called multiple times over the same data */
+static void
+cm_xml_parse_multi(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val0 = NULL;
+	int32_t val1 = 0;
+	bool val0_present = false;
+	bool val1_present = false;
+
+	ret = exml_slurp(cm_xml_data_num_basic,
+			 strlen(cm_xml_data_num_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			    "/outer/num",
+			    false,
+			    &val0,
+			    &val0_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	assert_true(val0_present);
+	assert_string_equal(val0, "100");
+	free(val0);
+
+	ret = exml_str_want(xdoc,
+			    "/outer/notpresent",
+			    false,
+			    &val0,
+			    &val0_present);
+	ret |= exml_int32_want(xdoc,
+			    "/outer/inner1/neg",
+			    false,
+			    &val1,
+			    &val1_present);
+	assert_int_equal(ret, 0);
+
+	/* second call should fail XML_Parse: "parsing finished" */
+	ret = exml_parse(xdoc);
+	assert_int_not_equal(ret, 0);
+
+	exml_free(xdoc);
+}
 
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
@@ -974,6 +1021,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_empty_vals),
 	unit_test(cm_xml_empty_attrs),
 	unit_test(cm_xml_attr_key_val_match),
+	unit_test(cm_xml_parse_multi),
 };
 
 int
