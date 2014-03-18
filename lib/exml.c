@@ -761,6 +761,11 @@ exml_finders_walk_free(struct xml_doc *xdoc,
 	return 0;
 }
 
+/*
+ * On failure, all xdoc state is cleaned up via exml_free(), aside from any
+ * finders that were found and allocated under the value pointer. E.g. string
+ * or base64 types.
+ */
 int
 exml_parse(struct xml_doc *xdoc)
 {
@@ -778,7 +783,8 @@ exml_parse(struct xml_doc *xdoc)
 	xret = XML_Parse(xdoc->parser, xdoc->buf, xdoc->buf_len, XML_TRUE);
 	xdoc->parsing = false;
 	if (xret != XML_STATUS_OK) {
-		dbg(0, "bad parsing status\n");
+		enum XML_Error xerr = XML_GetErrorCode(xdoc->parser);
+		dbg(0, "bad parsing status: %s\n", XML_ErrorString(xerr));
 		return -EIO;
 	} else if (xdoc->parse_ret < 0) {
 		dbg(0, "parsing failed: %s\n", strerror(-xdoc->parse_ret));
