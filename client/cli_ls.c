@@ -318,7 +318,8 @@ err_out:
 
 static int
 cli_ls_sub_handle(struct elasto_conn *econn,
-		  const char *sub_id)
+		  const char *sub_id,
+		  const char *sub_name)
 {
 	struct op *op;
 	struct az_rsp_acc_list *acc_list_rsp;
@@ -348,12 +349,13 @@ cli_ls_sub_handle(struct elasto_conn *econn,
 	}
 
 	if (acc_list_rsp->num_accs == 0) {
-		printf("No storage accounts for subscription %s\n", sub_id);
+		printf("No storage accounts for subscription %s (%s)\n",
+		       sub_name, sub_id);
 		ret = 0;
 		goto err_op_free;
 	}
 
-	printf("Accounts for subscription %s:\n", sub_id);
+	printf("Accounts for subscription %s (%s):\n", sub_name, sub_id);
 	list_for_each(&acc_list_rsp->accs, acc, list) {
 			printf("\t%s\n", acc->svc_name);
 			if (acc->label != NULL)
@@ -490,7 +492,8 @@ cli_ls_az_handle(struct cli_args *cli_args)
 	 && (cli_args->az.ctnr_name == NULL)
 	 && (cli_args->az.blob_acc == NULL)) {
 		/* list accounts for subscription, signing setup not needed */
-		ret = cli_ls_sub_handle(econn, cli_args->az.sub_id);
+		ret = cli_ls_sub_handle(econn, cli_args->az.sub_id,
+					cli_args->az.sub_name);
 		goto err_conn_free;
 	}
 
