@@ -60,7 +60,8 @@ cli_help_handle(struct cli_args *cli_args)
 struct cli_cmd_spec {
 	enum cli_cmd id;
 	char *name;
-	char *help;
+	char *az_help;
+	char *s3_help;
 	int arg_min;
 	int arg_max;
 	int (*args_parse)(int argc,
@@ -73,89 +74,97 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_LS,
 		.name = "ls",
-		.help = "[<account>[/container[/blob]]]\n"
-			"\t\t[<bucket>]",
+		.az_help = "[<account>[/container[/blob]]]",
+		.s3_help = "[<bucket>]",
 		.arg_min = 0,
 		.arg_max = 1,
 		.args_parse = &cli_ls_args_parse,
 		.handle = &cli_ls_handle,
 		.args_free = &cli_ls_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+					| CLI_FL_AZ | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_PUT,
 		.name = "put",
-		.help = "<local path> <account>/<container>/<blob>\n"
-			"\t\t<local path> <bucket>/<object>",
+		.az_help = "<local path> <account>/<container>/<blob>",
+		.s3_help = "<local path> <bucket>/<object>",
 		.arg_min = 2,
 		.arg_max = 2,
 		.args_parse = &cli_put_args_parse,
 		.handle = &cli_put_handle,
 		.args_free = &cli_put_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+					| CLI_FL_AZ | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_GET,
 		.name = "get",
-		.help = "<account>/<container>/<blob> <local path>\n"
-			"\t\t<bucket>/<object> <local path>",
+		.az_help = "<account>/<container>/<blob> <local path>",
+		.s3_help = "<bucket>/<object> <local path>",
 		.arg_min = 2,
 		.arg_max = 2,
 		.args_parse = &cli_get_args_parse,
 		.handle = &cli_get_handle,
 		.args_free = &cli_get_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+					| CLI_FL_AZ | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_DEL,
 		.name = "del",
-		.help = "<account>[/<container>[/<blob>]]\n"
-			"\t\t<bucket>[/<object>]",
+		.az_help = "<account>[/<container>[/<blob>]]",
+		.s3_help = "<bucket>[/<object>]",
 		.arg_min = 1,
 		.arg_max = 1,
 		.args_parse = &cli_del_args_parse,
 		.handle = &cli_del_handle,
 		.args_free = &cli_del_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+					| CLI_FL_AZ | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_CP,
 		.name = "cp",
-		.help = "<src_acc>/<src_ctnr>/<src_blob> "
-			"<dst_acc>/<dst_ctnr>/<dst_blob>\n"
-			"\t\t<bucket>/<object> <bucket>/<object>",
+		.az_help = "<src_acc>/<src_ctnr>/<src_blob> "
+			   "<dst_acc>/<dst_ctnr>/<dst_blob>",
+		.s3_help = "<bucket>/<object> <bucket>/<object>",
 		.arg_min = 2,
 		.arg_max = 2,
 		.args_parse = &cli_cp_args_parse,
 		.handle = &cli_cp_handle,
 		.args_free = &cli_cp_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+				| CLI_FL_AZ | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_CREATE,
 		.name = "create",
-		.help = "-l <label> [-d <desc>] [-L <location>] "
-			"[-A <affinity group>] <account>\n"
-			"\t\t<account>/<container>\n"
-			"\t\t[-L <location>] <bucket>",
+		.az_help = "-l <label> [-d <desc>] [-L <location>] "
+			   "[-A <affinity group>] <account>\n"
+			   "\t\t<account>/<container>",
+		.s3_help = "[-L <location>] <bucket>",
 		.arg_min = 1,
 		.arg_max = 7,
 		.args_parse = &cli_create_args_parse,
 		.handle = &cli_create_handle,
 		.args_free = &cli_create_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+				| CLI_FL_AZ | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_HELP,
 		.name = "help",
-		.help = "",
+		.az_help = "",
+		.s3_help = "",
 		.handle = &cli_help_handle,
-		.feature_flags = CLI_FL_PROMPT,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_AZ | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_EXIT,
 		.name = "exit",
-		.help = "",
+		.az_help = "",
+		.s3_help = "",
 		.handle = &cli_exit_handle,
 		/* alias for quit, never display */
 		.feature_flags = 0,
@@ -163,9 +172,10 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_EXIT,
 		.name = "quit",
-		.help = "",
+		.az_help = "",
+		.s3_help = "",
 		.handle = &cli_exit_handle,
-		.feature_flags = CLI_FL_PROMPT,
+		.feature_flags = CLI_FL_PROMPT | CLI_FL_AZ | CLI_FL_S3,
 	},
 	{
 		/* must be last entry */
@@ -199,12 +209,21 @@ cli_args_usage(const char *progname,
 	fprintf(stderr, "Commands:\n");
 	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
 		/*
-		 * filter listing based on whether run from elasto> prompt or as
-		 * binary arg. Show only applicable commands
+		 * Filter listing based on whether run from elasto> prompt or as
+		 * binary arg, and whether Azure or S3 credentials were provided.
+		 * Show only applicable commands.
 		 */
 		if ((cmd->feature_flags & flags & CLI_FL_BIN_ARG)
 		 || (cmd->feature_flags & flags & CLI_FL_PROMPT)) {
-			fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->help);
+			if ((cmd->feature_flags | CLI_FL_S3 | CLI_FL_AZ) == 0) {
+				continue;
+			}
+			if (cmd->feature_flags & flags & CLI_FL_AZ) {
+				fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->az_help);
+			}
+			if (cmd->feature_flags & flags & CLI_FL_S3) {
+				fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->s3_help);
+			}
 		}
 	}
 }
@@ -440,6 +459,8 @@ cli_args_parse(int argc,
 		goto err_out;
 	}
 	cli_args->insecure_http = false;
+	/* show help for all backends by default */
+	cli_args->flags = CLI_FL_AZ | CLI_FL_S3;
 
 	while ((opt = getopt(argc, argv, "s:k:d:?i")) != -1) {
 		uint32_t debug_level;
@@ -466,7 +487,9 @@ cli_args_parse(int argc,
 			cli_args->insecure_http = true;
 			break;
 		default: /* '?' */
-			cli_args_usage(progname, CLI_FL_BIN_ARG, NULL);
+			cli_args_usage(progname,
+				       CLI_FL_BIN_ARG | CLI_FL_AZ | CLI_FL_S3,
+				       NULL);
 			ret = -EINVAL;
 			goto err_out;
 			break;
@@ -474,7 +497,7 @@ cli_args_parse(int argc,
 	}
 	if (((pub_settings == NULL) && (s3_creds_file == NULL))
 	 || ((pub_settings != NULL) && (s3_creds_file != NULL))) {
-		cli_args_usage(argv[0], CLI_FL_BIN_ARG,
+		cli_args_usage(argv[0], CLI_FL_BIN_ARG | CLI_FL_AZ | CLI_FL_S3,
 			       "Either an Azure PublishSettings file, or "
 			       "Amazon S3 key file is required");
 		ret = -EINVAL;
@@ -483,10 +506,14 @@ cli_args_parse(int argc,
 
 	if (pub_settings != NULL) {
 		cli_args->type = CLI_TYPE_AZURE;
+		/* don't show S3 usage strings */
+		cli_args->flags &= ~CLI_FL_S3;
 		cli_args->az.ps_file = pub_settings;
 	} else {
 		assert(s3_creds_file != NULL);
 		cli_args->type = CLI_TYPE_S3;
+		/* don't show Azure usage strings */
+		cli_args->flags &= ~CLI_FL_AZ;
 		cli_args->s3.creds_file = s3_creds_file;
 	}
 	cli_args->progname = progname;
@@ -494,7 +521,7 @@ cli_args_parse(int argc,
 	if (argc - optind == 0) {
 		/* no cmd string, elasto> prompt */
 		*cmd_spec = NULL;
-		cli_args->flags = CLI_FL_PROMPT;
+		cli_args->flags |= CLI_FL_PROMPT;
 		return 0;
 	}
 
