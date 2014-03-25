@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2013, all rights reserved.
+ * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -2835,6 +2835,255 @@ err_out:
 	return ret;
 }
 
+static void
+az_req_blob_lease_free(struct az_req_blob_lease *blob_lease_req)
+{
+	free(blob_lease_req->acc);
+	free(blob_lease_req->ctnr);
+	free(blob_lease_req->blob);
+	free(blob_lease_req->lid);
+}
+
+static void
+az_rsp_blob_lease_free(struct az_rsp_blob_lease *blob_lease_rsp)
+{
+	free(blob_lease_rsp->lid);
+}
+
+static struct {
+	enum az_lease_action action_enum;
+	const char *action_str;
+} action_enum_name_map[] = {
+	{AOP_LEASE_ACTION_ACQUIRE, "acquire"},
+	{AOP_LEASE_ACTION_RENEW, "renew"},
+	{AOP_LEASE_ACTION_CHANGE, "change"},
+	{AOP_LEASE_ACTION_RELEASE, "release"},
+	{AOP_LEASE_ACTION_BREAK, "break"},
+};
+
+static const char *
+az_req_blob_lease_actn_enum_map(enum az_lease_action action_enum)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(action_enum_name_map); i++) {
+		if (action_enum_name_map[i].action_enum == action_enum) {
+			return action_enum_name_map[i].action_str;
+		}
+	}
+	dbg(0, "invalid lease action enum: %u\n", action_enum);
+	return NULL;
+}
+
+static int
+az_req_blob_lease_hdr_fill(struct az_req_blob_lease *blob_lease_req,
+			   const char *action_str,
+			   struct op *op)
+{
+	int ret;
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = op_req_hdr_add(op, "x-ms-lease-action", action_str);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (blob_lease_req->action == AOP_LEASE_ACTION_ACQUIRE) {
+		char *hdr_str;
+		ret = asprintf(&hdr_str, "%d", blob_lease_req->duration);
+		if (ret < 0) {
+			goto err_out;
+		}
+		ret = op_req_hdr_add(op, "x-ms-lease-duration", hdr_str);
+		free(hdr_str);
+		if (ret < 0) {
+			goto err_out;
+		}
+	}
+
+	if (blob_lease_req->lid != NULL) {
+		ret = op_req_hdr_add(op, "x-ms-lease-id", blob_lease_req->lid);
+		if (ret < 0) {
+			goto err_out;
+		}
+	}
+
+	return 0;
+
+err_out:
+	return ret;
+}
+
+int
+az_req_blob_lease(const char *acc,
+		  const char *ctnr,
+		  const char *blob,
+		  const char *lid,
+		  const char *lid_proposed,
+		  enum az_lease_action action,
+		  int32_t duration,
+		  struct op **_op)
+{
+	int ret;
+	struct az_ebo *ebo;
+	struct op *op;
+	struct az_req_blob_lease *blob_lease_req;
+	const char *action_str;
+
+	action_str = az_req_blob_lease_actn_enum_map(action);
+	if (action_str == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/* lease duration is only valid for AQUIRE, otherwise ignore it */
+	if ((action == AOP_LEASE_ACTION_ACQUIRE)
+	 && ((duration != -1) && ((duration < 15) || (duration > 60)))) {
+		dbg(1, "invalid lease duration: %d\n", duration);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if ((action == AOP_LEASE_ACTION_CHANGE) && (lid_proposed == NULL)) {
+		dbg(1, "proposed lease ID required with action=change\n");
+		ret = -EINVAL;
+		goto err_out;
+	} else if ((action != AOP_LEASE_ACTION_CHANGE)
+			&& (action != AOP_LEASE_ACTION_ACQUIRE)
+			&& (lid_proposed != NULL)) {
+		dbg(1, "proposed lease ID only valid with "
+		    "action=aquire|change\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (((action == AOP_LEASE_ACTION_RENEW)
+			|| (action == AOP_LEASE_ACTION_CHANGE)
+			|| (action == AOP_LEASE_ACTION_RELEASE))
+							&& (lid == NULL)) {
+		dbg(1, "lease ID required with action=renew|change|release\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/* TODO validate lid GUID format */
+
+	ret = az_ebo_init(AOP_BLOB_LEASE, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	blob_lease_req = &ebo->req.blob_lease;
+
+	blob_lease_req->acc = strdup(acc);
+	if (blob_lease_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	blob_lease_req->ctnr = strdup(ctnr);
+	if (blob_lease_req->ctnr == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	blob_lease_req->blob = strdup(blob);
+	if (blob_lease_req->blob == NULL) {
+		ret = -ENOMEM;
+		goto err_ctnr_free;
+	}
+
+	if (lid != NULL) {
+		blob_lease_req->lid = strdup(lid);
+		if (blob_lease_req->lid == NULL) {
+			ret = -ENOMEM;
+			goto err_blob_free;
+		}
+	}
+
+	if (lid_proposed != NULL) {
+		blob_lease_req->lid_proposed = strdup(lid_proposed);
+		if (blob_lease_req->lid_proposed == NULL) {
+			ret = -ENOMEM;
+			goto err_lid_free;
+		}
+	}
+
+	blob_lease_req->action = action;
+	blob_lease_req->duration = duration;
+
+	op->method = REQ_METHOD_PUT;
+	op->url_https_only = false;
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_lid_prop_free;
+	}
+
+	ret = asprintf(&op->url_path, "/%s/%s?comp=lease", ctnr, blob);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_req_blob_lease_hdr_fill(blob_lease_req, action_str, op);
+	if (ret < 0)
+		goto err_upath_free;
+
+	/* the connection layer must sign this request before sending */
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_lid_prop_free:
+	free(blob_lease_req->lid_proposed);
+err_lid_free:
+	free(blob_lease_req->lid);
+err_blob_free:
+	free(blob_lease_req->blob);
+err_ctnr_free:
+	free(blob_lease_req->ctnr);
+err_acc_free:
+	free(blob_lease_req->acc);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static int
+az_rsp_blob_lease_process(struct op *op,
+			  struct az_rsp_blob_lease *blob_lease_rsp)
+{
+	int ret;
+
+	assert(op->opcode == AOP_BLOB_LEASE);
+
+	ret = op_hdr_u64_val_lookup(&op->rsp.hdrs,
+				    "x-ms-lease-time",
+				    &blob_lease_rsp->time_remaining);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_out;
+	}
+	ret = op_hdr_val_lookup(&op->rsp.hdrs,
+				"x-ms-lease-id",
+				&blob_lease_rsp->lid);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_out;
+	}
+
+	ret = 0;
+err_out:
+	return ret;
+}
 
 static void
 az_req_status_get_free(struct az_req_status_get *sts_get_req)
@@ -3059,6 +3308,9 @@ az_req_free(struct op *op)
 	case AOP_BLOB_PROP_GET:
 		az_req_blob_prop_get_free(&ebo->req.blob_prop_get);
 		break;
+	case AOP_BLOB_LEASE:
+		az_req_blob_lease_free(&ebo->req.blob_lease);
+		break;
 	case AOP_STATUS_GET:
 		az_req_status_get_free(&ebo->req.sts_get);
 		break;
@@ -3091,6 +3343,9 @@ az_rsp_free(struct op *op)
 		break;
 	case AOP_BLOB_PROP_GET:
 		az_rsp_blob_prop_get_free(&ebo->rsp.blob_prop_get);
+		break;
+	case AOP_BLOB_LEASE:
+		az_rsp_blob_lease_free(&ebo->rsp.blob_lease);
 		break;
 	case AOP_STATUS_GET:
 		az_rsp_status_get_free(&ebo->rsp.sts_get);
@@ -3150,6 +3405,9 @@ az_rsp_process(struct op *op)
 		break;
 	case AOP_BLOB_PROP_GET:
 		ret = az_rsp_blob_prop_get_process(op, &ebo->rsp.blob_prop_get);
+		break;
+	case AOP_BLOB_LEASE:
+		ret = az_rsp_blob_lease_process(op, &ebo->rsp.blob_lease);
 		break;
 	case AOP_STATUS_GET:
 		ret = az_rsp_status_get_process(op, &ebo->rsp.sts_get);
@@ -3216,6 +3474,13 @@ az_rsp_blob_prop_get(struct op *op)
 {
 	struct az_ebo *ebo = container_of(op, struct az_ebo, op);
 	return &ebo->rsp.blob_prop_get;
+}
+
+struct az_rsp_blob_lease *
+az_rsp_blob_lease_get(struct op *op)
+{
+	struct az_ebo *ebo = container_of(op, struct az_ebo, op);
+	return &ebo->rsp.blob_lease;
 }
 
 struct az_rsp_status_get *

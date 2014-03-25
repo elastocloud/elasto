@@ -32,6 +32,7 @@ enum az_opcode {
 	AOP_BLOB_DEL,
 	AOP_BLOB_CP,
 	AOP_BLOB_PROP_GET,
+	AOP_BLOB_LEASE,
 	AOP_STATUS_GET,
 };
 
@@ -245,6 +246,30 @@ struct az_rsp_blob_prop_get {
 	enum azure_cp_status cp_status;
 };
 
+enum az_lease_action {
+	AOP_LEASE_ACTION_ACQUIRE,
+	AOP_LEASE_ACTION_RENEW,
+	AOP_LEASE_ACTION_CHANGE,
+	AOP_LEASE_ACTION_RELEASE,
+	AOP_LEASE_ACTION_BREAK,
+};
+
+struct az_req_blob_lease {
+	char *acc;
+	char *ctnr;
+	char *blob;
+	char *lid;
+	char *lid_proposed;
+	enum az_lease_action action;
+	int32_t break_period;
+	int32_t duration;
+};
+
+struct az_rsp_blob_lease {
+	char *lid;
+	uint64_t time_remaining;
+};
+
 struct az_req_status_get {
 	char *sub_id;
 	char *req_id;
@@ -289,6 +314,7 @@ struct az_req {
 		struct az_req_blob_del blob_del;
 		struct az_req_blob_cp blob_cp;
 		struct az_req_blob_prop_get blob_prop_get;
+		struct az_req_blob_lease blob_lease;
 		struct az_req_status_get sts_get;
 	};
 };
@@ -301,6 +327,7 @@ struct az_rsp {
 		struct az_rsp_blob_list blob_list;
 		struct az_rsp_block_list_get block_list_get;
 		struct az_rsp_blob_prop_get blob_prop_get;
+		struct az_rsp_blob_lease blob_lease;
 		struct az_rsp_status_get sts_get;
 		/*
 		 * No response specific data handled yet:
@@ -429,6 +456,16 @@ az_req_blob_prop_get(const char *account,
 		     struct op **_op);
 
 int
+az_req_blob_lease(const char *account,
+		  const char *ctnr,
+		  const char *bname,
+		  const char *lid,
+		  const char *lid_proposed,
+		  enum az_lease_action action,
+		  int32_t duration,
+		  struct op **_op);
+
+int
 az_req_status_get(const char *sub_id,
 		  const char *req_id,
 		  struct op **_op);
@@ -450,6 +487,9 @@ az_rsp_block_list_get(struct op *op);
 
 struct az_rsp_blob_prop_get *
 az_rsp_blob_prop_get(struct op *op);
+
+struct az_rsp_blob_lease *
+az_rsp_blob_lease_get(struct op *op);
 
 struct az_rsp_status_get *
 az_rsp_status_get(struct op *op);
