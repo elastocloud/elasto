@@ -66,4 +66,11 @@ elasto_fread(struct elasto_fh *fh,
 int
 elasto_fclose(struct elasto_fh *fh);
 
+int
+elasto_flease_acquire(struct elasto_fh *fh,
+		      int32_t duration);
+
+int
+elasto_flease_release(struct elasto_fh *fh);
+
 #endif /* _ELASTO_FILE_H_ */

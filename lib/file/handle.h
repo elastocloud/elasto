@@ -37,12 +37,17 @@ struct elasto_fh_priv {
 			char *pem_path;
 			char *sub_id;
 			char *sub_name;
+			char *lid;
 		} az;
 		struct {
 			struct elasto_fh_s3_path path;
 		} s3;
 	};
 	uint64_t len;
+	enum {
+		ELASTO_FH_LEASE_NONE = 0,
+		ELASTO_FH_LEASE_ACQUIRED,
+	} lease_state;
 };
 
 int
