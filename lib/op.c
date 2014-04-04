@@ -300,9 +300,6 @@ op_rsp_error_process(struct op *op)
 		/* temporary redirect, fill location */
 		ret = exml_str_want(xdoc, "/Error/Endpoint", true,
 				    &op->rsp.err.redir_endpoint, NULL);
-	} else {
-		dbg(0, "got error msg: %s\n", op->rsp.err.msg);
-		ret = 0;
 	}
 
 	ret = exml_parse(xdoc);
@@ -327,6 +324,8 @@ op_rsp_error_process(struct op *op)
 		    op->rsp.err.redir_endpoint);
 		/* EAGAIN implies resend with redirect */
 		ret = -EAGAIN;
+	} else if (got_err_msg) {
+		dbg(0, "got error msg: %s\n", op->rsp.err.msg);
 	}
 
 	exml_free(xdoc);
