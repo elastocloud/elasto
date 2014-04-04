@@ -266,6 +266,7 @@ curl_write_alloc_std(struct op *op,
 	int ret;
 	uint64_t rem;
 
+	dbg(9, "allocating buffer for %" PRIu64 " bytes\n", cb_nbytes);
 	if (op->rsp.data == NULL) {
 		uint64_t sz = (op->rsp.clen_recvd ? op->rsp.clen : cb_nbytes);
 		/* requester wants us to allocate a recv iov */
@@ -327,6 +328,9 @@ curl_write_err(struct op *op,
 	       uint8_t *data,
 	       uint64_t num_bytes)
 {
+	dbg(8, "filling error buffer of len %" PRIu64 " at off %" PRIu64
+	    " with %" PRIu64 " bytes\n",
+	    op->rsp.err.len, op->rsp.err.off, num_bytes);
 	if (op->rsp.err.off + num_bytes > op->rsp.err.len) {
 		dbg(0, "fatal: error rsp buffer exceeded, "
 		       "len %" PRIu64 " off %" PRIu64 " io_sz %" PRIu64 "\n",
@@ -392,11 +396,13 @@ curl_write_cb(char *ptr,
 	uint64_t num_bytes = (size * nmemb);
 	int ret;
 
+	op->rsp.write_cbs++;
+	dbg(9, "curl write cb %" PRIu64 "\n", op->rsp.write_cbs);
 	/* alloc content buffer on the first callback, or if clen is unknown */
-	if ((op->rsp.write_cbs++ == 0) || (op->rsp.clen_recvd == false)) {
+	if ((op->rsp.write_cbs == 1) || (op->rsp.clen_recvd == false)) {
 		CURLcode cc;
 		int ret_code;
-		/* should already have the http response code by the time we get here */
+		/* should already have the http response code */
 		cc = curl_easy_getinfo(op->econn->curl, CURLINFO_RESPONSE_CODE,
 				       &ret_code);
 		if (cc != CURLE_OK) {
