@@ -230,15 +230,18 @@ curl_write_alloc_err(struct op *op,
 	struct op_rsp_error *err = &op->rsp.err;
 
 	if ((err->buf != NULL) && (cb_nbytes > (err->len - err->off))) {
-		dbg(6, "error buffer already alloced but not big enough\n");
-			err->buf = realloc(err->buf, err->len + cb_nbytes);
-			if (err->buf == NULL) {
-				/* leaks */
-				return -ENOMEM;
-			}
-			err->len = err->len + cb_nbytes;
+		uint8_t *buf;
+		dbg(6, "extending error buffer by %" PRIu64 " bytes\n",
+		    cb_nbytes);
+		buf = realloc(err->buf, err->len + cb_nbytes);
+		if (buf == NULL) {
+			return -ENOMEM;
+		}
+		err->buf = buf;
+		err->len += cb_nbytes;
 	} else if (err->buf == NULL) {
 		uint64_t sz = (op->rsp.clen_recvd ? op->rsp.clen : cb_nbytes);
+		dbg(9, "allocating new %" PRIu64 " byte error buffer\n", sz);
 		err->buf = malloc(sz);
 		if (err->buf == NULL) {
 			return -ENOMEM;
