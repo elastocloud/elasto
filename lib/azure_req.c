@@ -166,12 +166,13 @@ az_req_common_hdr_fill(struct op *op, bool mgmt)
 	/* different to the version in management */
 	ret = op_req_hdr_add(op, "x-ms-version", "2012-02-12");
 	if (ret < 0) {
-		goto err_out;
+		goto err_hdrs_free;
 	}
 	return 0;
 
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
 err_out:
-	/* the slist is leaked on failure here */
 	return ret;
 }
 
@@ -533,14 +534,19 @@ az_req_acc_create_hdr_fill(struct op *op)
 
 	ret = az_req_common_hdr_fill(op, true);
 	if (ret < 0) {
-		return ret;
+		goto err_out;
 	}
 	ret = op_req_hdr_add(op,
 			"Content-Type", "application/xml; charset=utf-8");
 	if (ret < 0) {
-		return ret;
+		goto err_hdrs_free;
 	}
 	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
 }
 
 /*
@@ -1435,31 +1441,32 @@ az_req_blob_put_hdr_fill(struct az_req_blob_put *blob_put_req,
 		char *hdr_str;
 		ret = op_req_hdr_add(op, "x-ms-blob-type", "PageBlob");
 		if (ret < 0) {
-			goto err_out;
+			goto err_hdrs_free;
 		}
 		ret = asprintf(&hdr_str, "%" PRIu64,
 			       blob_put_req->pg_len);
 		if (ret < 0) {
 			ret = -ENOMEM;
-			goto err_out;
+			goto err_hdrs_free;
 		}
 		ret = op_req_hdr_add(op, "x-ms-blob-content-length",
 					   hdr_str);
 		free(hdr_str);
 		if (ret < 0) {
-			goto err_out;
+			goto err_hdrs_free;
 		}
 	} else {
 		ret = op_req_hdr_add(op, "x-ms-blob-type", "BlockBlob");
 		if (ret < 0) {
-			goto err_out;
+			goto err_hdrs_free;
 		}
 	}
 
 	return 0;
 
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
 err_out:
-	/* the slist is leaked on failure here */
 	return ret;
 }
 
@@ -1588,12 +1595,12 @@ az_req_blob_get_hdr_fill(struct az_req_blob_get *blob_get_req,
 			       (blob_get_req->off + blob_get_req->len - 1));
 		if (ret < 0) {
 			ret = -ENOMEM;
-			goto err_out;
+			goto err_hdrs_free;
 		}
 		ret = op_req_hdr_add(op, "x-ms-range", hdr_str);
 		free(hdr_str);
 		if (ret < 0) {
-			goto err_out;
+			goto err_hdrs_free;
 		}
 	}
 
@@ -1603,13 +1610,14 @@ az_req_blob_get_hdr_fill(struct az_req_blob_get *blob_get_req,
 		ret = op_req_hdr_add(op, "x-ms-blob-type", "BlockBlob");
 	}
 	if (ret < 0) {
-		goto err_out;
+		goto err_hdrs_free;
 	}
 
 	return 0;
 
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
 err_out:
-	/* the slist is leaked on failure here */
 	return ret;
 }
 
@@ -1745,30 +1753,31 @@ az_req_page_put_hdr_fill(struct az_req_page_put *page_put_req,
 		       (page_put_req->off + page_put_req->len - 1));
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_out;
+		goto err_hdrs_free;
 	}
 	ret = op_req_hdr_add(op, "x-ms-range", hdr_str);
 	free(hdr_str);
 	if (ret < 0) {
-		goto err_out;
+		goto err_hdrs_free;
 	}
 
 	if (page_put_req->clear_data) {
 		ret = op_req_hdr_add(op, "x-ms-page-write", "clear");
 		if (ret < 0) {
-			goto err_out;
+			goto err_hdrs_free;
 		}
 	} else {
 		ret = op_req_hdr_add(op, "x-ms-page-write", "update");
 		if (ret < 0) {
-			goto err_out;
+			goto err_hdrs_free;
 		}
 	}
 
 	return 0;
 
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
 err_out:
-	/* the slist is leaked on failure here */
 	return ret;
 }
 /*
@@ -2549,12 +2558,14 @@ az_req_blob_cp_hdr_fill(struct az_req_blob_cp *blob_cp_req,
 	ret = op_req_hdr_add(op, "x-ms-copy-source", hdr_str);
 	free(hdr_str);
 	if (ret < 0) {
-		goto err_out;
+		goto err_hdrs_free;
 	}
 	/* common headers and signature added later */
 
 	return 0;
 
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
 err_out:
 	return ret;
 }
@@ -2889,31 +2900,33 @@ az_req_blob_lease_hdr_fill(struct az_req_blob_lease *blob_lease_req,
 
 	ret = op_req_hdr_add(op, "x-ms-lease-action", action_str);
 	if (ret < 0) {
-		goto err_out;
+		goto err_hdrs_free;
 	}
 
 	if (blob_lease_req->action == AOP_LEASE_ACTION_ACQUIRE) {
 		char *hdr_str;
 		ret = asprintf(&hdr_str, "%d", blob_lease_req->duration);
 		if (ret < 0) {
-			goto err_out;
+			goto err_hdrs_free;
 		}
 		ret = op_req_hdr_add(op, "x-ms-lease-duration", hdr_str);
 		free(hdr_str);
 		if (ret < 0) {
-			goto err_out;
+			goto err_hdrs_free;
 		}
 	}
 
 	if (blob_lease_req->lid != NULL) {
 		ret = op_req_hdr_add(op, "x-ms-lease-id", blob_lease_req->lid);
 		if (ret < 0) {
-			goto err_out;
+			goto err_hdrs_free;
 		}
 	}
 
 	return 0;
 
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
 err_out:
 	return ret;
 }

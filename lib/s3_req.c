@@ -629,12 +629,14 @@ s3_req_bkt_create(const char *bkt_name,
 
 	ret = s3_op_bkt_create_fill_body(location, &op->req.data);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_hdrs_free;
 	}
 
 	*_op = op;
 	return 0;
 
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
 err_upath_free:
 	free(op->url_path);
 err_uhost_free:
@@ -973,15 +975,18 @@ s3_req_obj_cp_hdr_fill(struct s3_req_obj_cp *obj_cp_req,
 		       obj_cp_req->src.obj_name);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_out;
+		goto err_hdrs_free;
 	}
 	ret = op_req_hdr_add(op, "x-amz-copy-source", hdr_str);
 	free(hdr_str);
 	if (ret < 0) {
-		goto err_out;
+		goto err_hdrs_free;
 	}
 
-	ret = 0;
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
 err_out:
 	return ret;
 }
@@ -1335,7 +1340,7 @@ s3_req_mp_done(const char *bkt,
 
 	ret = s3_op_mp_done_fill_body(parts, &op->req.data);
 	if (ret < 0) {
-		goto err_hdr_free;
+		goto err_hdrs_free;
 	}
 	/* XXX should copy list */
 	mp_done_req->parts = parts;
@@ -1343,7 +1348,7 @@ s3_req_mp_done(const char *bkt,
 	*_op = op;
 	return 0;
 
-err_hdr_free:
+err_hdrs_free:
 	op_hdrs_free(&op->req.hdrs);
 err_upath_free:
 	free(op->url_path);
