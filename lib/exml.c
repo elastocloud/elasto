@@ -19,6 +19,7 @@
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <search.h>
+#include <inttypes.h>
 
 #include <expat.h>
 
@@ -263,7 +264,8 @@ exml_slurp(const char *buf,
 	int ret;
 	struct xml_doc *xdoc;
 
-	dbg(10, "slurping data: %s\n", (const char *)buf);
+	dbg(10, "slurping %" PRIu64 " bytes data: %*s\n",
+	    buf_len, (int)buf_len, (const char *)buf);
 
 	xdoc = malloc(sizeof(*xdoc));
 	if (xdoc == NULL) {
