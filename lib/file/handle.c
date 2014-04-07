@@ -112,7 +112,14 @@ elasto_fh_free(struct elasto_fh *fh)
 struct elasto_fh_priv *
 elasto_fh_validate(struct elasto_fh *fh)
 {
-	struct elasto_fh_priv *fh_priv = fh->priv;
+	struct elasto_fh_priv *fh_priv;
+
+	if (fh == NULL) {
+		dbg(0, "invalid NULL handle\n");
+		return NULL;
+	}
+
+	fh_priv = fh->priv;
 
 	if (fh_priv->type != ELASTO_FILE_AZURE) {
 		dbg(0, "handle has invalid type %x\n", fh_priv->type);
