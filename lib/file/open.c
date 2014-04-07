@@ -325,6 +325,15 @@ elasto_fclose(struct elasto_fh *fh)
 		return -EINVAL;
 	}
 
+	if (fh_priv->lease_state == ELASTO_FH_LEASE_ACQUIRED) {
+		dbg(4, "cleaning up lease %s on close\n", fh_priv->az.lid);
+		int ret = elasto_flease_release(fh);
+		if (ret < 0) {
+			dbg(0, "failed to release lease %s on close: %s\n",
+			    fh_priv->az.lid, strerror(ret));
+		}
+	}
+
 	elasto_fpath_az_free(&fh_priv->az.path);
 	elasto_fh_free(fh);
 
