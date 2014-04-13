@@ -247,6 +247,7 @@ err_out:
 int
 elasto_fopen(const struct elasto_fauth *auth,
 	     const char *path,
+	     uint64_t flags,
 	     struct elasto_fh **_fh)
 {
 	int ret;
@@ -286,7 +287,24 @@ elasto_fopen(const struct elasto_fauth *auth,
 	}
 
 	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	if (ret < 0) {
+	if ((ret < 0) && op_rsp_error_match(op, 404)
+					&& (flags & ELASTO_FOPEN_CREATE)) {
+		/* not found, create it */
+		op_free(op);
+		ret = az_req_blob_put(fh_priv->az.path.acc, fh_priv->az.path.ctnr,
+				      fh_priv->az.path.blob, NULL, 0,
+				      &op);
+		if (ret < 0) {
+			goto err_path_free;
+		}
+
+		ret = elasto_fop_send_recv(fh_priv->conn, op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+		fh_priv->len = 0;
+		goto done;
+	} else if (ret < 0) {
 		goto err_op_free;
 	}
 
@@ -302,6 +320,7 @@ elasto_fopen(const struct elasto_fauth *auth,
 	}
 	fh_priv->len = blob_prop_get_rsp->len;
 
+done:
 	op_free(op);
 	*_fh = fh;
 	return 0;

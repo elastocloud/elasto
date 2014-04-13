@@ -103,6 +103,7 @@ cm_file_create(void **state)
 
 	ret = elasto_fopen(&auth,
 			   path,
+			   0,
 			   &fh);
 	assert_false(ret < 0);
 

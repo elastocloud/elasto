@@ -46,9 +46,14 @@ elasto_fcreate(const struct elasto_fauth *auth,
 	       uint64_t size,
 	       struct elasto_fh **_fh);
 
+enum elasto_fopen_flags {
+	ELASTO_FOPEN_CREATE = 0x0001,
+};
+
 int
 elasto_fopen(const struct elasto_fauth *auth,
 	     const char *path,
+	     uint64_t flags,
 	     struct elasto_fh **_fh);
 
 int
