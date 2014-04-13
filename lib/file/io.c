@@ -121,3 +121,40 @@ err_op_free:
 err_out:
 	return ret;
 }
+
+int
+elasto_ftruncate(struct elasto_fh *fh,
+		 uint64_t len)
+{
+	int ret;
+	struct op *op;
+	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
+	if (fh_priv == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	dbg(3, "truncating to len %" PRIu64 "\n", len);
+
+	ret = az_req_blob_prop_set(fh_priv->az.path.acc,
+				   fh_priv->az.path.ctnr,
+				   fh_priv->az.path.blob,
+				   true,	/* is_page */
+				   len,
+				   &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(fh_priv->conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+	ret = 0;
+	fh_priv->len = len;
+
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}

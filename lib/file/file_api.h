@@ -69,6 +69,10 @@ elasto_fread(struct elasto_fh *fh,
 	     struct elasto_data *dest);
 
 int
+elasto_ftruncate(struct elasto_fh *fh,
+		 uint64_t len);
+
+int
 elasto_fclose(struct elasto_fh *fh);
 
 int
