@@ -216,7 +216,8 @@ op_rsp_error_free(struct op_rsp_error *err)
  * specific yet.
  */
 bool
-op_rsp_is_error(int opcode, int err_code)
+op_rsp_is_error(int opcode,
+		int err_code)
 {
 	if (err_code == 0) {
 		return false;
@@ -224,6 +225,17 @@ op_rsp_is_error(int opcode, int err_code)
 		return false;
 	}
 	return true;
+}
+
+bool
+op_rsp_error_match(struct op *op,
+		   int err_code)
+{
+	if ((op->rsp.is_error) && (op->rsp.err_code == err_code)) {
+		return true;
+	}
+
+	return false;
 }
 
 static void

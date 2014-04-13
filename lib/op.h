@@ -114,6 +114,11 @@ bool
 op_rsp_is_error(int opcode,
 		int err_code);
 
+
+bool
+op_rsp_error_match(struct op *op,
+		   int err_code);
+
 int
 op_req_redirect(struct op *op);
 
