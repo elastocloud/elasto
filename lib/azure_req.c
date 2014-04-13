@@ -2847,6 +2847,135 @@ err_out:
 }
 
 static void
+az_req_blob_prop_set_free(struct az_req_blob_prop_set *blob_prop_set_req)
+{
+	free(blob_prop_set_req->account);
+	free(blob_prop_set_req->container);
+	free(blob_prop_set_req->bname);
+}
+
+static int
+az_req_blob_prop_set_hdr_fill(struct az_req_blob_prop_set *blob_prop_set_req,
+			      struct op *op)
+{
+	int ret;
+	char *hdr_str;
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (blob_prop_set_req->is_page) {
+		ret = asprintf(&hdr_str, "%" PRIu64, blob_prop_set_req->len);
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_hdrs_free;
+		}
+		ret = op_req_hdr_add(op, "x-ms-blob-content-length", hdr_str);
+		free(hdr_str);
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
+/* page blob truncated to @len if @is_page is set, otherwise ignored */
+int
+az_req_blob_prop_set(const char *account,
+		     const char *container,
+		     const char *bname,
+		     bool is_page,
+		     uint64_t len,
+		     struct op **_op)
+{
+	int ret;
+	struct az_ebo *ebo;
+	struct op *op;
+	struct az_req_blob_prop_set *blob_prop_set_req;
+
+	if (!is_page && (len != 0)) {
+		dbg(0, "non-zero len for block blob invalid\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_ebo_init(AOP_BLOB_PROP_SET, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	blob_prop_set_req = &ebo->req.blob_prop_set;
+
+	blob_prop_set_req->account = strdup(account);
+	if (blob_prop_set_req->account == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	blob_prop_set_req->container = strdup(container);
+	if (blob_prop_set_req->container == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	blob_prop_set_req->bname = strdup(bname);
+	if (blob_prop_set_req->bname == NULL) {
+		ret = -ENOMEM;
+		goto err_ctnr_free;
+	}
+
+	blob_prop_set_req->is_page = is_page;
+	blob_prop_set_req->len = len;
+
+	op->method = REQ_METHOD_PUT;
+	ret = asprintf(&op->url_host,
+		       "%s.blob.core.windows.net", account);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_bname_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s?comp=properties",
+		       container, bname);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_req_blob_prop_set_hdr_fill(blob_prop_set_req, op);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	/* the connection layer must sign this request before sending */
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_bname_free:
+	free(blob_prop_set_req->bname);
+err_ctnr_free:
+	free(blob_prop_set_req->container);
+err_acc_free:
+	free(blob_prop_set_req->account);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
 az_req_blob_lease_free(struct az_req_blob_lease *blob_lease_req)
 {
 	free(blob_lease_req->acc);
@@ -3321,6 +3450,9 @@ az_req_free(struct op *op)
 	case AOP_BLOB_PROP_GET:
 		az_req_blob_prop_get_free(&ebo->req.blob_prop_get);
 		break;
+	case AOP_BLOB_PROP_SET:
+		az_req_blob_prop_set_free(&ebo->req.blob_prop_set);
+		break;
 	case AOP_BLOB_LEASE:
 		az_req_blob_lease_free(&ebo->req.blob_lease);
 		break;
@@ -3374,6 +3506,7 @@ az_rsp_free(struct op *op)
 	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
 	case AOP_BLOB_CP:
+	case AOP_BLOB_PROP_SET:
 		/* nothing to do */
 		break;
 	default:
@@ -3436,6 +3569,7 @@ az_rsp_process(struct op *op)
 	case AOP_BLOCK_LIST_PUT:
 	case AOP_BLOB_DEL:
 	case AOP_BLOB_CP:
+	case AOP_BLOB_PROP_SET:
 		/* nothing to do */
 		ret = 0;
 		break;

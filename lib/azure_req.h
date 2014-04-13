@@ -32,6 +32,7 @@ enum az_opcode {
 	AOP_BLOB_DEL,
 	AOP_BLOB_CP,
 	AOP_BLOB_PROP_GET,
+	AOP_BLOB_PROP_SET,
 	AOP_BLOB_LEASE,
 	AOP_STATUS_GET,
 };
@@ -246,6 +247,14 @@ struct az_rsp_blob_prop_get {
 	enum azure_cp_status cp_status;
 };
 
+struct az_req_blob_prop_set {
+	char *account;
+	char *container;
+	char *bname;
+	bool is_page;
+	uint64_t len;
+};
+
 enum az_lease_action {
 	AOP_LEASE_ACTION_ACQUIRE,
 	AOP_LEASE_ACTION_RENEW,
@@ -314,6 +323,7 @@ struct az_req {
 		struct az_req_blob_del blob_del;
 		struct az_req_blob_cp blob_cp;
 		struct az_req_blob_prop_get blob_prop_get;
+		struct az_req_blob_prop_set blob_prop_set;
 		struct az_req_blob_lease blob_lease;
 		struct az_req_status_get sts_get;
 	};
@@ -453,6 +463,14 @@ int
 az_req_blob_prop_get(const char *account,
 		     const char *container,
 		     const char *bname,
+		     struct op **_op);
+
+int
+az_req_blob_prop_set(const char *account,
+		     const char *container,
+		     const char *bname,
+		     bool is_page,
+		     uint64_t len,
 		     struct op **_op);
 
 int
