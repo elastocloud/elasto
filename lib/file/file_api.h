@@ -82,4 +82,13 @@ elasto_flease_acquire(struct elasto_fh *fh,
 int
 elasto_flease_release(struct elasto_fh *fh);
 
+struct elasto_fstat {
+	uint64_t size;		/* total size, in bytes */
+	uint64_t blksize;	/* blocksize for file system I/O */
+};
+
+int
+elasto_fstat(struct elasto_fh *fh,
+	     struct elasto_fstat *fstat);
+
 #endif /* _ELASTO_FILE_H_ */
