@@ -47,7 +47,8 @@ elasto_fcreate(const struct elasto_fauth *auth,
 	       struct elasto_fh **_fh);
 
 enum elasto_fopen_flags {
-	ELASTO_FOPEN_CREATE = 0x0001,
+	ELASTO_FOPEN_CREATE	= 0x0001,
+	ELASTO_FOPEN_EXCL	= 0x0002,
 };
 
 int

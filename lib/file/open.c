@@ -287,7 +287,12 @@ elasto_fopen(const struct elasto_fauth *auth,
 	}
 
 	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	if ((ret < 0) && op_rsp_error_match(op, 404)
+	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
+					&& (flags & ELASTO_FOPEN_EXCL)) {
+		dbg(1, "path already exists, but exclusive create specified\n");
+		ret = -EEXIST;
+		goto err_op_free;
+	} else if ((ret < 0) && op_rsp_error_match(op, 404)
 					&& (flags & ELASTO_FOPEN_CREATE)) {
 		/* not found, create it */
 		op_free(op);
