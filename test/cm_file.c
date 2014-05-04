@@ -92,10 +92,10 @@ cm_file_create(void **state)
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fcreate(&auth,
-			     path,
-			     (1024 * 1024 * 1024),
-			     &fh);
+	ret = elasto_fopen(&auth,
+			   path,
+			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
+			   &fh);
 	assert_false(ret < 0);
 
 	ret = elasto_fclose(fh);
@@ -103,7 +103,22 @@ cm_file_create(void **state)
 
 	ret = elasto_fopen(&auth,
 			   path,
+			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
+			   &fh);
+	assert_int_equal(ret, -EEXIST);
+
+	ret = elasto_fopen(&auth,
+			   path,
 			   0,
+			   &fh);
+	assert_false(ret < 0);
+
+	ret = elasto_fclose(fh);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_CREATE,
 			   &fh);
 	assert_false(ret < 0);
 
@@ -153,10 +168,14 @@ cm_file_io(void **state)
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fcreate(&auth,
-			     path,
-			     (1024 * 1024 * 1024),
-			     &fh);
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_CREATE,
+			   &fh);
+	assert_false(ret < 0);
+
+	/* must truncate to size writing to the range */
+	ret = elasto_ftruncate(fh, (1024 * 1024 * 1024));
 	assert_false(ret < 0);
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf));
@@ -202,11 +221,11 @@ cm_file_lease_basic(void **state)
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fcreate(&auth,
-			     path,
-			     (1024 * 1024 * 1024),
-			     &fh);
-	assert_int_equal(ret, 0);
+	ret = elasto_fopen(&auth,
+			   path,
+			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
+			   &fh);
+	assert_false(ret < 0);
 
 	ret = elasto_flease_acquire(fh, -1);
 	assert_int_equal(ret, 0);
