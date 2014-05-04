@@ -294,7 +294,7 @@ elasto_fopen(const struct elasto_fauth *auth,
 		goto err_op_free;
 	} else if ((ret < 0) && op_rsp_error_match(op, 404)
 					&& (flags & ELASTO_FOPEN_CREATE)) {
-		/* not found, create it */
+		dbg(4, "path not found, creating\n");
 		op_free(op);
 		ret = az_req_blob_put(fh_priv->az.path.acc, fh_priv->az.path.ctnr,
 				      fh_priv->az.path.blob, NULL, 0,
