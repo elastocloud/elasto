@@ -2772,8 +2772,8 @@ az_rsp_blob_prop_get_process(struct op *op,
 
 	assert(op->opcode == AOP_BLOB_PROP_GET);
 	ret = op_hdr_val_lookup(&op->rsp.hdrs,
-				      "x-ms-blob-type",
-				      &hdr_val);
+				"x-ms-blob-type",
+				&hdr_val);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -2790,22 +2790,22 @@ az_rsp_blob_prop_get_process(struct op *op,
 	}
 
 	ret = op_hdr_u64_val_lookup(&op->rsp.hdrs,
-					  "Content-Length",
-					  &blob_prop_get_rsp->len);
+				    "Content-Length",
+				    &blob_prop_get_rsp->len);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	ret = op_hdr_val_lookup(&op->rsp.hdrs,
-				      "Content-Type",
-				      &blob_prop_get_rsp->content_type);
+				"Content-Type",
+				&blob_prop_get_rsp->content_type);
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_out;
 	}
 
 	ret = op_hdr_val_lookup(&op->rsp.hdrs,
-				      "x-ms-copy-id",
-				      &blob_prop_get_rsp->cp_id);
+				"x-ms-copy-id",
+				&blob_prop_get_rsp->cp_id);
 	if (ret == -ENOENT) {
 		/* cp ID only present if blob was a cp destination */
 		goto done;
@@ -2814,8 +2814,8 @@ az_rsp_blob_prop_get_process(struct op *op,
 	}
 
 	ret = op_hdr_val_lookup(&op->rsp.hdrs,
-				      "x-ms-copy-status",
-				      &hdr_val);
+				"x-ms-copy-status",
+				&hdr_val);
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_cid_free;
 	} else if (ret == 0) {
