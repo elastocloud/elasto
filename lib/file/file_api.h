@@ -92,4 +92,7 @@ int
 elasto_fstat(struct elasto_fh *fh,
 	     struct elasto_fstat *fstat);
 
+int
+elasto_fdebug(int level);
+
 #endif /* _ELASTO_FILE_H_ */

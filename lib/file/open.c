@@ -363,3 +363,12 @@ elasto_fclose(struct elasto_fh *fh)
 
 	return 0;
 }
+
+int
+elasto_fdebug(int level)
+{
+	int ret = dbg_level_get();
+	dbg_level_set(level);
+
+	return ret;
+}
