@@ -261,20 +261,28 @@ elasto_fopen(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
+	ret = elasto_conn_subsys_init();
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	ret = elasto_fh_init(auth->az.ps_path, auth->insecure_http, &fh);
 	if (ret < 0) {
+		dbg(0, "failed to initialize elasto fh\n");
 		goto err_out;
 	}
 	fh_priv = fh->priv;
 
 	ret = elasto_fpath_az_parse(path, &fh_priv->az.path);
 	if (ret < 0) {
+		dbg(0, "failed parse elasto path\n");
 		goto err_fhconn_free;
 	}
 
 	ret = elasto_fsign_conn_setup(fh_priv->conn, fh_priv->az.sub_id,
 				      fh_priv->az.path.acc);
 	if (ret < 0) {
+		dbg(0, "signing setup failed\n");
 		goto err_path_free;
 	}
 
