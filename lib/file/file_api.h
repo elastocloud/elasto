@@ -40,12 +40,6 @@ int
 elasto_frmdir(const struct elasto_fauth *auth,
 	      const char *path);
 
-int
-elasto_fcreate(const struct elasto_fauth *auth,
-	       const char *path,
-	       uint64_t size,
-	       struct elasto_fh **_fh);
-
 enum elasto_fopen_flags {
 	ELASTO_FOPEN_CREATE	= 0x0001,
 	ELASTO_FOPEN_EXCL	= 0x0002,
