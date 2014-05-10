@@ -238,6 +238,55 @@ cm_file_lease_basic(void **state)
 }
 
 static void
+cm_file_lease_multi(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct elasto_fh *fh1;
+	struct elasto_fh *fh2;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+
+	auth.type = ELASTO_FILE_AZURE;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d/lease_multi_test",
+		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
+			   &fh1);
+	assert_false(ret < 0);
+
+	ret = elasto_flease_acquire(fh1, -1);
+	assert_int_equal(ret, 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   0,
+			   &fh2);
+	assert_false(ret < 0);
+
+	ret = elasto_flease_acquire(fh2, -1);
+	assert_true(ret < 0);
+
+	ret = elasto_flease_release(fh1);
+	assert_int_equal(ret, 0);
+
+	ret = elasto_flease_acquire(fh2, -1);
+	assert_int_equal(ret, 0);
+
+	ret = elasto_fclose(fh1);
+	assert_int_equal(ret, 0);
+
+	ret = elasto_fclose(fh2);
+	assert_int_equal(ret, 0);
+}
+
+static void
 cm_file_truncate_basic(void **state)
 {
 	int ret;
@@ -290,6 +339,7 @@ static const UnitTest cm_file_tests[] = {
 	unit_test_setup_teardown(cm_file_create, cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_io, cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_lease_basic, cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_lease_multi, cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_truncate_basic, cm_file_mkdir, cm_file_rmdir),
 };
 
