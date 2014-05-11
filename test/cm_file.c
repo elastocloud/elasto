@@ -211,6 +211,7 @@ cm_file_lease_basic(void **state)
 	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
+	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
 	auth.type = ELASTO_FILE_AZURE;
@@ -227,11 +228,23 @@ cm_file_lease_basic(void **state)
 			   &fh);
 	assert_false(ret < 0);
 
+	ret = elasto_fstat(fh, &fstat);
+	assert_int_equal(ret, 0);
+	assert_true(fstat.lease_status == ELASTO_FLEASE_UNLOCKED);
+
 	ret = elasto_flease_acquire(fh, -1);
 	assert_int_equal(ret, 0);
 
+	ret = elasto_fstat(fh, &fstat);
+	assert_int_equal(ret, 0);
+	assert_true(fstat.lease_status == ELASTO_FLEASE_LOCKED);
+
 	ret = elasto_flease_release(fh);
 	assert_int_equal(ret, 0);
+
+	ret = elasto_fstat(fh, &fstat);
+	assert_int_equal(ret, 0);
+	assert_true(fstat.lease_status == ELASTO_FLEASE_UNLOCKED);
 
 	ret = elasto_fclose(fh);
 	assert_int_equal(ret, 0);
@@ -245,6 +258,7 @@ cm_file_lease_multi(void **state)
 	char *path = NULL;
 	struct elasto_fh *fh1;
 	struct elasto_fh *fh2;
+	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
 	auth.type = ELASTO_FILE_AZURE;
@@ -279,10 +293,19 @@ cm_file_lease_multi(void **state)
 	ret = elasto_flease_acquire(fh2, -1);
 	assert_int_equal(ret, 0);
 
-	ret = elasto_fclose(fh1);
+	ret = elasto_fstat(fh1, &fstat);
 	assert_int_equal(ret, 0);
+	assert_true(fstat.lease_status == ELASTO_FLEASE_LOCKED);
 
 	ret = elasto_fclose(fh2);
+	assert_int_equal(ret, 0);
+
+	/* close should have dropped lock */
+	ret = elasto_fstat(fh1, &fstat);
+	assert_int_equal(ret, 0);
+	assert_true(fstat.lease_status == ELASTO_FLEASE_UNLOCKED);
+
+	ret = elasto_fclose(fh1);
 	assert_int_equal(ret, 0);
 }
 
@@ -294,6 +317,7 @@ cm_file_lease_break(void **state)
 	char *path = NULL;
 	struct elasto_fh *fh1;
 	struct elasto_fh *fh2;
+	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
 	auth.type = ELASTO_FILE_AZURE;
@@ -322,8 +346,16 @@ cm_file_lease_break(void **state)
 	ret = elasto_flease_acquire(fh2, -1);
 	assert_true(ret < 0);
 
+	ret = elasto_fstat(fh2, &fstat);
+	assert_int_equal(ret, 0);
+	assert_true(fstat.lease_status == ELASTO_FLEASE_LOCKED);
+
 	ret = elasto_flease_break(fh2);
 	assert_int_equal(ret, 0);
+
+	ret = elasto_fstat(fh2, &fstat);
+	assert_int_equal(ret, 0);
+	assert_true(fstat.lease_status == ELASTO_FLEASE_UNLOCKED);
 
 	ret = elasto_flease_acquire(fh2, -1);
 	assert_int_equal(ret, 0);
