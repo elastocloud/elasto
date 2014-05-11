@@ -2763,6 +2763,80 @@ err_out:
 	return ret;
 }
 
+static const struct {
+	const char *state_str;
+	enum az_lease_state state;
+} az_rsp_blob_prop_lease_state_map[] = {
+	{"available", AOP_LEASE_STATE_AVAILABLE},
+	{"leased", AOP_LEASE_STATE_LEASED},
+	{"expired", AOP_LEASE_STATE_EXPIRED},
+	{"breaking", AOP_LEASE_STATE_BREAKING},
+	{"broken", AOP_LEASE_STATE_BROKEN},
+};
+int
+az_rsp_blob_prop_lease_state(const char *state_str,
+			     enum az_lease_state *_state)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(az_rsp_blob_prop_lease_state_map); i++) {
+		if (!strcmp(state_str,
+			    az_rsp_blob_prop_lease_state_map[i].state_str)) {
+			*_state = az_rsp_blob_prop_lease_state_map[i].state;
+			return 0;
+		}
+	}
+	dbg(1, "invalid lease state string: %s\n", state_str);
+	return -EINVAL;
+}
+
+static const struct {
+	const char *status_str;
+	enum az_lease_status status;
+} az_rsp_blob_prop_lease_status_map[] = {
+	{"locked", AOP_LEASE_STATUS_LOCKED},
+	{"unlocked", AOP_LEASE_STATUS_UNLOCKED},
+};
+int
+az_rsp_blob_prop_lease_status(const char *status_str,
+			      enum az_lease_status *_status)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(az_rsp_blob_prop_lease_status_map); i++) {
+		if (!strcmp(status_str,
+			    az_rsp_blob_prop_lease_status_map[i].status_str)) {
+			*_status = az_rsp_blob_prop_lease_status_map[i].status;
+			return 0;
+		}
+	}
+	dbg(1, "invalid lease status string: %s\n", status_str);
+	return -EINVAL;
+}
+
+static const struct {
+	const char *status_str;
+	enum az_cp_status status;
+} az_rsp_blob_prop_cp_status_map[] = {
+	{"pending", AOP_CP_STATUS_PENDING},
+	{"success", AOP_CP_STATUS_SUCCESS},
+	{"aborted", AOP_CP_STATUS_ABORTED},
+	{"failed", AOP_CP_STATUS_FAILED},
+};
+int
+az_rsp_blob_prop_cp_status(const char *status_str,
+			   enum az_cp_status *_status)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(az_rsp_blob_prop_cp_status_map); i++) {
+		if (!strcmp(status_str,
+			    az_rsp_blob_prop_cp_status_map[i].status_str)) {
+			*_status = az_rsp_blob_prop_cp_status_map[i].status;
+			return 0;
+		}
+	}
+	dbg(1, "invalid copy status string: %s\n", status_str);
+	return -EINVAL;
+}
+
 static int
 az_rsp_blob_prop_get_process(struct op *op,
 			     struct az_rsp_blob_prop_get *blob_prop_get_rsp)
@@ -2804,6 +2878,34 @@ az_rsp_blob_prop_get_process(struct op *op,
 	}
 
 	ret = op_hdr_val_lookup(&op->rsp.hdrs,
+				"x-ms-lease-state",
+				&hdr_val);
+	if (ret < 0) {
+		goto err_ctype_free;
+	}
+
+	ret = az_rsp_blob_prop_lease_state(hdr_val,
+					   &blob_prop_get_rsp->lease_state);
+	free(hdr_val);
+	if (ret < 0) {
+		goto err_ctype_free;
+	}
+
+	ret = op_hdr_val_lookup(&op->rsp.hdrs,
+				"x-ms-lease-status",
+				&hdr_val);
+	if (ret < 0) {
+		goto err_ctype_free;
+	}
+
+	ret = az_rsp_blob_prop_lease_status(hdr_val,
+					    &blob_prop_get_rsp->lease_status);
+	free(hdr_val);
+	if (ret < 0) {
+		goto err_ctype_free;
+	}
+
+	ret = op_hdr_val_lookup(&op->rsp.hdrs,
 				"x-ms-copy-id",
 				&blob_prop_get_rsp->cp_id);
 	if (ret == -ENOENT) {
@@ -2819,21 +2921,12 @@ az_rsp_blob_prop_get_process(struct op *op,
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_cid_free;
 	} else if (ret == 0) {
-		if (!strcmp(hdr_val, "pending")) {
-			blob_prop_get_rsp->cp_status = AOP_CP_STATUS_PENDING;
-		} else if (!strcmp(hdr_val, "success")) {
-			blob_prop_get_rsp->cp_status = AOP_CP_STATUS_SUCCESS;
-		} else if (!strcmp(hdr_val, "aborted")) {
-			blob_prop_get_rsp->cp_status = AOP_CP_STATUS_ABORTED;
-		} else if (!strcmp(hdr_val, "failed")) {
-			blob_prop_get_rsp->cp_status = AOP_CP_STATUS_FAILED;
-		} else {
-			dbg(0, "unknown blob cp status %s\n", hdr_val);
-			free(hdr_val);
-			ret = -EINVAL;
+		ret = az_rsp_blob_prop_cp_status(hdr_val,
+						 &blob_prop_get_rsp->cp_status);
+		free(hdr_val);
+		if (ret < 0) {
 			goto err_cid_free;
 		}
-		free(hdr_val);
 	}
 done:
 	return 0;

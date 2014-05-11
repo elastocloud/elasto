@@ -228,7 +228,18 @@ struct az_req_blob_cp {
 	} dst;
 };
 
-enum azure_cp_status {
+enum az_lease_state {
+	AOP_LEASE_STATE_AVAILABLE,
+	AOP_LEASE_STATE_LEASED,
+	AOP_LEASE_STATE_EXPIRED,
+	AOP_LEASE_STATE_BREAKING,
+	AOP_LEASE_STATE_BROKEN,
+};
+enum az_lease_status {
+	AOP_LEASE_STATUS_LOCKED,
+	AOP_LEASE_STATUS_UNLOCKED,
+};
+enum az_cp_status {
 	AOP_CP_STATUS_PENDING,
 	AOP_CP_STATUS_SUCCESS,
 	AOP_CP_STATUS_ABORTED,
@@ -243,8 +254,10 @@ struct az_rsp_blob_prop_get {
 	bool is_page;
 	uint64_t len;
 	char *content_type;
+	enum az_lease_state lease_state;
+	enum az_lease_status lease_status;
 	char *cp_id;
-	enum azure_cp_status cp_status;
+	enum az_cp_status cp_status;
 };
 
 struct az_req_blob_prop_set {
