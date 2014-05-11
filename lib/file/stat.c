@@ -77,6 +77,11 @@ elasto_fstat(struct elasto_fh *fh,
 	fh_priv->len = blob_prop_get_rsp->len;
 	fstat->size = blob_prop_get_rsp->len;
 	fstat->blksize = 512;
+	if (blob_prop_get_rsp->lease_status == AOP_LEASE_STATUS_UNLOCKED) {
+		fstat->lease_status = ELASTO_FLEASE_UNLOCKED;
+	} else if (blob_prop_get_rsp->lease_status == AOP_LEASE_STATUS_LOCKED) {
+		fstat->lease_status = ELASTO_FLEASE_LOCKED;
+	}
 	ret = 0;
 
 err_op_free:

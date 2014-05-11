@@ -80,9 +80,21 @@ elasto_flease_break(struct elasto_fh *fh);
 int
 elasto_flease_release(struct elasto_fh *fh);
 
+enum elasto_flease_status {
+	ELASTO_FLEASE_UNKNOWN = 0,
+	ELASTO_FLEASE_LOCKED,
+	ELASTO_FLEASE_UNLOCKED,
+};
+
+/**
+ * @size: total size, in bytes
+ * @blksize: blocksize for file system I/O
+ * @lease_status: whether locked or unlocked
+ */
 struct elasto_fstat {
-	uint64_t size;		/* total size, in bytes */
-	uint64_t blksize;	/* blocksize for file system I/O */
+	uint64_t size;
+	uint64_t blksize;
+	enum elasto_flease_status lease_status;
 };
 
 int
