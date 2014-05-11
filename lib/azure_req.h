@@ -270,8 +270,10 @@ struct az_req_blob_lease {
 	char *lid;
 	char *lid_proposed;
 	enum az_lease_action action;
-	int32_t break_period;
-	int32_t duration;
+	union {
+		int32_t break_period;
+		int32_t duration;
+	};
 };
 
 struct az_rsp_blob_lease {

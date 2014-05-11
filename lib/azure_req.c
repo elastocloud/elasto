@@ -3021,6 +3021,7 @@ az_req_blob_lease_hdr_fill(struct az_req_blob_lease *blob_lease_req,
 			   struct op *op)
 {
 	int ret;
+	char *hdr_str;
 
 	ret = az_req_common_hdr_fill(op, false);
 	if (ret < 0) {
@@ -3033,12 +3034,21 @@ az_req_blob_lease_hdr_fill(struct az_req_blob_lease *blob_lease_req,
 	}
 
 	if (blob_lease_req->action == AOP_LEASE_ACTION_ACQUIRE) {
-		char *hdr_str;
 		ret = asprintf(&hdr_str, "%d", blob_lease_req->duration);
 		if (ret < 0) {
 			goto err_hdrs_free;
 		}
 		ret = op_req_hdr_add(op, "x-ms-lease-duration", hdr_str);
+		free(hdr_str);
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	} else if (blob_lease_req->action == AOP_LEASE_ACTION_BREAK) {
+		ret = asprintf(&hdr_str, "%d", blob_lease_req->break_period);
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+		ret = op_req_hdr_add(op, "x-ms-lease-break-period", hdr_str);
 		free(hdr_str);
 		if (ret < 0) {
 			goto err_hdrs_free;
@@ -3060,6 +3070,12 @@ err_out:
 	return ret;
 }
 
+/*
+ * @duration is the lease duration if @action=AOP_LEASE_ACTION_ACQUIRE.
+ * It can either be -1 (indefinite), or between 15 and 60 seconds.
+ * For @action=AOP_LEASE_ACTION_BREAK, @duration corresponds to the number of
+ * seconds that the lease should continue before it is broken.
+ */
 int
 az_req_blob_lease(const char *acc,
 		  const char *ctnr,
@@ -3082,10 +3098,18 @@ az_req_blob_lease(const char *acc,
 		goto err_out;
 	}
 
-	/* lease duration is only valid for AQUIRE, otherwise ignore it */
+	/* duration is only valid for AQUIRE and BREAK (as break period) */
 	if ((action == AOP_LEASE_ACTION_ACQUIRE)
 	 && ((duration != -1) && ((duration < 15) || (duration > 60)))) {
 		dbg(1, "invalid lease duration: %d\n", duration);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/* break period must be between 0 and 60 */
+	if ((action == AOP_LEASE_ACTION_BREAK)
+	 && ((duration < 0) || (duration > 60))) {
+		dbg(1, "invalid break period: %d\n", duration);
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -3156,7 +3180,14 @@ az_req_blob_lease(const char *acc,
 	}
 
 	blob_lease_req->action = action;
-	blob_lease_req->duration = duration;
+	if (action == AOP_LEASE_ACTION_ACQUIRE) {
+		blob_lease_req->duration = duration;
+	} else if (action == AOP_LEASE_ACTION_BREAK) {
+		blob_lease_req->break_period = duration;
+	} else if (duration != 0) {
+		dbg(0, "ignoring lease duration %d with action %s\n",
+		    duration, action_str);
+	}
 
 	op->method = REQ_METHOD_PUT;
 	op->url_https_only = false;
