@@ -198,6 +198,7 @@ elasto_fopen(const struct elasto_fauth *auth,
 
 	ret = elasto_conn_subsys_init();
 	if (ret < 0) {
+		dbg(0, "failed to initialize connection subsystem\n");
 		goto err_out;
 	}
 
@@ -297,7 +298,7 @@ elasto_fclose(struct elasto_fh *fh)
 		int ret = elasto_flease_release(fh);
 		if (ret < 0) {
 			dbg(0, "failed to release lease %s on close: %s\n",
-			    fh_priv->az.lid, strerror(ret));
+			    fh_priv->az.lid, strerror(-ret));
 		}
 	}
 
