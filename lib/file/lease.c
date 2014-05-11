@@ -108,6 +108,47 @@ err_out:
 }
 
 int
+elasto_flease_break(struct elasto_fh *fh)
+{
+	int ret;
+	struct op *op;
+	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
+	if (fh_priv == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_req_blob_lease(fh_priv->az.path.acc,
+				fh_priv->az.path.ctnr,
+				fh_priv->az.path.blob,
+				fh_priv->az.lid,
+				NULL,
+				AOP_LEASE_ACTION_BREAK,
+				0,
+				&op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(fh_priv->conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	dbg(3, "broke lease %s\n",
+	    (fh_priv->az.lid ? fh_priv->az.lid: "unknown"));
+	free(fh_priv->az.lid);
+	fh_priv->az.lid = NULL;
+	fh_priv->lease_state = ELASTO_FH_LEASE_NONE;
+
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+int
 elasto_flease_release(struct elasto_fh *fh)
 {
 	int ret;
