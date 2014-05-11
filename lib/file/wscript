@@ -5,6 +5,9 @@ def configure(conf):
 	conf.load('compiler_c')
 	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 
+def call_ldconfig(bld):
+	bld.exec_command('/sbin/ldconfig')
+
 def build(bld):
 	bld.shlib(source='''handle.c io.c open.c xmit.c dir.c lease.c stat.c''',
 		  target='elasto_file',
@@ -13,3 +16,5 @@ def build(bld):
 		  use=['elasto', 'ccan'],
 		  includes = '. .. ../../')
 	bld.install_as('${INCLUDEDIR}/elasto/file.h', 'file_api.h')
+	if bld.cmd == 'install':
+		bld.add_post_fun(call_ldconfig)
