@@ -205,7 +205,8 @@ cli_args_usage(const char *progname,
 "-k iam_creds:		Amazon IAM credentials file\n"
 "-d log_level:		Log debug messages (default: 0)\n"
 "-i			Insecure, use HTTP where possible "
-"(default: HTTPS only)\n\n",
+"(default: HTTPS only)\n"
+"-h history		CLI history file (default: ~/.elasto_history)\n\n",
 			progname);
 	}
 
@@ -466,7 +467,7 @@ cli_args_parse(int argc,
 	/* show help for all backends by default */
 	cli_args->flags = CLI_FL_AZ | CLI_FL_S3;
 
-	while ((opt = getopt(argc, argv, "s:k:d:?i")) != -1) {
+	while ((opt = getopt(argc, argv, "s:k:d:?ih:")) != -1) {
 		uint32_t debug_level;
 		switch (opt) {
 		case 's':
@@ -489,6 +490,13 @@ cli_args_parse(int argc,
 			break;
 		case 'i':
 			cli_args->insecure_http = true;
+			break;
+		case 'h':
+			history_file = strdup(optarg);
+			if (history_file == NULL) {
+				ret = -ENOMEM;
+				goto err_out;
+			}
 			break;
 		default: /* '?' */
 			cli_args_usage(progname,
