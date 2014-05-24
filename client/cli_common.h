@@ -71,6 +71,7 @@ struct cli_args {
 		} s3;
 	};
 	bool insecure_http;
+	char *history_file;
 	enum cli_cmd cmd;
 	union {
 		struct {

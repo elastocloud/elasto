@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2013, all rights reserved.
+ * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -11,6 +11,7 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -21,6 +22,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <pwd.h>
 
 #include <curl/curl.h>
 
@@ -453,6 +456,7 @@ cli_args_parse(int argc,
 	extern int optind;
 	char *pub_settings = NULL;
 	char *s3_creds_file = NULL;
+	char *history_file = NULL;
 	char *progname = strdup(argv[0]);
 	if (progname == NULL) {
 		ret = -ENOMEM;
@@ -516,6 +520,21 @@ cli_args_parse(int argc,
 		cli_args->flags &= ~CLI_FL_AZ;
 		cli_args->s3.creds_file = s3_creds_file;
 	}
+	if (history_file == NULL) {
+		/* default ~/.elasto_history */
+		struct passwd *pw = getpwuid(getuid());
+		if (pw == NULL || pw->pw_dir == NULL) {
+			ret = -EINVAL;
+			goto err_out;
+		}
+		ret = asprintf(&history_file, "%s/.elasto_history", pw->pw_dir);
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+	}
+	cli_args->history_file = history_file;
+
 	cli_args->progname = progname;
 
 	if (argc - optind == 0) {
@@ -537,6 +556,7 @@ cli_args_parse(int argc,
 err_out:
 	free(pub_settings);
 	free(s3_creds_file);
+	free(history_file);
 	free(progname);
 
 	return ret;
@@ -611,10 +631,15 @@ cli_cmd_line_run(struct cli_args *cli_args,
 	int argc = 0;
 	char *argv[ARGS_MAX];
 	const struct cli_cmd_spec *cmd;
+	mode_t old_mask;
 
 	/* add to history before tokenising */
 	linenoiseHistoryAdd(line);
-	linenoiseHistorySave(".elasto_history");
+	/* history should only be visible to user */
+	old_mask = umask(S_IRGRP | S_IWGRP | S_IXGRP
+			| S_IROTH | S_IWOTH | S_IXOTH);
+	linenoiseHistorySave(cli_args->history_file);
+	umask(old_mask);
 
 	ret = cli_cmd_tokenize(line, argv, &argc);
 	if (ret < 0) {
@@ -642,7 +667,7 @@ cli_cmd_line_start(struct cli_args *cli_args)
 	char *line;
 
 	linenoiseSetCompletionCallback(cli_cmd_line_completion);
-	linenoiseHistoryLoad(".elasto_history");
+	linenoiseHistoryLoad(cli_args->history_file);
 	while((line = linenoise("elasto> ")) != NULL) {
 		if (line[0] != '\0') {
 			cli_cmd_line_run(cli_args, line);
