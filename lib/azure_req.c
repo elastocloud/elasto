@@ -139,6 +139,9 @@ gen_date_str(void)
 	return strdup(buf);
 }
 
+#define AZ_API_VERS_MGMT "2012-03-01"
+#define AZ_API_VERS_BLOB "2012-02-12"
+
 static int
 az_req_common_hdr_fill(struct op *op, bool mgmt)
 {
@@ -146,7 +149,7 @@ az_req_common_hdr_fill(struct op *op, bool mgmt)
 	char *date_str;
 
 	if (mgmt) {
-		ret = op_req_hdr_add(op, "x-ms-version", "2012-03-01");
+		ret = op_req_hdr_add(op, "x-ms-version", AZ_API_VERS_MGMT);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -164,7 +167,7 @@ az_req_common_hdr_fill(struct op *op, bool mgmt)
 		goto err_out;
 	}
 	/* different to the version in management */
-	ret = op_req_hdr_add(op, "x-ms-version", "2012-02-12");
+	ret = op_req_hdr_add(op, "x-ms-version", AZ_API_VERS_BLOB);
 	if (ret < 0) {
 		goto err_hdrs_free;
 	}
