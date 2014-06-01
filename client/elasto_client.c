@@ -145,7 +145,8 @@ struct cli_cmd_spec {
 		.name = "create",
 		.az_help = "-l <label> [-d <desc>] [-L <location>] "
 			   "[-A <affinity group>] <account>\n"
-			   "\t\t<account>/<container>",
+			   "\t\t<account>/<container>\n"
+			   "\t\t-s <account>/<share>\n",
 		.s3_help = "[-L <location>] <bucket>",
 		.arg_min = 1,
 		.arg_max = 7,

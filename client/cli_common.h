@@ -98,6 +98,11 @@ struct cli_args {
 			};
 		} cp;
 		struct {
+			enum {
+				CLI_CMD_CREATE_ACC = 0,
+				CLI_CMD_CREATE_CTNR,
+				CLI_CMD_CREATE_SHARE,
+			} type;
 			char *label;
 			char *desc;
 			char *affin_grp;

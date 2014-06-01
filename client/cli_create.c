@@ -71,9 +71,13 @@ cli_create_args_validate_az(struct cli_args *cli_args)
 				       "-l, -d, -A or -L arguments");
 			return -EINVAL;
 		}
+		if (cli_args->create.type != CLI_CMD_CREATE_SHARE) {
+			cli_args->create.type = CLI_CMD_CREATE_CTNR;
+		}
 		return 0;
 	}
 
+	cli_args->create.type = CLI_CMD_CREATE_ACC;
 	if (cli_args->create.label == NULL) {
 		cli_args_usage(cli_args->progname, cli_args->flags,
 			       "Account creation requires a <label> argument");
@@ -115,7 +119,7 @@ cli_create_args_parse(int argc,
 	optind = 1;
 
 	memset(&cli_args->create, 0, sizeof(cli_args->create));
-	while ((opt = getopt(argc, argv, "l:d:A:L:")) != -1) {
+	while ((opt = getopt(argc, argv, "l:d:A:L:s")) != -1) {
 		switch (opt) {
 		case 'l':
 			cli_args->create.label = strdup(optarg);
@@ -144,6 +148,9 @@ cli_create_args_parse(int argc,
 				ret = -ENOMEM;
 				goto err_args_free;
 			}
+			break;
+		case 's':
+			cli_args->create.type = CLI_CMD_CREATE_SHARE;
 			break;
 		default: /* '?' */
 			cli_args_usage(cli_args->progname, cli_args->flags,
@@ -302,6 +309,57 @@ err_out:
 }
 
 static int
+cli_create_handle_share(struct cli_args *cli_args)
+{
+	struct elasto_conn *econn;
+	struct op *op;
+	int ret;
+
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
+					  cli_args->insecure_http, &econn);
+	} else {
+		ret = -ENOTSUP;
+	}
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = cli_sign_conn_setup(econn,
+				  cli_args->az.blob_acc,
+				  cli_args->az.sub_id);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+
+	ret = az_req_share_create(cli_args->az.blob_acc,
+				  cli_args->az.ctnr_name,
+				  &op);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+
+	ret = elasto_conn_op_txrx(econn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	if (op->rsp.is_error) {
+		ret = -EIO;
+		printf("failed response: %d\n", op->rsp.err_code);
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_conn_free:
+	elasto_conn_free(econn);
+err_out:
+	return ret;
+}
+
+static int
 cli_create_handle_bkt(struct cli_args *cli_args)
 {
 	struct elasto_conn *econn;
@@ -348,12 +406,12 @@ cli_create_handle(struct cli_args *cli_args)
 	int ret = -ENOTSUP;
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		if (cli_args->az.ctnr_name != NULL) {
-			/* container creation */
-			ret = cli_create_handle_ctnr(cli_args);
-		} else {
-			/* account creation */
+		if (cli_args->create.type == CLI_CMD_CREATE_ACC) {
 			ret = cli_create_handle_acc(cli_args);
+		} else if (cli_args->create.type == CLI_CMD_CREATE_CTNR) {
+			ret = cli_create_handle_ctnr(cli_args);
+		} else if (cli_args->create.type == CLI_CMD_CREATE_SHARE) {
+			ret = cli_create_handle_share(cli_args);
 		}
 	} else if (cli_args->type == CLI_TYPE_S3) {
 		ret = cli_create_handle_bkt(cli_args);
