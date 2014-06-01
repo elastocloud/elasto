@@ -3355,6 +3355,82 @@ err_out:
 }
 
 static void
+az_req_share_create_free(struct az_req_share_create *share_create_req)
+{
+	free(share_create_req->acc);
+	free(share_create_req->share);
+}
+
+int
+az_req_share_create(const char *acc,
+		    const char *share,
+		    struct op **_op)
+{
+
+	int ret;
+	struct az_ebo *ebo;
+	struct op *op;
+	struct az_req_share_create *share_create_req;
+
+	/* TODO input validation */
+
+	ret = az_ebo_init(AOP_SHARE_CREATE, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	share_create_req = &ebo->req.share_create;
+
+	share_create_req->acc = strdup(acc);
+	if (share_create_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+	share_create_req->share = strdup(share);
+	if (share_create_req->share == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	op->method = REQ_METHOD_PUT;
+	ret = asprintf(&op->url_host,
+		       "%s.file.core.windows.net", acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_share_free;
+	}
+	ret = asprintf(&op->url_path, "/%s?restype=share",
+		       share);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_share_free:
+	free(share_create_req->share);
+err_acc_free:
+	free(share_create_req->acc);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
 az_req_status_get_free(struct az_req_status_get *sts_get_req)
 {
 	free(sts_get_req->sub_id);
@@ -3583,6 +3659,9 @@ az_req_free(struct op *op)
 	case AOP_BLOB_LEASE:
 		az_req_blob_lease_free(&ebo->req.blob_lease);
 		break;
+	case AOP_SHARE_CREATE:
+		az_req_share_create_free(&ebo->req.share_create);
+		break;
 	case AOP_STATUS_GET:
 		az_req_status_get_free(&ebo->req.sts_get);
 		break;
@@ -3634,6 +3713,7 @@ az_rsp_free(struct op *op)
 	case AOP_BLOB_DEL:
 	case AOP_BLOB_CP:
 	case AOP_BLOB_PROP_SET:
+	case AOP_SHARE_CREATE:
 		/* nothing to do */
 		break;
 	default:
@@ -3697,6 +3777,7 @@ az_rsp_process(struct op *op)
 	case AOP_BLOB_DEL:
 	case AOP_BLOB_CP:
 	case AOP_BLOB_PROP_SET:
+	case AOP_SHARE_CREATE:
 		/* nothing to do */
 		ret = 0;
 		break;

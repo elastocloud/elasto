@@ -34,6 +34,7 @@ enum az_opcode {
 	AOP_BLOB_PROP_GET,
 	AOP_BLOB_PROP_SET,
 	AOP_BLOB_LEASE,
+	AOP_SHARE_CREATE,
 	AOP_STATUS_GET,
 };
 
@@ -294,6 +295,11 @@ struct az_rsp_blob_lease {
 	uint64_t time_remaining;
 };
 
+struct az_req_share_create {
+	char *acc;
+	char *share;
+};
+
 struct az_req_status_get {
 	char *sub_id;
 	char *req_id;
@@ -340,6 +346,7 @@ struct az_req {
 		struct az_req_blob_prop_get blob_prop_get;
 		struct az_req_blob_prop_set blob_prop_set;
 		struct az_req_blob_lease blob_lease;
+		struct az_req_share_create share_create;
 		struct az_req_status_get sts_get;
 	};
 };
@@ -365,6 +372,7 @@ struct az_rsp {
 		 * struct az_rsp_block_put block_put;
 		 * struct az_rsp_blob_del blob_del;
 		 * struct az_rsp_blob_cp blob_cp;
+		 * struct az_rsp_share_create share_create;
 		 */
 	};
 };
@@ -497,6 +505,11 @@ az_req_blob_lease(const char *account,
 		  enum az_lease_action action,
 		  int32_t duration,
 		  struct op **_op);
+
+int
+az_req_share_create(const char *acc,
+		    const char *share,
+		    struct op **_op);
 
 int
 az_req_status_get(const char *sub_id,
