@@ -14,11 +14,14 @@
 #ifndef _DBG_H_
 #define _DBG_H_
 
+/* allow compiler to optimise out debug strings if level is not of interest */
+#define DBG_LEVEL_MAX 10
+
 extern uint32_t dbg_level;
 
 #define dbg(lev, fmt, ...) \
 	do { \
-		if (lev <= dbg_level) \
+		if ((lev <= DBG_LEVEL_MAX) && (lev <= dbg_level)) \
 			fprintf(stderr, "%s:%d:%s(): " fmt, __FILE__, \
 				__LINE__, __func__, ##__VA_ARGS__); \
 	} while (0)
