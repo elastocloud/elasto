@@ -335,6 +335,10 @@ az_rsp_acc_list_free(struct az_rsp_acc_list *acc_list_rsp)
 	struct azure_account *acc;
 	struct azure_account *acc_n;
 
+	if (acc_list_rsp->num_accs == 0) {
+		return;
+	}
+
 	list_for_each_safe(&acc_list_rsp->accs, acc, acc_n, list) {
 		azure_acc_free(&acc);
 	}
@@ -1209,8 +1213,9 @@ az_rsp_blob_list_free(struct az_rsp_blob_list *blob_list_rsp)
 	struct azure_blob *blob;
 	struct azure_blob *blob_n;
 
-	if (blob_list_rsp->num_blobs <= 0)
+	if (blob_list_rsp->num_blobs == 0) {
 		return;
+	}
 
 	list_for_each_safe(&blob_list_rsp->blobs, blob, blob_n, list) {
 		free(blob->name);
@@ -2238,6 +2243,11 @@ az_rsp_block_list_get_free(struct az_rsp_block_list_get *blk_list_get_rsp)
 {
 	struct azure_block *blk;
 	struct azure_block *blk_n;
+
+	if (blk_list_get_rsp->num_blks == 0) {
+		return;
+	}
+
 	list_for_each_safe(&blk_list_get_rsp->blks, blk, blk_n, list) {
 		free(blk->id);
 		free(blk);
