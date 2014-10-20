@@ -21,6 +21,8 @@
 #include <assert.h>
 #include <time.h>
 #include <libgen.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include <curl/curl.h>
 #include <openssl/pem.h>
@@ -45,6 +47,7 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 	FILE *fp;
 	BIO *bmem;
 	int ret;
+	mode_t umask_old;
 
 	mcert = malloc(strlen(mcert_b64));
 	if (mcert == NULL) {
@@ -79,7 +82,9 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 	}
 
 	/* write output pem */
+	umask_old = umask(S_IRWXG | S_IRWXO);
 	fp = fopen(pem_file, "w");
+	umask(umask_old);
 	if (fp == NULL) {
 		dbg(0, "Error opening file %s\n", pem_file);
 		ret = -errno;
@@ -122,7 +127,9 @@ err_out:
  * @ps_file:	Azure publishsettings file from
  *		https://windows.azure.com/download/publishprofile.aspx
  * @pem_file:	Private key pem file generated from @ps_file source. It is
- *		written to the path @ps_file.
+ *		written to a private /tmp/elasto-XXXXXX/sub_id.pem path.
+ * @sub_id:	Subscriber identity, as present in the publishsettings file.
+ * @sub_name:	Subscriber name, as present in the publishsettings file.
  */
 int
 azure_ssl_pubset_process(const char *ps_file,
@@ -135,6 +142,7 @@ azure_ssl_pubset_process(const char *ps_file,
 	char *fbuf = NULL;
 	uint64_t len = 0;
 	char *ps_path = NULL;
+	char pem_dir[] = "/tmp/elasto-XXXXXX";
 	char *pem_file_path = NULL;
 	char *sid = NULL;
 	char *sname = NULL;
@@ -184,10 +192,16 @@ azure_ssl_pubset_process(const char *ps_file,
 		goto err_sub_free;
 	}
 
-	ret = asprintf(&pem_file_path, "%s/%s.pem", dirname(ps_path), sid);
+	pem_file_path = mkdtemp(pem_dir);
+	if (pem_file_path == NULL) {
+		dbg(0, "Failed to create temp directory\n");
+		goto err_sub_free;
+	}
+
+	ret = asprintf(&pem_file_path, "%s/%s.pem", pem_dir, sid);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_sub_free;
+		goto err_rmdir;
 	}
 
 	ret = azure_ssl_pem_write(mcert_b64, pem_file_path);
@@ -205,6 +219,8 @@ azure_ssl_pubset_process(const char *ps_file,
 	return 0;
 err_pem_free:
 	free(pem_file_path);
+err_rmdir:
+	rmdir(pem_dir);
 err_sub_free:
 	free(mcert_b64);
 	free(sname);
