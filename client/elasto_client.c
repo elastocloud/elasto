@@ -730,10 +730,14 @@ main(int argc, char * const *argv)
 		ret = cmd->handle(&cli_args);
 	}
 	if (ret < 0) {
-		goto err_global_clean;
+		goto err_ps_cleanup;
 	}
 
 	ret = 0;
+err_ps_cleanup:
+	if (cli_args.type == CLI_TYPE_AZURE) {
+		azure_ssl_pubset_cleanup(cli_args.az.pem_file);
+	}
 err_global_clean:
 	elasto_conn_subsys_deinit();
 err_args_free:
