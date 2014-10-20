@@ -83,6 +83,7 @@ elasto_fh_init(const char *ps_path,
 	return 0;
 
 err_ssl_free:
+	azure_ssl_pubset_cleanup(fh_priv->az.pem_path);
 	free(fh_priv->az.pem_path);
 	free(fh_priv->az.sub_id);
 	free(fh_priv->az.sub_name);
@@ -102,6 +103,7 @@ elasto_fh_free(struct elasto_fh *fh)
 	if (fh_priv->conn != NULL) {
 		elasto_conn_free(fh_priv->conn);
 	}
+	azure_ssl_pubset_cleanup(fh_priv->az.pem_path);
 	free(fh_priv->az.pem_path);
 	free(fh_priv->az.sub_id);
 	free(fh_priv->az.sub_name);
