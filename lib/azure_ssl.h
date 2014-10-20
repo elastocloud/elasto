@@ -19,5 +19,7 @@ azure_ssl_pubset_process(const char *ps_file,
 			 char **pem_file,
 			 char **sub_id,
 			 char **sub_name);
+int
+azure_ssl_pubset_cleanup(const char *pem_file);
 
 #endif /* ifdef _AZURE_SSL_H_ */
