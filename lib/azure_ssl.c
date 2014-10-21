@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <time.h>
 #include <libgen.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
