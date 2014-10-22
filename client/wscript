@@ -10,7 +10,8 @@ def build(bld):
 			   'cli_get.c cli_del.c cli_sign.c cli_create.c '
 			   'cli_cp.c cli_util.c',
 		    target='elasto_cli',
-		    lib=['curl', 'crypto', 'expat'],
+		    lib=['curl', 'crypto', 'expat', 'ssl',
+			 ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		    use=['ccan', 'elasto'],
 		    includes = '. ..',
 		    defines = ['_GNU_SOURCE'],

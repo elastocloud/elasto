@@ -19,10 +19,19 @@ enum elasto_conn_type {
 	CONN_TYPE_S3,
 };
 
+struct ssl_ctx_st;
+struct ssl_st;
+
 struct elasto_conn {
 	enum elasto_conn_type type;
 	bool insecure_http;
-	CURL *curl;
+	char *pem_file;
+	struct event_base *ev_base;
+	struct bufferevent *ev_bev;
+	struct evhttp_connection *ev_conn;
+	struct ssl_ctx_st *ssl_ctx;
+	struct ssl_st *ssl;
+	const char *hostname;
 	struct {
 		char *account;
 		uint8_t *key;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012, all rights reserved.
+ * Copyright (C) SUSE LINUX Products GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -22,8 +22,20 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <inttypes.h>
+#include <sys/queue.h>
 
 #include <curl/curl.h>
+
+#include <openssl/err.h>
+#include <openssl/ssl.h>
+
+#include <event2/bufferevent_ssl.h>
+#include <event2/bufferevent.h>
+#include <event2/buffer.h>
+#include <event2/listener.h>
+#include <event2/util.h>
+#include <event2/http.h>
+#include <event2/keyvalq_struct.h>
 
 #include "ccan/list/list.h"
 #include "dbg.h"
@@ -82,149 +94,12 @@ err_out:
 }
 
 /*
- * @hdr_str:	single non-null terminated header string.
- * @num_bytes:	length of @hdr_str.
- */
-static int
-curl_hdr_process(struct op *op,
-		 char *hdr_str,
-		 uint64_t num_bytes)
-{
-	int ret;
-	char *s;
-	char *c = strchr(hdr_str, ':');
-	char *val;
-	int64_t len;
-
-	if ((c == NULL) || (c > hdr_str + num_bytes) || (c == hdr_str)) {
-		dbg(3, "ignoring header: %s\n", hdr_str);
-		return 0;
-	}
-
-	for (s = c + 1; isspace((int)*s); s++);
-
-	if (s > hdr_str + num_bytes) {
-		dbg(0, "invalid header: %s\n", hdr_str);
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	len = num_bytes - (s - hdr_str);
-	/* XXX curl makes no guarantees that hdr_str has a null term */
-	val = strndup(s, (size_t)len);
-	if (val == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	/* trim trailing '\r', '\n' and space chars */
-	for (s = val + len - 1; isspace((int)*s); s--);
-	if (s < val) {
-		dbg(0, "invalid header: %s\n", hdr_str);
-		ret = -EINVAL;
-		goto err_val_free;
-	}
-	*(s + 1) = '\0';
-
-	*c = '\0';	/* zero terminate key */
-	ret = op_rsp_hdr_add(op, hdr_str, val);
-	if (ret < 0) {
-		goto err_cln_fill;
-	}
-
-	if (!strcmp(hdr_str, "Content-Length")) {
-		char *eptr;
-
-		errno = 0;
-		len = strtoll(val, &eptr, 10);
-		if ((eptr == val) || (errno != 0)) {
-			ret = -EINVAL;
-			goto err_cln_fill;
-		}
-
-		if (op->rsp.write_cbs > 0) {
-			dbg(0, "clen header received after data callback!\n");
-			ret = -EINVAL;
-			goto err_cln_fill;
-		}
-		/* allocate recv buffer in write callback */
-		op->rsp.clen_recvd = true;
-		op->rsp.clen = len;
-	}
-
-	ret = 0;
-err_cln_fill:
-	*c = ':';
-err_val_free:
-	free(val);
-err_out:
-	return ret;
-}
-
-static size_t
-curl_hdr_cb(char *ptr,
-	    size_t size,
-	    size_t nmemb,
-	    void *userdata)
-{
-	struct op *op = (struct op *)userdata;
-	uint64_t num_bytes = (size * nmemb);
-	int ret;
-
-	ret = curl_hdr_process(op, ptr, num_bytes);
-	if (ret < 0) {
-		return 0;
-	}
-
-	return num_bytes;
-}
-
-static size_t
-curl_read_cb(char *ptr,
-	     size_t size,
-	     size_t nmemb,
-	     void *userdata)
-{
-	struct op *op = (struct op *)userdata;
-	uint64_t num_bytes = (size * nmemb);
-	uint64_t read_off;
-
-	if ((op->req.data == NULL)
-	 || ((op->req.data->type != ELASTO_DATA_IOV)
-	      && (op->req.data->type != ELASTO_DATA_FILE))) {
-		return -1;	/* unsupported */
-	}
-
-	op->req.read_cbs++;
-	read_off = op->req.data->base_off + op->req.data->off;
-	if (op->req.data->off + num_bytes > op->req.data->len) {
-		dbg(3, "curl_read_cb buffer exceeded, len %" PRIu64
-		       " off %" PRIu64 " io_sz %" PRIu64 ", capping\n",
-		       op->req.data->len, op->req.data->off, num_bytes);
-		num_bytes = op->req.data->len - op->req.data->off;
-	}
-
-	if (op->req.data->type == ELASTO_DATA_IOV) {
-		memcpy(ptr, (void *)(op->req.data->iov.buf + read_off), num_bytes);
-	} else if (op->req.data->type == ELASTO_DATA_FILE) {
-		ssize_t ret;
-		ret = pread(op->req.data->file.fd, ptr, num_bytes, read_off);
-		if (ret != num_bytes) {
-			dbg(0, "failed to read from file\n");
-			return -1;
-		}
-	}
-	op->req.data->off += num_bytes;
-	return num_bytes;
-}
-
-/*
  * @cb_nbytes is the number of bytes provided by this callback, clen is the
  * number of bytes expected across all callbacks, but may not be known.
  */
 static int
-curl_write_alloc_err(struct op *op,
-		     uint64_t cb_nbytes)
+ev_write_alloc_err(struct op *op,
+		   uint64_t cb_nbytes)
 {
 	struct op_rsp_error *err = &op->rsp.err;
 
@@ -258,8 +133,8 @@ curl_write_alloc_err(struct op *op,
  * to the request structure and removing all data buffer types.
  */
 static int
-curl_write_alloc_std(struct op *op,
-		     uint64_t cb_nbytes)
+ev_write_alloc_std(struct op *op,
+		   uint64_t cb_nbytes)
 
 {
 	int ret;
@@ -323,10 +198,12 @@ curl_write_alloc_std(struct op *op,
 }
 
 static int
-curl_write_err(struct op *op,
-	       uint8_t *data,
-	       uint64_t num_bytes)
+ev_write_err(struct op *op,
+	     struct evbuffer *ev_in_buf,
+	     uint64_t num_bytes)
 {
+	int ret;
+
 	dbg(8, "filling error buffer of len %" PRIu64 " at off %" PRIu64
 	    " with %" PRIu64 " bytes\n",
 	    op->rsp.err.len, op->rsp.err.off, num_bytes);
@@ -336,43 +213,71 @@ curl_write_err(struct op *op,
 		       op->rsp.err.len, op->rsp.err.off, num_bytes);
 		return -E2BIG;
 	}
-	memcpy((void *)(op->rsp.err.buf + op->rsp.err.off), data,
-	       num_bytes);
+
+	ret = evbuffer_remove(ev_in_buf,
+			      (void *)(op->rsp.err.buf + op->rsp.err.off),
+			      num_bytes);
+	/* no tolerance for partial IO */
+	if ((ret < 0) || (ret != num_bytes)) {
+		dbg(0, "unable to remove %" PRIu64 " bytes from error buffer\n",
+		    num_bytes);
+		return -EIO;
+	}
+
 	op->rsp.err.off += num_bytes;
 
 	return 0;
 }
 
 static int
-curl_write_std(struct op *op,
-	       uint8_t *data,
-	       uint64_t num_bytes)
+ev_write_std(struct op *op,
+	     struct evbuffer *ev_in_buf,
+	     uint64_t num_bytes)
 {
 	int ret;
+	off_t soff;
 	uint64_t write_off = op->rsp.data->base_off + op->rsp.data->off;
 
 	/* rsp buffer must have been allocated */
 	assert(op->rsp.data != NULL);
 
+	dbg(9, "writing %" PRIu64 " bytes data\n", num_bytes);
+
 	switch (op->rsp.data->type) {
 	case ELASTO_DATA_IOV:
 		if (write_off + num_bytes > op->rsp.data->len) {
-			dbg(0, "fatal: curl_write_cb buffer exceeded, "
+			dbg(0, "fatal: write buffer exceeded, "
 			       "len %" PRIu64 " off %" PRIu64 " io_sz %" PRIu64
 			       "\n", op->rsp.data->len, write_off, num_bytes);
 			return -E2BIG;
 		}
-		memcpy((void *)(op->rsp.data->iov.buf + write_off), data, num_bytes);
+		ret = evbuffer_remove(ev_in_buf,
+				      (void *)(op->rsp.data->iov.buf + write_off),
+				      num_bytes);
+		/* no tolerance for partial IO */
+		if ((ret < 0) || (ret != num_bytes)) {
+			dbg(0, "unable to remove %" PRIu64 " bytes from buffer\n",
+			    num_bytes);
+			return -EIO;
+		}
 		break;
 	case ELASTO_DATA_FILE:
 		if (write_off + num_bytes > op->rsp.data->len) {
-			dbg(0, "fatal: curl_write_cb file exceeded, "
+			dbg(0, "fatal: write file exceeded, "
 			       "len %" PRIu64 " off %" PRIu64 " io_sz %" PRIu64
 			       "\n", op->rsp.data->len, write_off, num_bytes);
 			return -E2BIG;
 		}
-		ret = pwrite(op->rsp.data->file.fd, data, num_bytes, write_off);
-		if (ret != num_bytes) {
+
+		soff = lseek(op->rsp.data->file.fd, write_off, SEEK_SET);
+		if ((soff < 0) || (soff != write_off)) {
+			dbg(0, "failed to seek off %" PRIu64 "\n", write_off);
+			return -EIO;
+		}
+		ret = evbuffer_write_atmost(ev_in_buf, op->rsp.data->file.fd,
+					    num_bytes);
+		/* no tolerance for partial IO */
+		if ((ret < 0) || (ret != num_bytes)) {
 			dbg(0, "file write io failed: %s\n", strerror(errno));
 			return -EBADF;
 		}
@@ -385,144 +290,617 @@ curl_write_std(struct op *op,
 	return 0;
 }
 
-static size_t
-curl_write_cb(char *ptr,
-	      size_t size,
-	      size_t nmemb,
-	      void *userdata)
+static void
+conn_op_cancel(struct op *op)
 {
-	struct op *op = (struct op *)userdata;
-	uint64_t num_bytes = (size * nmemb);
-	int ret;
+	dbg(0, "cancelling outstanding op\n");
+	evhttp_cancel_request(op->req.ev_http);
+	op->req.ev_http = NULL;
 
+	if (!op->rsp.is_error) {
+		op->rsp.is_error = true;
+		op->rsp.err_code = HTTP_BADREQUEST;
+	}
+}
+
+/* never called on an empty response */
+static void
+ev_write_cb(struct evhttp_request *ev_req,
+	    void *data)
+{
+	struct op *op = (struct op *)data;
+	size_t len;
+	uint64_t num_bytes;
+	int ret;
+	struct evbuffer *ev_in_buf;
+
+	assert(op->req.ev_http == ev_req);
+	ev_in_buf = evhttp_request_get_input_buffer(ev_req);
+	if (ev_in_buf == NULL) {
+		dbg(0, "invalid NULL input buffer in write callback!\n");
+		conn_op_cancel(op);
+		return;
+	}
+	len = evbuffer_get_length(ev_in_buf);
+	if (len <= 0) {
+		dbg(0, "invalid input buffer len: %d\n", (int)len);
+		conn_op_cancel(op);
+		return;
+	}
+	num_bytes = len;
 	op->rsp.write_cbs++;
-	dbg(9, "curl write cb %" PRIu64 "\n", op->rsp.write_cbs);
+	dbg(9, "ev write cb %" PRIu64 "\n", op->rsp.write_cbs);
 	/* alloc content buffer on the first callback, or if clen is unknown */
 	if ((op->rsp.write_cbs == 1) || (op->rsp.clen_recvd == false)) {
-		CURLcode cc;
 		int ret_code;
-		/* should already have the http response code */
-		cc = curl_easy_getinfo(op->econn->curl, CURLINFO_RESPONSE_CODE,
-				       &ret_code);
-		if (cc != CURLE_OK) {
-			dbg(0, "could not get response code in write cb\n");
-			return -1;
-		}
-
+		/*
+		 * should already have the http response code.
+		 * XXX what if the response code hasn't arrived yet?
+		 */
+		ret_code = evhttp_request_get_response_code(ev_req);
 		op->rsp.err_code = ret_code;
 		op->rsp.is_error = op_rsp_is_error(op->opcode, ret_code);
 
 		if (op->rsp.is_error) {
-			ret = curl_write_alloc_err(op, num_bytes);
+			ret = ev_write_alloc_err(op, num_bytes);
 		} else {
-			ret = curl_write_alloc_std(op, num_bytes);
+			ret = ev_write_alloc_std(op, num_bytes);
 		}
 		if (ret < 0) {
 			dbg(0, "failed to allocate response buffer\n");
-			return -1;
+			conn_op_cancel(op);
+			return;
 		}
 	}
 
 	if (op->rsp.is_error) {
-		ret = curl_write_err(op, (uint8_t *)ptr, num_bytes);
+		ret = ev_write_err(op, ev_in_buf, num_bytes);
 	} else {
-		ret = curl_write_std(op, (uint8_t *)ptr, num_bytes);
+		ret = ev_write_std(op, ev_in_buf, num_bytes);
 	}
 	if (ret < 0) {
-		return -1;
+		conn_op_cancel(op);
+		return;
 	}
-	return num_bytes;
+	return;
 }
 
-static size_t
-curl_fail_cb(char *ptr,
-	     size_t size,
-	     size_t nmemb,
-	     void *userdata)
+static int
+ev_hdr_cb(struct evhttp_request *ev_req,
+	  void *data)
 {
-	dbg(0, "Failure: server body data when not expected!\n");
+	int ret;
+	struct op *op = (struct op *)data;
+	struct evkeyvalq *ev_in_hdrs;
+	struct evkeyval *ev_hdr;
+
+	ev_in_hdrs = evhttp_request_get_input_headers(ev_req);
+	if (ev_in_hdrs == NULL) {
+		dbg(0, "header callback with NULL queue\n");
+		goto err_disconnect;
+	}
+
+	if (op->rsp.num_hdrs > 0) {
+		/* headers should only be processed once */
+		dbg(0, "unexpected multiple header callbacks!\n");
+		goto err_disconnect;
+	}
+
+	TAILQ_FOREACH(ev_hdr, ev_in_hdrs, next) {
+		dbg(3, "received hdr: %s = %s\n", ev_hdr->key, ev_hdr->value);
+
+		ret = op_rsp_hdr_add(op, ev_hdr->key, ev_hdr->value);
+		if (ret < 0) {
+			goto err_disconnect;
+		}
+
+		if (!strcmp(ev_hdr->key, "Content-Length")) {
+			char *eptr;
+			uint64_t len;
+
+			errno = 0;
+			len = strtoull(ev_hdr->value, &eptr, 10);
+			if ((eptr == ev_hdr->value) || (errno != 0)) {
+				goto err_disconnect;
+			}
+
+			if (op->rsp.write_cbs > 0) {
+				dbg(0, "clen header received after data callback!\n");
+				goto err_disconnect;
+			}
+			/* allocate recv buffer in write callback */
+			op->rsp.clen_recvd = true;
+			op->rsp.clen = len;
+		}
+	}
+
+	/*
+	 * Do NOT clear processed headers via evhttp_clear_headers() -
+	 * otherwise libevent won't see the Transfer-Encoding=chunked header,
+	 * and will call the chunk callback without stripping the chunk-size
+	 * + CRLF prefix and suffix!
+	 */
+
 	return 0;
+
+err_disconnect:
+	/* ev_req is freed by libevent on callback error */
+	op->req.ev_http = NULL;
+	/* TODO set op error? */
+	return -1;	/* force disconnect */
+}
+
+static void
+ev_err_cb(enum evhttp_request_error ev_req_error,
+	  void *data)
+{
+	struct op *op = (struct op *)data;
+
+	/* ev_req is freed by libevent on error callback */
+	op->req.ev_http = NULL;
+
+	if (op->rsp.is_error == true) {
+		dbg(0, "is_error already set in error cb, ignoring %d\n",
+		    ev_req_error);
+		return;
+	}
+
+	op->rsp.is_error = true;
+
+	switch (ev_req_error) {
+	case EVREQ_HTTP_TIMEOUT:
+		dbg(0, "got client error: Request Time-out\n");
+		op->rsp.err_code = 408;	/* TODO add to libevent */
+		break;
+	case EVREQ_HTTP_EOF:
+		dbg(0, "got client error: EOF\n");
+		op->rsp.err_code = HTTP_NOTFOUND;
+		op->rsp.is_error = false;
+		break;
+	case EVREQ_HTTP_INVALID_HEADER:
+		dbg(0, "got client error: invalid header\n");
+		op->rsp.err_code = HTTP_BADREQUEST;
+		break;
+	case EVREQ_HTTP_BUFFER_ERROR:
+		dbg(0, "got client error: IO\n");
+		op->rsp.err_code = HTTP_BADREQUEST;
+		break;
+	case EVREQ_HTTP_REQUEST_CANCEL:
+		dbg(0, "got client error: cancelled\n");
+		op->rsp.err_code = HTTP_BADREQUEST;
+		break;
+	case EVREQ_HTTP_DATA_TOO_LONG:
+		dbg(0, "got client error: data too long\n");
+		op->rsp.err_code = HTTP_ENTITYTOOLARGE;
+		break;
+	default:
+		dbg(0, "got client error callback with unknown code: %d",
+		    (int)ev_req_error);
+		op->rsp.err_code = HTTP_BADREQUEST;
+		break;
+	}
+}
+
+static void
+elasto_conn_seg_cleanup_cb(struct evbuffer_file_segment const *seg,
+			   int flags,
+			   void *data)
+{
+	struct elasto_data *req_data = (struct elasto_data *)data;
+
+	if (req_data->type != ELASTO_DATA_FILE) {
+		dbg(0, "ev segment cleanup callback for unexpected type 0x%x\n",
+		    req_data->type);
+	} else {
+		dbg(0, "Got ev segment cleanup callback for %s\n",
+		    req_data->file.path);
+	}
+}
+
+static int
+elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
+				   struct elasto_data *req_data,
+				   uint64_t *_content_len)
+{
+	int ret;
+	struct evbuffer *ev_out_buf;
+	uint64_t read_off;
+	uint64_t num_bytes;
+	uint64_t content_len = (req_data ? req_data->len : 0);
+
+	if (content_len == 0) {
+		/* NULL or empty request buffer */
+		goto done;
+	}
+
+	if ((req_data->type != ELASTO_DATA_IOV)
+	 && (req_data->type != ELASTO_DATA_FILE)) {
+		ret = -EINVAL;	/* unsupported */
+		goto err_out;
+	}
+
+	ev_out_buf = evhttp_request_get_output_buffer(ev_req);
+	if (ev_out_buf == NULL) {
+		ret = -ENOENT;
+		goto err_out;
+	}
+
+	read_off = req_data->base_off + req_data->off;
+	num_bytes = req_data->len - req_data->off;
+
+	if (req_data->type == ELASTO_DATA_IOV) {
+		ret = evbuffer_add(ev_out_buf,
+				   (void *)(req_data->iov.buf + read_off),
+				   num_bytes);
+		if (ret < 0) {
+			dbg(0, "failed to add iov output buffer\n");
+			ret = -EFAULT;
+			goto err_out;
+		}
+	} else if (req_data->type == ELASTO_DATA_FILE) {
+		struct evbuffer_file_segment *ev_seg;
+
+		ev_seg = evbuffer_file_segment_new(req_data->file.fd,
+						   read_off, num_bytes, 0);
+		if (ev_seg == NULL) {
+			dbg(0, "failed to create file segment buffer\n");
+			ret = -EBADF;
+			goto err_out;
+		}
+		/* offset and len are relative to the segment! */
+		ret = evbuffer_add_file_segment(ev_out_buf, ev_seg, 0,
+						num_bytes);
+		if (ret < 0) {
+			evbuffer_file_segment_free(ev_seg);
+			dbg(0, "failed to add file output buffer\n");
+			ret = -EBADF;
+			goto err_out;
+		}
+
+		evbuffer_file_segment_add_cleanup_cb(ev_seg,
+						     elasto_conn_seg_cleanup_cb,
+						     req_data);
+	}
+	req_data->off += num_bytes;
+
+done:
+	*_content_len = content_len;
+	ret = 0;
+err_out:
+	return ret;
+}
+
+static void
+ev_done_cb(struct evhttp_request *ev_req,
+	   void *data)
+{
+	struct op *op = (struct op *)data;
+	struct evbuffer *ev_in_buf;
+	size_t len;
+
+	/* FIXME ev_req always freed after done callback?? */
+	op->req.ev_http = NULL;
+
+	if (ev_req == NULL) {
+		dbg(0, "NULL request on completion, an error occurred!\n");
+		/* op error already flagged in error callback */
+		assert(op->rsp.is_error);
+		return;
+	}
+
+	if (op->rsp.write_cbs == 0) {
+		/* write callback already sets this, otherwise still needed */
+		op->rsp.err_code = evhttp_request_get_response_code(ev_req),
+		op->rsp.is_error = op_rsp_is_error(op->opcode,
+						   op->rsp.err_code);
+	}
+
+	dbg(3, "op 0x%x completed with: %d %s\n", op->opcode, op->rsp.err_code,
+	    evhttp_request_get_response_code_line(ev_req));
+
+	ev_in_buf = evhttp_request_get_input_buffer(ev_req);
+	if (ev_in_buf == NULL) {
+		dbg(0, "NULL input buffer in completion callback\n");
+		return;
+	}
+	len = evbuffer_get_length(ev_in_buf);
+	if (len != 0) {
+		dbg(0, "unexpected completion input buffer len: %d\n", (int)len);
+		return;
+	}
 }
 
 /* a bit ugly, the signature src string is stored in @op for debugging */
 static int
-elasto_conn_send_prepare(struct elasto_conn *econn, struct op *op)
+elasto_conn_send_prepare(struct elasto_conn *econn,
+			 struct op *op,
+			 struct evhttp_request **_ev_req,
+			 enum evhttp_cmd_type *_ev_req_type,
+			 char **_url)
 {
 	int ret;
-	struct curl_slist *http_hdr = NULL;
 	struct op_hdr *hdr;
 	char *url;
+	struct evhttp_request *ev_req;
+	enum evhttp_cmd_type ev_req_type;
+	struct evkeyvalq *ev_out_hdrs;
+	uint64_t content_len = 0;
+	char *clen_str;
 
-	curl_easy_setopt(econn->curl, CURLOPT_CUSTOMREQUEST, op->method);
 	ret = asprintf(&url, "http%s://%s%s",
 		 ((econn->insecure_http && !op->url_https_only) ? "" : "s"),
 		 op->url_host, op->url_path);
 	if (ret < 0) {
 		return -ENOMEM;
 	}
-	curl_easy_setopt(econn->curl, CURLOPT_URL, url);
-	free(url);
-	curl_easy_setopt(econn->curl, CURLOPT_HEADERFUNCTION, curl_hdr_cb);
-	curl_easy_setopt(econn->curl, CURLOPT_HEADERDATA, op);
-	curl_easy_setopt(econn->curl, CURLOPT_WRITEDATA, op);
-	curl_easy_setopt(econn->curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
+
+	dbg(3, "preparing request for dispatch to: %s\n", url);
+
+	ev_req = evhttp_request_new(ev_done_cb, op);
+	if (ev_req == NULL) {
+		goto err_url_free;
+	}
+
+	evhttp_request_set_header_cb(ev_req, ev_hdr_cb);
+	evhttp_request_set_chunked_cb(ev_req, ev_write_cb);
+	/* on error, the error cb and then the completion cb will be called */
+	evhttp_request_set_error_cb(ev_req, ev_err_cb);
+
+
 	if (strcmp(op->method, REQ_METHOD_GET) == 0) {
-		curl_easy_setopt(econn->curl, CURLOPT_HTTPGET, 1);
-		curl_easy_setopt(econn->curl, CURLOPT_UPLOAD, 0);
-		curl_easy_setopt(econn->curl, CURLOPT_INFILESIZE_LARGE, 0);
-		curl_easy_setopt(econn->curl, CURLOPT_READFUNCTION,
-				 curl_fail_cb);
-	} else if ((strcmp(op->method, REQ_METHOD_PUT) == 0)
-				|| (strcmp(op->method, REQ_METHOD_POST) == 0)) {
-		uint64_t len = (op->req.data ? op->req.data->len : 0);
-		/* INFILESIZE_LARGE sets Content-Length hdr */
-		curl_easy_setopt(econn->curl, CURLOPT_INFILESIZE_LARGE, len);
-		curl_easy_setopt(econn->curl, CURLOPT_UPLOAD, 1);
-		curl_easy_setopt(econn->curl, CURLOPT_READDATA, op);
-		curl_easy_setopt(econn->curl, CURLOPT_READFUNCTION,
-				 curl_read_cb);
+		ev_req_type = EVHTTP_REQ_GET;
+	} else if (strcmp(op->method, REQ_METHOD_PUT) == 0) {
+		ev_req_type = EVHTTP_REQ_PUT;
+		ret = elasto_conn_send_prepare_read_data(ev_req, op->req.data,
+							 &content_len);
+		if (ret < 0) {
+			dbg(0, "failed to attach read data\n");
+			goto err_ev_req_free;
+		}
+	} else if (strcmp(op->method, REQ_METHOD_POST) == 0) {
+		ev_req_type = EVHTTP_REQ_POST;
+		ret = elasto_conn_send_prepare_read_data(ev_req, op->req.data,
+							 &content_len);
+		if (ret < 0) {
+			dbg(0, "failed to attach read data\n");
+			goto err_ev_req_free;
+		}
 	} else if (strcmp(op->method, REQ_METHOD_HEAD) == 0) {
+		ev_req_type = EVHTTP_REQ_HEAD;
 		/* No body component with HEAD requests */
-		curl_easy_setopt(econn->curl, CURLOPT_HTTPGET, 0);
-		curl_easy_setopt(econn->curl, CURLOPT_NOBODY, 1);
-		curl_easy_setopt(econn->curl, CURLOPT_UPLOAD, 0);
-		curl_easy_setopt(econn->curl, CURLOPT_INFILESIZE_LARGE, 0);
-		curl_easy_setopt(econn->curl, CURLOPT_READFUNCTION,
-				 curl_fail_cb);
+	} else if (strcmp(op->method, REQ_METHOD_DELETE) == 0) {
+		ev_req_type = EVHTTP_REQ_DELETE;
 	} else {
-		/* DELETE, etc. must set Content-Length hdr */
-		curl_easy_setopt(econn->curl, CURLOPT_INFILESIZE_LARGE, 0);
-		curl_easy_setopt(econn->curl, CURLOPT_UPLOAD, 0);
+		dbg(0, "invalid request method: %s\n", op->method);
+		ret = -EINVAL;
+		/* FIXME free read_data? */
+		goto err_ev_req_free;
 	}
 
 	if (op->req_sign != NULL) {
-		ret = op->req_sign(econn->sign.account,
-			       econn->sign.key, econn->sign.key_len,
-			       op);
+		ret = op->req_sign(econn->sign.account, econn->sign.key,
+				   econn->sign.key_len, op);
 		if (ret < 0) {
-			return ret;
+			goto err_ev_req_free;
 		}
 	}
 
+	ev_out_hdrs = evhttp_request_get_output_headers(ev_req);
+	if (ev_out_hdrs == NULL) {
+		ret = -ENOENT;
+		goto err_ev_req_free;
+	}
+
+	ret = asprintf(&clen_str, "%" PRIu64, content_len);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_ev_req_free;
+	}
+	/* evhttp_add_header returns -1 for EINVAL and ENOMEM */
+	ret = evhttp_add_header(ev_out_hdrs, "Content-Length", clen_str);
+	free(clen_str);
+	if (ret < 0) {
+		ret = -EINVAL;
+		goto err_ev_req_free;
+	}
+	ret = evhttp_add_header(ev_out_hdrs, "Host", op->url_host);
+	if (ret < 0) {
+		ret = -EINVAL;
+		goto err_ev_req_free;
+	}
+	ret = evhttp_add_header(ev_out_hdrs, "Connection", "close");
+	if (ret < 0) {
+		ret = -EINVAL;
+		goto err_ev_req_free;
+	}
+#if 0
+	ret = evhttp_add_header(ev_out_hdrs, "Accept", "*/*");
+	if (ret < 0) {
+		ret = -EINVAL;
+		goto err_ev_req_free;
+	}
+#endif
 	list_for_each(&op->req.hdrs, hdr, list) {
-		char buf[512];
-		struct curl_slist *http_hdr_nxt;
-		ret = snprintf(buf, ARRAY_SIZE(buf), "%s: %s",
-			       hdr->key, hdr->val);
-		if (ret >= ARRAY_SIZE(buf)) {
-			dbg(0, "header too large\n");
-			return -E2BIG;
+		dbg(3, "packing header: %s = %s\n", hdr->key, hdr->val);
+		ret = evhttp_add_header(ev_out_hdrs, hdr->key, hdr->val);
+		if (ret < 0) {
+			ret = -EINVAL;
+			goto err_ev_req_free;
 		}
-		http_hdr_nxt = curl_slist_append(http_hdr, buf);
-		if (http_hdr_nxt == NULL) {
-			curl_slist_free_all(http_hdr);
-			return -ENOMEM;
-		}
-		http_hdr = http_hdr_nxt;
 	}
-	curl_easy_setopt(econn->curl, CURLOPT_HTTPHEADER, http_hdr);
 
-	return 0;	/* FIXME detect curl_easy_setopt errors */
+	*_ev_req = ev_req;
+	*_ev_req_type = ev_req_type;
+	*_url = url;
+
+	return 0;
+
+err_ev_req_free:
+	evhttp_request_free(ev_req);
+err_url_free:
+	free(url);
+	return ret;
+}
+
+static void
+ev_conn_close_cb(struct evhttp_connection *ev_conn,
+		 void *data)
+{
+	struct elasto_conn *econn = (struct elasto_conn *)data;
+
+	dbg(1, "Closing elasto conn to %s!\n", econn->hostname);
+}
+
+static int
+elasto_conn_ev_ssl_init(struct elasto_conn *econn,
+			SSL_CTX **_ssl_ctx,
+			SSL **_ssl)
+{
+	int ret;
+	SSL_CTX *ssl_ctx;
+	SSL *ssl;
+	X509_STORE *store;
+
+	ssl_ctx = SSL_CTX_new(SSLv23_method());
+	if (ssl_ctx == NULL) {
+		ret = -EFAULT;
+		goto err_out;
+	}
+
+	store = SSL_CTX_get_cert_store(ssl_ctx);
+	X509_STORE_set_default_paths(store);
+
+	/*
+	 * XXX Use default openssl certificate verification. Should consider:
+	 * https://crypto.stanford.edu/~dabo/pubs/abstracts/ssl-client-bugs.html
+	 */
+
+	if (econn->pem_file != NULL) {
+		ret = SSL_CTX_use_certificate_chain_file(ssl_ctx,
+							 econn->pem_file);
+		if (ret != 1) {
+			ret = -EINVAL;
+			goto err_ctx_free;
+		}
+
+		ret = SSL_CTX_use_PrivateKey_file(ssl_ctx, econn->pem_file,
+						  SSL_FILETYPE_PEM);
+		if (ret != 1) {
+			ret = -EINVAL;
+			goto err_ctx_free;
+		}
+	}
+
+	ssl = SSL_new(ssl_ctx);
+	if (ssl == NULL) {
+		ret = -EFAULT;
+		goto err_ctx_free;
+	}
+
+	*_ssl_ctx = ssl_ctx;
+	*_ssl = ssl;
+
+	return 0;
+
+err_ctx_free:
+	SSL_CTX_free(ssl_ctx);
+err_out:
+	return ret;
+}
+
+static int
+elasto_conn_ev_connect(struct elasto_conn *econn,
+		       bool force_https,
+		       const char *url_host)
+{
+	int ret;
+	struct bufferevent *ev_bev;
+	struct evhttp_connection *ev_conn;
+	struct ssl_ctx_st *ssl_ctx;
+	struct ssl_st *ssl;
+	int port;
+
+	if (econn->insecure_http && !force_https) {
+		port = 80;
+		ev_bev = bufferevent_socket_new(econn->ev_base, -1,
+						BEV_OPT_CLOSE_ON_FREE);
+		if (ev_bev == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+		dbg(1, "Using HTTP instead of HTTPS\n");
+	} else {
+		port = 443;
+		ret = elasto_conn_ev_ssl_init(econn, &ssl_ctx, &ssl);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		/* set hostname for Server Name Indication (SNI) */
+		SSL_set_tlsext_host_name(ssl, url_host);
+
+		ev_bev = bufferevent_openssl_socket_new(econn->ev_base,
+						    -1, ssl,
+						    BUFFEREVENT_SSL_CONNECTING,
+						    (BEV_OPT_CLOSE_ON_FREE
+						    | BEV_OPT_DEFER_CALLBACKS));
+		if (ev_bev == NULL) {
+			ret = -ENOMEM;
+			goto err_ssl_free;
+		}
+
+		/* Needed to avoid EOF error on server disconnect */
+		bufferevent_openssl_set_allow_dirty_shutdown(ev_bev, 1);
+	}
+
+	/* synchronously resolve hostname and connect */
+	ev_conn = evhttp_connection_base_bufferevent_new(econn->ev_base,
+							 NULL,
+							 ev_bev,
+							 url_host,
+							 port);
+	if (ev_conn == NULL) {
+		dbg(0, "failed to resolve/connect to %s:%d\n",
+		    url_host, port);
+		ret = -EBADF;
+		goto err_bev_free;
+	}
+
+	evhttp_connection_set_closecb(ev_conn, ev_conn_close_cb, econn);
+	/* 30s timeout */
+	evhttp_connection_set_timeout(ev_conn, 30);
+
+	econn->hostname = url_host;
+	econn->ev_bev = ev_bev;
+	econn->ssl_ctx = ssl_ctx;
+	econn->ssl = ssl;
+	econn->ev_conn = ev_conn;
+
+	return 0;
+
+err_bev_free:
+	bufferevent_free(ev_bev);
+err_ssl_free:
+	if (!econn->insecure_http) {
+		SSL_CTX_free(ssl_ctx);
+	}
+err_out:
+	return ret;
+}
+
+static void
+elasto_conn_ev_disconnect(struct elasto_conn *econn)
+{
+
+	evhttp_connection_free(econn->ev_conn);
+	econn->ev_conn = NULL;
+	/* FIXME ev_bev is freed with the ev connection???!!!! */
+	// bufferevent_free(econn->ev_bev);
+	econn->ev_bev = NULL;
+	if (!econn->insecure_http) {
+		SSL_CTX_free(econn->ssl_ctx);
+	}
+	econn->hostname = NULL;
 }
 
 int
@@ -530,85 +908,112 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		    struct op *op)
 {
 	int ret;
-	CURLcode res;
 	int redirects = 0;
 	bool redirect;
+	enum evhttp_cmd_type ev_req_type;
+	char *url;
 
 	do {
 		redirect = false;
 		op->econn = econn;
-		ret = elasto_conn_send_prepare(econn, op);
+		ret = elasto_conn_send_prepare(econn, op, &op->req.ev_http,
+					       &ev_req_type, &url);
 		if (ret < 0) {
-			op->econn = NULL;
-			return ret;
+			goto err_op_unassoc;
 		}
 
-		/* dispatch */
-		res = curl_easy_perform(econn->curl);
-		if (res != CURLE_OK) {
-			dbg(0, "curl_easy_perform() failed: %s\n",
-			       curl_easy_strerror(res));
-			op->econn = NULL;
-			return -EBADF;
+		ret = elasto_conn_ev_connect(econn, op->url_https_only,
+					     op->url_host);
+		if (ret < 0) {
+			goto err_preped_free;
 		}
 
-		if (op->rsp.write_cbs == 0) {
-			/* write callback already sets this, otherwise still needed */
-			curl_easy_getinfo(econn->curl, CURLINFO_RESPONSE_CODE,
-					  &op->rsp.err_code);
-			op->rsp.is_error = op_rsp_is_error(op->opcode,
-							      op->rsp.err_code);
+		ret = evhttp_make_request(econn->ev_conn, op->req.ev_http,
+					  ev_req_type, url);
+		if (ret < 0) {
+			/* on failure, the request is freed */
+			op->req.ev_http = NULL;
+			ret = -ENOMEM;
+			goto err_ev_disconnect;
 		}
 
+		ret = event_base_dispatch(econn->ev_base);
+		if (ret < 0) {
+			dbg(0, "event_base_dispatch() failed\n");
+			ret = -EBADF;
+			goto err_ev_disconnect;
+		}
+
+		if (op->req.ev_http != NULL) {
+			/* ev_req is cancelled / freed on error */
+			evhttp_request_free(op->req.ev_http);
+			op->req.ev_http = NULL;
+		}
 		op->econn = NULL;
+		elasto_conn_ev_disconnect(econn);
+		free(url);
+
 		ret = op_rsp_process(op);
 		if (ret == -EAGAIN) {
 			/* response is a redirect, resend */
 			ret = op_req_redirect(op);
 			if (ret < 0) {
-				return ret;
+				goto err_out;
 			}
 			if (++redirects > 2) {
-				return -ELOOP;
+				ret = -ELOOP;
+				goto err_out;
 			}
 			redirect = true;
 		} else if (ret < 0) {
-			return ret;
+			goto err_out;
 		}
 	} while (redirect);
 
 	return 0;
+
+err_ev_disconnect:
+	elasto_conn_ev_disconnect(econn);
+err_preped_free:
+	if (op->req.ev_http != NULL) {
+		evhttp_request_free(op->req.ev_http);
+		op->req.ev_http = NULL;
+	}
+	free(url);
+err_op_unassoc:
+	op->econn = NULL;
+err_out:
+	return ret;
 }
 
 static int
 elasto_conn_init_common(bool insecure_http,
-			struct elasto_conn **econn_out)
+			struct elasto_conn **_econn)
 {
-	uint32_t debug_level;
+	int ret;
 	struct elasto_conn *econn = malloc(sizeof(*econn));
 	if (econn == NULL) {
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto err_out;
 	}
 	memset(econn, 0, sizeof(*econn));
 
-	econn->curl = curl_easy_init();
-	if (econn->curl == NULL) {
-		free(econn);
-		return -ENOMEM;
+	econn->ev_base = event_base_new();
+	if (econn->ev_base == NULL) {
+		ret = -ENOMEM;
+		goto err_conn_free;
 	}
 
-	if (insecure_http) {
-		dbg(1, "Using HTTP instead of HTTPS where available\n");
-		econn->insecure_http = true;
-	}
+	econn->insecure_http = insecure_http;
 
-	debug_level = dbg_level_get();
-	if (debug_level > 2) {
-		curl_easy_setopt(econn->curl, CURLOPT_VERBOSE, 1);
-	}
-	*econn_out = econn;
+	*_econn = econn;
 
 	return 0;
+
+err_conn_free:
+	free(econn);
+err_out:
+	return ret;
 }
 
 int
@@ -620,22 +1025,31 @@ elasto_conn_init_az(const char *pem_file,
 	struct elasto_conn *econn;
 	int ret;
 
+	if (pem_pw != NULL) {
+		dbg(0, "PEM file password not supported with libevent\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = elasto_conn_init_common(insecure_http, &econn);
 	if (ret < 0) {
-		return ret;
+		goto err_out;
 	}
 	econn->type = CONN_TYPE_AZURE;
-	curl_easy_setopt(econn->curl, CURLOPT_TCP_NODELAY, 1);
-	curl_easy_setopt(econn->curl, CURLOPT_SSLCERTTYPE, "PEM");
-	curl_easy_setopt(econn->curl, CURLOPT_SSLCERT, pem_file);
-	curl_easy_setopt(econn->curl, CURLOPT_SSLKEYTYPE, "PEM");
-	curl_easy_setopt(econn->curl, CURLOPT_SSLKEY, pem_file);
-	if (pem_pw) {
-		curl_easy_setopt(econn->curl, CURLOPT_KEYPASSWD, pem_pw);
+	econn->pem_file = strdup(pem_file);
+	if (econn->pem_file == NULL) {
+		ret = -ENOMEM;
+		goto err_conn_free;
 	}
+
 	*econn_out = econn;
 
 	return 0;
+
+err_conn_free:
+	elasto_conn_free(econn);
+err_out:
+	return ret;
 }
 
 /* signing keys are set immediately for S3 */
@@ -663,17 +1077,15 @@ elasto_conn_init_s3(const char *id,
 	econn->sign.account = strdup(id);
 	if (econn->sign.account == NULL) {
 		ret = -ENOMEM;
-		goto err_secret_free;
+		goto err_conn_free;
 	}
 
 	*econn_out = econn;
 
 	return 0;
 
-err_secret_free:
-	free(econn->sign.key);
 err_conn_free:
-	free(econn);
+	elasto_conn_free(econn);
 err_out:
 	return ret;
 }
@@ -681,24 +1093,55 @@ err_out:
 void
 elasto_conn_free(struct elasto_conn *econn)
 {
-	curl_easy_cleanup(econn->curl);
+	event_base_free(econn->ev_base);
 	if (econn->sign.key_len > 0) {
 		free(econn->sign.key);
 		free(econn->sign.account);
 	}
+	free(econn->pem_file);
 	free(econn);
+}
+
+static void
+ev_log_cb(int severity, const char *msg)
+{
+	int mapped_level;
+
+	switch (severity) {
+	case EVENT_LOG_DEBUG:
+		mapped_level = 5;
+		break;
+	case EVENT_LOG_MSG:
+		mapped_level = 4;
+		break;
+	case EVENT_LOG_WARN:
+		mapped_level = 1;
+		break;
+	case EVENT_LOG_ERR:
+		mapped_level = 0;
+		break;
+	default:
+		mapped_level = 0;
+		break;
+	}
+
+	dbg(mapped_level, "%s\n", msg);
 }
 
 int
 elasto_conn_subsys_init(void)
 {
-	CURLcode res;
-
-	res = curl_global_init(CURL_GLOBAL_DEFAULT);
-	if (res != CURLE_OK)
-		return -ENOMEM;
+	SSL_library_init();
+	ERR_load_crypto_strings();	/* called by SSL_load_error_strings? */
+	SSL_load_error_strings();
+	OpenSSL_add_all_algorithms();
 
 	sign_init();
+
+	if (dbg_level_get() > 0) {
+		event_enable_debug_logging(EVENT_DBG_ALL);
+	}
+	event_set_log_callback(ev_log_cb);
 
 	return 0;
 }
@@ -706,6 +1149,7 @@ elasto_conn_subsys_init(void)
 void
 elasto_conn_subsys_deinit(void)
 {
-	curl_global_cleanup();
 	sign_deinit();
+	EVP_cleanup();
+	ERR_free_strings();
 }

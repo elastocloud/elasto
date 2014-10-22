@@ -60,6 +60,7 @@ struct op {
 		struct elasto_data *data;
 		uint32_t num_hdrs;
 		struct list_head hdrs;
+		struct evhttp_request *ev_http;
 	} req;
 
 	struct {
