@@ -30,7 +30,7 @@ Installing
 After building, Elasto can be installed by running:
 > ./waf install
 
-Pre-build packages for GNU/Linux distributions are available via the
+Prebuilt packages for GNU/Linux distributions are available via the
 Elasto project website.
 
 
