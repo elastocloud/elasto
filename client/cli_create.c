@@ -27,7 +27,8 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"
-#include "lib/azure_req.h"
+#include "lib/azure_blob_req.h"
+#include "lib/azure_fs_req.h"
 #include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -332,9 +333,9 @@ cli_create_handle_share(struct cli_args *cli_args)
 		goto err_conn_free;
 	}
 
-	ret = az_req_share_create(cli_args->az.blob_acc,
-				  cli_args->az.ctnr_name,
-				  &op);
+	ret = az_fs_req_share_create(cli_args->az.blob_acc,
+				     cli_args->az.ctnr_name,
+				     &op);
 	if (ret < 0) {
 		goto err_conn_free;
 	}

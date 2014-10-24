@@ -11,19 +11,35 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
-#ifndef _AZURE_REQ_H_
-#define _AZURE_REQ_H_
+#ifndef _AZURE_FS_REQ_H_
+#define _AZURE_FS_REQ_H_
 
-#define REQ_HOST_AZURE_MGMT "management.core.windows.net"
+enum az_fs_opcode {
+	AOP_FS_SHARE_CREATE = 101,
+};
+
+struct az_fs_req_share_create {
+	char *acc;
+	char *share;
+};
+
+struct az_fs_req {
+	union {
+		struct az_fs_req_share_create share_create;
+	};
+};
+
+struct az_fs_rsp {
+	union {
+		/*
+		 * No response specific data handled yet:
+		 * struct az_fs_rsp_share_create share_create;
+		 */
+	};
+};
 
 int
-az_req_sign(const char *acc,
-	    const uint8_t *key,
-	    int key_len,
-	    struct op *op);
-
-int
-az_req_common_hdr_fill(struct op *op,
-		       bool mgmt);
-
-#endif /* ifdef _AZURE_REQ_H_ */
+az_fs_req_share_create(const char *acc,
+		       const char *share,
+		       struct op **_op);
+#endif /* ifdef _AZURE_FS_REQ_H_ */

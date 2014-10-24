@@ -29,7 +29,7 @@
 #include "lib/exml.h"
 #include "lib/data_api.h"
 #include "lib/op.h"
-#include "lib/azure_req.h"
+#include "lib/azure_blob_req.h"
 #include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
