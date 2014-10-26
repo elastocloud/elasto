@@ -16,6 +16,7 @@
 
 enum az_fs_opcode {
 	AOP_FS_SHARE_CREATE = 101,
+	AOP_FS_SHARE_DEL,
 };
 
 struct az_fs_req_share_create {
@@ -23,9 +24,15 @@ struct az_fs_req_share_create {
 	char *share;
 };
 
+struct az_fs_req_share_del {
+	char *acc;
+	char *share;
+};
+
 struct az_fs_req {
 	union {
 		struct az_fs_req_share_create share_create;
+		struct az_fs_req_share_del share_del;
 	};
 };
 
@@ -42,4 +49,9 @@ int
 az_fs_req_share_create(const char *acc,
 		       const char *share,
 		       struct op **_op);
+
+int
+az_fs_req_share_del(const char *acc,
+		    const char *share,
+		    struct op **_op);
 #endif /* ifdef _AZURE_FS_REQ_H_ */

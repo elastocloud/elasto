@@ -165,6 +165,84 @@ err_out:
 }
 
 static void
+az_fs_req_share_del_free(struct az_fs_req_share_del *share_del_req)
+{
+	free(share_del_req->acc);
+	free(share_del_req->share);
+}
+
+int
+az_fs_req_share_del(const char *acc,
+		    const char *share,
+		    struct op **_op)
+{
+	int ret;
+	struct az_fs_ebo *ebo;
+	struct op *op;
+	struct az_fs_req_share_del *share_del_req;
+
+	if ((acc == NULL) || (share == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_ebo_init(AOP_FS_SHARE_DEL, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	share_del_req = &ebo->req.share_del;
+
+	share_del_req->acc = strdup(acc);
+	if (share_del_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+	share_del_req->share = strdup(share);
+	if (share_del_req->share == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	op->method = REQ_METHOD_DELETE;
+	ret = asprintf(&op->url_host,
+		       "%s.file.core.windows.net", acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_share_free;
+	}
+	ret = asprintf(&op->url_path, "/%s?restype=share",
+		       share);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_share_free:
+	free(share_del_req->share);
+err_acc_free:
+	free(share_del_req->acc);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
 az_fs_req_free(struct op *op)
 {
 	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
@@ -172,6 +250,9 @@ az_fs_req_free(struct op *op)
 	switch (ebo->opcode) {
 	case AOP_FS_SHARE_CREATE:
 		az_fs_req_share_create_free(&ebo->req.share_create);
+		break;
+	case AOP_FS_SHARE_DEL:
+		az_fs_req_share_del_free(&ebo->req.share_del);
 		break;
 	default:
 		assert(false);
@@ -186,6 +267,7 @@ az_fs_rsp_free(struct op *op)
 
 	switch (ebo->opcode) {
 	case AOP_FS_SHARE_CREATE:
+	case AOP_FS_SHARE_DEL:
 		/* nothing to do */
 		break;
 	default:
@@ -214,6 +296,7 @@ az_fs_rsp_process(struct op *op)
 
 	switch (op->opcode) {
 	case AOP_FS_SHARE_CREATE:
+	case AOP_FS_SHARE_DEL:
 		/* nothing to do */
 		ret = 0;
 		break;
