@@ -98,13 +98,15 @@ az_fs_req_share_create(const char *acc,
 		       const char *share,
 		       struct op **_op)
 {
-
 	int ret;
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_share_create *share_create_req;
 
-	/* TODO input validation */
+	if ((acc == NULL) || (share == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_fs_ebo_init(AOP_FS_SHARE_CREATE, &ebo);
 	if (ret < 0) {
