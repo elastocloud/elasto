@@ -28,6 +28,7 @@
 #include "lib/exml.h"
 #include "lib/data_api.h"
 #include "lib/op.h"
+#include "lib/azure_mgmt_req.h"
 #include "lib/azure_blob_req.h"
 #include "lib/s3_req.h"
 #include "lib/conn.h"
@@ -42,9 +43,9 @@ cli_sign_conn_setup(struct elasto_conn *econn,
 {
 	int ret;
 	struct op *op;
-	struct az_rsp_acc_keys_get *acc_keys_get_rsp;
+	struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp;
 
-	ret = az_req_acc_keys_get(sub_id, blob_acc, &op);
+	ret = az_mgmt_req_acc_keys_get(sub_id, blob_acc, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -60,7 +61,7 @@ cli_sign_conn_setup(struct elasto_conn *econn,
 		goto err_op_free;
 	}
 
-	acc_keys_get_rsp = az_rsp_acc_keys_get(op);
+	acc_keys_get_rsp = az_mgmt_rsp_acc_keys_get(op);
 	if (acc_keys_get_rsp == NULL) {
 		ret = -ENOMEM;
 		goto err_op_free;

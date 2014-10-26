@@ -29,6 +29,7 @@
 #include "lib/util.h"
 #include "lib/exml.h"
 #include "lib/op.h"
+#include "lib/azure_mgmt_req.h"
 #include "lib/azure_blob_req.h"
 #include "lib/s3_req.h"
 #include "lib/conn.h"
@@ -322,11 +323,11 @@ cli_ls_sub_handle(struct elasto_conn *econn,
 		  const char *sub_name)
 {
 	struct op *op;
-	struct az_rsp_acc_list *acc_list_rsp;
+	struct az_mgmt_rsp_acc_list *acc_list_rsp;
 	struct azure_account *acc;
 	int ret;
 
-	ret = az_req_acc_list(sub_id, &op);
+	ret = az_mgmt_req_acc_list(sub_id, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -342,7 +343,7 @@ cli_ls_sub_handle(struct elasto_conn *econn,
 		goto err_op_free;
 	}
 
-	acc_list_rsp = az_rsp_acc_list(op);
+	acc_list_rsp = az_mgmt_rsp_acc_list(op);
 	if (acc_list_rsp == NULL) {
 		ret = -ENOMEM;
 		goto err_op_free;

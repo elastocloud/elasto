@@ -27,6 +27,7 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"
+#include "lib/azure_mgmt_req.h"
 #include "lib/azure_blob_req.h"
 #include "lib/azure_fs_req.h"
 #include "lib/s3_req.h"
@@ -209,7 +210,7 @@ cli_create_handle_acc(struct cli_args *cli_args)
 		goto err_out;
 	}
 
-	ret = az_req_acc_create(cli_args->az.sub_id,
+	ret = az_mgmt_req_acc_create(cli_args->az.sub_id,
 				  cli_args->az.blob_acc,
 				  cli_args->create.label,
 				  cli_args->create.desc,

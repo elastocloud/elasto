@@ -28,8 +28,7 @@
 #include "lib/exml.h"
 #include "lib/data_api.h"
 #include "lib/op.h"
-#include "lib/azure_blob_req.h"
-#include "lib/s3_req.h"
+#include "lib/azure_mgmt_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "cli_common.h"
@@ -46,12 +45,12 @@ cli_op_wait(struct elasto_conn *econn,
 	    int *err_code)
 {
 	struct op *op;
-	struct az_rsp_status_get *sts_get_rsp;
+	struct az_mgmt_rsp_status_get *sts_get_rsp;
 	int ret;
 	int i;
 
 	for (i = 0; i < CLI_OP_POLL_TIMEOUT; i++) {
-		ret = az_req_status_get(sub_id, req_id, &op);
+		ret = az_mgmt_req_status_get(sub_id, req_id, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -68,7 +67,7 @@ cli_op_wait(struct elasto_conn *econn,
 			goto err_op_free;
 		}
 
-		sts_get_rsp = az_rsp_status_get(op);
+		sts_get_rsp = az_mgmt_rsp_status_get(op);
 		if (sts_get_rsp == NULL) {
 			ret = -ENOMEM;
 			goto err_op_free;

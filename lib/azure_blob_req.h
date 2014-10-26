@@ -15,10 +15,6 @@
 #define _AZURE_BLOB_REQ_H_
 
 enum az_blob_opcode {
-	AOP_ACC_KEYS_GET = 1,
-	AOP_ACC_LIST,
-	AOP_ACC_CREATE,
-	AOP_ACC_DEL,
 	AOP_CONTAINER_LIST,
 	AOP_CONTAINER_CREATE,
 	AOP_CONTAINER_DEL,
@@ -34,47 +30,6 @@ enum az_blob_opcode {
 	AOP_BLOB_PROP_GET,
 	AOP_BLOB_PROP_SET,
 	AOP_BLOB_LEASE,
-	AOP_STATUS_GET,
-};
-
-struct az_req_acc_keys_get {
-	char *sub_id;
-	char *service_name;
-};
-struct az_rsp_acc_keys_get {
-	char *primary;
-	char *secondary;
-};
-
-/* azure storage account descriptor */
-struct azure_account {
-	struct list_node list;
-	char *svc_name;
-	char *label;
-	char *url;
-	char *desc;
-	char *affin_grp;
-	char *location;
-};
-
-struct az_req_acc_list {
-	char *sub_id;
-};
-
-/* @accs is a list of struct azure_account */
-struct az_rsp_acc_list {
-	int num_accs;
-	struct list_head accs;
-};
-
-struct az_req_acc_create {
-	char *sub_id;
-	struct azure_account *acc;
-};
-
-struct az_req_acc_del {
-	char *sub_id;
-	char *account;
 };
 
 struct azure_ctnr {
@@ -292,37 +247,8 @@ struct az_rsp_blob_lease {
 	uint64_t time_remaining;
 };
 
-struct az_req_status_get {
-	char *sub_id;
-	char *req_id;
-};
-
-enum az_req_status {
-	AOP_STATUS_IN_PROGRESS,
-	AOP_STATUS_SUCCEEDED,
-	AOP_STATUS_FAILED,
-};
-
-struct az_rsp_status_get {
-	enum az_req_status status;
-	union {
-		struct {
-			int http_code;
-		} ok;
-		struct {
-			int http_code;
-			int code;
-			char *msg;
-		} err;
-	};
-};
-
 struct az_blob_req {
 	union {
-		struct az_req_acc_keys_get acc_keys_get;
-		struct az_req_acc_list acc_list;
-		struct az_req_acc_create acc_create;
-		struct az_req_acc_del acc_del;
 		struct az_req_ctnr_list ctnr_list;
 		struct az_req_ctnr_create ctnr_create;
 		struct az_req_ctnr_del ctnr_del;
@@ -338,23 +264,18 @@ struct az_blob_req {
 		struct az_req_blob_prop_get blob_prop_get;
 		struct az_req_blob_prop_set blob_prop_set;
 		struct az_req_blob_lease blob_lease;
-		struct az_req_status_get sts_get;
 	};
 };
 
 struct az_blob_rsp {
 	union {
-		struct az_rsp_acc_keys_get acc_keys_get;
-		struct az_rsp_acc_list acc_list;
 		struct az_rsp_ctnr_list ctnr_list;
 		struct az_rsp_blob_list blob_list;
 		struct az_rsp_block_list_get block_list_get;
 		struct az_rsp_blob_prop_get blob_prop_get;
 		struct az_rsp_blob_lease blob_lease;
-		struct az_rsp_status_get sts_get;
 		/*
 		 * No response specific data handled yet:
-		 * struct az_rsp_acc_del acc_del;
 		 * struct az_rsp_ctnr_create ctnr_create;
 		 * struct az_rsp_ctnr_del ctnr_del;
 		 * struct az_rsp_blob_put blob_put;
@@ -366,29 +287,6 @@ struct az_blob_rsp {
 		 */
 	};
 };
-
-int
-az_req_acc_keys_get(const char *sub_id,
-		    const char *service_name,
-		    struct op **_op);
-
-int
-az_req_acc_list(const char *sub_id,
-		struct op **_op);
-
-int
-az_req_acc_create(const char *sub_id,
-		  const char *svc_name,
-		  const char *label,
-		  const char *desc,
-		  const char *affin_grp,
-		  const char *location,
-		  struct op **_op);
-
-int
-az_req_acc_del(const char *sub_id,
-	       const char *account,
-	       struct op **_op);
 
 int
 az_req_ctnr_list(const char *account,
@@ -496,17 +394,6 @@ az_req_blob_lease(const char *account,
 		  int32_t duration,
 		  struct op **_op);
 
-int
-az_req_status_get(const char *sub_id,
-		  const char *req_id,
-		  struct op **_op);
-
-struct az_rsp_acc_keys_get *
-az_rsp_acc_keys_get(struct op *op);
-
-struct az_rsp_acc_list *
-az_rsp_acc_list(struct op *op);
-
 struct az_rsp_ctnr_list *
 az_rsp_ctnr_list(struct op *op);
 
@@ -521,7 +408,4 @@ az_rsp_blob_prop_get(struct op *op);
 
 struct az_rsp_blob_lease *
 az_rsp_blob_lease_get(struct op *op);
-
-struct az_rsp_status_get *
-az_rsp_status_get(struct op *op);
 #endif /* ifdef _AZURE_BLOB_REQ_H_ */

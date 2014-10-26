@@ -29,6 +29,7 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"
+#include "lib/azure_mgmt_req.h"
 #include "lib/azure_blob_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -150,9 +151,9 @@ elasto_fsign_conn_setup(struct elasto_conn *econn,
 {
 	int ret;
 	struct op *op;
-	struct az_rsp_acc_keys_get *acc_keys_get_rsp;
+	struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp;
 
-	ret = az_req_acc_keys_get(sub_id, acc, &op);
+	ret = az_mgmt_req_acc_keys_get(sub_id, acc, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -162,7 +163,7 @@ elasto_fsign_conn_setup(struct elasto_conn *econn,
 		goto err_op_free;
 	}
 
-	acc_keys_get_rsp = az_rsp_acc_keys_get(op);
+	acc_keys_get_rsp = az_mgmt_rsp_acc_keys_get(op);
 	if (acc_keys_get_rsp == NULL) {
 		goto err_op_free;
 	}

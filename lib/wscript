@@ -7,7 +7,7 @@ def configure(conf):
 
 def build(bld):
 	bld.stlib(source='''azure_req.c azure_blob_req.c azure_fs_req.c
-			    s3_req.c op.c sign.c
+			    azure_mgmt_req.c s3_req.c op.c sign.c
 			    base64.c conn.c azure_ssl.c dbg.c data.c
 			    s3_creds.c exml.c util.c''',
 		  target='elasto',

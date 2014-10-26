@@ -28,6 +28,7 @@
 #include "lib/exml.h"
 #include "lib/data_api.h"
 #include "lib/op.h"
+#include "lib/azure_mgmt_req.h"
 #include "lib/azure_blob_req.h"
 #include "lib/s3_req.h"
 #include "lib/conn.h"
@@ -145,7 +146,7 @@ cli_del_acc_handle(struct elasto_conn *econn,
 	struct op *op;
 	int ret;
 
-	ret = az_req_acc_del(sub_id,
+	ret = az_mgmt_req_acc_del(sub_id,
 			       acc_name, &op);
 	if (ret < 0) {
 		goto err_out;
