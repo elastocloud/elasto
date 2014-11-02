@@ -243,6 +243,276 @@ err_out:
 }
 
 static void
+az_fs_req_dirs_files_list_free(
+			struct az_fs_req_dirs_files_list *dirs_files_list_req)
+{
+	free(dirs_files_list_req->acc);
+	free(dirs_files_list_req->share);
+	free(dirs_files_list_req->dir_path);
+}
+
+static void
+az_fs_ent_free(struct az_fs_ent **pent)
+{
+	struct az_fs_ent *ent = *pent;
+
+	if (ent->type == AZ_FS_ENT_TYPE_FILE) {
+		free(ent->file.name);
+	} else if (ent->type == AZ_FS_ENT_TYPE_DIR) {
+		free(ent->dir.name);
+	}
+	free(ent);
+}
+
+static void
+az_fs_rsp_dirs_files_list_free(struct az_fs_rsp_dirs_files_list *dirs_files_list_rsp)
+{
+	struct az_fs_ent *ent;
+	struct az_fs_ent *ent_n;
+
+	if (dirs_files_list_rsp->num_ents == 0) {
+		return;
+	}
+
+	list_for_each_safe(&dirs_files_list_rsp->ents, ent, ent_n, list) {
+		az_fs_ent_free(&ent);
+	}
+}
+
+int
+az_fs_req_dirs_files_list(const char *acc,
+			  const char *share,
+			  const char *dir_path,
+			  struct op **_op)
+{
+	int ret;
+	struct az_fs_ebo *ebo;
+	struct op *op;
+	struct az_fs_req_dirs_files_list *dirs_files_list_req;
+
+	if ((acc == NULL) || (share == NULL) || (dir_path == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_ebo_init(AOP_FS_DIRS_FILES_LIST, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	dirs_files_list_req = &ebo->req.dirs_files_list;
+
+	dirs_files_list_req->acc = strdup(acc);
+	if (dirs_files_list_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	dirs_files_list_req->share = strdup(share);
+	if (dirs_files_list_req->share == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	dirs_files_list_req->dir_path = strdup(dir_path);
+	if (dirs_files_list_req->dir_path == NULL) {
+		ret = -ENOMEM;
+		goto err_share_free;
+	}
+
+	op->method = REQ_METHOD_GET;
+	op->url_https_only = false;	/* TODO check! */
+	ret = asprintf(&op->url_host,
+		       "%s.file.core.windows.net", acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_path_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s?restype=directory&comp=list",
+		       share, dir_path);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_path_free:
+	free(dirs_files_list_req->dir_path);
+err_share_free:
+	free(dirs_files_list_req->share);
+err_acc_free:
+	free(dirs_files_list_req->acc);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static int
+az_fs_rsp_ent_file_iter_process(struct xml_doc *xdoc,
+				const char *path,
+				const char *val,
+				void *cb_data)
+{
+	int ret;
+	struct az_fs_rsp_dirs_files_list *dirs_files_list_rsp
+				= (struct az_fs_rsp_dirs_files_list *)cb_data;
+	struct az_fs_ent *ent;
+
+	/* request callback for subsequent file descriptors */
+	ret = exml_path_cb_want(xdoc,
+				"/EnumerationResults/Entries/File", false,
+				az_fs_rsp_ent_file_iter_process,
+				dirs_files_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ent = malloc(sizeof(*ent));
+	if (ent == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(ent, 0, sizeof(*ent));
+	ent->type = AZ_FS_ENT_TYPE_FILE;
+
+	ret = exml_str_want(xdoc, "./Name", true, &ent->file.name, NULL);
+	if (ret < 0) {
+		goto err_ent_free;
+	}
+
+	ret = exml_uint64_want(xdoc, "./Properties/Content-Length", true,
+			       &ent->file.size, NULL);
+	if (ret < 0) {
+		goto err_ent_free;
+	}
+
+	list_add_tail(&dirs_files_list_rsp->ents, &ent->list);
+	dirs_files_list_rsp->num_ents++;
+
+	return 0;
+
+err_ent_free:
+	free(ent);
+err_out:
+	return ret;
+}
+
+static int
+az_fs_rsp_ent_dir_iter_process(struct xml_doc *xdoc,
+			       const char *path,
+			       const char *val,
+			       void *cb_data)
+{
+	int ret;
+	struct az_fs_rsp_dirs_files_list *dirs_files_list_rsp
+				= (struct az_fs_rsp_dirs_files_list *)cb_data;
+	struct az_fs_ent *ent;
+
+	/* request callback for subsequent dir descriptors */
+	ret = exml_path_cb_want(xdoc,
+				"/EnumerationResults/Entries/Directory", false,
+				az_fs_rsp_ent_dir_iter_process,
+				dirs_files_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ent = malloc(sizeof(*ent));
+	if (ent == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(ent, 0, sizeof(*ent));
+	ent->type = AZ_FS_ENT_TYPE_DIR;
+
+	ret = exml_str_want(xdoc, "./Name", true, &ent->file.name, NULL);
+	if (ret < 0) {
+		goto err_ent_free;
+	}
+
+	list_add_tail(&dirs_files_list_rsp->ents, &ent->list);
+	dirs_files_list_rsp->num_ents++;
+
+	return 0;
+
+err_ent_free:
+	free(ent);
+err_out:
+	return ret;
+}
+
+static int
+az_fs_rsp_dirs_files_list_process(struct op *op,
+			struct az_fs_rsp_dirs_files_list *dirs_files_list_rsp)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	struct az_fs_ent *ent;
+	struct az_fs_ent *ent_n;
+
+	assert(op->opcode == AOP_FS_DIRS_FILES_LIST);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	assert(op->rsp.data->base_off == 0);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	list_head_init(&dirs_files_list_rsp->ents);
+
+	/* request callback for first file descriptor */
+	ret = exml_path_cb_want(xdoc,
+				"/EnumerationResults/Entries/File", false,
+				az_fs_rsp_ent_file_iter_process,
+				dirs_files_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
+	}
+
+	ret = exml_path_cb_want(xdoc,
+				"/EnumerationResults/Entries/Directory", false,
+				az_fs_rsp_ent_dir_iter_process,
+				dirs_files_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
+	}
+
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		/* need to walk list in case cb fired */
+		goto err_ents_free;
+	}
+
+	exml_free(xdoc);
+	return 0;
+
+err_ents_free:
+	list_for_each_safe(&dirs_files_list_rsp->ents, ent, ent_n, list) {
+		az_fs_ent_free(&ent);
+	}
+err_xdoc_free:
+	exml_free(xdoc);
+err_out:
+	return ret;
+}
+
+
+static void
 az_fs_req_free(struct op *op)
 {
 	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
@@ -253,6 +523,9 @@ az_fs_req_free(struct op *op)
 		break;
 	case AOP_FS_SHARE_DEL:
 		az_fs_req_share_del_free(&ebo->req.share_del);
+		break;
+	case AOP_FS_DIRS_FILES_LIST:
+		az_fs_req_dirs_files_list_free(&ebo->req.dirs_files_list);
 		break;
 	default:
 		assert(false);
@@ -266,6 +539,9 @@ az_fs_rsp_free(struct op *op)
 	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
 
 	switch (ebo->opcode) {
+	case AOP_FS_DIRS_FILES_LIST:
+		az_fs_rsp_dirs_files_list_free(&ebo->rsp.dirs_files_list);
+		break;
 	case AOP_FS_SHARE_CREATE:
 	case AOP_FS_SHARE_DEL:
 		/* nothing to do */
@@ -295,6 +571,10 @@ az_fs_rsp_process(struct op *op)
 	}
 
 	switch (op->opcode) {
+	case AOP_FS_DIRS_FILES_LIST:
+		ret = az_fs_rsp_dirs_files_list_process(op,
+						&ebo->rsp.dirs_files_list);
+		break;
 	case AOP_FS_SHARE_CREATE:
 	case AOP_FS_SHARE_DEL:
 		/* nothing to do */
@@ -306,4 +586,11 @@ az_fs_rsp_process(struct op *op)
 	};
 
 	return ret;
+}
+
+struct az_fs_rsp_dirs_files_list *
+az_fs_rsp_dirs_files_list(struct op *op)
+{
+	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
+	return &ebo->rsp.dirs_files_list;
 }

@@ -17,6 +17,7 @@
 enum az_fs_opcode {
 	AOP_FS_SHARE_CREATE = 101,
 	AOP_FS_SHARE_DEL,
+	AOP_FS_DIRS_FILES_LIST,
 };
 
 struct az_fs_req_share_create {
@@ -29,18 +30,51 @@ struct az_fs_req_share_del {
 	char *share;
 };
 
+struct az_fs_req_dirs_files_list {
+	char *acc;
+	char *share;
+	char *dir_path;
+};
+
+/* @file.size may be incorrect due to SMB oplocks etc. */
+struct az_fs_ent {
+	struct list_node list;
+	enum {
+		AZ_FS_ENT_TYPE_FILE,
+		AZ_FS_ENT_TYPE_DIR,
+	} type;
+	union {
+		struct {
+			char *name;
+			uint64_t size;
+		} file;
+		struct {
+			char *name;
+		} dir;
+	};
+};
+
+struct az_fs_rsp_dirs_files_list {
+	int num_ents;
+	struct list_head ents;
+};
+
 struct az_fs_req {
 	union {
 		struct az_fs_req_share_create share_create;
 		struct az_fs_req_share_del share_del;
+		struct az_fs_req_dirs_files_list dirs_files_list;
 	};
 };
 
 struct az_fs_rsp {
 	union {
+		struct az_fs_rsp_dirs_files_list dirs_files_list;
 		/*
 		 * No response specific data handled yet:
 		 * struct az_fs_rsp_share_create share_create;
+		 * struct az_fs_rsp_share_del share_del;
+		 * struct az_fs_rsp_dirs_files_list dirs_files_list;
 		 */
 	};
 };
@@ -54,4 +88,13 @@ int
 az_fs_req_share_del(const char *acc,
 		    const char *share,
 		    struct op **_op);
+
+int
+az_fs_req_dirs_files_list(const char *acc,
+			  const char *share,
+			  const char *dir_path,
+			  struct op **_op);
+
+struct az_fs_rsp_dirs_files_list *
+az_fs_rsp_dirs_files_list(struct op *op);
 #endif /* ifdef _AZURE_FS_REQ_H_ */
