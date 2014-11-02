@@ -18,6 +18,8 @@ enum az_fs_opcode {
 	AOP_FS_SHARE_CREATE = 101,
 	AOP_FS_SHARE_DEL,
 	AOP_FS_DIRS_FILES_LIST,
+	AOP_FS_DIR_CREATE,
+	AOP_FS_DIR_DEL,
 };
 
 struct az_fs_req_share_create {
@@ -59,11 +61,29 @@ struct az_fs_rsp_dirs_files_list {
 	struct list_head ents;
 };
 
+/* @parent_dir_path optional */
+struct az_fs_req_dir_create {
+	char *acc;
+	char *share;
+	char *parent_dir_path;
+	char *dir;
+};
+
+/* @parent_dir_path optional */
+struct az_fs_req_dir_del {
+	char *acc;
+	char *share;
+	char *parent_dir_path;
+	char *dir;
+};
+
 struct az_fs_req {
 	union {
 		struct az_fs_req_share_create share_create;
 		struct az_fs_req_share_del share_del;
 		struct az_fs_req_dirs_files_list dirs_files_list;
+		struct az_fs_req_dir_create dir_create;
+		struct az_fs_req_dir_del dir_del;
 	};
 };
 
@@ -75,6 +95,8 @@ struct az_fs_rsp {
 		 * struct az_fs_rsp_share_create share_create;
 		 * struct az_fs_rsp_share_del share_del;
 		 * struct az_fs_rsp_dirs_files_list dirs_files_list;
+		 * struct az_fs_rsp_dir_create dir_create;
+		 * struct az_fs_rsp_dir_del dir_del;
 		 */
 	};
 };
@@ -97,4 +119,18 @@ az_fs_req_dirs_files_list(const char *acc,
 
 struct az_fs_rsp_dirs_files_list *
 az_fs_rsp_dirs_files_list(struct op *op);
+
+int
+az_fs_req_dir_del(const char *acc,
+		  const char *share,
+		  const char *parent_dir_path,	/* optional */
+		  const char *dir,
+		  struct op **_op);
+
+int
+az_fs_req_dir_create(const char *acc,
+		     const char *share,
+		     const char *parent_dir_path,	/* optional */
+		     const char *dir,
+		     struct op **_op);
 #endif /* ifdef _AZURE_FS_REQ_H_ */
