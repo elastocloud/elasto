@@ -12,7 +12,7 @@ def build(bld):
 		print("Skipping test: Cmocka library required")
 		return
 	bld.program(source='''cm_unity.c cm_data.c  cm_sign_azure.c cm_sign_s3.c
-			      cm_file.c cm_xml.c''',
+			      cm_file.c cm_xml.c cm_az_fs.c''',
 		    target='cm_unity',
 		    lib=['curl', 'crypto', 'cmocka', 'expat'],
 		    use=['ccan', 'elasto', 'elasto_file'],

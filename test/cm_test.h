@@ -47,4 +47,7 @@ cm_xml_run(void);
 int
 cm_file_run(void);
 
+int
+cm_az_fs_run(void);
+
 #endif /* _CM_TEST_H_ */
