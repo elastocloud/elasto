@@ -14,6 +14,10 @@
 #ifndef _ELASTO_DATA_H_
 #define _ELASTO_DATA_H_
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 enum elasto_data_type {
 	ELASTO_DATA_NONE = 0,
 	ELASTO_DATA_IOV,
@@ -63,5 +67,9 @@ elasto_data_iov_new(uint8_t *buf,
 int
 elasto_data_iov_grow(struct elasto_data *data,
 		     uint64_t grow_by);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* _ELASTO_DATA_H_ */

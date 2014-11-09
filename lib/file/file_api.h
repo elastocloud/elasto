@@ -14,6 +14,10 @@
 #ifndef _ELASTO_FILE_H_
 #define _ELASTO_FILE_H_
 
+#ifdef  __cplusplus
+extern "C" {
+#endif
+
 struct elasto_fh {
 	void *priv;
 };
@@ -103,5 +107,9 @@ elasto_fstat(struct elasto_fh *fh,
 
 int
 elasto_fdebug(int level);
+
+#ifdef  __cplusplus
+}
+#endif
 
 #endif /* _ELASTO_FILE_H_ */
