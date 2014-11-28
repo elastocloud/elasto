@@ -923,6 +923,333 @@ err_out:
 }
 
 static void
+az_fs_req_file_get_free(struct az_fs_req_file_get *file_get_req)
+{
+	free(file_get_req->acc);
+	free(file_get_req->share);
+	free(file_get_req->parent_dir_path);
+	free(file_get_req->file);
+}
+
+static int
+az_fs_req_file_get_hdr_fill(struct az_fs_req_file_get *file_get_req,
+			    struct op *op)
+{
+	int ret;
+	char *hdr_str;
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (file_get_req->len > 0) {
+		ret = asprintf(&hdr_str, "bytes=%" PRIu64 "-%" PRIu64,
+			       file_get_req->off,
+			       (file_get_req->off + file_get_req->len - 1));
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_hdrs_free;
+		}
+		ret = op_req_hdr_add(op, "x-ms-range", hdr_str);
+		free(hdr_str);
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
+/*
+ * pretty similar to blob_get
+ * if @len is zero then ignore @off and retrieve entire blob
+ */
+int
+az_fs_req_file_get(const char *acc,
+		   const char *share,
+		   const char *parent_dir_path,
+		   const char *file,
+		   uint64_t off,
+		   uint64_t len,
+		   struct elasto_data *dest_data,
+		   struct op **_op)
+{
+	int ret;
+	struct az_fs_ebo *ebo;
+	struct op *op;
+	struct az_fs_req_file_get *file_get_req;
+
+	if ((acc == NULL) || (share == NULL) || (file == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_ebo_init(AOP_FS_FILE_GET, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	file_get_req = &ebo->req.file_get;
+
+	file_get_req->acc = strdup(acc);
+	if (file_get_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	file_get_req->share = strdup(share);
+	if (file_get_req->share == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	if (parent_dir_path != NULL) {
+		file_get_req->parent_dir_path = strdup(parent_dir_path);
+		if (file_get_req->parent_dir_path == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+	}
+
+	file_get_req->file = strdup(file);
+	if (file_get_req->file == NULL) {
+		ret = -ENOMEM;
+		goto err_path_free;
+	}
+
+	if (len > 0) {
+		file_get_req->off = off;
+		file_get_req->len = len;
+	}
+
+	if (dest_data == NULL) {
+		dbg(3, "no recv buffer, allocating on arrival\n");
+	}
+	op->rsp.data = dest_data;
+	/* TODO add a foreign flag so @req.data is not freed with @op */
+
+	op->method = REQ_METHOD_GET;
+	op->url_https_only = false;
+	ret = asprintf(&op->url_host,
+		       "%s.file.core.windows.net", acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_file_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s%s%s",
+		       share,
+		       (parent_dir_path ? parent_dir_path : ""),
+		       (parent_dir_path ? "/" : ""), file);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_fs_req_file_get_hdr_fill(file_get_req, op);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_file_free:
+	free(file_get_req->file);
+err_path_free:
+	free(file_get_req->parent_dir_path);
+err_share_free:
+	free(file_get_req->share);
+err_acc_free:
+	free(file_get_req->acc);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
+az_fs_req_file_put_free(struct az_fs_req_file_put *file_put_req)
+{
+	free(file_put_req->acc);
+	free(file_put_req->share);
+	free(file_put_req->parent_dir_path);
+	free(file_put_req->file);
+}
+
+static int
+az_fs_req_file_put_hdr_fill(struct az_fs_req_file_put *file_put_req,
+			    struct op *op)
+{
+	int ret;
+	char *hdr_str;
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (file_put_req->len > 0) {
+		ret = asprintf(&hdr_str, "bytes=%" PRIu64 "-%" PRIu64,
+			       file_put_req->off,
+			       (file_put_req->off + file_put_req->len - 1));
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_hdrs_free;
+		}
+		ret = op_req_hdr_add(op, "x-ms-range", hdr_str);
+		free(hdr_str);
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	}
+
+	if (file_put_req->clear_data) {
+		ret = op_req_hdr_add(op, "x-ms-write", "clear");
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	} else {
+		ret = op_req_hdr_add(op, "x-ms-write", "update");
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
+/*
+ * pretty similar to blob_put
+ * update or clear @len bytes of data at @off.
+ * if @src_data is null then clear the byte range, otherwise update.
+ */
+int
+az_fs_req_file_put(const char *acc,
+		   const char *share,
+		   const char *parent_dir_path,
+		   const char *file,
+		   uint64_t off,
+		   uint64_t len,
+		   struct elasto_data *src_data,
+		   struct op **_op)
+{
+	int ret;
+	struct az_fs_ebo *ebo;
+	struct op *op;
+	struct az_fs_req_file_put *file_put_req;
+
+	if ((acc == NULL) || (share == NULL) || (file == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_ebo_init(AOP_FS_FILE_PUT, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	file_put_req = &ebo->req.file_put;
+
+	file_put_req->acc = strdup(acc);
+	if (file_put_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	file_put_req->share = strdup(share);
+	if (file_put_req->share == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	if (parent_dir_path != NULL) {
+		file_put_req->parent_dir_path = strdup(parent_dir_path);
+		if (file_put_req->parent_dir_path == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+	}
+
+	file_put_req->file = strdup(file);
+	if (file_put_req->file == NULL) {
+		ret = -ENOMEM;
+		goto err_path_free;
+	}
+
+	if (len > 0) {
+		file_put_req->off = off;
+		file_put_req->len = len;
+	}
+
+	if (src_data == NULL) {
+		file_put_req->clear_data = true;
+	} else {
+		file_put_req->clear_data = false;
+		op->req.data = src_data;
+		/* TODO add a foreign flag so @req.data is not freed with @op */
+	}
+
+	op->method = REQ_METHOD_PUT;
+	op->url_https_only = false;
+	ret = asprintf(&op->url_host,
+		       "%s.file.core.windows.net", acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_file_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s%s%s",
+		       share,
+		       (parent_dir_path ? parent_dir_path : ""),
+		       (parent_dir_path ? "/" : ""), file);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_fs_req_file_put_hdr_fill(file_put_req, op);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_file_free:
+	free(file_put_req->file);
+err_path_free:
+	free(file_put_req->parent_dir_path);
+err_share_free:
+	free(file_put_req->share);
+err_acc_free:
+	free(file_put_req->acc);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
 az_fs_req_free(struct op *op)
 {
 	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
@@ -949,6 +1276,12 @@ az_fs_req_free(struct op *op)
 	case AOP_FS_FILE_DEL:
 		az_fs_req_file_del_free(&ebo->req.file_del);
 		break;
+	case AOP_FS_FILE_GET:
+		az_fs_req_file_get_free(&ebo->req.file_get);
+		break;
+	case AOP_FS_FILE_PUT:
+		az_fs_req_file_put_free(&ebo->req.file_put);
+		break;
 	default:
 		assert(false);
 		break;
@@ -970,6 +1303,8 @@ az_fs_rsp_free(struct op *op)
 	case AOP_FS_DIR_DEL:
 	case AOP_FS_FILE_CREATE:
 	case AOP_FS_FILE_DEL:
+	case AOP_FS_FILE_GET:
+	case AOP_FS_FILE_PUT:
 		/* nothing to do */
 		break;
 	default:
@@ -1007,6 +1342,8 @@ az_fs_rsp_process(struct op *op)
 	case AOP_FS_DIR_DEL:
 	case AOP_FS_FILE_CREATE:
 	case AOP_FS_FILE_DEL:
+	case AOP_FS_FILE_GET:
+	case AOP_FS_FILE_PUT:
 		/* nothing to do */
 		ret = 0;
 		break;

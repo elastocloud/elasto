@@ -22,6 +22,8 @@ enum az_fs_opcode {
 	AOP_FS_DIR_DEL,
 	AOP_FS_FILE_CREATE,
 	AOP_FS_FILE_DEL,
+	AOP_FS_FILE_GET,
+	AOP_FS_FILE_PUT,
 };
 
 struct az_fs_req_share_create {
@@ -95,6 +97,25 @@ struct az_fs_req_file_del {
 	char *file;
 };
 
+struct az_fs_req_file_get {
+	char *acc;
+	char *share;
+	char *parent_dir_path;
+	char *file;
+	uint64_t off;
+	uint64_t len;
+};
+
+struct az_fs_req_file_put {
+	char *acc;
+	char *share;
+	char *parent_dir_path;
+	char *file;
+	uint64_t off;
+	uint64_t len;
+	bool clear_data;
+};
+
 struct az_fs_req {
 	union {
 		struct az_fs_req_share_create share_create;
@@ -104,6 +125,8 @@ struct az_fs_req {
 		struct az_fs_req_dir_del dir_del;
 		struct az_fs_req_file_create file_create;
 		struct az_fs_req_file_del file_del;
+		struct az_fs_req_file_get file_get;
+		struct az_fs_req_file_put file_put;
 	};
 };
 
@@ -119,6 +142,8 @@ struct az_fs_rsp {
 		 * struct az_fs_rsp_dir_del dir_del;
 		 * struct az_fs_rsp_file_create file_create;
 		 * struct az_fs_rsp_file_del file_del;
+		 * struct az_fs_rsp_file_get file_get;
+		 * struct az_fs_rsp_file_put file_put;
 		 */
 	};
 };
@@ -169,4 +194,24 @@ az_fs_req_file_del(const char *acc,
 		  const char *parent_dir_path,	/* optional */
 		  const char *file,
 		  struct op **_op);
+
+int
+az_fs_req_file_get(const char *acc,
+		   const char *share,
+		   const char *parent_dir_path,
+		   const char *file,
+		   uint64_t off,
+		   uint64_t len,
+		   struct elasto_data *dest_data,
+		   struct op **_op);
+
+int
+az_fs_req_file_put(const char *acc,
+		   const char *share,
+		   const char *parent_dir_path,
+		   const char *file,
+		   uint64_t off,
+		   uint64_t len,
+		   struct elasto_data *src_data,
+		   struct op **_op);
 #endif /* ifdef _AZURE_FS_REQ_H_ */
