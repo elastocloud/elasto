@@ -92,7 +92,7 @@ struct xml_doc {
 };
 
 static void
-exml_el_free(const void *_el)
+exml_el_free(void *_el)
 {
 	struct xml_el *el = (struct xml_el *)_el;
 
