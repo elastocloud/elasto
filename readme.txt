@@ -41,7 +41,7 @@ Running (short version)
   1. Create an Azure account
 
   2. Download the PublishSettings file for the account:
-     https://windows.azure.com/download/publishprofile.aspx
+     https://manage.windowsazure.com/publishsettings/index
 
   3. elasto_cli -s Azure_PublishSettings_File
 
@@ -67,7 +67,7 @@ Running (not so short version)
   SSL/TLS, as well as the subscriber ID.
   After creating an Azure account, the PublishSettings file can be
   downloaded at:
-  https://windows.azure.com/download/publishprofile.aspx
+  https://manage.windowsazure.com/publishsettings/index
 
   The PublishSettings file contains security sensitive information, care
   should be taken to ensure the file remains private.
