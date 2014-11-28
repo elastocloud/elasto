@@ -189,7 +189,7 @@ azure_ssl_pubset_process(const char *ps_file,
 	if (ret < 0) {
 		dbg(0, "Failed to parse Azure Subscription data from %s\n",
 		    ps_file);
-		goto err_sub_free;
+		goto err_xdoc_free;
 	}
 
 	pem_file_path = mkdtemp(pem_dir);
