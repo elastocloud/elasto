@@ -26,6 +26,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <errno.h>
 #include <cmocka.h>
 
 #include "ccan/list/list.h"
@@ -1002,6 +1003,56 @@ cm_xml_parse_multi(void **state)
 	exml_free(xdoc);
 }
 
+static void
+cm_xml_attr_find_partial(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val1 = NULL;
+	char *val2 = NULL;
+	char *val3 = NULL;
+	bool got_attr1 = false;
+	bool got_attr2 = false;
+	bool got_attr3 = false;
+
+	ret = exml_slurp(cm_xml_data_attr_basic,
+			strlen(cm_xml_data_attr_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/PublishData/PublishProfile/Subscription[@Id]",
+			   true,
+			   &val1,
+			   &got_attr1);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,
+			   "/PublishData/PublishProfile/Subscription[@Name]",
+			   true,
+			   &val2,
+			   &got_attr2);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc,	/* no attribute */
+			  "/PublishData/PublishProfile[@ManagementCertificate]",
+			   true,
+			   &val3,
+			   &got_attr3);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, -ENOENT);
+	/* exml_free frees the found values */
+	exml_free(xdoc);
+
+	assert_true(got_attr1);
+	assert_null(val1);
+	assert_true(got_attr2);
+	assert_null(val2);
+	assert_false(got_attr3);
+}
+
+
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
 	unit_test(cm_xml_str_dup),
@@ -1021,6 +1072,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_empty_attrs),
 	unit_test(cm_xml_attr_key_val_match),
 	unit_test(cm_xml_parse_multi),
+	unit_test(cm_xml_attr_find_partial),
 };
 
 int
