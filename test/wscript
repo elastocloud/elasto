@@ -17,4 +17,5 @@ def build(bld):
 		    lib=['curl', 'crypto', 'cmocka', 'expat'],
 		    use=['ccan', 'elasto', 'elasto_file'],
 		    includes = '. .. ../lib',
+		    defines = ['_GNU_SOURCE'],
 		    install_path = None)

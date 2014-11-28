@@ -13,4 +13,5 @@ def build(bld):
 		    lib=['curl', 'crypto', 'expat'],
 		    use=['ccan', 'elasto'],
 		    includes = '. ..',
+		    defines = ['_GNU_SOURCE'],
 		    install_path = '${BINDIR}')

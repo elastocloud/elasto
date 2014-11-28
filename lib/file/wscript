@@ -14,7 +14,8 @@ def build(bld):
 		  vnum='0.0.1',
 		  lib=['curl', 'crypto', 'expat'],
 		  use=['elasto', 'ccan'],
-		  includes = '. .. ../../')
+		  includes = '. .. ../../',
+		  defines = ['_GNU_SOURCE'])
 	bld.install_as('${INCLUDEDIR}/elasto/file.h', 'file_api.h')
 	if bld.cmd == 'install':
 		bld.add_post_fun(call_ldconfig)

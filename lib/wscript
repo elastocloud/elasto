@@ -13,5 +13,6 @@ def build(bld):
 		  target='elasto',
 		  lib=['curl', 'crypto', 'expat'],
 		  use=['ccan'],
-		  includes = '. ..')
+		  includes = '. ..',
+		  defines = ['_GNU_SOURCE'])
 	bld.install_as('${INCLUDEDIR}/elasto/data.h', 'data_api.h')

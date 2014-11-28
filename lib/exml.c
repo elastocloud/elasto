@@ -16,7 +16,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <search.h>
 #include <inttypes.h>
