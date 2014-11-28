@@ -20,6 +20,8 @@ enum az_fs_opcode {
 	AOP_FS_DIRS_FILES_LIST,
 	AOP_FS_DIR_CREATE,
 	AOP_FS_DIR_DEL,
+	AOP_FS_FILE_CREATE,
+	AOP_FS_FILE_DEL,
 };
 
 struct az_fs_req_share_create {
@@ -77,6 +79,22 @@ struct az_fs_req_dir_del {
 	char *dir;
 };
 
+/* @parent_dir_path optional */
+struct az_fs_req_file_create {
+	char *acc;
+	char *share;
+	char *parent_dir_path;
+	char *file;
+};
+
+/* @parent_dir_path optional */
+struct az_fs_req_file_del {
+	char *acc;
+	char *share;
+	char *parent_dir_path;
+	char *file;
+};
+
 struct az_fs_req {
 	union {
 		struct az_fs_req_share_create share_create;
@@ -84,6 +102,8 @@ struct az_fs_req {
 		struct az_fs_req_dirs_files_list dirs_files_list;
 		struct az_fs_req_dir_create dir_create;
 		struct az_fs_req_dir_del dir_del;
+		struct az_fs_req_file_create file_create;
+		struct az_fs_req_file_del file_del;
 	};
 };
 
@@ -97,6 +117,8 @@ struct az_fs_rsp {
 		 * struct az_fs_rsp_dirs_files_list dirs_files_list;
 		 * struct az_fs_rsp_dir_create dir_create;
 		 * struct az_fs_rsp_dir_del dir_del;
+		 * struct az_fs_rsp_file_create file_create;
+		 * struct az_fs_rsp_file_del file_del;
 		 */
 	};
 };
@@ -121,6 +143,13 @@ struct az_fs_rsp_dirs_files_list *
 az_fs_rsp_dirs_files_list(struct op *op);
 
 int
+az_fs_req_dir_create(const char *acc,
+		     const char *share,
+		     const char *parent_dir_path,	/* optional */
+		     const char *dir,
+		     struct op **_op);
+
+int
 az_fs_req_dir_del(const char *acc,
 		  const char *share,
 		  const char *parent_dir_path,	/* optional */
@@ -128,9 +157,16 @@ az_fs_req_dir_del(const char *acc,
 		  struct op **_op);
 
 int
-az_fs_req_dir_create(const char *acc,
+az_fs_req_file_create(const char *acc,
 		     const char *share,
 		     const char *parent_dir_path,	/* optional */
-		     const char *dir,
+		     const char *file,
 		     struct op **_op);
+
+int
+az_fs_req_file_del(const char *acc,
+		  const char *share,
+		  const char *parent_dir_path,	/* optional */
+		  const char *file,
+		  struct op **_op);
 #endif /* ifdef _AZURE_FS_REQ_H_ */
