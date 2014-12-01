@@ -14,6 +14,8 @@
 #ifndef _AZURE_SSL_H_
 #define _AZURE_SSL_H_
 
+#define AZURE_SSL_PUBSET_VERS_2 "2.0"
+
 int
 azure_ssl_pubset_process(const char *ps_file,
 			 char **pem_file,

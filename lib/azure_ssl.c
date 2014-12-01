@@ -36,6 +36,7 @@
 #include "op.h"
 #include "conn.h"
 #include "util.h"
+#include "lib/azure_ssl.h"
 
 static int
 azure_ssl_pem_write(char *mcert_b64, char *pem_file)
@@ -121,6 +122,70 @@ err_out:
 	return ret;
 }
 
+static int
+azure_ssl_pubset_want_v1(struct xml_doc *xdoc,
+			 char **_sid,
+			 char **_sname,
+			 char **_mcert_b64)
+{
+	int ret;
+
+	ret = exml_str_want(xdoc,
+			    "/PublishData/PublishProfile/Subscription[@Id]",
+			    true, _sid, NULL);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = exml_str_want(xdoc,
+			    "/PublishData/PublishProfile/Subscription[@Name]",
+			    true, _sname, NULL);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = exml_str_want(xdoc,
+			  "/PublishData/PublishProfile[@ManagementCertificate]",
+			    true, _mcert_b64, NULL);
+	if (ret < 0) {
+		return ret;
+	}
+
+	return 0;
+}
+
+static int
+azure_ssl_pubset_want_v2(struct xml_doc *xdoc,
+			 char **_sid,
+			 char **_sname,
+			 char **_mcert_b64)
+{
+	int ret;
+
+	ret = exml_str_want(xdoc,
+			    "/PublishData/PublishProfile/Subscription[@Id]",
+			    true, _sid, NULL);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = exml_str_want(xdoc,
+			    "/PublishData/PublishProfile/Subscription[@Name]",
+			    true, _sname, NULL);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = exml_str_want(xdoc,
+	     "/PublishData/PublishProfile/Subscription[@ManagementCertificate]",
+			    true, _mcert_b64, NULL);
+	if (ret < 0) {
+		return ret;
+	}
+
+	return 0;
+}
+
 /*
  * Process Azure publishsettings XML
  *
@@ -144,6 +209,8 @@ azure_ssl_pubset_process(const char *ps_file,
 	char *ps_path = NULL;
 	char pem_dir[] = "/tmp/elasto-XXXXXX";
 	char *pem_file_path = NULL;
+	char *schema_vers = NULL;
+	bool vers_present = false;
 	char *sid = NULL;
 	char *sname = NULL;
 	char *mcert_b64 = NULL;
@@ -165,22 +232,42 @@ azure_ssl_pubset_process(const char *ps_file,
 	}
 
 	ret = exml_str_want(xdoc,
-			    "/PublishData/PublishProfile/Subscription[@Id]",
-			    true, &sid, NULL);
+			    "/PublishData/PublishProfile[@SchemaVersion]",
+			    false, &schema_vers, &vers_present);
 	if (ret < 0) {
 		goto err_xdoc_free;
 	}
 
-	ret = exml_str_want(xdoc,
-			    "/PublishData/PublishProfile/Subscription[@Name]",
-			    true, &sname, NULL);
+	ret = exml_parse(xdoc);
 	if (ret < 0) {
-		goto err_sub_free;
+		dbg(0, "Failed to parse Azure Subscription data from %s\n",
+		    ps_file);
+		goto err_xdoc_free;
 	}
 
-	ret = exml_str_want(xdoc,
-			  "/PublishData/PublishProfile[@ManagementCertificate]",
-			    true, &mcert_b64, NULL);
+	/* need to free before parsing again */
+	exml_free(xdoc);
+
+	ret = exml_slurp(fbuf, len, &xdoc);
+	if (ret < 0) {
+		goto err_fbuf_free;
+	}
+
+	/*
+	 * Version 2 and Version 1 (no SchemaVersion) publishsettings formats
+	 * supported
+	 */
+	if (vers_present && (strcmp(schema_vers, AZURE_SSL_PUBSET_VERS_2) == 0)) {
+		ret = azure_ssl_pubset_want_v2(xdoc, &sid, &sname,
+					       &mcert_b64);
+	} else if (!vers_present) {
+		ret = azure_ssl_pubset_want_v1(xdoc, &sid, &sname,
+					       &mcert_b64);
+	} else {
+		dbg(0, "unsupported PublishSettings SchemaVersion: %s\n",
+		    schema_vers);
+		ret = -EINVAL;
+	}
 	if (ret < 0) {
 		goto err_xdoc_free;
 	}
