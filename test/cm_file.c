@@ -125,7 +125,7 @@ cm_file_create(void **state)
 	assert_false(ret < 0);
 }
 
-static void
+void
 cm_file_buf_fill(uint8_t *buf,
 		 size_t len)
 {
@@ -136,17 +136,27 @@ cm_file_buf_fill(uint8_t *buf,
 	}
 }
 
-static void
+void
 cm_file_buf_check(uint8_t *buf,
 		  size_t len)
 {
 	int i;
 
 	for (i = 0; i < len; i++) {
-		assert_true(buf[i] == (i & 0xff));
+		assert_int_equal(buf[i], (i & 0xff));
 	}
 }
 
+void
+cm_file_buf_check_zero(uint8_t *buf,
+		       size_t len)
+{
+	int i;
+
+	for (i = 0; i < len; i++) {
+		assert_int_equal(buf[i], 0);
+	}
+}
 
 static void
 cm_file_io(void **state)

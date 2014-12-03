@@ -47,6 +47,18 @@ cm_xml_run(void);
 int
 cm_file_run(void);
 
+void
+cm_file_buf_fill(uint8_t *buf,
+		 size_t len);
+
+void
+cm_file_buf_check(uint8_t *buf,
+		  size_t len);
+
+void
+cm_file_buf_check_zero(uint8_t *buf,
+		       size_t len);
+
 int
 cm_az_fs_run(void);
 
