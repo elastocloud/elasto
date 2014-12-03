@@ -37,6 +37,8 @@
 #include "lib/azure_fs_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
+#include "lib/util.h"
+#include "lib/data_api.h"
 
 static struct {
 	char *pem_file;
@@ -101,6 +103,8 @@ cm_az_fs_init(void **state)
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
+
+	cm_us->ctnr_suffix++;
 
 	op_free(op);
 }
@@ -225,8 +229,198 @@ cm_az_fs_dir_create(void **state)
 	op_free(op);
 }
 
+static void
+cm_az_fs_file_create(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct az_fs_rsp_dirs_files_list *dirs_files_list_rsp;
+	struct az_fs_ent *ent;
+
+	/* create base file and directory */
+	ret = az_fs_req_file_create(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				    "file1", BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	ret = az_fs_req_dir_create(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				   "dir1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* create nested file */
+	ret = az_fs_req_file_create(cm_us->acc, cm_op_az_fs_state.share, "dir1",
+				    "file2", BYTES_IN_MB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* confirm new entries exists */
+	ret = az_fs_req_dirs_files_list(cm_us->acc, cm_op_az_fs_state.share,
+					"", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	dirs_files_list_rsp = az_fs_rsp_dirs_files_list(op);
+	assert_true(dirs_files_list_rsp != NULL);
+	assert_true(dirs_files_list_rsp->num_ents == 2);
+	list_for_each(&dirs_files_list_rsp->ents, ent, list) {
+		if (ent->type == AZ_FS_ENT_TYPE_DIR) {
+			assert_string_equal(ent->dir.name, "dir1");
+		} else {
+			assert_int_equal(ent->type, AZ_FS_ENT_TYPE_FILE);
+			assert_string_equal(ent->file.name, "file1");
+			assert_int_equal(ent->file.size, BYTES_IN_TB);
+		}
+	}
+	op_free(op);
+
+	/* cleanup dir, not empty */
+	ret = az_fs_req_dir_del(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				"dir1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(op->rsp.is_error);
+	assert_int_equal(op->rsp.err_code, 409);
+	op_free(op);
+
+	/* cleanup nested file */
+	ret = az_fs_req_file_del(cm_us->acc, cm_op_az_fs_state.share, "dir1",
+				 "file2", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	/* cleanup dir, now empty */
+	ret = az_fs_req_dir_del(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				"dir1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* cleanup base file */
+	ret = az_fs_req_file_del(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				 "file1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+}
+
+static void
+cm_az_fs_file_io(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct elasto_data *data;
+	uint8_t buf[1024];
+
+	/* create base file and directory */
+	ret = az_fs_req_file_create(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				    "file1", BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf));
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	assert_true(ret >= 0);
+
+	ret = az_fs_req_file_put(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				 "file1", 0, ARRAY_SIZE(buf), data, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	/* TODO the ugly data api should be improved here... */
+	op->req.data = NULL;
+	op_free(op);
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	memset(buf, 0, ARRAY_SIZE(buf));
+
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	assert_true(ret >= 0);
+
+	ret = az_fs_req_file_get(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				 "file1", 0, ARRAY_SIZE(buf), data, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	cm_file_buf_check(buf, ARRAY_SIZE(buf));
+	op->rsp.data = NULL;
+	op_free(op);
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	/* read from offset after allocated range, should be zero */
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	assert_true(ret >= 0);
+
+	ret = az_fs_req_file_get(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				 "file1", ARRAY_SIZE(buf), ARRAY_SIZE(buf),
+				 data, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	cm_file_buf_check_zero(buf, ARRAY_SIZE(buf));
+	op->rsp.data = NULL;
+	op_free(op);
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	/* cleanup base file */
+	ret = az_fs_req_file_del(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				 "file1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+}
+
 static const UnitTest cm_az_fs_tests[] = {
 	unit_test_setup_teardown(cm_az_fs_dir_create, cm_az_fs_init, cm_az_fs_deinit),
+	unit_test_setup_teardown(cm_az_fs_file_create, cm_az_fs_init, cm_az_fs_deinit),
+	unit_test_setup_teardown(cm_az_fs_file_io, cm_az_fs_init, cm_az_fs_deinit),
 };
 
 int
