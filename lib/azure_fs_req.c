@@ -725,11 +725,48 @@ az_fs_req_file_create_free(struct az_fs_req_file_create *file_create_req)
 	free(file_create_req->file);
 }
 
+static int
+az_fs_req_file_create_hdr_fill(struct az_fs_req_file_create *file_create_req,
+			       struct op *op)
+{
+	int ret;
+	char *hdr_str;
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = asprintf(&hdr_str, "%" PRIu64, file_create_req->max_size_bytes);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_hdrs_free;
+	}
+	ret = op_req_hdr_add(op, "x-ms-content-length", hdr_str);
+	free(hdr_str);
+	if (ret < 0) {
+		goto err_hdrs_free;
+	}
+
+	ret = op_req_hdr_add(op, "x-ms-type", "file");
+	if (ret < 0) {
+		goto err_hdrs_free;
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
 int
 az_fs_req_file_create(const char *acc,
 		      const char *share,
 		      const char *parent_dir_path,	/* optional */
 		      const char *file,
+		      uint64_t max_size_bytes,
 		      struct op **_op)
 {
 	int ret;
@@ -737,7 +774,8 @@ az_fs_req_file_create(const char *acc,
 	struct op *op;
 	struct az_fs_req_file_create *file_create_req;
 
-	if ((acc == NULL) || (share == NULL) || (file == NULL)) {
+	if ((acc == NULL) || (share == NULL) || (file == NULL)
+					|| (max_size_bytes > BYTES_IN_TB)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -775,6 +813,8 @@ az_fs_req_file_create(const char *acc,
 		goto err_path_free;
 	}
 
+	file_create_req->max_size_bytes = max_size_bytes;
+
 	op->method = REQ_METHOD_PUT;
 	op->url_https_only = false;
 	ret = asprintf(&op->url_host,
@@ -792,7 +832,7 @@ az_fs_req_file_create(const char *acc,
 		goto err_uhost_free;
 	}
 
-	ret = az_req_common_hdr_fill(op, false);
+	ret = az_fs_req_file_create_hdr_fill(file_create_req, op);
 	if (ret < 0) {
 		goto err_upath_free;
 	}

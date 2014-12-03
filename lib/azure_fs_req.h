@@ -87,6 +87,7 @@ struct az_fs_req_file_create {
 	char *share;
 	char *parent_dir_path;
 	char *file;
+	uint64_t max_size_bytes;
 };
 
 /* @parent_dir_path optional */
@@ -186,6 +187,7 @@ az_fs_req_file_create(const char *acc,
 		     const char *share,
 		     const char *parent_dir_path,	/* optional */
 		     const char *file,
+		     uint64_t max_size_bytes,
 		     struct op **_op);
 
 int
