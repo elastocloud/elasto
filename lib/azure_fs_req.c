@@ -1253,7 +1253,7 @@ az_fs_req_file_put(const char *acc,
 		ret = -ENOMEM;
 		goto err_file_free;
 	}
-	ret = asprintf(&op->url_path, "/%s/%s%s%s",
+	ret = asprintf(&op->url_path, "/%s/%s%s%s?comp=range",
 		       share,
 		       (parent_dir_path ? parent_dir_path : ""),
 		       (parent_dir_path ? "/" : ""), file);
