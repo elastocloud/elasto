@@ -15,6 +15,11 @@
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define MIN(a,b) ((a)<(b)?(a):(b))
 
+#define BYTES_IN_KB (uint64_t)1024
+#define BYTES_IN_MB (uint64_t)(BYTES_IN_KB * 1024)
+#define BYTES_IN_GB (uint64_t)(BYTES_IN_MB * 1024)
+#define BYTES_IN_TB (uint64_t)(BYTES_IN_GB * 1024)
+
 int
 slurp_file(const char *path,
 	   char **_buf,
