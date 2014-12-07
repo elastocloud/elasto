@@ -417,10 +417,72 @@ cm_az_fs_file_io(void **state)
 	op_free(op);
 }
 
+static void
+cm_az_fs_file_props(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct az_fs_rsp_file_prop_get *file_prop_get;
+	uint64_t relevant;
+
+	ret = az_fs_req_file_create(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				    "file1", BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	ret = az_fs_req_file_prop_get(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				       "file1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	file_prop_get = az_fs_rsp_file_prop_get(op);
+	assert_true(file_prop_get->len == BYTES_IN_TB);
+	assert_string_equal(file_prop_get->content_type,
+			    "application/octet-stream");
+
+	op_free(op);
+
+	relevant = (AZ_FS_FILE_PROP_LEN | AZ_FS_FILE_PROP_CTYPE);
+	ret = az_fs_req_file_prop_set(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				      "file1", relevant, BYTES_IN_GB, "text/plain",
+				      &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	ret = az_fs_req_file_prop_get(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				       "file1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	file_prop_get = az_fs_rsp_file_prop_get(op);
+	assert_true(file_prop_get->relevant
+			== (AZ_FS_FILE_PROP_LEN | AZ_FS_FILE_PROP_CTYPE));
+	assert_true(file_prop_get->len == BYTES_IN_GB);
+	assert_string_equal(file_prop_get->content_type, "text/plain");
+
+	op_free(op);
+}
+
 static const UnitTest cm_az_fs_tests[] = {
 	unit_test_setup_teardown(cm_az_fs_dir_create, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_file_create, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_file_io, cm_az_fs_init, cm_az_fs_deinit),
+	unit_test_setup_teardown(cm_az_fs_file_props, cm_az_fs_init, cm_az_fs_deinit),
 };
 
 int
