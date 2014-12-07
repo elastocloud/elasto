@@ -24,6 +24,8 @@ enum az_fs_opcode {
 	AOP_FS_FILE_DEL,
 	AOP_FS_FILE_GET,
 	AOP_FS_FILE_PUT,
+	AOP_FS_FILE_PROP_GET,
+	AOP_FS_FILE_PROP_SET,
 };
 
 struct az_fs_req_share_create {
@@ -117,6 +119,36 @@ struct az_fs_req_file_put {
 	bool clear_data;
 };
 
+enum az_fs_file_prop {
+	AZ_FS_FILE_PROP_LEN = 0x01,
+	AZ_FS_FILE_PROP_CTYPE = 0x02,
+};
+
+struct az_fs_req_file_prop_get {
+	char *acc;
+	char *share;
+	char *parent_dir_path;
+	char *file;
+};
+
+/* @relevant reflects which values were actually supplied in the response */
+struct az_fs_rsp_file_prop_get {
+	uint64_t relevant;
+	uint64_t len;
+	char *content_type;
+};
+
+/* @relevant reflects which values should be supplied in the request */
+struct az_fs_req_file_prop_set {
+	char *acc;
+	char *share;
+	char *parent_dir_path;
+	char *file;
+	uint64_t relevant;
+	uint64_t len;
+	char *content_type;
+};
+
 struct az_fs_req {
 	union {
 		struct az_fs_req_share_create share_create;
@@ -128,12 +160,15 @@ struct az_fs_req {
 		struct az_fs_req_file_del file_del;
 		struct az_fs_req_file_get file_get;
 		struct az_fs_req_file_put file_put;
+		struct az_fs_req_file_prop_get file_prop_get;
+		struct az_fs_req_file_prop_set file_prop_set;
 	};
 };
 
 struct az_fs_rsp {
 	union {
 		struct az_fs_rsp_dirs_files_list dirs_files_list;
+		struct az_fs_rsp_file_prop_get file_prop_get;
 		/*
 		 * No response specific data handled yet:
 		 * struct az_fs_rsp_share_create share_create;
@@ -145,6 +180,7 @@ struct az_fs_rsp {
 		 * struct az_fs_rsp_file_del file_del;
 		 * struct az_fs_rsp_file_get file_get;
 		 * struct az_fs_rsp_file_put file_put;
+		 * struct az_fs_rsp_file_prop_set file_prop_set;
 		 */
 	};
 };
@@ -216,4 +252,25 @@ az_fs_req_file_put(const char *acc,
 		   uint64_t len,
 		   struct elasto_data *src_data,
 		   struct op **_op);
+
+int
+az_fs_req_file_prop_get(const char *acc,
+			const char *share,
+			const char *parent_dir_path,
+			const char *file,
+			struct op **_op);
+
+struct az_fs_rsp_file_prop_get *
+az_fs_rsp_file_prop_get(struct op *op);
+
+/* @relevant reflects which values should be supplied in the request */
+int
+az_fs_req_file_prop_set(const char *acc,
+			const char *share,
+			const char *parent_dir_path,
+			const char *file,
+			uint64_t relevant,
+			uint64_t len,
+			const char *content_type,
+			struct op **_op);
 #endif /* ifdef _AZURE_FS_REQ_H_ */
