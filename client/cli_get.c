@@ -23,8 +23,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include <curl/curl.h>
-
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/data_api.h"

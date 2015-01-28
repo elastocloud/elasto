@@ -24,7 +24,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include <curl/curl.h>
 #include <openssl/pem.h>
 #include <openssl/err.h>
 #include <openssl/pkcs12.h>

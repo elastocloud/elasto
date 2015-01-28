@@ -24,8 +24,6 @@
 #include <sys/types.h>
 #include <pwd.h>
 
-#include <curl/curl.h>
-
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"

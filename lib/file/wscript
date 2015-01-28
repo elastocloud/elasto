@@ -12,7 +12,8 @@ def build(bld):
 	bld.shlib(source='''handle.c io.c open.c xmit.c dir.c lease.c stat.c''',
 		  target='elasto_file',
 		  vnum='0.0.1',
-		  lib=['curl', 'crypto', 'expat', 'ssl', ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  lib=['crypto', 'expat', 'ssl',
+		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto', 'ccan'],
 		  includes = '. .. ../../',
 		  defines = ['_GNU_SOURCE'])

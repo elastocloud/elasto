@@ -26,8 +26,6 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
-#include <curl/curl.h>
-
 #include "cm_test.h"
 #include "ccan/list/list.h"
 #include "lib/exml.h"

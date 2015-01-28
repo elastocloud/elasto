@@ -22,7 +22,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#include <curl/curl.h>
 #include <setjmp.h>
 #include <cmocka.h>
 

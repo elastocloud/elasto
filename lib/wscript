@@ -11,7 +11,8 @@ def build(bld):
 			    base64.c conn.c azure_ssl.c dbg.c data.c
 			    s3_creds.c exml.c util.c''',
 		  target='elasto',
-		  lib=['curl', 'crypto', 'expat', 'ssl', ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  lib=['crypto', 'expat', 'ssl',
+		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['ccan'],
 		  includes = '. ..',
 		  defines = ['_GNU_SOURCE'])

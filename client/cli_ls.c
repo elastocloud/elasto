@@ -23,8 +23,6 @@
 #include <sys/stat.h>
 #include <inttypes.h>
 
-#include <curl/curl.h>
-
 #include "ccan/list/list.h"
 #include "lib/util.h"
 #include "lib/exml.h"

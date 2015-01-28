@@ -24,8 +24,6 @@
 #include <inttypes.h>
 #include <sys/queue.h>
 
-#include <curl/curl.h>
-
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
