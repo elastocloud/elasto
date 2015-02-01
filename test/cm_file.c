@@ -369,6 +369,7 @@ cm_file_lease_break(void **state)
 	ret = elasto_flease_acquire(fh2, -1);
 	assert_int_equal(ret, 0);
 
+	/* will attempt and fail to release fh1's broken lease */
 	ret = elasto_fclose(fh1);
 	assert_int_equal(ret, 0);
 
