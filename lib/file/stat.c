@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2014-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -27,7 +27,6 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"
-#include "lib/azure_blob_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "lib/util.h"
@@ -41,11 +40,9 @@ elasto_fstat(struct elasto_fh *fh,
 	     struct elasto_fstat *fstat)
 {
 	int ret;
-	struct op *op;
-	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
-	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
-	if (fh_priv == NULL) {
-		ret = -EINVAL;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -54,36 +51,12 @@ elasto_fstat(struct elasto_fh *fh,
 		goto err_out;
 	}
 
-	ret = az_req_blob_prop_get(fh_priv->az.path.acc,
-				   fh_priv->az.path.ctnr,
-				   fh_priv->az.path.blob,
-				   &op);
+	ret = fh->ops.stat(fh->mod_priv, fh->conn, fstat);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	blob_prop_get_rsp = az_rsp_blob_prop_get(op);
-	if (blob_prop_get_rsp == NULL) {
-		goto err_op_free;
-	}
-
-	fh_priv->len = blob_prop_get_rsp->len;
-	fstat->size = blob_prop_get_rsp->len;
-	fstat->blksize = 512;
-	if (blob_prop_get_rsp->lease_status == AOP_LEASE_STATUS_UNLOCKED) {
-		fstat->lease_status = ELASTO_FLEASE_UNLOCKED;
-	} else if (blob_prop_get_rsp->lease_status == AOP_LEASE_STATUS_LOCKED) {
-		fstat->lease_status = ELASTO_FLEASE_LOCKED;
-	}
 	ret = 0;
-
-err_op_free:
-	op_free(op);
 err_out:
 	return ret;
 }

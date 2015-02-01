@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -27,7 +27,6 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"
-#include "lib/azure_blob_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "lib/util.h"
@@ -43,10 +42,9 @@ elasto_fwrite(struct elasto_fh *fh,
 	      struct elasto_data *src_data)
 {
 	int ret;
-	struct op *op;
-	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
-	if (fh_priv == NULL) {
-		ret = -EINVAL;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -54,26 +52,20 @@ elasto_fwrite(struct elasto_fh *fh,
 	    (src_data == NULL ? "clearing" : "writing"),
 	    dest_off, dest_len);
 
-	ret = az_req_page_put(fh_priv->az.path.acc,
-			      fh_priv->az.path.ctnr,
-			      fh_priv->az.path.blob,
-			      src_data,
-			      dest_off,
-			      dest_len,
-			      &op);
+	if (src_data == NULL) {
+		/* TODO split into a separate API fn */
+		ret = fh->ops.allocate(fh->mod_priv, fh->conn,
+				       ELASTO_FALLOC_PUNCH_HOLE,
+				       dest_off, dest_len);
+	} else {
+		ret = fh->ops.write(fh->mod_priv, fh->conn, dest_off, dest_len,
+				    src_data);
+	}
 	if (ret < 0) {
 		goto err_out;
 	}
-
-	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
 	ret = 0;
 
-err_op_free:
-	op->req.data = NULL;
-	op_free(op);
 err_out:
 	return ret;
 }
@@ -85,37 +77,21 @@ elasto_fread(struct elasto_fh *fh,
 	     struct elasto_data *dest_data)
 {
 	int ret;
-	struct op *op;
-	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
-	if (fh_priv == NULL) {
-		ret = -EINVAL;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
 		goto err_out;
 	}
 
 	dbg(3, "reading range at %" PRIu64 ", len %" PRIu64 "\n",
 	    src_off, src_len);
 
-	ret = az_req_blob_get(fh_priv->az.path.acc,
-			      fh_priv->az.path.ctnr,
-			      fh_priv->az.path.blob,
-			      true,
-			      dest_data,
-			      src_off,
-			      src_len,
-			      &op);
+	ret = fh->ops.read(fh->mod_priv, fh->conn, src_off, src_len, dest_data);
 	if (ret < 0) {
 		goto err_out;
 	}
-
-	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
 	ret = 0;
 
-err_op_free:
-	op->rsp.data = NULL;
-	op_free(op);
 err_out:
 	return ret;
 }
@@ -125,34 +101,20 @@ elasto_ftruncate(struct elasto_fh *fh,
 		 uint64_t len)
 {
 	int ret;
-	struct op *op;
-	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
-	if (fh_priv == NULL) {
-		ret = -EINVAL;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
 		goto err_out;
 	}
 
 	dbg(3, "truncating to len %" PRIu64 "\n", len);
 
-	ret = az_req_blob_prop_set(fh_priv->az.path.acc,
-				   fh_priv->az.path.ctnr,
-				   fh_priv->az.path.blob,
-				   true,	/* is_page */
-				   len,
-				   &op);
+	ret = fh->ops.truncate(fh->mod_priv, fh->conn, len);
 	if (ret < 0) {
 		goto err_out;
 	}
-
-	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
 	ret = 0;
-	fh_priv->len = len;
 
-err_op_free:
-	op_free(op);
 err_out:
 	return ret;
 }

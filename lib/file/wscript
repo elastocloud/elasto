@@ -9,9 +9,13 @@ def call_ldconfig(bld):
 	bld.exec_command('/sbin/ldconfig')
 
 def build(bld):
-	bld.shlib(source='''handle.c io.c open.c xmit.c dir.c lease.c stat.c''',
+	apb_source = '''azure/apb_dir.c azure/apb_handle.c
+			azure/apb_io.c azure/apb_lease.c
+			azure/apb_open.c azure/apb_stat.c'''
+	bld.shlib(source='''handle.c io.c open.c xmit.c dir.c lease.c
+			    stat.c ''' + apb_source,
 		  target='elasto_file',
-		  vnum='0.0.1',
+		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto', 'ccan'],

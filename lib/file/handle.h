@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -14,36 +14,63 @@
 #ifndef _HANDLE_H_
 #define _HANDLE_H_
 
-struct elasto_fh_az_path {
-	char *acc;
-	char *ctnr;
-	char *blob;
-};
-
-struct elasto_fh_s3_path {
-	char *bkt;
-	char *obj;
-};
-
 #define ELASTO_FH_MAGIC "ElastoF"
 
-struct elasto_fh_priv {
+struct elasto_fh_mod_ops {
+	void (*fh_free)(void *mod_priv);
+	int (*open)(void *mod_priv,
+		    struct elasto_conn *conn,
+		    const char *path,
+		    uint64_t flags);
+	int (*close)(void *mod_priv,
+		     struct elasto_conn *conn);
+	int (*write)(void *mod_priv,
+		     struct elasto_conn *conn,
+		     uint64_t dest_off,
+		     uint64_t dest_len,
+		     struct elasto_data *src_data);
+	int (*read)(void *mod_priv,
+		    struct elasto_conn *conn,
+		    uint64_t src_off,
+		    uint64_t src_len,
+		    struct elasto_data *dest_data);
+	int (*allocate)(void *mod_priv,
+			struct elasto_conn *conn,
+			uint32_t mode,
+			uint64_t dest_off,
+			uint64_t dest_len);
+	int (*truncate)(void *mod_priv,
+			struct elasto_conn *conn,
+			uint64_t len);
+	int (*stat)(void *mod_priv,
+		    struct elasto_conn *conn,
+		    struct elasto_fstat *fstat);
+	int (*lease_acquire)(void *mod_priv,
+			     struct elasto_conn *conn,
+			     int32_t duration,
+			     void **_flease_h);
+	int (*lease_break)(void *mod_priv,
+			   struct elasto_conn *conn,
+			   void **_flease_h);
+	int (*lease_release)(void *mod_priv,
+			     struct elasto_conn *conn,
+			     void **_flease_h);
+	int (*mkdir)(void *mod_priv,
+		     struct elasto_conn *conn,
+		     const char *path);
+	int (*rmdir)(void *mod_priv,
+		     struct elasto_conn *conn,
+		     const char *path);
+};
+
+struct elasto_fh {
 	char magic[8];
 	struct elasto_conn *conn;
 	enum elasto_ftype type;
-	union {
-		struct {
-			struct elasto_fh_az_path path;
-			char *pem_path;
-			char *sub_id;
-			char *sub_name;
-			char *lid;
-		} az;
-		struct {
-			struct elasto_fh_s3_path path;
-		} s3;
-	};
-	uint64_t len;
+	void *mod_priv;
+	struct elasto_fh_mod_ops ops;
+	/* FIXME: make lid an iovec style blob */
+	void *lid;
 	enum {
 		ELASTO_FH_LEASE_NONE = 0,
 		ELASTO_FH_LEASE_ACQUIRED,
@@ -51,14 +78,13 @@ struct elasto_fh_priv {
 };
 
 int
-elasto_fh_init(const char *ps_path,
-	       bool insecure_http,
+elasto_fh_init(const struct elasto_fauth *auth,
 	       struct elasto_fh **_fh);
 
 void
 elasto_fh_free(struct elasto_fh *fh);
 
-struct elasto_fh_priv *
+int
 elasto_fh_validate(struct elasto_fh *fh);
 
 #endif /* _HANDLE_H_ */

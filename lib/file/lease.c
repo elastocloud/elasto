@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2014-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -27,7 +27,6 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"
-#include "lib/azure_blob_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "lib/util.h"
@@ -46,61 +45,34 @@ elasto_flease_acquire(struct elasto_fh *fh,
 		     int32_t duration)
 {
 	int ret;
-	struct op *op;
-	struct az_rsp_blob_lease *blob_lease_rsp;
-	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
-	if (fh_priv == NULL) {
-		ret = -EINVAL;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
 		goto err_out;
 	}
 
-	if (fh_priv->lease_state != ELASTO_FH_LEASE_NONE) {
+	/* ensure back-end supports request */
+	if (fh->ops.lease_acquire == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
+	if (fh->lease_state != ELASTO_FH_LEASE_NONE) {
 		dbg(2, "bad attempt to acquire lease while in %d state\n",
-		    fh_priv->lease_state);
+		    fh->lease_state);
 		ret = -EINVAL;
 		goto err_out;
 	}
 
-	ret = az_req_blob_lease(fh_priv->az.path.acc,
-				fh_priv->az.path.ctnr,
-				fh_priv->az.path.blob,
-				NULL,
-				NULL,
-				AOP_LEASE_ACTION_ACQUIRE,
-				duration,
-				&op);
+	ret = fh->ops.lease_acquire(fh->mod_priv, fh->conn,
+				    duration, &fh->lid);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	blob_lease_rsp = az_rsp_blob_lease_get(op);
-	if ((blob_lease_rsp->lid == NULL)
-				|| (strlen(blob_lease_rsp->lid) == 0 )) {
-		ret = -ENOENT;
-		dbg(0, "failed to fetch lease ID on success\n");
-		goto err_op_free;
-	}
-
-	/* save this with @fh */
-	fh_priv->az.lid = strdup(blob_lease_rsp->lid);
-	if (fh_priv->az.lid == NULL) {
-		ret = -ENOMEM;
-		goto err_op_free;
-	}
-
-	fh_priv->lease_state = ELASTO_FH_LEASE_ACQUIRED;
-
-	dbg(3, "acquired lease %s for %" PRIu64 " seconds\n",
-	    blob_lease_rsp->lid, blob_lease_rsp->time_remaining);
+	fh->lease_state = ELASTO_FH_LEASE_ACQUIRED;
 
 	ret = 0;
-err_op_free:
-	op_free(op);
 err_out:
 	return ret;
 }
@@ -109,39 +81,28 @@ int
 elasto_flease_break(struct elasto_fh *fh)
 {
 	int ret;
-	struct op *op;
-	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
-	if (fh_priv == NULL) {
-		ret = -EINVAL;
-		goto err_out;
-	}
 
-	ret = az_req_blob_lease(fh_priv->az.path.acc,
-				fh_priv->az.path.ctnr,
-				fh_priv->az.path.blob,
-				fh_priv->az.lid,
-				NULL,
-				AOP_LEASE_ACTION_BREAK,
-				0,
-				&op);
+	ret = elasto_fh_validate(fh);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	if (ret < 0) {
-		goto err_op_free;
+	/* ensure back-end supports request */
+	if (fh->ops.lease_break == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
 	}
 
-	dbg(3, "broke lease %s\n",
-	    (fh_priv->az.lid ? fh_priv->az.lid: "unknown"));
-	free(fh_priv->az.lid);
-	fh_priv->az.lid = NULL;
-	fh_priv->lease_state = ELASTO_FH_LEASE_NONE;
+	/* fh->lid may be NULL, will be freed if non-null */
+	ret = fh->ops.lease_break(fh->mod_priv, fh->conn,
+				  &fh->lid);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	fh->lease_state = ELASTO_FH_LEASE_NONE;
 
 	ret = 0;
-err_op_free:
-	op_free(op);
 err_out:
 	return ret;
 }
@@ -150,45 +111,38 @@ int
 elasto_flease_release(struct elasto_fh *fh)
 {
 	int ret;
-	struct op *op;
-	struct az_rsp_blob_lease *blob_lease_rsp;
-	struct elasto_fh_priv *fh_priv = elasto_fh_validate(fh);
-	if (fh_priv == NULL) {
-		ret = -EINVAL;
-		goto err_out;
-	}
 
-	if (fh_priv->lease_state != ELASTO_FH_LEASE_ACQUIRED) {
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	ret = az_req_blob_lease(fh_priv->az.path.acc,
-				fh_priv->az.path.ctnr,
-				fh_priv->az.path.blob,
-				fh_priv->az.lid,
-				NULL,
-				AOP_LEASE_ACTION_RELEASE,
-				0,
-				&op);
+	ret = elasto_fh_validate(fh);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	if (ret < 0) {
-		goto err_op_free;
+	/* ensure back-end supports request */
+	if (fh->ops.lease_release == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
 	}
 
-	blob_lease_rsp = az_rsp_blob_lease_get(op);
-	dbg(3, "released lease %s\n", blob_lease_rsp->lid);
-	free(fh_priv->az.lid);
-	fh_priv->az.lid = NULL;
-	fh_priv->lease_state = ELASTO_FH_LEASE_NONE;
+	if (fh->lease_state != ELASTO_FH_LEASE_ACQUIRED) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (fh->lid == NULL) {
+		dbg(0, "invalid release with NULL lease id\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/* fh->lid will be freed and zeroed */
+	ret = fh->ops.lease_release(fh->mod_priv, fh->conn, &fh->lid);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	fh->lease_state = ELASTO_FH_LEASE_NONE;
 
 	ret = 0;
-err_op_free:
-	op_free(op);
 err_out:
 	return ret;
 }

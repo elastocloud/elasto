@@ -18,9 +18,7 @@
 extern "C" {
 #endif
 
-struct elasto_fh {
-	void *priv;
-};
+struct elasto_fh;
 
 enum elasto_ftype {
 	ELASTO_FILE_AZURE = 1,
@@ -66,6 +64,10 @@ elasto_fread(struct elasto_fh *fh,
 	     uint64_t src_off,
 	     uint64_t src_len,
 	     struct elasto_data *dest);
+
+enum elasto_falloc_flags {
+	ELASTO_FALLOC_PUNCH_HOLE	= 0x0001,
+};
 
 int
 elasto_ftruncate(struct elasto_fh *fh,

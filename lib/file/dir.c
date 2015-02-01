@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -27,8 +27,6 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"
-#include "lib/azure_mgmt_req.h"
-#include "lib/azure_blob_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "lib/util.h"
@@ -36,7 +34,6 @@
 #include "file_api.h"
 #include "handle.h"
 #include "xmit.h"
-#include "open.h"
 
 int
 elasto_fmkdir(const struct elasto_fauth *auth,
@@ -44,8 +41,6 @@ elasto_fmkdir(const struct elasto_fauth *auth,
 {
 	int ret;
 	struct elasto_fh *fh;
-	struct elasto_fh_priv *fh_priv;
-	struct op *op;
 
 	if (auth->type != ELASTO_FILE_AZURE) {
 		ret = -ENOTSUP;
@@ -57,58 +52,15 @@ elasto_fmkdir(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	ret = elasto_fh_init(auth->az.ps_path, auth->insecure_http, &fh);
+	ret = elasto_fh_init(auth, &fh);
 	if (ret < 0) {
-		goto err_connss_deinit;
-	}
-	fh_priv = fh->priv;
-
-	ret = elasto_fpath_az_parse(path, &fh_priv->az.path);
-	if (ret < 0) {
-		goto err_fhconn_free;
+		/* don't deinit subsystem on error */
+		goto err_out;
 	}
 
-	if ((fh_priv->az.path.acc == NULL)
-	 || (fh_priv->az.path.ctnr == NULL)) {
-		dbg(0, "invalid mkdir path: must include account and container "
-		       "components\n");
-		goto err_path_free;
-	}
-	if (fh_priv->az.path.blob != NULL) {
-		dbg(0, "invalid mkdir path: blob component must not be "
-		       "present\n");
-		goto err_path_free;
-	}
+	ret = fh->ops.mkdir(fh->mod_priv, fh->conn, path);
 
-	ret = elasto_fsign_conn_setup(fh_priv->conn, fh_priv->az.sub_id,
-				      fh_priv->az.path.acc);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = az_req_ctnr_create(fh_priv->az.path.acc, fh_priv->az.path.ctnr,
-				 &op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	op_free(op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	elasto_fpath_az_free(&fh_priv->az.path);
 	elasto_fh_free(fh);
-
-	return 0;
-
-err_path_free:
-	elasto_fpath_az_free(&fh_priv->az.path);
-err_fhconn_free:
-	elasto_fh_free(fh);
-err_connss_deinit:
-	elasto_conn_subsys_deinit();
 err_out:
 	return ret;
 }
@@ -119,8 +71,6 @@ elasto_frmdir(const struct elasto_fauth *auth,
 {
 	int ret;
 	struct elasto_fh *fh;
-	struct elasto_fh_priv *fh_priv;
-	struct op *op;
 
 	if (auth->type != ELASTO_FILE_AZURE) {
 		ret = -ENOTSUP;
@@ -132,58 +82,15 @@ elasto_frmdir(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	ret = elasto_fh_init(auth->az.ps_path, auth->insecure_http, &fh);
+	ret = elasto_fh_init(auth, &fh);
 	if (ret < 0) {
-		goto err_connss_deinit;
-	}
-	fh_priv = fh->priv;
-
-	ret = elasto_fpath_az_parse(path, &fh_priv->az.path);
-	if (ret < 0) {
-		goto err_fhconn_free;
+		/* don't deinit subsystem on error */
+		goto err_out;
 	}
 
-	if ((fh_priv->az.path.acc == NULL)
-	 || (fh_priv->az.path.ctnr == NULL)) {
-		dbg(0, "invalid rmdir path: must include account and container "
-		       "components\n");
-		goto err_path_free;
-	}
-	if (fh_priv->az.path.blob != NULL) {
-		dbg(0, "invalid rmdir path: blob component must not be "
-		       "present\n");
-		goto err_path_free;
-	}
+	ret = fh->ops.rmdir(fh->mod_priv, fh->conn, path);
 
-	ret = elasto_fsign_conn_setup(fh_priv->conn, fh_priv->az.sub_id,
-				      fh_priv->az.path.acc);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = az_req_ctnr_del(fh_priv->az.path.acc, fh_priv->az.path.ctnr,
-			      &op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = elasto_fop_send_recv(fh_priv->conn, op);
-	op_free(op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	elasto_fpath_az_free(&fh_priv->az.path);
 	elasto_fh_free(fh);
-
-	return 0;
-
-err_path_free:
-	elasto_fpath_az_free(&fh_priv->az.path);
-err_fhconn_free:
-	elasto_fh_free(fh);
-err_connss_deinit:
-	elasto_conn_subsys_deinit();
 err_out:
 	return ret;
 }
