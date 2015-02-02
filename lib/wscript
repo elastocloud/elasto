@@ -4,16 +4,34 @@ def options(opt):
 def configure(conf):
 	conf.load('compiler_c')
 	conf.env.append_unique('CFLAGS', ['-Wall', '-g', '-fPIC'])
+	conf.recurse('file')
 
 def build(bld):
-	bld.stlib(source='''azure_req.c azure_blob_req.c azure_fs_req.c
-			    azure_mgmt_req.c s3_req.c op.c sign.c
-			    base64.c conn.c azure_ssl.c dbg.c data.c
-			    s3_creds.c exml.c util.c''',
-		  target='elasto',
+	bld.shlib(source='''op.c sign.c base64.c conn.c dbg.c data.c exml.c
+			    util.c''',
+		  target='elasto_core',
+		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['ccan'],
 		  includes = '. ..',
 		  defines = ['_GNU_SOURCE'])
+	bld.shlib(source='s3_creds.c s3_req.c',
+		  target='elasto_req_s3',
+		  vnum='0.0.2',
+		  lib=['crypto', 'expat', 'ssl',
+		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  use=['elasto_core'],
+		  includes = '. ..',
+		  defines = ['_GNU_SOURCE'])
+	bld.shlib(source='''azure_ssl.c azure_req.c azure_blob_req.c
+			    azure_fs_req.c azure_mgmt_req.c''',
+		  target='elasto_req_azure',
+		  vnum='0.0.2',
+		  lib=['crypto', 'expat', 'ssl',
+		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  use=['elasto_core'],
+		  includes = '. ..',
+		  defines = ['_GNU_SOURCE'])
 	bld.install_as('${INCLUDEDIR}/elasto/data.h', 'data_api.h')
+	bld.recurse('file')

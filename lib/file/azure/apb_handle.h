@@ -27,11 +27,12 @@ struct apb_fh {
 	char *sub_name;
 };
 
+/* module entry point */
 int
-apb_fh_init(const struct elasto_fauth *auth,
-	    void **_fh_priv,
-	    struct elasto_conn **_conn,
-	    struct elasto_fh_mod_ops *mod_ops);
+elasto_file_mod_fh_init(const struct elasto_fauth *auth,
+			void **_fh_priv,
+			struct elasto_conn **_conn,
+			struct elasto_fh_mod_ops *mod_ops);
 
 void
 apb_fh_free(void *mod_priv);

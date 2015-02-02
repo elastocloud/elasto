@@ -16,7 +16,7 @@ def build(bld):
 		    target='cm_unity',
 		    lib=['crypto', 'cmocka', 'expat', 'ssl',
 			 ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
-		    use=['ccan', 'elasto', 'elasto_file'],
+		    use=['elasto_req_azure', 'elasto_req_s3', 'elasto_file'],
 		    includes = '. .. ../lib',
 		    defines = ['_GNU_SOURCE'],
 		    install_path = None)

@@ -17,7 +17,6 @@ def configure(conf):
 	conf.check(lib='expat')
 	conf.recurse('ccan')
 	conf.recurse('lib')
-	conf.recurse('lib/file')
 	conf.recurse('client')
 	conf.recurse('test')
 	conf.recurse('doc')
@@ -25,7 +24,6 @@ def configure(conf):
 def build(bld):
 	bld.recurse('ccan')
 	bld.recurse('lib')
-	bld.recurse('lib/file')
 	bld.recurse('client')
 	bld.recurse('test')
 	bld.recurse('doc')

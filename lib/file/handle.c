@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <inttypes.h>
 #include <sys/stat.h>
+#include <dlfcn.h>
 
 #include "ccan/list/list.h"
 #include "lib/exml.h"
@@ -33,7 +34,6 @@
 #include "lib/dbg.h"
 #include "file_api.h"
 #include "handle.h"
-#include "lib/file/azure/apb_handle.h"
 
 int
 elasto_fh_init(const struct elasto_fauth *auth,
@@ -41,6 +41,11 @@ elasto_fh_init(const struct elasto_fauth *auth,
 {
 	struct elasto_fh *fh;
 	int ret;
+	const char *mod_path;
+	int (*mod_fh_init)(const struct elasto_fauth *auth,
+			   void **_fh_priv,
+			   struct elasto_conn **_conn,
+			   struct elasto_fh_mod_ops *_ops);
 
 	if (auth == NULL) {
 		ret = -EINVAL;
@@ -62,13 +67,31 @@ elasto_fh_init(const struct elasto_fauth *auth,
 
 	if (auth->type == ELASTO_FILE_AZURE) {
 		fh->type = ELASTO_FILE_AZURE;
-		/* initialise back-end module. Will use dlopen in future */
-		ret = apb_fh_init(auth, &fh->mod_priv, &fh->conn, &fh->ops);
-		if (ret < 0) {
-			goto err_fh_free;
-		}
+		mod_path = "libelasto_file_mod_apb.so";
 	} else {
 		assert(false);
+	}
+
+	fh->mod_dl_h = dlopen(mod_path, RTLD_NOW);
+	if (fh->mod_dl_h == NULL) {
+		dbg(0, "failed to load module (%d) at path \"%s\": %s\n",
+		    auth->type, mod_path, dlerror());
+		ret = -EFAULT;
+		goto err_fh_free;
+	}
+
+	mod_fh_init = dlsym(fh->mod_dl_h, ELASTO_FILE_MOD_INIT_FN);
+	if (mod_fh_init == NULL) {
+		dbg(0, "failed to find init fn \"%s\" for module at %s: %s\n",
+		    ELASTO_FILE_MOD_INIT_FN, mod_path, dlerror());
+		ret = -EFAULT;
+		goto err_dl_close;
+	}
+
+	/* initialise back-end module */
+	ret = mod_fh_init(auth, &fh->mod_priv, &fh->conn, &fh->ops);
+	if (ret < 0) {
+		goto err_fh_free;
 	}
 
 	assert(ARRAY_SIZE(fh->magic) == sizeof(ELASTO_FH_MAGIC));
@@ -78,6 +101,8 @@ elasto_fh_init(const struct elasto_fauth *auth,
 
 	return 0;
 
+err_dl_close:
+	dlclose(fh->mod_dl_h);
 err_fh_free:
 	free(fh);
 err_out:
@@ -87,9 +112,16 @@ err_out:
 void
 elasto_fh_free(struct elasto_fh *fh)
 {
+	int ret;
+
 	fh->ops.fh_free(fh->mod_priv);
 	if (fh->conn != NULL) {
 		elasto_conn_free(fh->conn);
+	}
+	ret = dlclose(fh->mod_dl_h);
+	if (ret != 0) {
+		dbg(0, "failed to unload module (%d): %s\n",
+		    fh->type, dlerror());
 	}
 	free(fh);
 }

@@ -63,10 +63,24 @@ struct elasto_fh_mod_ops {
 		     const char *path);
 };
 
+/* fh init calls this entry point for the corresponding module */
+#define ELASTO_FILE_MOD_INIT_FN "elasto_file_mod_fh_init"
+
+/*
+ * @magic: magic to verify handle on use
+ * @conn: Elasto connection initialised by open op
+ * @type: module identifier
+ * @mod_dl_h: module dlopen handle
+ * @mod_priv: private module data returned on module init
+ * @ops: module functions
+ * @lid: opaque lease ID, returned on acquisition
+ * @lease_state: last known lease state
+ */
 struct elasto_fh {
 	char magic[8];
 	struct elasto_conn *conn;
 	enum elasto_ftype type;
+	void *mod_dl_h;
 	void *mod_priv;
 	struct elasto_fh_mod_ops ops;
 	/* FIXME: make lid an iovec style blob */

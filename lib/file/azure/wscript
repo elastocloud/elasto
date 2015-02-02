@@ -4,23 +4,19 @@ def options(opt):
 def configure(conf):
 	conf.load('compiler_c')
 	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
-	conf.recurse('azure')
 
 def call_ldconfig(bld):
 	bld.exec_command('/sbin/ldconfig')
 
 def build(bld):
-	bld.shlib(source='''handle.c io.c open.c xmit.c dir.c lease.c
-			    stat.c''',
-		  target='elasto_file',
+	bld.shlib(source='''apb_dir.c apb_handle.c apb_io.c apb_lease.c
+			    apb_open.c apb_stat.c''',
+		  target='elasto_file_mod_apb',
 		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',
-		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5',
-		       'dl'],
-		  use=['elasto_core'],
-		  includes = '. .. ../../',
+		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  use=['elasto_file', 'elasto_req_azure'],
+		  includes = '. .. ../../ ../../../',
 		  defines = ['_GNU_SOURCE'])
-	bld.install_as('${INCLUDEDIR}/elasto/file.h', 'file_api.h')
 	if bld.cmd == 'install':
 		bld.add_post_fun(call_ldconfig)
-	bld.recurse('azure')

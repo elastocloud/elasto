@@ -43,7 +43,7 @@
 #include "apb_dir.h"
 #include "apb_stat.h"
 
-int
+static int
 apb_fh_init(const struct elasto_fauth *auth,
 	    void **_fh_priv,
 	    struct elasto_conn **_conn,
@@ -106,6 +106,16 @@ err_priv_free:
 	free(apb_fh);
 err_out:
 	return ret;
+}
+
+/* module entry point */
+int
+elasto_file_mod_fh_init(const struct elasto_fauth *auth,
+			void **_fh_priv,
+			struct elasto_conn **_conn,
+			struct elasto_fh_mod_ops *_ops)
+{
+	return apb_fh_init(auth, _fh_priv, _conn, _ops);
 }
 
 void
