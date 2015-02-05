@@ -560,6 +560,7 @@ exml_el_path_found_handle(struct xml_doc *xdoc,
 			  const char **atts)
 {
 	int ret;
+	char *attr_val = NULL;
 
 	finder->found_el_path = strdup(xdoc->el_path);
 	if (finder->found_el_path == NULL) {
@@ -572,7 +573,7 @@ exml_el_path_found_handle(struct xml_doc *xdoc,
 		if (ret < 0) {
 			dbg(0, "xml path (%s) callback failed\n",
 			    xdoc->el_path);
-			return ret;
+			goto err_found_path_free;
 		}
 		assert(finder->handled == 0);
 		finder->handled++;
@@ -585,18 +586,18 @@ exml_el_path_found_handle(struct xml_doc *xdoc,
 		/* cb must add another finder entry if still interested */
 		return 0;
 	} else if (finder->search_attr != NULL) {
-		char *attr_val;
 		ret = exml_el_attr_search(atts, finder->search_attr, &attr_val);
 		if ((ret < 0) && (ret != -ENOENT)) {
-			return ret;
+			goto err_found_path_free;
 		} else if (ret == -ENOENT) {
-			return 0;	/* ignore */
+			ret = 0;	/* ignore */
+			goto err_found_path_free;
 		}
 
 		assert(finder->handled == 0);
 		ret = exml_finder_val_stash(xdoc, attr_val, finder);
 		if (ret < 0) {
-			return ret;
+			goto err_attr_val_free;
 		}
 		finder->handled++;
 		list_del(&finder->list);
@@ -613,6 +614,13 @@ exml_el_path_found_handle(struct xml_doc *xdoc,
 	xdoc->num_finders--;
 	list_add_tail(&xdoc->finders_val_wait, &finder->list);
 	return 0;
+
+err_attr_val_free:
+	free(attr_val);
+err_found_path_free:
+	free(finder->found_el_path);
+	finder->found_el_path = NULL;
+	return ret;
 }
 
 static int
