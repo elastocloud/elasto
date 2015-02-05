@@ -299,7 +299,9 @@ azure_ssl_pubset_process(const char *ps_file,
 	*pem_file = pem_file_path;
 	*sub_id = sid;
 	*sub_name = sname;
+	free(schema_vers);
 	exml_free(xdoc);
+	free(fbuf);
 	free(ps_path);
 
 	return 0;
@@ -312,6 +314,7 @@ err_sub_free:
 	free(sname);
 	free(sid);
 err_xdoc_free:
+	free(schema_vers);
 	exml_free(xdoc);
 err_fbuf_free:
 	free(fbuf);
