@@ -69,6 +69,11 @@ cm_sign_s3_object_get(void **state)
 				     "Tue, 27 Mar 2007 19:36:42 +0000\n"
 				     "/johnsmith/photos/puppy.jpg");
 	assert_string_equal(sig_str, "bWq2s1WEIj+Ydj0vQ697zp+IXMU=");
+	free(sig_src);
+	free(sig_str);
+	op_hdrs_free(&op.req.hdrs);
+	free(op.url_path);
+	free(op.url_host);
 }
 
 static void
@@ -96,6 +101,11 @@ cm_sign_s3_object_put(void **state)
 			  &sig_str);
 	assert_int_equal(ret, 0);
 	assert_string_equal(sig_str, "MyyxeRY7whkBe+bq8fHCL/2kKUg=");
+	free(sig_src);
+	free(sig_str);
+	op_hdrs_free(&op.req.hdrs);
+	free(op.url_path);
+	free(op.url_host);
 }
 
 static void
@@ -122,6 +132,11 @@ cm_sign_s3_list(void **state)
 			  &sig_str);
 	assert_int_equal(ret, 0);
 	assert_string_equal(sig_str, "htDYFYduRNen8P9ZfE/s9SuKy0U=");
+	free(sig_src);
+	free(sig_str);
+	op_hdrs_free(&op.req.hdrs);
+	free(op.url_path);
+	free(op.url_host);
 }
 
 static void
@@ -147,6 +162,11 @@ cm_sign_s3_fetch(void **state)
 			  &sig_str);
 	assert_int_equal(ret, 0);
 	assert_string_equal(sig_str, "c2WLPFtWHVgbEmeEG93a4cG37dM=");
+	free(sig_src);
+	free(sig_str);
+	op_hdrs_free(&op.req.hdrs);
+	free(op.url_path);
+	free(op.url_host);
 }
 
 static void
@@ -175,6 +195,11 @@ cm_sign_s3_object_del(void **state)
 			  &sig_str);
 	assert_int_equal(ret, 0);
 	assert_string_equal(sig_str, "lx3byBScXR6KzyMaifNkardMwNk=");
+	free(sig_src);
+	free(sig_str);
+	op_hdrs_free(&op.req.hdrs);
+	free(op.url_path);
+	free(op.url_host);
 }
 
 static void
@@ -213,6 +238,11 @@ cm_sign_s3_object_upload(void **state)
 			  &sig_str);
 	assert_int_equal(ret, 0);
 	assert_string_equal(sig_str, "ilyl83RwaSoYIEdixDQcA4OnAnc=");
+	free(sig_src);
+	free(sig_str);
+	op_hdrs_free(&op.req.hdrs);
+	free(op.url_path);
+	free(op.url_host);
 }
 
 static void
@@ -239,6 +269,11 @@ cm_sign_s3_bucket_list_all(void **state)
 			  &sig_str);
 	assert_int_equal(ret, 0);
 	assert_string_equal(sig_str, "qGdzdERIC03wnaRNKh6OqZehG9s=");
+	free(sig_src);
+	free(sig_str);
+	op_hdrs_free(&op.req.hdrs);
+	free(op.url_path);
+	free(op.url_host);
 }
 
 static void
@@ -265,6 +300,11 @@ cm_sign_s3_unicode_keys(void **state)
 			  &sig_str);
 	assert_int_equal(ret, 0);
 	assert_string_equal(sig_str, "DNEZGsoieTZ92F3bUfSPQcbGmlM=");
+	free(sig_src);
+	free(sig_str);
+	op_hdrs_free(&op.req.hdrs);
+	free(op.url_path);
+	free(op.url_host);
 }
 
 static void
@@ -291,6 +331,11 @@ cm_sign_s3_redir(void **state)
 			  &sig_str);
 	assert_int_equal(ret, 0);
 	assert_string_equal(sig_str, "6C8kD9KDok53JJkBfV2STjB1CcQ=");
+	free(sig_src);
+	free(sig_str);
+	op_hdrs_free(&op.req.hdrs);
+	free(op.url_path);
+	free(op.url_host);
 }
 
 static const UnitTest cm_sign_s3_tests[] = {

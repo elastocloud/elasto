@@ -50,6 +50,7 @@ cm_file_mkdir(void **state)
 	ret = elasto_fmkdir(&auth,
 			    path);
 	assert_false(ret < 0);
+	free(path);
 }
 
 static void
@@ -72,6 +73,7 @@ cm_file_rmdir(void **state)
 	ret = elasto_frmdir(&auth,
 			    path);
 	assert_false(ret < 0);
+	free(path);
 }
 
 static void
@@ -123,6 +125,7 @@ cm_file_create(void **state)
 
 	ret = elasto_fclose(fh);
 	assert_false(ret < 0);
+	free(path);
 }
 
 void
@@ -211,6 +214,7 @@ cm_file_io(void **state)
 
 	ret = elasto_fclose(fh);
 	assert_false(ret < 0);
+	free(path);
 }
 
 static void
@@ -257,6 +261,7 @@ cm_file_lease_basic(void **state)
 
 	ret = elasto_fclose(fh);
 	assert_int_equal(ret, 0);
+	free(path);
 }
 
 static void
@@ -316,6 +321,7 @@ cm_file_lease_multi(void **state)
 
 	ret = elasto_fclose(fh1);
 	assert_int_equal(ret, 0);
+	free(path);
 }
 
 static void
@@ -375,6 +381,7 @@ cm_file_lease_break(void **state)
 
 	ret = elasto_fclose(fh2);
 	assert_int_equal(ret, 0);
+	free(path);
 }
 
 static void
@@ -424,6 +431,7 @@ cm_file_truncate_basic(void **state)
 
 	ret = elasto_fclose(fh);
 	assert_int_equal(ret, 0);
+	free(path);
 }
 
 static const UnitTest cm_file_tests[] = {

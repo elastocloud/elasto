@@ -604,6 +604,7 @@ cm_xml_attr_multi(void **state)
 
 	free(val1);
 	free(val2);
+	free(val3);
 }
 
 static void
@@ -921,6 +922,7 @@ cm_xml_empty_attrs(void **state)
 	assert_null(val0);
 	assert_string_equal(val1, "bar");
 	assert_null(val2);
+	free(val1);
 }
 
 /*
@@ -953,6 +955,7 @@ cm_xml_attr_key_val_match(void **state)
 	assert_true(val0_present);
 	assert_non_null(val0);
 	assert_string_equal(val0, "dokey");
+	free(val0);
 }
 
 /* check that parse can't be called multiple times over the same data */

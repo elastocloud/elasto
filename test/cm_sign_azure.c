@@ -74,6 +74,11 @@ cm_sign_az_list(void **state)
 			    "/ddiss/test?comp=list");
 	assert_string_equal(sig_str,
 			    "UZqdIQCl+6/E/Ptp+q49bsKTtrXft2fHjvu9Qf+Ys+0=");
+	free(sig_src);
+	free(sig_str);
+	op_hdrs_free(&op.req.hdrs);
+	free(op.url_path);
+	free(op.url_host);
 }
 
 static const UnitTest cm_sign_azure_tests[] = {

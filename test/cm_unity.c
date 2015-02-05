@@ -68,6 +68,17 @@ err_out:
 }
 
 static void
+cm_unity_state_free(void)
+{
+	free(cm_ustate->acc);
+	free(cm_ustate->ctnr);
+	free(cm_ustate->ps_file);
+	free(cm_ustate->s3_id);
+	free(cm_ustate->s3_secret);
+	free(cm_ustate);
+}
+
+static void
 cm_unity_usage(const char *progname)
 {
 	printf("Usage: %s [-s publish settings] [-k S3 key-duo]"
@@ -96,14 +107,14 @@ main(int argc,
 			cm_ustate->ps_file = strdup(optarg);
 			if (cm_ustate->ps_file == NULL) {
 				ret = -ENOMEM;
-				goto err_out;
+				goto err_state_free;
 			}
 			break;
 		case 'k':
 			cm_ustate->s3_id = strdup(optarg);
 			if (cm_ustate->s3_id == NULL) {
 				ret = -ENOMEM;
-				goto err_out;
+				goto err_state_free;
 			}
 			sep = strchr(cm_ustate->s3_id, ',');
 			if (sep == NULL) {
@@ -111,12 +122,12 @@ main(int argc,
 			}
 			if (strlen(sep) <= 1) {
 				ret = -EINVAL;
-				goto err_out;
+				goto err_state_free;
 			}
 			cm_ustate->s3_secret = strdup(sep + 1);
 			if (cm_ustate->s3_secret == NULL) {
 				ret = -ENOMEM;
-				goto err_out;
+				goto err_state_free;
 			}
 			*sep = 0;
 			break;
@@ -130,7 +141,7 @@ main(int argc,
 		default:
 			cm_unity_usage(argv[0]);
 			ret = -EINVAL;
-			goto err_out;
+			goto err_state_free;
 			break;
 		}
 	}
@@ -140,12 +151,12 @@ main(int argc,
 		sak = getpass("S3 secret access key: ");
 		if (sak == NULL) {
 			ret = -EINVAL;
-			goto err_out;
+			goto err_state_free;
 		}
 		cm_ustate->s3_secret = strdup(sak);
 		if (cm_ustate->s3_secret == NULL) {
 			ret = -ENOMEM;
-			goto err_out;
+			goto err_state_free;
 		}
 	}
 
@@ -164,7 +175,8 @@ main(int argc,
 	}
 	sign_deinit();
 	ret = 0;
-
+err_state_free:
+	cm_unity_state_free();
 err_out:
 	return ret;
 }

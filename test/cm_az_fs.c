@@ -90,6 +90,7 @@ cm_az_fs_init(void **state)
 	ret = elasto_conn_sign_setkey(cm_op_az_fs_state.econn, cm_us->acc,
 				      acc_keys_get_rsp->primary);
 	assert_true(ret >= 0);
+	op_free(op);
 
 	ret = asprintf(&cm_op_az_fs_state.share, "%s%d",
 		       cm_us->ctnr, cm_us->ctnr_suffix);
@@ -128,6 +129,9 @@ cm_az_fs_deinit(void **state)
 	elasto_conn_free(cm_op_az_fs_state.econn);
 	elasto_conn_subsys_init();
 	azure_ssl_pubset_cleanup(cm_op_az_fs_state.pem_file);
+	free(cm_op_az_fs_state.pem_file);
+	free(cm_op_az_fs_state.sub_id);
+	free(cm_op_az_fs_state.sub_name);
 }
 
 static void
@@ -307,6 +311,7 @@ cm_az_fs_file_create(void **state)
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
+	op_free(op);
 
 	/* cleanup dir, now empty */
 	ret = az_fs_req_dir_del(cm_us->acc, cm_op_az_fs_state.share, NULL,
