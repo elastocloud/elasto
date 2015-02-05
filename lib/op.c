@@ -139,10 +139,11 @@ op_hdr_u64_val_lookup(struct list_head *hdrs,
 	if (sval_end == sval) {
 		dbg(0, "non-numeric at %s: %s\n",
 		    key, sval);
+		free(sval);
 		return -EINVAL;
 	}
 	*_val = val;
-
+	free(sval);
 	return 0;
 }
 
