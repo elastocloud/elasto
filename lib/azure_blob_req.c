@@ -2111,6 +2111,7 @@ az_rsp_blob_prop_get_process(struct op *op,
 		ret = -ENOTSUP;
 		goto err_out;
 	}
+	free(hdr_val);
 
 	ret = op_hdr_u64_val_lookup(&op->rsp.hdrs,
 				    "Content-Length",
