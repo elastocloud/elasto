@@ -64,6 +64,7 @@ apb_fh_init(const struct elasto_fauth *auth,
 		.lease_acquire = apb_flease_acquire,
 		.lease_break = apb_flease_break,
 		.lease_release = apb_flease_release,
+		.lease_free = apb_flease_free,
 		.mkdir = apb_fmkdir,
 		.rmdir = apb_frmdir,
 	};

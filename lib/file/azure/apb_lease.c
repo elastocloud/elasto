@@ -43,10 +43,18 @@ struct apb_flease {
 	char *lid;
 };
 
-static void
-apb_flease_free(void **_flease_h)
+void
+apb_flease_free(void *mod_priv,
+		void **_flease_h)
 {
-	struct apb_flease *lease = *_flease_h;
+	struct apb_flease *lease;
+
+	if (_flease_h == NULL) {
+		dbg(0, "NULL lease handle for free!\n");
+		return;
+	}
+
+	lease = *_flease_h;
 
 	if (lease == NULL) {
 		return;
@@ -169,7 +177,6 @@ apb_flease_break(void *mod_priv,
 	}
 
 	dbg(3, "broke lease %s\n", (lid ? lid: "unknown"));
-	apb_flease_free(_flease_h);
 
 	ret = 0;
 err_op_free:
@@ -189,7 +196,11 @@ apb_flease_release(void *mod_priv,
 	struct az_rsp_blob_lease *blob_lease_rsp;
 	struct apb_fh *apb_fh = mod_priv;
 
-	/* caller checks for NULL handle */
+	if (_flease_h == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	lease = *_flease_h;
 	if (lease == NULL) {
 		ret = -EINVAL;
@@ -216,7 +227,6 @@ apb_flease_release(void *mod_priv,
 	blob_lease_rsp = az_rsp_blob_lease_get(op);
 
 	dbg(3, "released lease %s\n", blob_lease_rsp->lid);
-	apb_flease_free(_flease_h);
 
 	ret = 0;
 err_op_free:

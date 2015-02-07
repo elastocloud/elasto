@@ -88,11 +88,13 @@ elasto_fclose(struct elasto_fh *fh)
 	}
 
 	if (fh->lease_state == ELASTO_FH_LEASE_ACQUIRED) {
-		dbg(4, "cleaning up lease %p on close\n", fh->lid);
+		dbg(4, "cleaning up lease %p on close\n", fh->flease_h);
 		int ret = elasto_flease_release(fh);
 		if (ret < 0) {
 			dbg(0, "failed to release lease %p on close: %s\n",
-			    fh->lid, strerror(-ret));
+			    fh->flease_h, strerror(-ret));
+			/* the lid still needs to be freed on failure */
+			fh->ops.lease_free(fh->mod_priv, &fh->flease_h);
 		}
 	}
 

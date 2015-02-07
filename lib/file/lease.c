@@ -38,7 +38,6 @@
 /*
  * @duration: Lease duration in seconds. -1 is indefinite, otherwise it must be
  *	      between 15 and 60 seconds.
- * @_lid: lease ID assigned by provider, allocated and returned on success.
  */
 int
 elasto_flease_acquire(struct elasto_fh *fh,
@@ -65,7 +64,7 @@ elasto_flease_acquire(struct elasto_fh *fh,
 	}
 
 	ret = fh->ops.lease_acquire(fh->mod_priv, fh->conn,
-				    duration, &fh->lid);
+				    duration, &fh->flease_h);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -93,13 +92,14 @@ elasto_flease_break(struct elasto_fh *fh)
 		goto err_out;
 	}
 
-	/* fh->lid may be NULL, will be freed if non-null */
+	/* fh->flease_h may be NULL */
 	ret = fh->ops.lease_break(fh->mod_priv, fh->conn,
-				  &fh->lid);
+				  &fh->flease_h);
 	if (ret < 0) {
 		goto err_out;
 	}
 
+	fh->ops.lease_free(fh->mod_priv, &fh->flease_h);
 	fh->lease_state = ELASTO_FH_LEASE_NONE;
 
 	ret = 0;
@@ -128,18 +128,18 @@ elasto_flease_release(struct elasto_fh *fh)
 		goto err_out;
 	}
 
-	if (fh->lid == NULL) {
+	if (fh->flease_h == NULL) {
 		dbg(0, "invalid release with NULL lease id\n");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
-	/* fh->lid will be freed and zeroed */
-	ret = fh->ops.lease_release(fh->mod_priv, fh->conn, &fh->lid);
+	ret = fh->ops.lease_release(fh->mod_priv, fh->conn, &fh->flease_h);
 	if (ret < 0) {
 		goto err_out;
 	}
 
+	fh->ops.lease_free(fh->mod_priv, &fh->flease_h);
 	fh->lease_state = ELASTO_FH_LEASE_NONE;
 
 	ret = 0;

@@ -55,6 +55,8 @@ struct elasto_fh_mod_ops {
 	int (*lease_release)(void *mod_priv,
 			     struct elasto_conn *conn,
 			     void **_flease_h);
+	void (*lease_free)(void *mod_priv,
+			   void **_flease_h);
 	int (*mkdir)(void *mod_priv,
 		     struct elasto_conn *conn,
 		     const char *path);
@@ -73,7 +75,7 @@ struct elasto_fh_mod_ops {
  * @mod_dl_h: module dlopen handle
  * @mod_priv: private module data returned on module init
  * @ops: module functions
- * @lid: opaque lease ID, returned on acquisition
+ * @lease_h: opaque lease handle, returned on acquisition
  * @lease_state: last known lease state
  */
 struct elasto_fh {
@@ -83,8 +85,7 @@ struct elasto_fh {
 	void *mod_dl_h;
 	void *mod_priv;
 	struct elasto_fh_mod_ops ops;
-	/* FIXME: make lid an iovec style blob */
-	void *lid;
+	void *flease_h;
 	enum {
 		ELASTO_FH_LEASE_NONE = 0,
 		ELASTO_FH_LEASE_ACQUIRED,

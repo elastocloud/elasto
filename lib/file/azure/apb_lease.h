@@ -30,4 +30,8 @@ apb_flease_release(void *mod_priv,
 		   struct elasto_conn *conn,
 		   void **_flease_h);
 
+void
+apb_flease_free(void *mod_priv,
+		void **_flease_h);
+
 #endif /* _APB_LEASE_H_ */
