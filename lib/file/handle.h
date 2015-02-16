@@ -45,6 +45,9 @@ struct elasto_fh_mod_ops {
 	int (*stat)(void *mod_priv,
 		    struct elasto_conn *conn,
 		    struct elasto_fstat *fstat);
+	int (*statfs)(void *mod_priv,
+		      struct elasto_conn *conn,
+		      struct elasto_fstatfs *fstatfs);
 	int (*lease_acquire)(void *mod_priv,
 			     struct elasto_conn *conn,
 			     int32_t duration,

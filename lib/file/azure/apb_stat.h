@@ -19,4 +19,9 @@ apb_fstat(void *mod_priv,
 	  struct elasto_conn *conn,
 	  struct elasto_fstat *fstat);
 
+int
+apb_fstatvfs(void *mod_priv,
+	     struct elasto_conn *conn,
+	     struct elasto_fstatfs *fstatfs);
+
 #endif /* _APB_STAT_H_ */

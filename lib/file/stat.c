@@ -60,3 +60,29 @@ elasto_fstat(struct elasto_fh *fh,
 err_out:
 	return ret;
 }
+
+int
+elasto_fstatfs(struct elasto_fh *fh,
+	       struct elasto_fstatfs *fstatfs)
+{
+	int ret;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (fstatfs == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = fh->ops.statfs(fh->mod_priv, fh->conn, fstatfs);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = 0;
+err_out:
+	return ret;
+}

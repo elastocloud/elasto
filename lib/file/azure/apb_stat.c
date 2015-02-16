@@ -83,3 +83,44 @@ err_op_free:
 err_out:
 	return ret;
 }
+
+const struct elasto_fstatfs_region apb_regions[] = {
+	{"Central US", "Iowa"},
+	{"East US", "Virginia"},
+	{"East US 2", "Virginia"},
+	{"US Gov Iowa", "Iowa"},
+	{"US Gov Virginia", "Virginia"},
+	{"North Central US", "Illinois"},
+	{"South Central US", "Texas"},
+	{"West US", "California"},
+	{"North Europe", "Ireland"},
+	{"West Europe", "Netherlands"},
+	{"East Asia", "Hong Kong"},
+	{"Southeast Asia", "Singapore"},
+	{"Japan East", "Saitama Prefecture"},
+	{"Japan West", "Osaka Prefecture"},
+	{"Brazil South", "Sao Paulo State"},
+	{"Australia East", "New South Wales"},
+	{"Australia Southeast", "Victoria"},
+};
+
+int
+apb_fstatvfs(void *mod_priv,
+	     struct elasto_conn *conn,
+	     struct elasto_fstatfs *fstatfs)
+{
+	/* fstatfs checked by caller */
+	fstatfs->iosize_min = 512;
+	fstatfs->iosize_optimal = 512;
+
+	/* Azure Page Blobs are sparse and can be written at any offset */
+	fstatfs->cap_flags = (ELASTO_FSTATFS_CAP_SPARSE
+			    | ELASTO_FSTATFS_CAP_WRITE_RANGE
+			    | ELASTO_FSTATFS_CAP_LEASES);
+	fstatfs->prop_flags = 0;
+
+	fstatfs->num_regions = ARRAY_SIZE(apb_regions);
+	fstatfs->regions = apb_regions;
+
+	return 0;
+}

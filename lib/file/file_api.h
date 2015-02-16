@@ -107,6 +107,42 @@ int
 elasto_fstat(struct elasto_fh *fh,
 	     struct elasto_fstat *fstat);
 
+enum elasto_fstatfs_cap_flags {
+	ELASTO_FSTATFS_CAP_SPARSE	= 0x0001,
+	ELASTO_FSTATFS_CAP_WRITE_RANGE	= 0x0002,
+	ELASTO_FSTATFS_CAP_LEASES	= 0x0004,
+};
+
+enum elasto_fstatfs_prop_flags {
+	ELASTO_FSTATFS_PROP_READ_ONLY	= 0x0001,
+};
+
+struct elasto_fstatfs_region {
+	char *region;
+	char *location;
+};
+
+/**
+ * @iosize_min: minimum unit of file system I/O
+ * @iosize_min: optimal unit of file system I/O
+ * @cap_flags: FS capabilities
+ * @prop_flags: FS properties
+ * @num_regions: number of entries in the regions array
+ * @regions: array of datacenter locations for the backend
+ */
+struct elasto_fstatfs {
+	uint64_t iosize_min;
+	uint64_t iosize_optimal;
+	uint64_t cap_flags;
+	uint64_t prop_flags;
+	uint64_t num_regions;
+	const struct elasto_fstatfs_region *regions;
+};
+
+int
+elasto_fstatfs(struct elasto_fh *fh,
+	       struct elasto_fstatfs *fstatfs);
+
 int
 elasto_fdebug(int level);
 
