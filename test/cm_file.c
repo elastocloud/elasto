@@ -434,6 +434,53 @@ cm_file_truncate_basic(void **state)
 	free(path);
 }
 
+static void
+cm_file_stat_basic(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct elasto_fh *fh;
+	struct elasto_fstat fstat;
+	struct elasto_fstatfs fstatfs;
+	int i;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+
+	auth.type = ELASTO_FILE_AZURE;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d/stat_test",
+		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
+			   &fh);
+	assert_false(ret < 0);
+
+	ret = elasto_fstat(fh, &fstat);
+	assert_false(ret < 0);
+
+	assert_int_equal(fstat.size, 0);
+
+	ret = elasto_fstatfs(fh, &fstatfs);
+	assert_false(ret < 0);
+
+	assert_int_equal(fstat.size, 0);
+	assert_true(fstatfs.iosize_min > 0);
+	assert_true(fstatfs.iosize_optimal >= fstatfs.iosize_min);
+	for (i = 0; i < fstatfs.num_regions; i++) {
+		assert_non_null(fstatfs.regions[i].region);
+		assert_non_null(fstatfs.regions[i].location);
+	}
+
+	ret = elasto_fclose(fh);
+	assert_int_equal(ret, 0);
+	free(path);
+}
+
 static const UnitTest cm_file_tests[] = {
 	unit_test_setup_teardown(cm_file_create, cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_io, cm_file_mkdir, cm_file_rmdir),
@@ -441,6 +488,7 @@ static const UnitTest cm_file_tests[] = {
 	unit_test_setup_teardown(cm_file_lease_multi, cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_lease_break, cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_truncate_basic, cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_stat_basic, cm_file_mkdir, cm_file_rmdir),
 };
 
 int
