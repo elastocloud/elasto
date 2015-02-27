@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -757,6 +757,132 @@ err_out:
 }
 
 static void
+az_mgmt_req_acc_prop_get_free(struct az_mgmt_req_acc_prop_get *acc_prop_get_req)
+{
+	free(acc_prop_get_req->sub_id);
+	free(acc_prop_get_req->acc);
+}
+
+static void
+az_mgmt_rsp_acc_prop_get_free(struct az_mgmt_rsp_acc_prop_get *acc_prop_get_rsp)
+{
+	azure_acc_free(&acc_prop_get_rsp->acc_desc);
+}
+
+int
+az_mgmt_req_acc_prop_get(const char *sub_id,
+			 const char *acc,
+			 struct op **_op)
+{
+	int ret;
+	struct az_mgmt_ebo *ebo;
+	struct op *op;
+	struct az_mgmt_req_acc_prop_get *acc_prop_get_req;
+
+	ret = az_mgmt_ebo_init(AOP_MGMT_ACC_PROP_GET, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	acc_prop_get_req = &ebo->req.acc_prop_get;
+
+	acc_prop_get_req->sub_id = strdup(sub_id);
+	if (acc_prop_get_req->sub_id == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	acc_prop_get_req->acc = strdup(acc);
+	if (acc_prop_get_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_sub_free;
+	}
+
+	op->method = REQ_METHOD_GET;
+	op->url_https_only = true;
+	op->url_host = strdup(REQ_HOST_AZURE_MGMT);
+	if (op->url_host == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	ret = asprintf(&op->url_path, "/%s/services/storageservices/%s",
+		       sub_id, acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_req_common_hdr_fill(op, true);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_acc_free:
+	free(acc_prop_get_req->acc);
+err_sub_free:
+	free(acc_prop_get_req->sub_id);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static int az_mgmt_rsp_acc_svc_process(struct xml_doc *xdoc,
+				       const char *path,
+				       const char *val,
+				       void *cb_data)
+{
+	struct az_mgmt_rsp_acc_prop_get *acc_prop_get_rsp
+				= (struct az_mgmt_rsp_acc_prop_get *)cb_data;
+
+	return az_mgmt_rsp_acc_want(xdoc, &acc_prop_get_rsp->acc_desc);
+}
+
+static int
+az_mgmt_rsp_acc_prop_get_process(struct op *op,
+			      struct az_mgmt_rsp_acc_prop_get *acc_prop_get_rsp)
+{
+	int ret;
+	struct xml_doc *xdoc;
+
+	assert(op->opcode == AOP_MGMT_ACC_PROP_GET);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	assert(op->rsp.data->base_off == 0);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_path_cb_want(xdoc,
+				"/StorageService", true,
+				az_mgmt_rsp_acc_svc_process,
+				acc_prop_get_rsp, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
+	}
+
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_xdoc_free;
+	}
+
+	ret = 0;
+err_xdoc_free:
+	exml_free(xdoc);
+err_out:
+	return ret;
+}
+
+static void
 az_mgmt_req_status_get_free(struct az_mgmt_req_status_get *sts_get_req)
 {
 	free(sts_get_req->sub_id);
@@ -940,6 +1066,9 @@ az_mgmt_req_free(struct op *op)
 	case AOP_MGMT_ACC_DEL:
 		az_mgmt_req_acc_del_free(&ebo->req.acc_del);
 		break;
+	case AOP_MGMT_ACC_PROP_GET:
+		az_mgmt_req_acc_prop_get_free(&ebo->req.acc_prop_get);
+		break;
 	case AOP_MGMT_STATUS_GET:
 		az_mgmt_req_status_get_free(&ebo->req.sts_get);
 		break;
@@ -960,6 +1089,9 @@ az_mgmt_rsp_free(struct op *op)
 		break;
 	case AOP_MGMT_ACC_LIST:
 		az_mgmt_rsp_acc_list_free(&ebo->rsp.acc_list);
+		break;
+	case AOP_MGMT_ACC_PROP_GET:
+		az_mgmt_rsp_acc_prop_get_free(&ebo->rsp.acc_prop_get);
 		break;
 	case AOP_MGMT_STATUS_GET:
 		az_mgmt_rsp_status_get_free(&ebo->rsp.sts_get);
@@ -994,10 +1126,15 @@ az_mgmt_rsp_process(struct op *op)
 
 	switch (op->opcode) {
 	case AOP_MGMT_ACC_KEYS_GET:
-		ret = az_mgmt_rsp_acc_keys_get_process(op, &ebo->rsp.acc_keys_get);
+		ret = az_mgmt_rsp_acc_keys_get_process(op,
+						       &ebo->rsp.acc_keys_get);
 		break;
 	case AOP_MGMT_ACC_LIST:
 		ret = az_mgmt_rsp_acc_list_process(op, &ebo->rsp.acc_list);
+		break;
+	case AOP_MGMT_ACC_PROP_GET:
+		ret = az_mgmt_rsp_acc_prop_get_process(op,
+						       &ebo->rsp.acc_prop_get);
 		break;
 	case AOP_MGMT_STATUS_GET:
 		ret = az_mgmt_rsp_status_get_process(op, &ebo->rsp.sts_get);
@@ -1027,6 +1164,13 @@ az_mgmt_rsp_acc_list(struct op *op)
 {
 	struct az_mgmt_ebo *ebo = container_of(op, struct az_mgmt_ebo, op);
 	return &ebo->rsp.acc_list;
+}
+
+struct az_mgmt_rsp_acc_prop_get *
+az_mgmt_rsp_acc_prop_get(struct op *op)
+{
+	struct az_mgmt_ebo *ebo = container_of(op, struct az_mgmt_ebo, op);
+	return &ebo->rsp.acc_prop_get;
 }
 
 struct az_mgmt_rsp_status_get *
