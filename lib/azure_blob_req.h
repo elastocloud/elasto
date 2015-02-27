@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -18,6 +18,7 @@ enum az_blob_opcode {
 	AOP_CONTAINER_LIST,
 	AOP_CONTAINER_CREATE,
 	AOP_CONTAINER_DEL,
+	AOP_CONTAINER_PROP_GET,
 	AOP_BLOB_LIST,
 	AOP_BLOB_PUT,
 	AOP_BLOB_GET,
@@ -54,6 +55,29 @@ struct az_req_ctnr_create {
 struct az_req_ctnr_del {
 	char *account;
 	char *container;
+};
+
+struct az_req_ctnr_prop_get {
+	char *acc;
+	char *ctnr;
+};
+
+enum az_lease_state {
+	AOP_LEASE_STATE_AVAILABLE,
+	AOP_LEASE_STATE_LEASED,
+	AOP_LEASE_STATE_EXPIRED,
+	AOP_LEASE_STATE_BREAKING,
+	AOP_LEASE_STATE_BROKEN,
+};
+
+enum az_lease_status {
+	AOP_LEASE_STATUS_LOCKED,
+	AOP_LEASE_STATUS_UNLOCKED,
+};
+
+struct az_rsp_ctnr_prop_get {
+	enum az_lease_state lease_state;
+	enum az_lease_status lease_status;
 };
 
 struct azure_blob {
@@ -181,17 +205,6 @@ struct az_req_blob_cp {
 	} dst;
 };
 
-enum az_lease_state {
-	AOP_LEASE_STATE_AVAILABLE,
-	AOP_LEASE_STATE_LEASED,
-	AOP_LEASE_STATE_EXPIRED,
-	AOP_LEASE_STATE_BREAKING,
-	AOP_LEASE_STATE_BROKEN,
-};
-enum az_lease_status {
-	AOP_LEASE_STATUS_LOCKED,
-	AOP_LEASE_STATUS_UNLOCKED,
-};
 enum az_cp_status {
 	AOP_CP_STATUS_PENDING,
 	AOP_CP_STATUS_SUCCESS,
@@ -252,6 +265,7 @@ struct az_blob_req {
 		struct az_req_ctnr_list ctnr_list;
 		struct az_req_ctnr_create ctnr_create;
 		struct az_req_ctnr_del ctnr_del;
+		struct az_req_ctnr_prop_get ctnr_prop_get;
 		struct az_req_blob_list blob_list;
 		struct az_req_blob_put blob_put;
 		struct az_req_blob_get blob_get;
@@ -270,6 +284,7 @@ struct az_blob_req {
 struct az_blob_rsp {
 	union {
 		struct az_rsp_ctnr_list ctnr_list;
+		struct az_rsp_ctnr_prop_get ctnr_prop_get;
 		struct az_rsp_blob_list blob_list;
 		struct az_rsp_block_list_get block_list_get;
 		struct az_rsp_blob_prop_get blob_prop_get;
@@ -301,6 +316,11 @@ int
 az_req_ctnr_del(const char *account,
 		const char *container,
 		struct op **_op);
+
+int
+az_req_ctnr_prop_get(const char *acc,
+		     const char *ctnr,
+		     struct op **_op);
 
 int
 az_req_blob_list(const char *account,
@@ -396,6 +416,9 @@ az_req_blob_lease(const char *account,
 
 struct az_rsp_ctnr_list *
 az_rsp_ctnr_list(struct op *op);
+
+struct az_rsp_ctnr_prop_get *
+az_rsp_ctnr_prop_get(struct op *op);
 
 struct az_rsp_blob_list *
 az_rsp_blob_list(struct op *op);
