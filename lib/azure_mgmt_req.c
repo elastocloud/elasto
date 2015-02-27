@@ -308,6 +308,50 @@ err_out:
 	return ret;
 }
 
+static int az_mgmt_rsp_acc_want(struct xml_doc *xdoc,
+				struct azure_account *acc)
+{
+	int ret;
+
+	ret = exml_str_want(xdoc, "./ServiceName", true, &acc->svc_name, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_str_want(xdoc, "./Url", true, &acc->url, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_str_want(xdoc, "./StorageServiceProperties/Description",
+			    false, &acc->desc, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_str_want(xdoc, "./StorageServiceProperties/AffinityGroup",
+			    false, &acc->affin_grp, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_base64_want(xdoc, "./StorageServiceProperties/Label",
+			       false, &acc->label, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_str_want(xdoc, "./StorageServiceProperties/Location",
+			    false, &acc->location, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = 0;
+err_out:
+	return ret;
+}
+
 static int az_mgmt_rsp_acc_iter_process(struct xml_doc *xdoc,
 					const char *path,
 					const char *val,
@@ -333,36 +377,7 @@ static int az_mgmt_rsp_acc_iter_process(struct xml_doc *xdoc,
 	}
 	memset(acc, 0, sizeof(*acc));
 
-	ret = exml_str_want(xdoc, "./ServiceName", true, &acc->svc_name, NULL);
-	if (ret < 0) {
-		goto err_acc_free;
-	}
-
-	ret = exml_str_want(xdoc, "./Url", true, &acc->url, NULL);
-	if (ret < 0) {
-		goto err_acc_free;
-	}
-
-	ret = exml_str_want(xdoc, "./StorageServiceProperties/Description",
-			    false, &acc->desc, NULL);
-	if (ret < 0) {
-		goto err_acc_free;
-	}
-
-	ret = exml_str_want(xdoc, "./StorageServiceProperties/AffinityGroup",
-			    false, &acc->affin_grp, NULL);
-	if (ret < 0) {
-		goto err_acc_free;
-	}
-
-	ret = exml_base64_want(xdoc, "./StorageServiceProperties/Label",
-			       false, &acc->label, NULL);
-	if (ret < 0) {
-		goto err_acc_free;
-	}
-
-	ret = exml_str_want(xdoc, "./StorageServiceProperties/Location",
-			    false, &acc->location, NULL);
+	ret = az_mgmt_rsp_acc_want(xdoc, acc);
 	if (ret < 0) {
 		goto err_acc_free;
 	}
