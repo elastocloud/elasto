@@ -223,17 +223,14 @@ az_mgmt_req_acc_list_free(struct az_mgmt_req_acc_list *acc_list_req)
 }
 
 static void
-azure_acc_free(struct azure_account **pacc)
+azure_acc_free(struct azure_account *acc)
 {
-	struct azure_account *acc = *pacc;
-
 	free(acc->svc_name);
 	free(acc->label);
 	free(acc->url);
 	free(acc->affin_grp);
 	free(acc->location);
 	free(acc->desc);
-	free(acc);
 }
 
 static void
@@ -247,14 +244,9 @@ az_mgmt_rsp_acc_list_free(struct az_mgmt_rsp_acc_list *acc_list_rsp)
 	}
 
 	list_for_each_safe(&acc_list_rsp->accs, acc, acc_n, list) {
-		azure_acc_free(&acc);
+		azure_acc_free(acc);
+		free(acc);
 	}
-}
-
-static int
-az_mgmt_req_acc_list_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, true);
 }
 
 int
@@ -297,7 +289,7 @@ az_mgmt_req_acc_list(const char *sub_id,
 		goto err_uhost_free;
 	}
 
-	ret = az_mgmt_req_acc_list_hdr_fill(op);
+	ret = az_req_common_hdr_fill(op, true);
 	if (ret < 0) {
 		goto err_upath_free;
 	}
@@ -426,7 +418,8 @@ az_mgmt_rsp_acc_list_process(struct op *op,
 
 err_accs_free:
 	list_for_each_safe(&acc_list_rsp->accs, acc, acc_n, list) {
-		azure_acc_free(&acc);
+		azure_acc_free(acc);
+		free(acc);
 	}
 err_xdoc_free:
 	exml_free(xdoc);
@@ -584,42 +577,35 @@ az_mgmt_req_acc_create(const char *sub_id,
 		goto err_ebo_free;
 	}
 
-	acc_create_req->acc = malloc(sizeof(*acc_create_req->acc));
-	if (acc_create_req->acc == NULL) {
+	acc_create_req->acc.svc_name = strdup(svc_name);
+	if (acc_create_req->acc.svc_name == NULL) {
 		ret = -ENOMEM;
 		goto err_sub_free;
 	}
-	memset(acc_create_req->acc, 0, sizeof(*acc_create_req->acc));
-
-	acc_create_req->acc->svc_name = strdup(svc_name);
-	if (acc_create_req->acc->svc_name == NULL) {
-		ret = -ENOMEM;
-		goto err_acc_free;
-	}
-	acc_create_req->acc->label = strdup(label);
-	if (acc_create_req->acc->label == NULL) {
+	acc_create_req->acc.label = strdup(label);
+	if (acc_create_req->acc.label == NULL) {
 		ret = -ENOMEM;
 		goto err_svc_name_free;
 	}
 
 	if (desc != NULL) {
-		acc_create_req->acc->desc = strdup(desc);
-		if (acc_create_req->acc->desc == NULL) {
+		acc_create_req->acc.desc = strdup(desc);
+		if (acc_create_req->acc.desc == NULL) {
 			ret = -ENOMEM;
 			goto err_label_free;
 		}
 	}
 	if (affin_grp != NULL) {
 		assert(location == NULL);
-		acc_create_req->acc->affin_grp = strdup(affin_grp);
-		if (acc_create_req->acc->affin_grp == NULL) {
+		acc_create_req->acc.affin_grp = strdup(affin_grp);
+		if (acc_create_req->acc.affin_grp == NULL) {
 			ret = -ENOMEM;
 			goto err_desc_free;
 		}
 	} else {
 		assert(location != NULL);
-		acc_create_req->acc->location = strdup(location);
-		if (acc_create_req->acc->location == NULL) {
+		acc_create_req->acc.location = strdup(location);
+		if (acc_create_req->acc.location == NULL) {
 			ret = -ENOMEM;
 			goto err_desc_free;
 		}
@@ -646,7 +632,7 @@ az_mgmt_req_acc_create(const char *sub_id,
 		goto err_upath_free;
 	}
 
-	ret = az_mgmt_req_acc_create_body_fill(acc_create_req->acc,
+	ret = az_mgmt_req_acc_create_body_fill(&acc_create_req->acc,
 					       &op->req.data);
 	if (ret < 0) {
 		goto err_hdrs_free;
@@ -661,16 +647,14 @@ err_upath_free:
 err_uhost_free:
 	free(op->url_host);
 err_loc_free:
-	free(acc_create_req->acc->location);
-	free(acc_create_req->acc->affin_grp);
+	free(acc_create_req->acc.location);
+	free(acc_create_req->acc.affin_grp);
 err_desc_free:
-	free(acc_create_req->acc->desc);
+	free(acc_create_req->acc.desc);
 err_label_free:
-	free(acc_create_req->acc->label);
+	free(acc_create_req->acc.label);
 err_svc_name_free:
-	free(acc_create_req->acc->svc_name);
-err_acc_free:
-	free(acc_create_req->acc);
+	free(acc_create_req->acc.svc_name);
 err_sub_free:
 	free(acc_create_req->sub_id);
 err_ebo_free:

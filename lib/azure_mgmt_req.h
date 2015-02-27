@@ -54,7 +54,7 @@ struct az_mgmt_rsp_acc_list {
 
 struct az_mgmt_req_acc_create {
 	char *sub_id;
-	struct azure_account *acc;
+	struct azure_account acc;
 };
 
 struct az_mgmt_req_acc_del {
