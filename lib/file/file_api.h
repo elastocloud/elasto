@@ -45,6 +45,7 @@ elasto_frmdir(const struct elasto_fauth *auth,
 enum elasto_fopen_flags {
 	ELASTO_FOPEN_CREATE	= 0x0001,
 	ELASTO_FOPEN_EXCL	= 0x0002,
+	ELASTO_FOPEN_DIRECTORY	= 0x0004,
 };
 
 int

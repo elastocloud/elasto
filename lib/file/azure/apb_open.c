@@ -123,6 +123,10 @@ done:
 	az_path->acc = comp1;
 	az_path->ctnr = comp2;
 	az_path->blob = comp3;
+	dbg(2, "parsed %s as APB path: acc=%s, ctnr=%s, blob=%s\n",
+	    path, (az_path->acc ? az_path->acc : ""),
+	    (az_path->ctnr ? az_path->ctnr : ""),
+	    (az_path->blob ? az_path->blob : ""));
 
 	return 0;
 
@@ -184,25 +188,24 @@ err_out:
 	return ret;
 }
 
-int
-apb_fopen(void *mod_priv,
-	  struct elasto_conn *conn,
-	  const char *path,
-	  uint64_t flags)
+static int
+apb_fopen_blob(struct apb_fh *apb_fh,
+	       struct elasto_conn *conn,
+	       uint64_t flags)
 {
 	int ret;
 	struct op *op;
 	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
-	struct apb_fh *apb_fh = mod_priv;
 
-	ret = apb_fpath_parse(path, &apb_fh->path);
-	if (ret < 0) {
+	if (flags & ELASTO_FOPEN_DIRECTORY) {
+		dbg(1, "attempt to open blob with directory flag set\n");
+		ret = -EINVAL;
 		goto err_out;
 	}
 
 	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
 	if (ret < 0) {
-		goto err_path_free;
+		goto err_out;
 	}
 
 	ret = az_req_blob_prop_get(apb_fh->path.acc,
@@ -210,7 +213,7 @@ apb_fopen(void *mod_priv,
 				   apb_fh->path.blob,
 				   &op);
 	if (ret < 0) {
-		goto err_path_free;
+		goto err_out;
 	}
 
 	ret = elasto_fop_send_recv(conn, op);
@@ -251,11 +254,206 @@ apb_fopen(void *mod_priv,
 	}
 
 done:
-	op_free(op);
-	return 0;
-
+	ret = 0;
 err_op_free:
 	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
+apb_fopen_ctnr(struct apb_fh *apb_fh,
+	       struct elasto_conn *conn,
+	       uint64_t flags)
+{
+	int ret;
+	struct op *op;
+
+	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
+		dbg(1, "attempt to open container without dir flag set\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = az_req_ctnr_prop_get(apb_fh->path.acc,
+				   apb_fh->path.ctnr,
+				   &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
+					&& (flags & ELASTO_FOPEN_EXCL)) {
+		dbg(1, "path already exists, but exclusive create specified\n");
+		ret = -EEXIST;
+		goto err_op_free;
+	} else if ((ret < 0) && op_rsp_error_match(op, 404)
+					&& (flags & ELASTO_FOPEN_CREATE)) {
+		dbg(4, "path not found, creating\n");
+		op_free(op);
+		ret = az_req_ctnr_create(apb_fh->path.acc, apb_fh->path.ctnr,
+					 &op);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		ret = elasto_fop_send_recv(conn, op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+	} else if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
+apb_fopen_acc(struct apb_fh *apb_fh,
+	      struct elasto_conn *conn,
+	      uint64_t flags)
+{
+	int ret;
+	struct op *op;
+
+	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
+		dbg(1, "attempt to open account without dir flag set\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_mgmt_req_acc_prop_get(apb_fh->sub_id, apb_fh->path.acc,
+				       &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
+					&& (flags & ELASTO_FOPEN_EXCL)) {
+		dbg(1, "path already exists, but exclusive create specified\n");
+		ret = -EEXIST;
+		goto err_op_free;
+	} else if ((ret < 0) && op_rsp_error_match(op, 404)
+					&& (flags & ELASTO_FOPEN_CREATE)) {
+		dbg(4, "path not found, creating\n");
+		op_free(op);
+		/* FIXME use hard coded location for now */
+		ret = az_mgmt_req_acc_create(apb_fh->sub_id,
+					     apb_fh->path.acc,
+					     apb_fh->path.acc, /* label */
+					     NULL,	       /* description */
+					     NULL,	       /* affin group */
+					     "Netherlands",    /* location */
+					     &op);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		ret = elasto_fop_send_recv(conn, op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+	} else if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
+apb_fopen_root(struct apb_fh *apb_fh,
+	       struct elasto_conn *conn,
+	       uint64_t flags)
+{
+	int ret;
+	struct op *op;
+
+	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
+		dbg(1, "attempt to open account without dir flag set\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (flags & (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL)) {
+		dbg(1, "invalid flag for root open\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/*
+	 * XXX use the heavy-weight List Storage Accounts request to check that
+	 * the subscription information is correct at open time.
+	 */
+	ret = az_mgmt_req_acc_list(apb_fh->sub_id, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+int
+apb_fopen(void *mod_priv,
+	  struct elasto_conn *conn,
+	  const char *path,
+	  uint64_t flags)
+{
+	int ret;
+	struct apb_fh *apb_fh = mod_priv;
+
+	ret = apb_fpath_parse(path, &apb_fh->path);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (apb_fh->path.blob != NULL) {
+		ret = apb_fopen_blob(apb_fh, conn, flags);
+		if (ret < 0) {
+			goto err_path_free;
+		}
+	} else if (apb_fh->path.ctnr != NULL) {
+		ret = apb_fopen_ctnr(apb_fh, conn, flags);
+		if (ret < 0) {
+			goto err_path_free;
+		}
+	} else if (apb_fh->path.acc != NULL) {
+		ret = apb_fopen_acc(apb_fh, conn, flags);
+		if (ret < 0) {
+			goto err_path_free;
+		}
+	} else {
+		ret = apb_fopen_root(apb_fh, conn, flags);
+		if (ret < 0) {
+			goto err_path_free;
+		}
+	}
+
+	return 0;
+
 err_path_free:
 	apb_fpath_free(&apb_fh->path);
 err_out:
