@@ -481,6 +481,98 @@ cm_file_stat_basic(void **state)
 	free(path);
 }
 
+static void
+cm_file_dir_open(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct elasto_fh *fh;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+
+	auth.type = ELASTO_FILE_AZURE;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	/* open root */
+	ret = elasto_fopen(&auth,
+			   "/",
+			   ELASTO_FOPEN_DIRECTORY,
+			   &fh);
+	assert_true(ret >= 0);
+	elasto_fclose(fh);
+
+	/* open root without dir flag */
+	ret = elasto_fopen(&auth,
+			   "/",
+			   0,
+			   &fh);
+	assert_int_equal(ret, -EINVAL);
+
+	/* open root with create flags - should fail */
+	ret = elasto_fopen(&auth,
+			   "/",
+			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
+			    | ELASTO_FOPEN_EXCL),
+			   &fh);
+	assert_int_equal(ret, -EINVAL);
+
+	/* open existing account */
+	ret = asprintf(&path, "/%s", cm_us->acc);
+	assert_true(ret >= 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_DIRECTORY,
+			   &fh);
+	assert_true(ret >= 0);
+	ret = elasto_fclose(fh);
+	assert_true(ret >= 0);
+
+	/* account without dir flag */
+	ret = elasto_fopen(&auth,
+			   path,
+			   0,
+			   &fh);
+	assert_true(ret < 0);
+
+	/* account with create flags - already exists */
+	ret = elasto_fopen(&auth,
+			   path,
+			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
+			    | ELASTO_FOPEN_EXCL),
+			   &fh);
+	assert_true(ret < 0);
+	free(path);
+
+	/* open non-existent ctnr without create flags */
+	ret = asprintf(&path, "/%s/%s%d",
+		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
+	assert_true(ret >= 0);
+	cm_us->ctnr_suffix++;
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_DIRECTORY,
+			   &fh);
+	assert_true(ret < 0);
+
+	/* open non-existent ctnr with create flags */
+	ret = elasto_fopen(&auth,
+			   path,
+			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
+			    | ELASTO_FOPEN_EXCL),
+			   &fh);
+	assert_true(ret >= 0);
+	ret = elasto_fclose(fh);
+	assert_true(ret >= 0);
+
+	ret = elasto_frmdir(&auth,
+			    path);
+	assert_false(ret < 0);
+	free(path);
+}
+
 static const UnitTest cm_file_tests[] = {
 	unit_test_setup_teardown(cm_file_create, cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_io, cm_file_mkdir, cm_file_rmdir),
@@ -489,6 +581,7 @@ static const UnitTest cm_file_tests[] = {
 	unit_test_setup_teardown(cm_file_lease_break, cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_truncate_basic, cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_stat_basic, cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_dir_open, NULL, NULL),
 };
 
 int
