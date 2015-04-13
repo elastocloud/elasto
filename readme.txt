@@ -13,7 +13,7 @@ cloud storage providers.
 Building
 --------
 
-Elasto uses the Waf build framework - http://code.google.com/p/waf/
+Elasto uses the Waf build framework - https://github.com/waf-project/waf
 
 libevent, libexpat and openssl (libcrypto) development libraries are
 required for building.
@@ -60,7 +60,7 @@ Running (not so short version)
 ------------------------------
 
 = Azure =
-  Create an Azure account at https://www.windowsazure.com
+  Create an Azure account at https://azure.microsoft.com
 
   A PublishSettings file is required for an authenticated connection
   with Azure. It provides a management certificate / private key for
@@ -105,16 +105,16 @@ Deltacloud:	Provides an API that abstracts differences between clouds.
 		http://deltacloud.apache.org/
 
 libs3:		A C Library API for Amazon S3.
-		http://libs3.ischo.com.s3.amazonaws.com/index.html
+		https://github.com/bji/libs3
 
 fog:		Ruby cloud services library.
 		http://fog.io/
 
 rest-client-c:	Object-oriented REST client in C.
-		http://code.google.com/p/rest-client-c/
+		https://github.com/emcvipr/rest-client-c
 
 atmos-c:	C library for EMC Atmos cloud storage.
-		http://code.google.com/p/atmos-c/
+		https://github.com/emcvipr/atmos-client-c
 
 Droplet:	Cloud storage client library
 		https://github.com/scality/Droplet
