@@ -70,6 +70,9 @@ struct elasto_fh_mod_ops {
 
 /* fh init calls this entry point for the corresponding module */
 #define ELASTO_FILE_MOD_INIT_FN "elasto_file_mod_fh_init"
+/* Elasto file module internal API version */
+#define ELASTO_FILE_MOD_VERS_SYM "elasto_file_mod_version"
+#define ELASTO_FILE_MOD_VERS_VAL 1ULL
 
 /*
  * @magic: magic to verify handle on use

@@ -110,6 +110,9 @@ err_out:
 	return ret;
 }
 
+/* module version number */
+uint64_t elasto_file_mod_version = ELASTO_FILE_MOD_VERS_VAL;
+
 /* module entry point */
 int
 elasto_file_mod_fh_init(const struct elasto_fauth *auth,

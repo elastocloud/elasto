@@ -42,6 +42,7 @@ elasto_fh_init(const struct elasto_fauth *auth,
 	struct elasto_fh *fh;
 	int ret;
 	const char *mod_path;
+	uint64_t *_mod_vers;
 	int (*mod_fh_init)(const struct elasto_fauth *auth,
 			   void **_fh_priv,
 			   struct elasto_conn **_conn,
@@ -80,6 +81,21 @@ elasto_fh_init(const struct elasto_fauth *auth,
 		goto err_fh_free;
 	}
 
+	_mod_vers = dlsym(fh->mod_dl_h, ELASTO_FILE_MOD_VERS_SYM);
+	if (_mod_vers == NULL) {
+		dbg(0, "failed to find version symbol \"%s\" for module at %s: "
+		    "%s\n", ELASTO_FILE_MOD_VERS_SYM, mod_path, dlerror());
+		ret = -EFAULT;
+		goto err_dl_close;
+	}
+
+	if (*_mod_vers != ELASTO_FILE_MOD_VERS_VAL) {
+		dbg(0, "Invalid module %s version: %" PRIu64 ", expected "
+		    "%llu\n", mod_path, *_mod_vers, ELASTO_FILE_MOD_VERS_VAL);
+		ret = -EFAULT;
+		goto err_dl_close;
+	}
+
 	mod_fh_init = dlsym(fh->mod_dl_h, ELASTO_FILE_MOD_INIT_FN);
 	if (mod_fh_init == NULL) {
 		dbg(0, "failed to find init fn \"%s\" for module at %s: %s\n",
@@ -91,7 +107,7 @@ elasto_fh_init(const struct elasto_fauth *auth,
 	/* initialise back-end module */
 	ret = mod_fh_init(auth, &fh->mod_priv, &fh->conn, &fh->ops);
 	if (ret < 0) {
-		goto err_fh_free;
+		goto err_dl_close;
 	}
 
 	assert(ARRAY_SIZE(fh->magic) == sizeof(ELASTO_FH_MAGIC));
