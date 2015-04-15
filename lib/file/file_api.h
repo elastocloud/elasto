@@ -93,12 +93,20 @@ enum elasto_flease_status {
 	ELASTO_FLEASE_UNLOCKED,
 };
 
+enum elasto_fstat_ent_type {
+	ELASTO_FSTAT_ENT_FILE	=	0x0001,
+	ELASTO_FSTAT_ENT_DIR	=	0x0002,
+	ELASTO_FSTAT_ENT_ROOT	=	0x0004,
+};
+
 /**
+ * @ent_type: type of entry
  * @size: total size, in bytes
  * @blksize: blocksize for file system I/O
  * @lease_status: whether locked or unlocked
  */
 struct elasto_fstat {
+	uint64_t ent_type;
 	uint64_t size;
 	uint64_t blksize;
 	enum elasto_flease_status lease_status;
