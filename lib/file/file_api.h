@@ -93,6 +93,15 @@ enum elasto_flease_status {
 	ELASTO_FLEASE_UNLOCKED,
 };
 
+enum elasto_fstat_field {
+	ELASTO_FSTAT_FIELD_TYPE		= 0x0001,
+	ELASTO_FSTAT_FIELD_SIZE		= 0x0002,
+	ELASTO_FSTAT_FIELD_BSIZE	= 0x0004,
+	ELASTO_FSTAT_FIELD_LEASE	= 0x0008,
+
+	ELASTO_FSTAT_FIELD_ALL_MASK	= 0x000F,
+};
+
 enum elasto_fstat_ent_type {
 	ELASTO_FSTAT_ENT_FILE	=	0x0001,
 	ELASTO_FSTAT_ENT_DIR	=	0x0002,
@@ -106,6 +115,7 @@ enum elasto_fstat_ent_type {
  * @lease_status: whether locked or unlocked
  */
 struct elasto_fstat {
+	uint64_t field_mask;
 	uint64_t ent_type;
 	uint64_t size;
 	uint64_t blksize;

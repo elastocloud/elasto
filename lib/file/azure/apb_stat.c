@@ -76,6 +76,11 @@ apb_fstat_blob(struct apb_fh *apb_fh,
 	} else if (blob_prop_get_rsp->lease_status == AOP_LEASE_STATUS_LOCKED) {
 		fstat->lease_status = ELASTO_FLEASE_LOCKED;
 	}
+	/* flag which values are valid in the stat response */
+	fstat->field_mask = (ELASTO_FSTAT_FIELD_TYPE
+				| ELASTO_FSTAT_FIELD_SIZE
+				| ELASTO_FSTAT_FIELD_BSIZE
+				| ELASTO_FSTAT_FIELD_LEASE);
 	ret = 0;
 
 err_op_free:
@@ -119,6 +124,9 @@ apb_fstat_ctnr(struct apb_fh *apb_fh,
 	} else if (ctnr_prop_get_rsp->lease_status == AOP_LEASE_STATUS_LOCKED) {
 		fstat->lease_status = ELASTO_FLEASE_LOCKED;
 	}
+	fstat->field_mask = (ELASTO_FSTAT_FIELD_TYPE
+				| ELASTO_FSTAT_FIELD_BSIZE
+				| ELASTO_FSTAT_FIELD_LEASE);
 	ret = 0;
 
 err_op_free:
@@ -159,6 +167,8 @@ apb_fstat_acc(struct apb_fh *apb_fh,
 	fstat->blksize = 512;
 	/* Azure only supports leases at a container or blob level */
 	fstat->lease_status = ELASTO_FLEASE_UNLOCKED;
+	fstat->field_mask = (ELASTO_FSTAT_FIELD_TYPE
+				| ELASTO_FSTAT_FIELD_BSIZE);
 	ret = 0;
 
 err_op_free:
@@ -182,6 +192,8 @@ apb_fstat_root(struct apb_fh *apb_fh,
 	fstat->blksize = 512;
 	/* Azure only supports leases at a container or blob level */
 	fstat->lease_status = ELASTO_FLEASE_UNLOCKED;
+	fstat->field_mask = (ELASTO_FSTAT_FIELD_TYPE
+				| ELASTO_FSTAT_FIELD_BSIZE);
 
 	return 0;
 }
