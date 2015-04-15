@@ -66,6 +66,11 @@ struct elasto_fh_mod_ops {
 	int (*rmdir)(void *mod_priv,
 		     struct elasto_conn *conn,
 		     const char *path);
+	int (*readdir)(void *mod_priv,
+		       struct elasto_conn *conn,
+		       void *cli_priv,
+		       int (*dent_cb)(struct elasto_dent *,
+				      void *));
 };
 
 /* fh init calls this entry point for the corresponding module */

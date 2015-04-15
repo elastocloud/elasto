@@ -162,6 +162,17 @@ int
 elasto_fstatfs(struct elasto_fh *fh,
 	       struct elasto_fstatfs *fstatfs);
 
+struct elasto_dent {
+	char *name;
+	struct elasto_fstat fstat;
+};
+
+int
+elasto_freaddir(struct elasto_fh *fh,
+		void *priv,
+		int (*dent_cb)(struct elasto_dent *,
+			       void *));
+
 int
 elasto_fdebug(int level);
 

@@ -94,3 +94,31 @@ elasto_frmdir(const struct elasto_fauth *auth,
 err_out:
 	return ret;
 }
+
+int
+elasto_freaddir(struct elasto_fh *fh,
+		void *priv,
+		int (*dent_cb)(struct elasto_dent *,
+			       void *))
+{
+	int ret;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (fh->ops.readdir == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
+	ret = fh->ops.readdir(fh->mod_priv, fh->conn, priv, dent_cb);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = 0;
+err_out:
+	return ret;
+}
