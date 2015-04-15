@@ -718,6 +718,21 @@ az_rsp_blob_iter_type_process(struct xml_doc *xdoc,
 	return 0;
 }
 
+static int
+az_rsp_blob_iter_lease_status_process(struct xml_doc *xdoc,
+				      const char *path,
+				      const char *val,
+				      void *cb_data)
+{
+	struct azure_blob *blob = (struct azure_blob *)cb_data;
+
+	if (val == NULL) {
+		return -EINVAL;
+	}
+
+	return az_rsp_lease_status(val, &blob->lease_status);
+}
+
 /*
  * process a single blob list iteration at @iter, return -ENOENT if no such
  * iteration exists
@@ -761,6 +776,15 @@ az_rsp_blob_iter_process(struct xml_doc *xdoc,
 
 	ret = exml_val_cb_want(xdoc, "./Properties/BlobType", true,
 			       az_rsp_blob_iter_type_process, blob, NULL);
+	if (ret < 0) {
+		goto err_blob_free;
+	}
+
+	/* lease status is absent in snapshots and old API versions */
+	blob->lease_status = AOP_LEASE_STATUS_UNLOCKED;
+	ret = exml_val_cb_want(xdoc, "./Properties/LeaseStatus", false,
+			       az_rsp_blob_iter_lease_status_process, blob,
+			       NULL);
 	if (ret < 0) {
 		goto err_blob_free;
 	}

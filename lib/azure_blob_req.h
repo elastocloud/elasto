@@ -85,6 +85,7 @@ struct azure_blob {
 	char *name;
 	bool is_page;
 	uint64_t len;
+	enum az_lease_status lease_status;
 };
 
 struct az_req_blob_list {
