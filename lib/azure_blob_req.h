@@ -19,6 +19,7 @@ enum az_blob_opcode {
 	AOP_CONTAINER_CREATE,
 	AOP_CONTAINER_DEL,
 	AOP_CONTAINER_PROP_GET,
+	AOP_CONTAINER_LEASE,
 	AOP_BLOB_LIST,
 	AOP_BLOB_PUT,
 	AOP_BLOB_GET,
@@ -44,6 +45,14 @@ enum az_lease_state {
 enum az_lease_status {
 	AOP_LEASE_STATUS_LOCKED,
 	AOP_LEASE_STATUS_UNLOCKED,
+};
+
+enum az_lease_action {
+	AOP_LEASE_ACTION_ACQUIRE,
+	AOP_LEASE_ACTION_RENEW,
+	AOP_LEASE_ACTION_CHANGE,
+	AOP_LEASE_ACTION_RELEASE,
+	AOP_LEASE_ACTION_BREAK,
 };
 
 struct azure_ctnr {
@@ -79,6 +88,23 @@ struct az_req_ctnr_prop_get {
 struct az_rsp_ctnr_prop_get {
 	enum az_lease_state lease_state;
 	enum az_lease_status lease_status;
+};
+
+struct az_req_ctnr_lease {
+	char *acc;
+	char *ctnr;
+	char *lid;
+	char *lid_proposed;
+	enum az_lease_action action;
+	union {
+		int32_t break_period;
+		int32_t duration;
+	};
+};
+
+struct az_rsp_ctnr_lease {
+	char *lid;
+	uint64_t time_remaining;
 };
 
 struct azure_blob {
@@ -236,14 +262,6 @@ struct az_req_blob_prop_set {
 	uint64_t len;
 };
 
-enum az_lease_action {
-	AOP_LEASE_ACTION_ACQUIRE,
-	AOP_LEASE_ACTION_RENEW,
-	AOP_LEASE_ACTION_CHANGE,
-	AOP_LEASE_ACTION_RELEASE,
-	AOP_LEASE_ACTION_BREAK,
-};
-
 struct az_req_blob_lease {
 	char *acc;
 	char *ctnr;
@@ -268,6 +286,7 @@ struct az_blob_req {
 		struct az_req_ctnr_create ctnr_create;
 		struct az_req_ctnr_del ctnr_del;
 		struct az_req_ctnr_prop_get ctnr_prop_get;
+		struct az_req_ctnr_lease ctnr_lease;
 		struct az_req_blob_list blob_list;
 		struct az_req_blob_put blob_put;
 		struct az_req_blob_get blob_get;
@@ -287,6 +306,7 @@ struct az_blob_rsp {
 	union {
 		struct az_rsp_ctnr_list ctnr_list;
 		struct az_rsp_ctnr_prop_get ctnr_prop_get;
+		struct az_rsp_ctnr_lease ctnr_lease;
 		struct az_rsp_blob_list blob_list;
 		struct az_rsp_block_list_get block_list_get;
 		struct az_rsp_blob_prop_get blob_prop_get;
@@ -323,6 +343,15 @@ int
 az_req_ctnr_prop_get(const char *acc,
 		     const char *ctnr,
 		     struct op **_op);
+
+int
+az_req_ctnr_lease(const char *acc,
+		  const char *ctnr,
+		  const char *lid,
+		  const char *lid_proposed,
+		  enum az_lease_action action,
+		  int32_t duration,
+		  struct op **_op);
 
 int
 az_req_blob_list(const char *account,
@@ -421,6 +450,9 @@ az_rsp_ctnr_list(struct op *op);
 
 struct az_rsp_ctnr_prop_get *
 az_rsp_ctnr_prop_get(struct op *op);
+
+struct az_rsp_ctnr_lease *
+az_rsp_ctnr_lease_get(struct op *op);
 
 struct az_rsp_blob_list *
 az_rsp_blob_list(struct op *op);
