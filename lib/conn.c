@@ -453,7 +453,6 @@ ev_err_cb(enum evhttp_request_error ev_req_error,
 	case EVREQ_HTTP_EOF:
 		dbg(0, "got client error: EOF\n");
 		op->rsp.err_code = HTTP_NOTFOUND;
-		op->rsp.is_error = false;
 		break;
 	case EVREQ_HTTP_INVALID_HEADER:
 		dbg(0, "got client error: invalid header\n");
