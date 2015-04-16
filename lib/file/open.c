@@ -49,6 +49,12 @@ elasto_fopen(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
+	if ((flags & ELASTO_FOPEN_FLAGS_MASK) != flags) {
+		dbg(0, "invalid open flags: %lx\n", (long)flags);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = elasto_conn_subsys_init();
 	if (ret < 0) {
 		dbg(0, "failed to initialize connection subsystem\n");
