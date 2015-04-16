@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -571,6 +571,13 @@ cm_file_dir_open(void **state)
 			    path);
 	assert_false(ret < 0);
 	free(path);
+
+	/* open root with invalid flags */
+	ret = elasto_fopen(&auth,
+			   "/",
+			   ~ELASTO_FOPEN_FLAGS_MASK,
+			   &fh);
+	assert_int_equal(ret, -EINVAL);
 }
 
 static const UnitTest cm_file_tests[] = {
