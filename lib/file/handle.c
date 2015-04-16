@@ -26,6 +26,7 @@
 #include <dlfcn.h>
 
 #include "ccan/list/list.h"
+#include "ccan/build_assert/build_assert.h"
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/conn.h"
@@ -139,6 +140,10 @@ elasto_fh_free(struct elasto_fh *fh)
 		dbg(0, "failed to unload module (%d): %s\n",
 		    fh->type, dlerror());
 	}
+
+	BUILD_ASSERT(sizeof(ELASTO_FH_POISON) <= ARRAY_SIZE(fh->magic));
+	memcpy(fh->magic, ELASTO_FH_MAGIC, sizeof(ELASTO_FH_MAGIC));
+
 	free(fh);
 }
 
@@ -155,6 +160,7 @@ elasto_fh_validate(struct elasto_fh *fh)
 		return -EINVAL;
 	}
 
+	BUILD_ASSERT(sizeof(ELASTO_FH_MAGIC) <= ARRAY_SIZE(fh->magic));
 	if (memcmp(fh->magic, ELASTO_FH_MAGIC, sizeof(ELASTO_FH_MAGIC))) {
 		dbg(0, "handle has invalid magic\n");
 		return -EINVAL;

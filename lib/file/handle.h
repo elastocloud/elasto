@@ -15,6 +15,7 @@
 #define _HANDLE_H_
 
 #define ELASTO_FH_MAGIC "ElastoF"
+#define ELASTO_FH_POISON "PoisonF"
 
 struct elasto_fh_mod_ops {
 	void (*fh_free)(void *mod_priv);
