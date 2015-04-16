@@ -242,9 +242,14 @@ apb_freaddir_acc(struct apb_fh *apb_fh,
 		dent.fstat.ent_type = ELASTO_FSTAT_ENT_DIR;
 		dent.fstat.size = 0;
 		dent.fstat.blksize = 512;
-		/* TODO lease status currently not parsed in response */
+		if (ctnr->lease_status == AOP_LEASE_STATUS_UNLOCKED) {
+			dent.fstat.lease_status = ELASTO_FLEASE_UNLOCKED;
+		} else if (ctnr->lease_status == AOP_LEASE_STATUS_LOCKED) {
+			dent.fstat.lease_status = ELASTO_FLEASE_LOCKED;
+		}
 		dent.fstat.field_mask = (ELASTO_FSTAT_FIELD_TYPE
-					| ELASTO_FSTAT_FIELD_BSIZE);
+					| ELASTO_FSTAT_FIELD_BSIZE
+					| ELASTO_FSTAT_FIELD_LEASE);
 		ret = dent_cb(&dent, cli_priv);
 		if (ret < 0) {
 			/* cb requests immediate error return */
