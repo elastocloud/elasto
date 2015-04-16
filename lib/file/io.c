@@ -48,6 +48,12 @@ elasto_fwrite(struct elasto_fh *fh,
 		goto err_out;
 	}
 
+	if (fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
+		dbg(1, "invalid IO request for directory handle\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	dbg(3, "%s range at %" PRIu64 ", len %" PRIu64 "\n",
 	    (src_data == NULL ? "clearing" : "writing"),
 	    dest_off, dest_len);
@@ -83,6 +89,12 @@ elasto_fread(struct elasto_fh *fh,
 		goto err_out;
 	}
 
+	if (fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
+		dbg(1, "invalid IO request for directory handle\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	dbg(3, "reading range at %" PRIu64 ", len %" PRIu64 "\n",
 	    src_off, src_len);
 
@@ -104,6 +116,12 @@ elasto_ftruncate(struct elasto_fh *fh,
 
 	ret = elasto_fh_validate(fh);
 	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
+		dbg(1, "invalid IO request for directory handle\n");
+		ret = -EINVAL;
 		goto err_out;
 	}
 
