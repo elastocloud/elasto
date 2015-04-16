@@ -85,6 +85,54 @@ az_blob_ebo_init(enum az_blob_opcode opcode,
 	return 0;
 }
 
+static const struct {
+	const char *state_str;
+	enum az_lease_state state;
+} az_rsp_lease_state_map[] = {
+	{"available", AOP_LEASE_STATE_AVAILABLE},
+	{"leased", AOP_LEASE_STATE_LEASED},
+	{"expired", AOP_LEASE_STATE_EXPIRED},
+	{"breaking", AOP_LEASE_STATE_BREAKING},
+	{"broken", AOP_LEASE_STATE_BROKEN},
+};
+int
+az_rsp_lease_state(const char *state_str,
+		   enum az_lease_state *_state)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(az_rsp_lease_state_map); i++) {
+		if (!strcmp(state_str, az_rsp_lease_state_map[i].state_str)) {
+			*_state = az_rsp_lease_state_map[i].state;
+			return 0;
+		}
+	}
+	dbg(1, "invalid lease state string: %s\n", state_str);
+	return -EINVAL;
+}
+
+static const struct {
+	const char *status_str;
+	enum az_lease_status status;
+} az_rsp_lease_status_map[] = {
+	{"locked", AOP_LEASE_STATUS_LOCKED},
+	{"unlocked", AOP_LEASE_STATUS_UNLOCKED},
+};
+int
+az_rsp_lease_status(const char *status_str,
+		    enum az_lease_status *_status)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(az_rsp_lease_status_map); i++) {
+		if (!strcmp(status_str,
+			    az_rsp_lease_status_map[i].status_str)) {
+			*_status = az_rsp_lease_status_map[i].status;
+			return 0;
+		}
+	}
+	dbg(1, "invalid lease status string: %s\n", status_str);
+	return -EINVAL;
+}
+
 static void
 az_req_ctnr_list_free(struct az_req_ctnr_list *ctnr_list_req)
 {
@@ -181,6 +229,20 @@ err_out:
 }
 
 static int
+az_rsp_iter_lease_status_process(struct xml_doc *xdoc,
+				 const char *path,
+				 const char *val,
+				 void *cb_data)
+{
+	enum az_lease_status *lease_status = (enum az_lease_status *)cb_data;
+
+	if (val == NULL) {
+		return -EINVAL;
+	}
+	return az_rsp_lease_status(val, lease_status);
+}
+
+static int
 az_rsp_ctnr_iter_process(struct xml_doc *xdoc,
 			 const char *path,
 			 const char *val,
@@ -208,6 +270,14 @@ az_rsp_ctnr_iter_process(struct xml_doc *xdoc,
 	memset(ctnr, 0, sizeof(*ctnr));
 
 	ret = exml_str_want(xdoc, "./Name", true, &ctnr->name, NULL);
+	if (ret < 0) {
+		goto err_ctnr_free;
+	}
+
+	/* lease status is present in API versions >= 2012-02-12 */
+	ret = exml_val_cb_want(xdoc, "./Properties/LeaseStatus", true,
+			       az_rsp_iter_lease_status_process,
+			       &ctnr->lease_status, NULL);
 	if (ret < 0) {
 		goto err_ctnr_free;
 	}
@@ -508,54 +578,6 @@ err_out:
 	return ret;
 }
 
-static const struct {
-	const char *state_str;
-	enum az_lease_state state;
-} az_rsp_lease_state_map[] = {
-	{"available", AOP_LEASE_STATE_AVAILABLE},
-	{"leased", AOP_LEASE_STATE_LEASED},
-	{"expired", AOP_LEASE_STATE_EXPIRED},
-	{"breaking", AOP_LEASE_STATE_BREAKING},
-	{"broken", AOP_LEASE_STATE_BROKEN},
-};
-int
-az_rsp_lease_state(const char *state_str,
-		   enum az_lease_state *_state)
-{
-	int i;
-	for (i = 0; i < ARRAY_SIZE(az_rsp_lease_state_map); i++) {
-		if (!strcmp(state_str, az_rsp_lease_state_map[i].state_str)) {
-			*_state = az_rsp_lease_state_map[i].state;
-			return 0;
-		}
-	}
-	dbg(1, "invalid lease state string: %s\n", state_str);
-	return -EINVAL;
-}
-
-static const struct {
-	const char *status_str;
-	enum az_lease_status status;
-} az_rsp_lease_status_map[] = {
-	{"locked", AOP_LEASE_STATUS_LOCKED},
-	{"unlocked", AOP_LEASE_STATUS_UNLOCKED},
-};
-int
-az_rsp_lease_status(const char *status_str,
-		    enum az_lease_status *_status)
-{
-	int i;
-	for (i = 0; i < ARRAY_SIZE(az_rsp_lease_status_map); i++) {
-		if (!strcmp(status_str,
-			    az_rsp_lease_status_map[i].status_str)) {
-			*_status = az_rsp_lease_status_map[i].status;
-			return 0;
-		}
-	}
-	dbg(1, "invalid lease status string: %s\n", status_str);
-	return -EINVAL;
-}
-
 static int
 az_rsp_ctnr_prop_get_process(struct op *op,
 			     struct az_rsp_ctnr_prop_get *ctnr_prop_get_rsp)
@@ -718,21 +740,6 @@ az_rsp_blob_iter_type_process(struct xml_doc *xdoc,
 	return 0;
 }
 
-static int
-az_rsp_blob_iter_lease_status_process(struct xml_doc *xdoc,
-				      const char *path,
-				      const char *val,
-				      void *cb_data)
-{
-	struct azure_blob *blob = (struct azure_blob *)cb_data;
-
-	if (val == NULL) {
-		return -EINVAL;
-	}
-
-	return az_rsp_lease_status(val, &blob->lease_status);
-}
-
 /*
  * process a single blob list iteration at @iter, return -ENOENT if no such
  * iteration exists
@@ -780,11 +787,11 @@ az_rsp_blob_iter_process(struct xml_doc *xdoc,
 		goto err_blob_free;
 	}
 
-	/* lease status is absent in snapshots and old API versions */
+	/* lease status is absent in snapshots */
 	blob->lease_status = AOP_LEASE_STATUS_UNLOCKED;
 	ret = exml_val_cb_want(xdoc, "./Properties/LeaseStatus", false,
-			       az_rsp_blob_iter_lease_status_process, blob,
-			       NULL);
+			       az_rsp_iter_lease_status_process,
+			       &blob->lease_status, NULL);
 	if (ret < 0) {
 		goto err_blob_free;
 	}

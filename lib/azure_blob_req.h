@@ -33,9 +33,23 @@ enum az_blob_opcode {
 	AOP_BLOB_LEASE,
 };
 
+enum az_lease_state {
+	AOP_LEASE_STATE_AVAILABLE,
+	AOP_LEASE_STATE_LEASED,
+	AOP_LEASE_STATE_EXPIRED,
+	AOP_LEASE_STATE_BREAKING,
+	AOP_LEASE_STATE_BROKEN,
+};
+
+enum az_lease_status {
+	AOP_LEASE_STATUS_LOCKED,
+	AOP_LEASE_STATUS_UNLOCKED,
+};
+
 struct azure_ctnr {
 	struct list_node list;
 	char *name;
+	enum az_lease_status lease_status;
 };
 
 struct az_req_ctnr_list {
@@ -60,19 +74,6 @@ struct az_req_ctnr_del {
 struct az_req_ctnr_prop_get {
 	char *acc;
 	char *ctnr;
-};
-
-enum az_lease_state {
-	AOP_LEASE_STATE_AVAILABLE,
-	AOP_LEASE_STATE_LEASED,
-	AOP_LEASE_STATE_EXPIRED,
-	AOP_LEASE_STATE_BREAKING,
-	AOP_LEASE_STATE_BROKEN,
-};
-
-enum az_lease_status {
-	AOP_LEASE_STATUS_LOCKED,
-	AOP_LEASE_STATUS_UNLOCKED,
 };
 
 struct az_rsp_ctnr_prop_get {
