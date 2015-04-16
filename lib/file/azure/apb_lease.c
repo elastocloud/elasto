@@ -224,26 +224,13 @@ err_out:
 	return ret;
 }
 
-/* @_flease_h is optional */
-int
-apb_flease_break(void *mod_priv,
-		 struct elasto_conn *conn,
-		 void **_flease_h)
+static int
+apb_flease_break_blob(struct apb_fh *apb_fh,
+		      struct elasto_conn *conn,
+		      const char *lid)
 {
 	int ret;
-	char *lid = NULL;
 	struct op *op;
-	struct apb_fh *apb_fh = mod_priv;
-
-	if (_flease_h == NULL) {
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	if (*_flease_h != NULL) {
-		struct apb_flease *lease = *_flease_h;
-		lid = lease->lid;
-	}
 
 	ret = az_req_blob_lease(apb_fh->path.acc,
 				apb_fh->path.ctnr,
@@ -262,11 +249,87 @@ apb_flease_break(void *mod_priv,
 		goto err_op_free;
 	}
 
-	dbg(3, "broke lease %s\n", (lid ? lid: "unknown"));
+	dbg(3, "broke blob lease %s\n", (lid ? lid: "unknown"));
 
 	ret = 0;
 err_op_free:
 	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
+apb_flease_break_ctnr(struct apb_fh *apb_fh,
+		      struct elasto_conn *conn,
+		      const char *lid)
+{
+	int ret;
+	struct op *op;
+
+	ret = az_req_ctnr_lease(apb_fh->path.acc,
+				apb_fh->path.ctnr,
+				lid,
+				NULL,
+				AOP_LEASE_ACTION_BREAK,
+				0,
+				&op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	dbg(3, "broke ctnr lease %s\n", (lid ? lid: "unknown"));
+
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+/* @_flease_h is optional */
+int
+apb_flease_break(void *mod_priv,
+		 struct elasto_conn *conn,
+		 void **_flease_h)
+{
+	int ret;
+	char *lid = NULL;
+	struct apb_fh *apb_fh = mod_priv;
+
+	if ((apb_fh->path.blob == NULL) && (apb_fh->path.ctnr == NULL)) {
+		/* only blobs and containers can be leased */
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (_flease_h == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (*_flease_h != NULL) {
+		struct apb_flease *lease = *_flease_h;
+		lid = lease->lid;
+	}
+
+	if (apb_fh->path.blob != NULL) {
+		ret = apb_flease_break_blob(apb_fh, conn, lid);
+		if (ret < 0) {
+			goto err_out;
+		}
+	} else if (apb_fh->path.ctnr != NULL) {
+		ret = apb_flease_break_ctnr(apb_fh, conn, lid);
+		if (ret < 0) {
+			goto err_out;
+		}
+	}
+
+	ret = 0;
 err_out:
 	return ret;
 }
