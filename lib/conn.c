@@ -631,10 +631,11 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 		return -ENOMEM;
 	}
 
-	dbg(3, "preparing request for dispatch to: %s\n", url);
+	dbg(3, "preparing %s request for dispatch to: %s\n", op->method, url);
 
 	ev_req = evhttp_request_new(ev_done_cb, op);
 	if (ev_req == NULL) {
+		ret = -ENOMEM;
 		goto err_url_free;
 	}
 
