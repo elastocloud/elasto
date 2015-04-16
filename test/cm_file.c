@@ -580,15 +580,74 @@ cm_file_dir_open(void **state)
 	assert_int_equal(ret, -EINVAL);
 }
 
+static void
+cm_file_dir_lease_basic(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct elasto_fh *fh;
+	struct elasto_fstat fstat;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+
+	auth.type = ELASTO_FILE_AZURE;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d",
+		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_DIRECTORY,
+			   &fh);
+	assert_int_equal(ret, 0);
+
+	ret = elasto_fstat(fh, &fstat);
+	assert_int_equal(ret, 0);
+	assert_true(fstat.field_mask | ELASTO_FSTAT_FIELD_LEASE);
+	assert_true(fstat.lease_status == ELASTO_FLEASE_UNLOCKED);
+
+	ret = elasto_flease_acquire(fh, -1);
+	assert_int_equal(ret, 0);
+
+	ret = elasto_fstat(fh, &fstat);
+	assert_int_equal(ret, 0);
+	assert_true(fstat.field_mask | ELASTO_FSTAT_FIELD_LEASE);
+	assert_true(fstat.lease_status == ELASTO_FLEASE_LOCKED);
+
+	ret = elasto_flease_release(fh);
+	assert_int_equal(ret, 0);
+
+	ret = elasto_fstat(fh, &fstat);
+	assert_int_equal(ret, 0);
+	assert_true(fstat.field_mask | ELASTO_FSTAT_FIELD_LEASE);
+	assert_true(fstat.lease_status == ELASTO_FLEASE_UNLOCKED);
+
+	ret = elasto_fclose(fh);
+	assert_int_equal(ret, 0);
+	free(path);
+}
+
 static const UnitTest cm_file_tests[] = {
-	unit_test_setup_teardown(cm_file_create, cm_file_mkdir, cm_file_rmdir),
-	unit_test_setup_teardown(cm_file_io, cm_file_mkdir, cm_file_rmdir),
-	unit_test_setup_teardown(cm_file_lease_basic, cm_file_mkdir, cm_file_rmdir),
-	unit_test_setup_teardown(cm_file_lease_multi, cm_file_mkdir, cm_file_rmdir),
-	unit_test_setup_teardown(cm_file_lease_break, cm_file_mkdir, cm_file_rmdir),
-	unit_test_setup_teardown(cm_file_truncate_basic, cm_file_mkdir, cm_file_rmdir),
-	unit_test_setup_teardown(cm_file_stat_basic, cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_create,
+				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_io,
+				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_lease_basic,
+				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_lease_multi,
+				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_lease_break,
+				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_truncate_basic,
+				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_stat_basic,
+				 cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_dir_open, NULL, NULL),
+	unit_test_setup_teardown(cm_file_dir_lease_basic,
+				 cm_file_mkdir, cm_file_rmdir),
 };
 
 int
