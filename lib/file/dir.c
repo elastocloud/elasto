@@ -113,6 +113,12 @@ elasto_freaddir(struct elasto_fh *fh,
 		goto err_out;
 	}
 
+	if ((fh->open_flags & ELASTO_FOPEN_DIRECTORY) == 0) {
+		dbg(1, "invalid readdir request for non-directory handle\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = fh->ops.readdir(fh->mod_priv, fh->conn, priv, dent_cb);
 	if (ret < 0) {
 		goto err_out;
