@@ -334,32 +334,19 @@ err_out:
 	return ret;
 }
 
-int
-apb_flease_release(void *mod_priv,
-		   struct elasto_conn *conn,
-		   void **_flease_h)
+static int
+apb_flease_release_blob(struct apb_fh *apb_fh,
+			struct elasto_conn *conn,
+			const char *lid)
 {
 	int ret;
 	struct op *op;
-	struct apb_flease *lease;
 	struct az_rsp_blob_lease *blob_lease_rsp;
-	struct apb_fh *apb_fh = mod_priv;
-
-	if (_flease_h == NULL) {
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	lease = *_flease_h;
-	if (lease == NULL) {
-		ret = -EINVAL;
-		goto err_out;
-	}
 
 	ret = az_req_blob_lease(apb_fh->path.acc,
 				apb_fh->path.ctnr,
 				apb_fh->path.blob,
-				lease->lid,
+				lid,
 				NULL,
 				AOP_LEASE_ACTION_RELEASE,
 				0,
@@ -375,11 +362,90 @@ apb_flease_release(void *mod_priv,
 
 	blob_lease_rsp = az_rsp_blob_lease_get(op);
 
-	dbg(3, "released lease %s\n", blob_lease_rsp->lid);
+	dbg(3, "released blob lease %s\n", blob_lease_rsp->lid);
 
 	ret = 0;
 err_op_free:
 	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
+apb_flease_release_ctnr(struct apb_fh *apb_fh,
+			struct elasto_conn *conn,
+			const char *lid)
+{
+	int ret;
+	struct op *op;
+	struct az_rsp_ctnr_lease *ctnr_lease_rsp;
+
+	ret = az_req_ctnr_lease(apb_fh->path.acc,
+				apb_fh->path.ctnr,
+				lid,
+				NULL,
+				AOP_LEASE_ACTION_RELEASE,
+				0,
+				&op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ctnr_lease_rsp = az_rsp_ctnr_lease_get(op);
+
+	dbg(3, "released ctnr lease %s\n", ctnr_lease_rsp->lid);
+
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+int
+apb_flease_release(void *mod_priv,
+		   struct elasto_conn *conn,
+		   void **_flease_h)
+{
+	int ret;
+	struct apb_flease *lease;
+	struct apb_fh *apb_fh = mod_priv;
+
+	if ((apb_fh->path.blob == NULL) && (apb_fh->path.ctnr == NULL)) {
+		/* only blobs and containers can be leased */
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (_flease_h == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	lease = *_flease_h;
+	if (lease == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (apb_fh->path.blob != NULL) {
+		ret = apb_flease_release_blob(apb_fh, conn, lease->lid);
+		if (ret < 0) {
+			goto err_out;
+		}
+	} else if (apb_fh->path.ctnr != NULL) {
+		ret = apb_flease_release_ctnr(apb_fh, conn, lease->lid);
+		if (ret < 0) {
+			goto err_out;
+		}
+	}
+
+	ret = 0;
 err_out:
 	return ret;
 }
