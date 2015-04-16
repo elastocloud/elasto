@@ -47,6 +47,7 @@ az_req_sign(const char *acc,
 	char *hdr_str;
 
 	if (key == NULL) {
+		dbg(0, "key missing in sign callback\n");
 		return -EINVAL;
 	}
 
