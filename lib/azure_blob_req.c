@@ -154,12 +154,6 @@ az_rsp_ctnr_list_free(struct az_rsp_ctnr_list *ctnr_list_rsp)
 	}
 }
 
-static int
-az_req_ctnr_list_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, false);
-}
-
 int
 az_req_ctnr_list(const char *account,
 		 struct op **_op)
@@ -204,7 +198,7 @@ az_req_ctnr_list(const char *account,
 		goto err_upath_free;
 	}
 
-	ret = az_req_ctnr_list_hdr_fill(op);
+	ret = az_req_common_hdr_fill(op, false);
 	if (ret < 0) {
 		goto err_buf_free;
 	}
@@ -352,12 +346,6 @@ az_req_ctnr_create_free(struct az_req_ctnr_create *ctnr_create_req)
 	free(ctnr_create_req->ctnr);
 }
 
-static int
-az_req_ctnr_create_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, false);
-}
-
 int
 az_req_ctnr_create(const char *account,
 		   const char *ctnr,
@@ -403,7 +391,7 @@ az_req_ctnr_create(const char *account,
 		goto err_uhost_free;
 	}
 
-	ret = az_req_ctnr_create_hdr_fill(op);
+	ret = az_req_common_hdr_fill(op, false);
 	if (ret < 0) {
 		goto err_upath_free;
 	}
@@ -433,12 +421,6 @@ az_req_ctnr_del_free(struct az_req_ctnr_del *ctnr_del_req)
 {
 	free(ctnr_del_req->account);
 	free(ctnr_del_req->container);
-}
-
-static int
-az_req_ctnr_del_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, false);
 }
 
 int
@@ -484,9 +466,10 @@ az_req_ctnr_del(const char *account,
 		goto err_uhost_free;
 	}
 
-	ret = az_req_ctnr_del_hdr_fill(op);
-	if (ret < 0)
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
 		goto err_upath_free;
+	}
 
 	/* the connection layer must sign this request before sending */
 	op->req_sign = az_req_sign;
@@ -641,12 +624,6 @@ az_rsp_blob_list_free(struct az_rsp_blob_list *blob_list_rsp)
 	}
 }
 
-static int
-az_req_blob_list_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, false);
-}
-
 int
 az_req_blob_list(const char *account,
 		 const char *ctnr,
@@ -699,7 +676,7 @@ az_req_blob_list(const char *account,
 		goto err_upath_free;
 	}
 
-	ret = az_req_blob_list_hdr_fill(op);
+	ret = az_req_common_hdr_fill(op, false);
 	if (ret < 0) {
 		goto err_buf_free;
 	}
@@ -1332,12 +1309,6 @@ az_req_block_put_free(struct az_req_block_put *blk_put_req)
 	free(blk_put_req->blk_id);
 }
 
-static int
-az_req_block_put_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, false);
-}
-
 /*
  * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
  * fom the file at path @buf if @data_type is ELASTO_DATA_FILE.
@@ -1431,9 +1402,10 @@ az_req_block_put(const char *account,
 		goto err_uhost_free;
 	}
 
-	ret = az_req_block_put_hdr_fill(op);
-	if (ret < 0)
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
 		goto err_upath_free;
+	}
 
 	/* the connection layer must sign this request before sending */
 	op->req_sign = az_req_sign;
@@ -1472,12 +1444,6 @@ az_req_block_list_put_free(struct az_req_block_list_put *blk_list_put_req)
 		free(blk);
 	}
 	free(blk_list_put_req->blks);
-}
-
-static int
-az_req_block_list_put_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, false);
 }
 
 static int
@@ -1625,13 +1591,15 @@ az_req_block_list_put(const char *account,
 		goto err_uhost_free;
 	}
 
-	ret = az_req_block_list_put_hdr_fill(op);
-	if (ret < 0)
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
 		goto err_upath_free;
+	}
 
 	ret = az_req_block_list_put_body_fill(blks, &op->req.data);
-	if (ret < 0)
+	if (ret < 0) {
 		goto err_hdrs_free;
+	}
 
 	blk_list_put_req->blks = blks;
 
@@ -1679,12 +1647,6 @@ az_rsp_block_list_get_free(struct az_rsp_block_list_get *blk_list_get_rsp)
 		free(blk->id);
 		free(blk);
 	}
-}
-
-static int
-az_req_block_list_get_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, false);
 }
 
 /* request a list of all committed and uncommited blocks for @bname */
@@ -1744,9 +1706,10 @@ az_req_block_list_get(const char *account,
 		goto err_upath_free;
 	}
 
-	ret = az_req_block_list_get_hdr_fill(op);
-	if (ret < 0)
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
 		goto err_buf_free;
+	}
 
 	/* the connection layer must sign this request before sending */
 	op->req_sign = az_req_sign;
@@ -1885,12 +1848,6 @@ az_req_blob_del_free(struct az_req_blob_del *blob_del_req)
 	free(blob_del_req->bname);
 }
 
-static int
-az_req_blob_del_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, false);
-}
-
 int
 az_req_blob_del(const char *account,
 		const char *container,
@@ -1941,9 +1898,10 @@ az_req_blob_del(const char *account,
 		goto err_uhost_free;
 	}
 
-	ret = az_req_blob_del_hdr_fill(op);
-	if (ret < 0)
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
 		goto err_upath_free;
+	}
 
 	/* the connection layer must sign this request before sending */
 	op->req_sign = az_req_sign;
