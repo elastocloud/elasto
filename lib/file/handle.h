@@ -94,6 +94,7 @@ struct elasto_fh {
 	char magic[8];
 	struct elasto_conn *conn;
 	enum elasto_ftype type;
+	uint64_t open_flags;
 	void *mod_dl_h;
 	void *mod_priv;
 	struct elasto_fh_mod_ops ops;

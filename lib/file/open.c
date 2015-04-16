@@ -72,6 +72,7 @@ elasto_fopen(const struct elasto_fauth *auth,
 	if (ret < 0) {
 		goto err_fh_free;
 	}
+	fh->open_flags = flags;
 
 	*_fh = fh;
 	return 0;
