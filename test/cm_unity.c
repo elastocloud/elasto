@@ -50,6 +50,7 @@ static int
 cm_unity_state_init(void)
 {
 	int ret;
+	unsigned int seedy = time(NULL);
 
 	cm_ustate = malloc(sizeof(*cm_ustate));
 	if (cm_ustate == NULL) {
@@ -60,6 +61,7 @@ cm_unity_state_init(void)
 	cm_ustate->insecure_http = false;
 	cm_ustate->acc = strdup("elastotest");
 	cm_ustate->ctnr = strdup("testctnr");
+	srand(seedy);
 	cm_ustate->ctnr_suffix = rand();
 
 	ret = 0;
