@@ -64,28 +64,16 @@ apb_flease_free(void *mod_priv,
 	*_flease_h = NULL;
 }
 
-/*
- * @duration: Lease duration in seconds. -1 is indefinite, otherwise it must be
- *	      between 15 and 60 seconds.
- * @_flease_h: lease handle assigned by provider, allocated and returned on
- *	       success.
- */
-int
-apb_flease_acquire(void *mod_priv,
-		   struct elasto_conn *conn,
-		   int32_t duration,
-		   void **_flease_h)
+static int
+apb_flease_acquire_blob(struct apb_fh *apb_fh,
+			struct elasto_conn *conn,
+			int32_t duration,
+			char **_lid)
 {
 	int ret;
 	struct op *op;
 	struct az_rsp_blob_lease *blob_lease_rsp;
-	struct apb_flease *lease;
-	struct apb_fh *apb_fh = mod_priv;
-
-	if (_flease_h == NULL) {
-		ret = -EINVAL;
-		goto err_out;
-	}
+	char *lid;
 
 	ret = az_req_blob_lease(apb_fh->path.acc,
 				apb_fh->path.ctnr,
@@ -112,28 +100,126 @@ apb_flease_acquire(void *mod_priv,
 		goto err_op_free;
 	}
 
-	lease = malloc(sizeof(*lease));
-	if (lease == NULL) {
+	lid = strdup(blob_lease_rsp->lid);
+	if (lid == NULL) {
 		ret = -ENOMEM;
 		goto err_op_free;
 	}
 
-	lease->lid = strdup(blob_lease_rsp->lid);
-	if (lease->lid == NULL) {
-		ret = -ENOMEM;
-		goto err_lease_free;
+	dbg(3, "got blob lease %s\n", lid);
+
+	*_lid = lid;
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
+apb_flease_acquire_ctnr(struct apb_fh *apb_fh,
+			struct elasto_conn *conn,
+			int32_t duration,
+			char **_lid)
+{
+	int ret;
+	struct op *op;
+	struct az_rsp_ctnr_lease *ctnr_lease_rsp;
+	char *lid;
+
+	ret = az_req_ctnr_lease(apb_fh->path.acc,
+				apb_fh->path.ctnr,
+				NULL,
+				NULL,
+				AOP_LEASE_ACTION_ACQUIRE,
+				duration,
+				&op);
+	if (ret < 0) {
+		goto err_out;
 	}
 
-	dbg(3, "got lease %s\n", lease->lid);
+	ret = elasto_fop_send_recv(conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
 
-	*_flease_h = lease;
+	ctnr_lease_rsp = az_rsp_ctnr_lease_get(op);
+	if ((ctnr_lease_rsp->lid == NULL)
+				|| (strlen(ctnr_lease_rsp->lid) == 0 )) {
+		ret = -ENOENT;
+		dbg(0, "failed to fetch lease ID on success\n");
+		goto err_op_free;
+	}
+
+	lid = strdup(ctnr_lease_rsp->lid);
+	if (lid == NULL) {
+		ret = -ENOMEM;
+		goto err_op_free;
+	}
+
+	dbg(3, "got ctnr lease %s\n", lid);
+
+	*_lid = lid;
+	ret = 0;
+err_op_free:
 	op_free(op);
+err_out:
+	return ret;
+}
+
+/*
+ * @duration: Lease duration in seconds. -1 is indefinite, otherwise it must be
+ *	      between 15 and 60 seconds.
+ * @_flease_h: lease handle assigned by provider, allocated and returned on
+ *	       success.
+ */
+int
+apb_flease_acquire(void *mod_priv,
+		   struct elasto_conn *conn,
+		   int32_t duration,
+		   void **_flease_h)
+{
+	int ret;
+	struct apb_fh *apb_fh = mod_priv;
+	struct apb_flease *lease;
+
+	if ((apb_fh->path.blob == NULL) && (apb_fh->path.ctnr == NULL)) {
+		/* only blobs and containers can be leased */
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (_flease_h == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	lease = malloc(sizeof(*lease));
+	if (lease == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(lease, 0, sizeof(*lease));
+
+	if (apb_fh->path.blob != NULL) {
+		ret = apb_flease_acquire_blob(apb_fh, conn, duration,
+					      &lease->lid);
+		if (ret < 0) {
+			goto err_lease_free;
+		}
+	} else if (apb_fh->path.ctnr != NULL) {
+		ret = apb_flease_acquire_ctnr(apb_fh, conn, duration,
+					      &lease->lid);
+		if (ret < 0) {
+			goto err_lease_free;
+		}
+	}
+	*_flease_h = lease;
+
 	return 0;
 
 err_lease_free:
 	free(lease);
-err_op_free:
-	op_free(op);
 err_out:
 	return ret;
 }
