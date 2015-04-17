@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -24,6 +24,7 @@ enum s3_opcode {
 	S3OP_OBJ_GET,
 	S3OP_OBJ_DEL,
 	S3OP_OBJ_CP,
+	S3OP_OBJ_HEAD,
 	S3OP_MULTIPART_START,
 	S3OP_MULTIPART_DONE,
 	S3OP_MULTIPART_ABORT,
@@ -100,6 +101,16 @@ struct s3_req_obj_cp {
 	} src;
 };
 
+struct s3_req_obj_head {
+	char *bkt_name;
+	char *obj_name;
+};
+
+struct s3_rsp_obj_head {
+	uint64_t len;
+	char *content_type;
+};
+
 struct s3_req_mp_start {
 	char *bkt_name;
 	char *obj_name;
@@ -154,6 +165,7 @@ struct s3_req {
 		struct s3_req_obj_get obj_get;
 		struct s3_req_obj_del obj_del;
 		struct s3_req_obj_cp obj_cp;
+		struct s3_req_obj_head obj_head;
 		struct s3_req_mp_start mp_start;
 		struct s3_req_mp_done mp_done;
 		struct s3_req_mp_abort mp_abort;
@@ -165,6 +177,7 @@ struct s3_rsp {
 	union {
 		struct s3_rsp_svc_list svc_list;
 		struct s3_rsp_bkt_list bkt_list;
+		struct s3_rsp_obj_head obj_head;
 		struct s3_rsp_mp_start mp_start;
 		struct s3_rsp_part_put part_put;
 		/*
@@ -219,6 +232,11 @@ s3_req_obj_cp(const char *src_bkt,
 		 struct op **_op);
 
 int
+s3_req_obj_head(const char *bkt_name,
+		const char *obj_name,
+		struct op **_op);
+
+int
 s3_req_mp_start(const char *bkt,
 		   const char *obj,
 		   struct op **_op);
@@ -249,6 +267,9 @@ s3_rsp_svc_list(struct op *op);
 
 struct s3_rsp_bkt_list *
 s3_rsp_bkt_list(struct op *op);
+
+struct s3_rsp_obj_head *
+s3_rsp_obj_head(struct op *op);
 
 struct s3_rsp_mp_start *
 s3_rsp_mp_start(struct op *op);

@@ -1071,6 +1071,108 @@ err_out:
 }
 
 static void
+s3_req_obj_head_free(struct s3_req_obj_head *obj_head)
+{
+	free(obj_head->bkt_name);
+	free(obj_head->obj_name);
+}
+
+int
+s3_req_obj_head(const char *bkt_name,
+		const char *obj_name,
+		struct op **_op)
+{
+	int ret;
+	struct s3_ebo *ebo;
+	struct op *op;
+	struct s3_req_obj_head *obj_head_req;
+
+	ret = s3_ebo_init(S3OP_OBJ_HEAD, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	obj_head_req = &ebo->req.obj_head;
+
+	obj_head_req->bkt_name = strdup(bkt_name);
+	if (obj_head_req->bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	obj_head_req->obj_name = strdup(obj_name);
+	if (obj_head_req->obj_name == NULL) {
+		ret = -ENOMEM;
+		goto err_bkt_free;
+	}
+
+	op->method = REQ_METHOD_HEAD;
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_obj_free;
+	}
+	ret = asprintf(&op->url_path, "/%s", obj_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_obj_free:
+	free(obj_head_req->obj_name);
+err_bkt_free:
+	free(obj_head_req->bkt_name);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
+s3_rsp_obj_head_free(struct s3_rsp_obj_head *obj_head_rsp)
+{
+	free(obj_head_rsp->content_type);
+}
+
+static int
+s3_rsp_obj_head_process(struct op *op,
+			struct s3_rsp_obj_head *obj_head_rsp)
+{
+	int ret;
+
+	assert(op->opcode == S3OP_OBJ_HEAD);
+
+	ret = op_hdr_u64_val_lookup(&op->rsp.hdrs, "Content-Length",
+				    &obj_head_rsp->len);
+	if (ret < 0) {
+		dbg(0, "no clen response header\n");
+		goto err_out;
+	}
+
+	ret = op_hdr_val_lookup(&op->rsp.hdrs, "Content-Type",
+				&obj_head_rsp->content_type);
+	if (ret < 0) {
+		dbg(0, "no ctype response header\n");
+		goto err_out;
+	}
+
+	ret = 0;
+err_out:
+	return ret;
+}
+
+static void
 s3_req_mp_start_free(struct s3_req_mp_start *mp_start_req)
 {
 	free(mp_start_req->bkt_name);
@@ -1585,6 +1687,9 @@ s3_req_free(struct op *op)
 	case S3OP_OBJ_CP:
 		s3_req_obj_cp_free(&ebo->req.obj_cp);
 		break;
+	case S3OP_OBJ_HEAD:
+		s3_req_obj_head_free(&ebo->req.obj_head);
+		break;
 	case S3OP_MULTIPART_START:
 		s3_req_mp_start_free(&ebo->req.mp_start);
 		break;
@@ -1614,6 +1719,9 @@ s3_rsp_free(struct op *op)
 		break;
 	case S3OP_BKT_LIST:
 		s3_rsp_bkt_list_free(&ebo->rsp.bkt_list);
+		break;
+	case S3OP_OBJ_HEAD:
+		s3_rsp_obj_head_free(&ebo->rsp.obj_head);
 		break;
 	case S3OP_MULTIPART_START:
 		s3_rsp_mp_start_free(&ebo->rsp.mp_start);
@@ -1662,6 +1770,9 @@ s3_rsp_process(struct op *op)
 	case S3OP_BKT_LIST:
 		ret = s3_rsp_bkt_list_process(op, &ebo->rsp.bkt_list);
 		break;
+	case S3OP_OBJ_HEAD:
+		ret = s3_rsp_obj_head_process(op, &ebo->rsp.obj_head);
+		break;
 	case S3OP_MULTIPART_START:
 		ret = s3_rsp_mp_start_process(op, &ebo->rsp.mp_start);
 		break;
@@ -1699,6 +1810,13 @@ s3_rsp_bkt_list(struct op *op)
 {
 	struct s3_ebo *ebo = container_of(op, struct s3_ebo, op);
 	return &ebo->rsp.bkt_list;
+}
+
+struct s3_rsp_obj_head *
+s3_rsp_obj_head(struct op *op)
+{
+	struct s3_ebo *ebo = container_of(op, struct s3_ebo, op);
+	return &ebo->rsp.obj_head;
 }
 
 struct s3_rsp_mp_start *
