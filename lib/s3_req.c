@@ -533,14 +533,18 @@ s3_op_bkt_create_fill_body(const char *location,
 	char *xml_data;
 	int buf_remain;
 	struct elasto_data *req_data;
+	const char *xml_printf_format =
+			"<CreateBucketConfiguration "
+			   "xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+				"<LocationConstraint>%s</LocationConstraint>"
+			"</CreateBucketConfiguration>";
 
 	if (location == NULL) {
 		dbg(2, "bucket location not specified, using S3 default\n");
 		return 0;
 	}
 
-	/* 2k buf, should be strlen calculated */
-	buf_remain = 2048;
+	buf_remain = sizeof(xml_printf_format) + strlen(location);
 	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -549,10 +553,7 @@ s3_op_bkt_create_fill_body(const char *location,
 
 	xml_data = (char *)req_data->iov.buf;
 	ret = snprintf(xml_data, buf_remain,
-		       "<CreateBucketConfiguration "
-			  "xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
-				"<LocationConstraint>%s</LocationConstraint>"
-		       "</CreateBucketConfiguration>",
+		       xml_printf_format,
 		       location);
 	if ((ret < 0) || (ret >= buf_remain)) {
 		/* truncated or error */
