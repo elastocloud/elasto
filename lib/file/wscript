@@ -11,7 +11,7 @@ def call_ldconfig(bld):
 
 def build(bld):
 	bld.shlib(source='''handle.c io.c open.c xmit.c dir.c lease.c
-			    stat.c''',
+			    stat.c token.c''',
 		  target='elasto_file',
 		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',
