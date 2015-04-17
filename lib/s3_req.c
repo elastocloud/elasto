@@ -711,6 +711,112 @@ err_out:
 }
 
 static void
+s3_req_bkt_loc_get_free(struct s3_req_bkt_loc_get *bkt_loc_get)
+{
+	free(bkt_loc_get->bkt_name);
+}
+
+int
+s3_req_bkt_loc_get(const char *bkt_name,
+		   struct op **_op)
+{
+	int ret;
+	struct s3_ebo *ebo;
+	struct op *op;
+	struct s3_req_bkt_loc_get *bkt_loc_get_req;
+
+	ret = s3_ebo_init(S3OP_BKT_LOCATION_GET, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	bkt_loc_get_req = &ebo->req.bkt_loc_get;
+
+	bkt_loc_get_req->bkt_name = strdup(bkt_name);
+	if (bkt_loc_get_req->bkt_name == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	op->method = REQ_METHOD_GET;
+	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_name_free;
+	}
+	ret = asprintf(&op->url_path, "/?location");
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	*_op = op;
+	return 0;
+
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_name_free:
+	free(bkt_loc_get_req->bkt_name);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
+s3_rsp_bkt_loc_get_free(struct s3_rsp_bkt_loc_get *bkt_loc_get)
+{
+	free(bkt_loc_get->location);
+}
+
+static int
+s3_rsp_bkt_loc_get_process(struct op *op,
+			   struct s3_rsp_bkt_loc_get *bkt_loc_get_rsp)
+{
+	int ret;
+	struct xml_doc *xdoc;
+
+	assert(op->opcode == S3OP_BKT_LOCATION_GET);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+	assert(op->rsp.data->base_off == 0);
+
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	/* always present, returns an empty element for "US Classic region" */
+	ret = exml_str_want(xdoc, "/LocationConstraint", true,
+			    &bkt_loc_get_rsp->location, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
+	}
+
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_rsp_free;
+	}
+
+	exml_free(xdoc);
+	return 0;
+
+err_rsp_free:
+	s3_rsp_bkt_loc_get_free(bkt_loc_get_rsp);
+err_xdoc_free:
+	exml_free(xdoc);
+err_out:
+	return ret;
+}
+
+static void
 s3_req_obj_put_free(struct s3_req_obj_put *obj_put)
 {
 	free(obj_put->bkt_name);
@@ -1675,6 +1781,9 @@ s3_req_free(struct op *op)
 	case S3OP_BKT_DEL:
 		s3_req_bkt_del_free(&ebo->req.bkt_del);
 		break;
+	case S3OP_BKT_LOCATION_GET:
+		s3_req_bkt_loc_get_free(&ebo->req.bkt_loc_get);
+		break;
 	case S3OP_OBJ_PUT:
 		s3_req_obj_put_free(&ebo->req.obj_put);
 		break;
@@ -1719,6 +1828,9 @@ s3_rsp_free(struct op *op)
 		break;
 	case S3OP_BKT_LIST:
 		s3_rsp_bkt_list_free(&ebo->rsp.bkt_list);
+		break;
+	case S3OP_BKT_LOCATION_GET:
+		s3_rsp_bkt_loc_get_free(&ebo->rsp.bkt_loc_get);
 		break;
 	case S3OP_OBJ_HEAD:
 		s3_rsp_obj_head_free(&ebo->rsp.obj_head);
@@ -1770,6 +1882,9 @@ s3_rsp_process(struct op *op)
 	case S3OP_BKT_LIST:
 		ret = s3_rsp_bkt_list_process(op, &ebo->rsp.bkt_list);
 		break;
+	case S3OP_BKT_LOCATION_GET:
+		ret = s3_rsp_bkt_loc_get_process(op, &ebo->rsp.bkt_loc_get);
+		break;
 	case S3OP_OBJ_HEAD:
 		ret = s3_rsp_obj_head_process(op, &ebo->rsp.obj_head);
 		break;
@@ -1810,6 +1925,13 @@ s3_rsp_bkt_list(struct op *op)
 {
 	struct s3_ebo *ebo = container_of(op, struct s3_ebo, op);
 	return &ebo->rsp.bkt_list;
+}
+
+struct s3_rsp_bkt_loc_get *
+s3_rsp_bkt_loc_get(struct op *op)
+{
+	struct s3_ebo *ebo = container_of(op, struct s3_ebo, op);
+	return &ebo->rsp.bkt_loc_get;
 }
 
 struct s3_rsp_obj_head *

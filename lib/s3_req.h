@@ -20,6 +20,7 @@ enum s3_opcode {
 	S3OP_BKT_LIST,
 	S3OP_BKT_CREATE,
 	S3OP_BKT_DEL,
+	S3OP_BKT_LOCATION_GET,
 	S3OP_OBJ_PUT,
 	S3OP_OBJ_GET,
 	S3OP_OBJ_DEL,
@@ -73,6 +74,14 @@ struct s3_req_bkt_create {
 
 struct s3_req_bkt_del {
 	char *bkt_name;
+};
+
+struct s3_req_bkt_loc_get {
+	char *bkt_name;
+};
+
+struct s3_rsp_bkt_loc_get {
+	char *location;
 };
 
 struct s3_req_obj_put {
@@ -161,6 +170,7 @@ struct s3_req {
 		struct s3_req_bkt_list bkt_list;
 		struct s3_req_bkt_create bkt_create;
 		struct s3_req_bkt_del bkt_del;
+		struct s3_req_bkt_loc_get bkt_loc_get;
 		struct s3_req_obj_put obj_put;
 		struct s3_req_obj_get obj_get;
 		struct s3_req_obj_del obj_del;
@@ -177,6 +187,7 @@ struct s3_rsp {
 	union {
 		struct s3_rsp_svc_list svc_list;
 		struct s3_rsp_bkt_list bkt_list;
+		struct s3_rsp_bkt_loc_get bkt_loc_get;
 		struct s3_rsp_obj_head obj_head;
 		struct s3_rsp_mp_start mp_start;
 		struct s3_rsp_part_put part_put;
@@ -206,6 +217,10 @@ s3_req_bkt_create(const char *bkt_name,
 int
 s3_req_bkt_del(const char *bkt_name,
 	       struct op **_op);
+
+int
+s3_req_bkt_loc_get(const char *bkt_name,
+		   struct op **_op);
 
 int
 s3_req_obj_put(const char *bkt_name,
@@ -267,6 +282,9 @@ s3_rsp_svc_list(struct op *op);
 
 struct s3_rsp_bkt_list *
 s3_rsp_bkt_list(struct op *op);
+
+struct s3_rsp_bkt_loc_get *
+s3_rsp_bkt_loc_get(struct op *op);
 
 struct s3_rsp_obj_head *
 s3_rsp_obj_head(struct op *op);
