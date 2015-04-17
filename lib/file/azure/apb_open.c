@@ -37,8 +37,11 @@
 #include "lib/file/file_api.h"
 #include "lib/file/xmit.h"
 #include "lib/file/handle.h"
+#include "lib/file/token.h"
 #include "apb_handle.h"
 #include "apb_open.h"
+
+#define APB_FOPEN_LOCATION_DEFAULT "Netherlands"
 
 /* XXX dup of path parsing code in elasto_cli.c */
 int
@@ -321,7 +324,8 @@ err_out:
 static int
 apb_fopen_acc(struct apb_fh *apb_fh,
 	      struct elasto_conn *conn,
-	      uint64_t flags)
+	      uint64_t flags,
+	      struct elasto_ftoken_list *open_toks)
 {
 	int ret;
 	struct op *op;
@@ -355,15 +359,27 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 		goto err_op_free;
 	} else if ((ret < 0) && op_rsp_error_match(op, 404)
 					&& (flags & ELASTO_FOPEN_CREATE)) {
+		const char *location;
+
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		/* FIXME use hard coded location for now */
+
+		ret = elasto_ftoken_find(open_toks,
+					 ELASTO_FOPEN_TOK_CREATE_AT_LOCATION,
+					 &location);
+		if (ret == -ENOENT) {
+			location = APB_FOPEN_LOCATION_DEFAULT;
+			dbg(1, "location token not specified for new account "
+			    "%s, using default: %s\n",
+			    apb_fh->path.acc, location);
+		}
+
 		ret = az_mgmt_req_acc_create(apb_fh->sub_id,
 					     apb_fh->path.acc,
 					     apb_fh->path.acc, /* label */
 					     NULL,	       /* description */
 					     NULL,	       /* affin group */
-					     "Netherlands",    /* location */
+					     location,
 					     &op);
 		if (ret < 0) {
 			goto err_out;
@@ -429,7 +445,8 @@ int
 apb_fopen(void *mod_priv,
 	  struct elasto_conn *conn,
 	  const char *path,
-	  uint64_t flags)
+	  uint64_t flags,
+	  struct elasto_ftoken_list *open_toks)
 {
 	int ret;
 	struct apb_fh *apb_fh = mod_priv;
@@ -450,7 +467,7 @@ apb_fopen(void *mod_priv,
 			goto err_path_free;
 		}
 	} else if (apb_fh->path.acc != NULL) {
-		ret = apb_fopen_acc(apb_fh, conn, flags);
+		ret = apb_fopen_acc(apb_fh, conn, flags, open_toks);
 		if (ret < 0) {
 			goto err_path_free;
 		}

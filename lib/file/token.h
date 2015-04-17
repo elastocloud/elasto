@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -11,19 +11,23 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
-#ifndef _OPEN_H_
-#define _OPEN_H_
+#ifndef _TOKEN_H_
+#define _TOKEN_H_
+
+struct elasto_kv {
+	struct list_node list;
+	uint64_t key;
+	char *val;
+};
+
+struct elasto_ftoken_list {
+	int num_kvs;
+	struct list_head kvs;
+};
 
 int
-elasto_fpath_az_parse(const char *path,
-		      struct elasto_fh_az_path *az_path);
+elasto_ftoken_find(struct elasto_ftoken_list *toks,
+		   uint64_t key,
+		   const char **_val);
 
-void
-elasto_fpath_az_free(struct elasto_fh_az_path *az_path);
-
-int
-elasto_fsign_conn_setup(struct elasto_conn *econn,
-			const char *sub_id,
-			const char *acc);
-
-#endif /* _OPEN_H_ */
+#endif /* _TOKEN_H_ */

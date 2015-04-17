@@ -96,7 +96,7 @@ cm_file_create(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
-			   &fh);
+			   NULL, &fh);
 	assert_false(ret < 0);
 
 	ret = elasto_fclose(fh);
@@ -105,13 +105,13 @@ cm_file_create(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
-			   &fh);
+			   NULL, &fh);
 	assert_int_equal(ret, -EEXIST);
 
 	ret = elasto_fopen(&auth,
 			   path,
 			   0,
-			   &fh);
+			   NULL, &fh);
 	assert_false(ret < 0);
 
 	ret = elasto_fclose(fh);
@@ -120,7 +120,7 @@ cm_file_create(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_CREATE,
-			   &fh);
+			   NULL, &fh);
 	assert_false(ret < 0);
 
 	ret = elasto_fclose(fh);
@@ -183,7 +183,7 @@ cm_file_io(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_CREATE,
-			   &fh);
+			   NULL, &fh);
 	assert_false(ret < 0);
 
 	/* must truncate to size writing to the range */
@@ -238,7 +238,7 @@ cm_file_lease_basic(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
-			   &fh);
+			   NULL, &fh);
 	assert_false(ret < 0);
 
 	ret = elasto_fstat(fh, &fstat);
@@ -286,7 +286,7 @@ cm_file_lease_multi(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
-			   &fh1);
+			   NULL, &fh1);
 	assert_false(ret < 0);
 
 	ret = elasto_flease_acquire(fh1, -1);
@@ -295,7 +295,7 @@ cm_file_lease_multi(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   0,
-			   &fh2);
+			   NULL, &fh2);
 	assert_false(ret < 0);
 
 	ret = elasto_flease_acquire(fh2, -1);
@@ -346,7 +346,7 @@ cm_file_lease_break(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
-			   &fh1);
+			   NULL, &fh1);
 	assert_false(ret < 0);
 
 	ret = elasto_flease_acquire(fh1, -1);
@@ -355,7 +355,7 @@ cm_file_lease_break(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   0,
-			   &fh2);
+			   NULL, &fh2);
 	assert_false(ret < 0);
 
 	ret = elasto_flease_acquire(fh2, -1);
@@ -405,7 +405,7 @@ cm_file_truncate_basic(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
-			   &fh);
+			   NULL, &fh);
 	assert_false(ret < 0);
 
 	ret = elasto_fstat(fh, &fstat);
@@ -457,7 +457,7 @@ cm_file_stat_basic(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
-			   &fh);
+			   NULL, &fh);
 	assert_false(ret < 0);
 
 	ret = elasto_fstat(fh, &fstat);
@@ -498,7 +498,7 @@ cm_file_dir_open(void **state)
 	ret = elasto_fopen(&auth,
 			   "/",
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh);
+			   NULL, &fh);
 	assert_true(ret >= 0);
 	elasto_fclose(fh);
 
@@ -506,7 +506,7 @@ cm_file_dir_open(void **state)
 	ret = elasto_fopen(&auth,
 			   "/",
 			   0,
-			   &fh);
+			   NULL, &fh);
 	assert_int_equal(ret, -EINVAL);
 
 	/* open root with create flags - should fail */
@@ -514,7 +514,7 @@ cm_file_dir_open(void **state)
 			   "/",
 			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
 			    | ELASTO_FOPEN_EXCL),
-			   &fh);
+			   NULL, &fh);
 	assert_int_equal(ret, -EINVAL);
 
 	/* open existing account */
@@ -524,7 +524,7 @@ cm_file_dir_open(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh);
+			   NULL, &fh);
 	assert_true(ret >= 0);
 	ret = elasto_fclose(fh);
 	assert_true(ret >= 0);
@@ -533,7 +533,7 @@ cm_file_dir_open(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   0,
-			   &fh);
+			   NULL, &fh);
 	assert_true(ret < 0);
 
 	/* account with create flags - already exists */
@@ -541,7 +541,7 @@ cm_file_dir_open(void **state)
 			   path,
 			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
 			    | ELASTO_FOPEN_EXCL),
-			   &fh);
+			   NULL, &fh);
 	assert_true(ret < 0);
 	free(path);
 
@@ -554,7 +554,7 @@ cm_file_dir_open(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh);
+			   NULL, &fh);
 	assert_true(ret < 0);
 
 	/* open non-existent ctnr with create flags */
@@ -562,7 +562,7 @@ cm_file_dir_open(void **state)
 			   path,
 			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
 			    | ELASTO_FOPEN_EXCL),
-			   &fh);
+			   NULL, &fh);
 	assert_true(ret >= 0);
 	ret = elasto_fclose(fh);
 	assert_true(ret >= 0);
@@ -576,7 +576,7 @@ cm_file_dir_open(void **state)
 	ret = elasto_fopen(&auth,
 			   "/",
 			   ~ELASTO_FOPEN_FLAGS_MASK,
-			   &fh);
+			   NULL, &fh);
 	assert_int_equal(ret, -EINVAL);
 }
 
@@ -601,7 +601,7 @@ cm_file_dir_lease_basic(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh);
+			   NULL, &fh);
 	assert_int_equal(ret, 0);
 
 	ret = elasto_fstat(fh, &fstat);
@@ -652,7 +652,7 @@ cm_file_dir_lease_multi(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh1);
+			   NULL, &fh1);
 	assert_false(ret < 0);
 
 	ret = elasto_flease_acquire(fh1, -1);
@@ -661,7 +661,7 @@ cm_file_dir_lease_multi(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh2);
+			   NULL, &fh2);
 	assert_false(ret < 0);
 
 	ret = elasto_flease_acquire(fh2, -1);
@@ -714,7 +714,7 @@ cm_file_dir_lease_break(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh1);
+			   NULL, &fh1);
 	assert_false(ret < 0);
 
 	ret = elasto_flease_acquire(fh1, -1);
@@ -723,7 +723,7 @@ cm_file_dir_lease_break(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh2);
+			   NULL, &fh2);
 	assert_false(ret < 0);
 
 	ret = elasto_flease_acquire(fh2, -1);
@@ -788,7 +788,7 @@ cm_file_dir_readdir(void **state)
 	ret = elasto_fopen(&auth,
 			   "/",
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh_root);
+			   NULL, &fh_root);
 	assert_int_equal(ret, 0);
 
 	/* readdir root, and expect test account entry */
@@ -816,7 +816,7 @@ cm_file_dir_readdir(void **state)
 			   ctnr_path,
 			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
 			    | ELASTO_FOPEN_EXCL),
-			   &fh_ctnr);
+			   NULL, &fh_ctnr);
 	assert_int_equal(ret, 0);
 
 	/* open the account */
@@ -825,7 +825,7 @@ cm_file_dir_readdir(void **state)
 	ret = elasto_fopen(&auth,
 			   acc_path,
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh_acc);
+			   NULL, &fh_acc);
 	assert_int_equal(ret, 0);
 
 	/* check that the new ctnr appears in account readdir */
@@ -851,7 +851,7 @@ cm_file_dir_readdir(void **state)
 	ret = elasto_fopen(&auth,
 			   blob_path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
-			   &fh_blob);
+			   NULL, &fh_blob);
 	assert_int_equal(ret, 0);
 	ret = elasto_fclose(fh_blob);
 	assert_true(ret >= 0);
@@ -900,7 +900,7 @@ cm_file_dir_stat(void **state)
 	ret = elasto_fopen(&auth,
 			   "/",
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh);
+			   NULL, &fh);
 	assert_true(ret >= 0);
 
 	ret = elasto_fstat(fh, &fstat);
@@ -922,7 +922,7 @@ cm_file_dir_stat(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh);
+			   NULL, &fh);
 	assert_true(ret >= 0);
 
 	ret = elasto_fstat(fh, &fstat);
@@ -944,7 +944,7 @@ cm_file_dir_stat(void **state)
 	ret = elasto_fopen(&auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
-			   &fh);
+			   NULL, &fh);
 	assert_true(ret >= 0);
 
 	ret = elasto_fstat(fh, &fstat);
