@@ -752,6 +752,136 @@ cm_file_dir_lease_break(void **state)
 	free(path);
 }
 
+static int
+cm_file_dir_readdir_finder_dent_cb(struct elasto_dent *dent,
+				   void *priv)
+{
+	struct elasto_dent *finder_dent = priv;
+
+	if (!strcmp(dent->name, finder_dent->name)) {
+		finder_dent->fstat = dent->fstat;
+	}
+
+	return 0;
+}
+
+static void
+cm_file_dir_readdir(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *acc_path = NULL;
+	char *ctnr_name = NULL;
+	char *ctnr_path = NULL;
+	char *blob_path = NULL;
+	struct elasto_fh *fh_root;
+	struct elasto_fh *fh_acc;
+	struct elasto_fh *fh_ctnr;
+	struct elasto_fh *fh_blob;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct elasto_dent finder_dent;
+
+	auth.type = ELASTO_FILE_AZURE;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = elasto_fopen(&auth,
+			   "/",
+			   ELASTO_FOPEN_DIRECTORY,
+			   &fh_root);
+	assert_int_equal(ret, 0);
+
+	/* readdir root, and expect test account entry */
+	memset(&finder_dent, 0, sizeof(finder_dent));
+	finder_dent.name = cm_us->acc;
+	ret = elasto_freaddir(fh_root, &finder_dent,
+			      cm_file_dir_readdir_finder_dent_cb);
+	assert_int_equal(ret, 0);
+	elasto_fclose(fh_root);
+
+	assert_true(finder_dent.fstat.field_mask == (ELASTO_FSTAT_FIELD_TYPE
+						| ELASTO_FSTAT_FIELD_BSIZE));
+	assert_true(finder_dent.fstat.ent_type == ELASTO_FSTAT_ENT_DIR);
+	assert_true(finder_dent.fstat.blksize == 512);
+
+
+	/* create a new ctnr nested under the account */
+	ret = asprintf(&ctnr_name, "%s%d", cm_us->ctnr, cm_us->ctnr_suffix);
+	assert_true(ret >= 0);
+	cm_us->ctnr_suffix++;
+	ret = asprintf(&ctnr_path, "/%s/%s", cm_us->acc, ctnr_name);
+	assert_true(ret >= 0);
+
+	ret = elasto_fopen(&auth,
+			   ctnr_path,
+			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
+			    | ELASTO_FOPEN_EXCL),
+			   &fh_ctnr);
+	assert_int_equal(ret, 0);
+
+	/* open the account */
+	ret = asprintf(&acc_path, "/%s", cm_us->acc);
+	assert_true(ret >= 0);
+	ret = elasto_fopen(&auth,
+			   acc_path,
+			   ELASTO_FOPEN_DIRECTORY,
+			   &fh_acc);
+	assert_int_equal(ret, 0);
+
+	/* check that the new ctnr appears in account readdir */
+	memset(&finder_dent, 0, sizeof(finder_dent));
+	finder_dent.name = ctnr_name;
+	ret = elasto_freaddir(fh_acc, &finder_dent,
+			      cm_file_dir_readdir_finder_dent_cb);
+	assert_int_equal(ret, 0);
+	ret = elasto_fclose(fh_acc);
+	assert_true(ret >= 0);
+
+	assert_true(finder_dent.fstat.field_mask == (ELASTO_FSTAT_FIELD_TYPE
+						| ELASTO_FSTAT_FIELD_BSIZE
+						| ELASTO_FSTAT_FIELD_LEASE));
+	assert_true(finder_dent.fstat.ent_type == ELASTO_FSTAT_ENT_DIR);
+	assert_true(finder_dent.fstat.blksize == 512);
+	assert_true(finder_dent.fstat.lease_status == ELASTO_FLEASE_UNLOCKED);
+
+	/* create a new blob */
+	ret = asprintf(&blob_path, "/%s/%s/readdir", cm_us->acc, ctnr_name);
+	assert_true(ret >= 0);
+
+	ret = elasto_fopen(&auth,
+			   blob_path,
+			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
+			   &fh_blob);
+	assert_int_equal(ret, 0);
+	ret = elasto_fclose(fh_blob);
+	assert_true(ret >= 0);
+
+	/* readdir ctnr and expect blob entry */
+	memset(&finder_dent, 0, sizeof(finder_dent));
+	finder_dent.name = "readdir";
+	ret = elasto_freaddir(fh_ctnr, &finder_dent,
+			      cm_file_dir_readdir_finder_dent_cb);
+	assert_int_equal(ret, 0);
+
+	assert_true(finder_dent.fstat.field_mask == (ELASTO_FSTAT_FIELD_TYPE
+						| ELASTO_FSTAT_FIELD_SIZE
+						| ELASTO_FSTAT_FIELD_BSIZE
+						| ELASTO_FSTAT_FIELD_LEASE));
+	assert_true(finder_dent.fstat.ent_type == ELASTO_FSTAT_ENT_FILE);
+	assert_true(finder_dent.fstat.size == 0);
+	assert_true(finder_dent.fstat.blksize == 512);
+	assert_true(finder_dent.fstat.lease_status == ELASTO_FLEASE_UNLOCKED);
+
+	ret = elasto_fclose(fh_ctnr);
+	assert_true(ret >= 0);
+
+	ret = elasto_frmdir(&auth,
+			    ctnr_path);
+	assert_false(ret < 0);
+	free(acc_path);
+	free(ctnr_path);
+}
+
 static const UnitTest cm_file_tests[] = {
 	unit_test_setup_teardown(cm_file_create,
 				 cm_file_mkdir, cm_file_rmdir),
@@ -774,6 +904,7 @@ static const UnitTest cm_file_tests[] = {
 				 cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_dir_lease_break,
 				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_dir_readdir, NULL, NULL),
 };
 
 int
