@@ -68,6 +68,7 @@ apb_fh_init(const struct elasto_fauth *auth,
 		.lease_free = apb_flease_free,
 		.mkdir = apb_fmkdir,
 		.rmdir = apb_frmdir,
+		.readdir = apb_freaddir,
 	};
 
 	assert(auth->type == ELASTO_FILE_AZURE);

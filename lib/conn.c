@@ -453,7 +453,6 @@ ev_err_cb(enum evhttp_request_error ev_req_error,
 	case EVREQ_HTTP_EOF:
 		dbg(0, "got client error: EOF\n");
 		op->rsp.err_code = HTTP_NOTFOUND;
-		op->rsp.is_error = false;
 		break;
 	case EVREQ_HTTP_INVALID_HEADER:
 		dbg(0, "got client error: invalid header\n");
@@ -632,10 +631,11 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 		return -ENOMEM;
 	}
 
-	dbg(3, "preparing request for dispatch to: %s\n", url);
+	dbg(3, "preparing %s request for dispatch to: %s\n", op->method, url);
 
 	ev_req = evhttp_request_new(ev_done_cb, op);
 	if (ev_req == NULL) {
+		ret = -ENOMEM;
 		goto err_url_free;
 	}
 

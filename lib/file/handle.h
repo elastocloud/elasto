@@ -15,6 +15,7 @@
 #define _HANDLE_H_
 
 #define ELASTO_FH_MAGIC "ElastoF"
+#define ELASTO_FH_POISON "PoisonF"
 
 struct elasto_fh_mod_ops {
 	void (*fh_free)(void *mod_priv);
@@ -66,6 +67,11 @@ struct elasto_fh_mod_ops {
 	int (*rmdir)(void *mod_priv,
 		     struct elasto_conn *conn,
 		     const char *path);
+	int (*readdir)(void *mod_priv,
+		       struct elasto_conn *conn,
+		       void *cli_priv,
+		       int (*dent_cb)(struct elasto_dent *,
+				      void *));
 };
 
 /* fh init calls this entry point for the corresponding module */
@@ -88,6 +94,7 @@ struct elasto_fh {
 	char magic[8];
 	struct elasto_conn *conn;
 	enum elasto_ftype type;
+	uint64_t open_flags;
 	void *mod_dl_h;
 	void *mod_priv;
 	struct elasto_fh_mod_ops ops;

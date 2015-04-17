@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -19,6 +19,7 @@ enum az_mgmt_opcode {
 	AOP_MGMT_ACC_LIST,
 	AOP_MGMT_ACC_CREATE,
 	AOP_MGMT_ACC_DEL,
+	AOP_MGMT_ACC_PROP_GET,
 	AOP_MGMT_STATUS_GET,
 };
 
@@ -54,12 +55,21 @@ struct az_mgmt_rsp_acc_list {
 
 struct az_mgmt_req_acc_create {
 	char *sub_id;
-	struct azure_account *acc;
+	struct azure_account acc;
 };
 
 struct az_mgmt_req_acc_del {
 	char *sub_id;
 	char *account;
+};
+
+struct az_mgmt_req_acc_prop_get {
+	char *sub_id;
+	char *acc;
+};
+
+struct az_mgmt_rsp_acc_prop_get {
+	struct azure_account acc_desc;
 };
 
 struct az_mgmt_req_status_get {
@@ -93,6 +103,7 @@ struct az_mgmt_req {
 		struct az_mgmt_req_acc_list acc_list;
 		struct az_mgmt_req_acc_create acc_create;
 		struct az_mgmt_req_acc_del acc_del;
+		struct az_mgmt_req_acc_prop_get acc_prop_get;
 		struct az_mgmt_req_status_get sts_get;
 	};
 };
@@ -101,6 +112,7 @@ struct az_mgmt_rsp {
 	union {
 		struct az_mgmt_rsp_acc_keys_get acc_keys_get;
 		struct az_mgmt_rsp_acc_list acc_list;
+		struct az_mgmt_rsp_acc_prop_get acc_prop_get;
 		struct az_mgmt_rsp_status_get sts_get;
 		/*
 		 * No response specific data handled yet:
@@ -134,6 +146,11 @@ az_mgmt_req_acc_del(const char *sub_id,
 		    struct op **_op);
 
 int
+az_mgmt_req_acc_prop_get(const char *sub_id,
+			 const char *acc,
+			 struct op **_op);
+
+int
 az_mgmt_req_status_get(const char *sub_id,
 		       const char *req_id,
 		       struct op **_op);
@@ -143,6 +160,9 @@ az_mgmt_rsp_acc_keys_get(struct op *op);
 
 struct az_mgmt_rsp_acc_list *
 az_mgmt_rsp_acc_list(struct op *op);
+
+struct az_mgmt_rsp_acc_prop_get *
+az_mgmt_rsp_acc_prop_get(struct op *op);
 
 struct az_mgmt_rsp_status_get *
 az_mgmt_rsp_status_get(struct op *op);

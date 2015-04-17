@@ -45,6 +45,9 @@ elasto_frmdir(const struct elasto_fauth *auth,
 enum elasto_fopen_flags {
 	ELASTO_FOPEN_CREATE	= 0x0001,
 	ELASTO_FOPEN_EXCL	= 0x0002,
+	ELASTO_FOPEN_DIRECTORY	= 0x0004,
+
+	ELASTO_FOPEN_FLAGS_MASK	= 0x0007
 };
 
 int
@@ -92,12 +95,30 @@ enum elasto_flease_status {
 	ELASTO_FLEASE_UNLOCKED,
 };
 
+enum elasto_fstat_field {
+	ELASTO_FSTAT_FIELD_TYPE		= 0x0001,
+	ELASTO_FSTAT_FIELD_SIZE		= 0x0002,
+	ELASTO_FSTAT_FIELD_BSIZE	= 0x0004,
+	ELASTO_FSTAT_FIELD_LEASE	= 0x0008,
+
+	ELASTO_FSTAT_FIELD_ALL_MASK	= 0x000F,
+};
+
+enum elasto_fstat_ent_type {
+	ELASTO_FSTAT_ENT_FILE	=	0x0001,
+	ELASTO_FSTAT_ENT_DIR	=	0x0002,
+	ELASTO_FSTAT_ENT_ROOT	=	0x0004,
+};
+
 /**
+ * @ent_type: type of entry
  * @size: total size, in bytes
  * @blksize: blocksize for file system I/O
  * @lease_status: whether locked or unlocked
  */
 struct elasto_fstat {
+	uint64_t field_mask;
+	uint64_t ent_type;
 	uint64_t size;
 	uint64_t blksize;
 	enum elasto_flease_status lease_status;
@@ -142,6 +163,17 @@ struct elasto_fstatfs {
 int
 elasto_fstatfs(struct elasto_fh *fh,
 	       struct elasto_fstatfs *fstatfs);
+
+struct elasto_dent {
+	char *name;
+	struct elasto_fstat fstat;
+};
+
+int
+elasto_freaddir(struct elasto_fh *fh,
+		void *priv,
+		int (*dent_cb)(struct elasto_dent *,
+			       void *));
 
 int
 elasto_fdebug(int level);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -223,17 +223,14 @@ az_mgmt_req_acc_list_free(struct az_mgmt_req_acc_list *acc_list_req)
 }
 
 static void
-azure_acc_free(struct azure_account **pacc)
+azure_acc_free(struct azure_account *acc)
 {
-	struct azure_account *acc = *pacc;
-
 	free(acc->svc_name);
 	free(acc->label);
 	free(acc->url);
 	free(acc->affin_grp);
 	free(acc->location);
 	free(acc->desc);
-	free(acc);
 }
 
 static void
@@ -247,14 +244,9 @@ az_mgmt_rsp_acc_list_free(struct az_mgmt_rsp_acc_list *acc_list_rsp)
 	}
 
 	list_for_each_safe(&acc_list_rsp->accs, acc, acc_n, list) {
-		azure_acc_free(&acc);
+		azure_acc_free(acc);
+		free(acc);
 	}
-}
-
-static int
-az_mgmt_req_acc_list_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, true);
 }
 
 int
@@ -297,7 +289,7 @@ az_mgmt_req_acc_list(const char *sub_id,
 		goto err_uhost_free;
 	}
 
-	ret = az_mgmt_req_acc_list_hdr_fill(op);
+	ret = az_req_common_hdr_fill(op, true);
 	if (ret < 0) {
 		goto err_upath_free;
 	}
@@ -312,6 +304,50 @@ err_sub_free:
 	free(acc_list_req->sub_id);
 err_ebo_free:
 	free(ebo);
+err_out:
+	return ret;
+}
+
+static int az_mgmt_rsp_acc_want(struct xml_doc *xdoc,
+				struct azure_account *acc)
+{
+	int ret;
+
+	ret = exml_str_want(xdoc, "./ServiceName", true, &acc->svc_name, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_str_want(xdoc, "./Url", true, &acc->url, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_str_want(xdoc, "./StorageServiceProperties/Description",
+			    false, &acc->desc, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_str_want(xdoc, "./StorageServiceProperties/AffinityGroup",
+			    false, &acc->affin_grp, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_base64_want(xdoc, "./StorageServiceProperties/Label",
+			       false, &acc->label, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_str_want(xdoc, "./StorageServiceProperties/Location",
+			    false, &acc->location, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = 0;
 err_out:
 	return ret;
 }
@@ -341,36 +377,7 @@ static int az_mgmt_rsp_acc_iter_process(struct xml_doc *xdoc,
 	}
 	memset(acc, 0, sizeof(*acc));
 
-	ret = exml_str_want(xdoc, "./ServiceName", true, &acc->svc_name, NULL);
-	if (ret < 0) {
-		goto err_acc_free;
-	}
-
-	ret = exml_str_want(xdoc, "./Url", true, &acc->url, NULL);
-	if (ret < 0) {
-		goto err_acc_free;
-	}
-
-	ret = exml_str_want(xdoc, "./StorageServiceProperties/Description",
-			    false, &acc->desc, NULL);
-	if (ret < 0) {
-		goto err_acc_free;
-	}
-
-	ret = exml_str_want(xdoc, "./StorageServiceProperties/AffinityGroup",
-			    false, &acc->affin_grp, NULL);
-	if (ret < 0) {
-		goto err_acc_free;
-	}
-
-	ret = exml_base64_want(xdoc, "./StorageServiceProperties/Label",
-			       false, &acc->label, NULL);
-	if (ret < 0) {
-		goto err_acc_free;
-	}
-
-	ret = exml_str_want(xdoc, "./StorageServiceProperties/Location",
-			    false, &acc->location, NULL);
+	ret = az_mgmt_rsp_acc_want(xdoc, acc);
 	if (ret < 0) {
 		goto err_acc_free;
 	}
@@ -426,7 +433,8 @@ az_mgmt_rsp_acc_list_process(struct op *op,
 
 err_accs_free:
 	list_for_each_safe(&acc_list_rsp->accs, acc, acc_n, list) {
-		azure_acc_free(&acc);
+		azure_acc_free(acc);
+		free(acc);
 	}
 err_xdoc_free:
 	exml_free(xdoc);
@@ -584,42 +592,35 @@ az_mgmt_req_acc_create(const char *sub_id,
 		goto err_ebo_free;
 	}
 
-	acc_create_req->acc = malloc(sizeof(*acc_create_req->acc));
-	if (acc_create_req->acc == NULL) {
+	acc_create_req->acc.svc_name = strdup(svc_name);
+	if (acc_create_req->acc.svc_name == NULL) {
 		ret = -ENOMEM;
 		goto err_sub_free;
 	}
-	memset(acc_create_req->acc, 0, sizeof(*acc_create_req->acc));
-
-	acc_create_req->acc->svc_name = strdup(svc_name);
-	if (acc_create_req->acc->svc_name == NULL) {
-		ret = -ENOMEM;
-		goto err_acc_free;
-	}
-	acc_create_req->acc->label = strdup(label);
-	if (acc_create_req->acc->label == NULL) {
+	acc_create_req->acc.label = strdup(label);
+	if (acc_create_req->acc.label == NULL) {
 		ret = -ENOMEM;
 		goto err_svc_name_free;
 	}
 
 	if (desc != NULL) {
-		acc_create_req->acc->desc = strdup(desc);
-		if (acc_create_req->acc->desc == NULL) {
+		acc_create_req->acc.desc = strdup(desc);
+		if (acc_create_req->acc.desc == NULL) {
 			ret = -ENOMEM;
 			goto err_label_free;
 		}
 	}
 	if (affin_grp != NULL) {
 		assert(location == NULL);
-		acc_create_req->acc->affin_grp = strdup(affin_grp);
-		if (acc_create_req->acc->affin_grp == NULL) {
+		acc_create_req->acc.affin_grp = strdup(affin_grp);
+		if (acc_create_req->acc.affin_grp == NULL) {
 			ret = -ENOMEM;
 			goto err_desc_free;
 		}
 	} else {
 		assert(location != NULL);
-		acc_create_req->acc->location = strdup(location);
-		if (acc_create_req->acc->location == NULL) {
+		acc_create_req->acc.location = strdup(location);
+		if (acc_create_req->acc.location == NULL) {
 			ret = -ENOMEM;
 			goto err_desc_free;
 		}
@@ -646,7 +647,7 @@ az_mgmt_req_acc_create(const char *sub_id,
 		goto err_upath_free;
 	}
 
-	ret = az_mgmt_req_acc_create_body_fill(acc_create_req->acc,
+	ret = az_mgmt_req_acc_create_body_fill(&acc_create_req->acc,
 					       &op->req.data);
 	if (ret < 0) {
 		goto err_hdrs_free;
@@ -661,16 +662,14 @@ err_upath_free:
 err_uhost_free:
 	free(op->url_host);
 err_loc_free:
-	free(acc_create_req->acc->location);
-	free(acc_create_req->acc->affin_grp);
+	free(acc_create_req->acc.location);
+	free(acc_create_req->acc.affin_grp);
 err_desc_free:
-	free(acc_create_req->acc->desc);
+	free(acc_create_req->acc.desc);
 err_label_free:
-	free(acc_create_req->acc->label);
+	free(acc_create_req->acc.label);
 err_svc_name_free:
-	free(acc_create_req->acc->svc_name);
-err_acc_free:
-	free(acc_create_req->acc);
+	free(acc_create_req->acc.svc_name);
 err_sub_free:
 	free(acc_create_req->sub_id);
 err_ebo_free:
@@ -753,6 +752,132 @@ err_sub_free:
 	free(acc_del_req->sub_id);
 err_ebo_free:
 	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
+az_mgmt_req_acc_prop_get_free(struct az_mgmt_req_acc_prop_get *acc_prop_get_req)
+{
+	free(acc_prop_get_req->sub_id);
+	free(acc_prop_get_req->acc);
+}
+
+static void
+az_mgmt_rsp_acc_prop_get_free(struct az_mgmt_rsp_acc_prop_get *acc_prop_get_rsp)
+{
+	azure_acc_free(&acc_prop_get_rsp->acc_desc);
+}
+
+int
+az_mgmt_req_acc_prop_get(const char *sub_id,
+			 const char *acc,
+			 struct op **_op)
+{
+	int ret;
+	struct az_mgmt_ebo *ebo;
+	struct op *op;
+	struct az_mgmt_req_acc_prop_get *acc_prop_get_req;
+
+	ret = az_mgmt_ebo_init(AOP_MGMT_ACC_PROP_GET, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	acc_prop_get_req = &ebo->req.acc_prop_get;
+
+	acc_prop_get_req->sub_id = strdup(sub_id);
+	if (acc_prop_get_req->sub_id == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	acc_prop_get_req->acc = strdup(acc);
+	if (acc_prop_get_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_sub_free;
+	}
+
+	op->method = REQ_METHOD_GET;
+	op->url_https_only = true;
+	op->url_host = strdup(REQ_HOST_AZURE_MGMT);
+	if (op->url_host == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	ret = asprintf(&op->url_path, "/%s/services/storageservices/%s",
+		       sub_id, acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_req_common_hdr_fill(op, true);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_acc_free:
+	free(acc_prop_get_req->acc);
+err_sub_free:
+	free(acc_prop_get_req->sub_id);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static int az_mgmt_rsp_acc_svc_process(struct xml_doc *xdoc,
+				       const char *path,
+				       const char *val,
+				       void *cb_data)
+{
+	struct az_mgmt_rsp_acc_prop_get *acc_prop_get_rsp
+				= (struct az_mgmt_rsp_acc_prop_get *)cb_data;
+
+	return az_mgmt_rsp_acc_want(xdoc, &acc_prop_get_rsp->acc_desc);
+}
+
+static int
+az_mgmt_rsp_acc_prop_get_process(struct op *op,
+			      struct az_mgmt_rsp_acc_prop_get *acc_prop_get_rsp)
+{
+	int ret;
+	struct xml_doc *xdoc;
+
+	assert(op->opcode == AOP_MGMT_ACC_PROP_GET);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	assert(op->rsp.data->base_off == 0);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_path_cb_want(xdoc,
+				"/StorageService", true,
+				az_mgmt_rsp_acc_svc_process,
+				acc_prop_get_rsp, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
+	}
+
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_xdoc_free;
+	}
+
+	ret = 0;
+err_xdoc_free:
+	exml_free(xdoc);
 err_out:
 	return ret;
 }
@@ -941,6 +1066,9 @@ az_mgmt_req_free(struct op *op)
 	case AOP_MGMT_ACC_DEL:
 		az_mgmt_req_acc_del_free(&ebo->req.acc_del);
 		break;
+	case AOP_MGMT_ACC_PROP_GET:
+		az_mgmt_req_acc_prop_get_free(&ebo->req.acc_prop_get);
+		break;
 	case AOP_MGMT_STATUS_GET:
 		az_mgmt_req_status_get_free(&ebo->req.sts_get);
 		break;
@@ -961,6 +1089,9 @@ az_mgmt_rsp_free(struct op *op)
 		break;
 	case AOP_MGMT_ACC_LIST:
 		az_mgmt_rsp_acc_list_free(&ebo->rsp.acc_list);
+		break;
+	case AOP_MGMT_ACC_PROP_GET:
+		az_mgmt_rsp_acc_prop_get_free(&ebo->rsp.acc_prop_get);
 		break;
 	case AOP_MGMT_STATUS_GET:
 		az_mgmt_rsp_status_get_free(&ebo->rsp.sts_get);
@@ -995,10 +1126,15 @@ az_mgmt_rsp_process(struct op *op)
 
 	switch (op->opcode) {
 	case AOP_MGMT_ACC_KEYS_GET:
-		ret = az_mgmt_rsp_acc_keys_get_process(op, &ebo->rsp.acc_keys_get);
+		ret = az_mgmt_rsp_acc_keys_get_process(op,
+						       &ebo->rsp.acc_keys_get);
 		break;
 	case AOP_MGMT_ACC_LIST:
 		ret = az_mgmt_rsp_acc_list_process(op, &ebo->rsp.acc_list);
+		break;
+	case AOP_MGMT_ACC_PROP_GET:
+		ret = az_mgmt_rsp_acc_prop_get_process(op,
+						       &ebo->rsp.acc_prop_get);
 		break;
 	case AOP_MGMT_STATUS_GET:
 		ret = az_mgmt_rsp_status_get_process(op, &ebo->rsp.sts_get);
@@ -1028,6 +1164,13 @@ az_mgmt_rsp_acc_list(struct op *op)
 {
 	struct az_mgmt_ebo *ebo = container_of(op, struct az_mgmt_ebo, op);
 	return &ebo->rsp.acc_list;
+}
+
+struct az_mgmt_rsp_acc_prop_get *
+az_mgmt_rsp_acc_prop_get(struct op *op)
+{
+	struct az_mgmt_ebo *ebo = container_of(op, struct az_mgmt_ebo, op);
+	return &ebo->rsp.acc_prop_get;
 }
 
 struct az_mgmt_rsp_status_get *
