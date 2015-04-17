@@ -60,6 +60,16 @@ enum elasto_fopen_flags {
 	ELASTO_FOPEN_FLAGS_MASK	= 0x0007
 };
 
+/**
+ * Miscellaneous open parameters
+ *
+ * @ELASTO_FOPEN_TOK_CREATE_AT_LOCATION specifies a location constraint for a
+ * newly created directory, where applicable (e.g. Azure Account).
+ */
+enum elasto_fopen_token_key {
+	ELASTO_FOPEN_TOK_CREATE_AT_LOCATION	= 1,
+};
+
 int
 elasto_fopen(const struct elasto_fauth *auth,
 	     const char *path,
