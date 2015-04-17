@@ -39,6 +39,7 @@ int
 elasto_fopen(const struct elasto_fauth *auth,
 	     const char *path,
 	     uint64_t flags,
+	     struct elasto_ftoken_list *open_toks,
 	     struct elasto_fh **_fh)
 {
 	int ret;
@@ -68,7 +69,7 @@ elasto_fopen(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	ret = fh->ops.open(fh->mod_priv, fh->conn, path, flags);
+	ret = fh->ops.open(fh->mod_priv, fh->conn, path, flags, open_toks);
 	if (ret < 0) {
 		goto err_fh_free;
 	}

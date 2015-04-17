@@ -22,7 +22,8 @@ struct elasto_fh_mod_ops {
 	int (*open)(void *mod_priv,
 		    struct elasto_conn *conn,
 		    const char *path,
-		    uint64_t flags);
+		    uint64_t flags,
+		    struct elasto_ftoken_list *open_toks);
 	int (*close)(void *mod_priv,
 		     struct elasto_conn *conn);
 	int (*write)(void *mod_priv,

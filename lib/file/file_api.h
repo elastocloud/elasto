@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -42,6 +42,16 @@ int
 elasto_frmdir(const struct elasto_fauth *auth,
 	      const char *path);
 
+struct elasto_ftoken_list;
+
+int
+elasto_ftoken_add(uint64_t key,
+		  const char *val,
+		  struct elasto_ftoken_list **_toks);
+
+void
+elasto_ftoken_list_free(struct elasto_ftoken_list *toks);
+
 enum elasto_fopen_flags {
 	ELASTO_FOPEN_CREATE	= 0x0001,
 	ELASTO_FOPEN_EXCL	= 0x0002,
@@ -54,6 +64,7 @@ int
 elasto_fopen(const struct elasto_fauth *auth,
 	     const char *path,
 	     uint64_t flags,
+	     struct elasto_ftoken_list *open_toks,
 	     struct elasto_fh **_fh);
 
 int

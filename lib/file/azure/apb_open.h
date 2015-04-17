@@ -30,7 +30,8 @@ int
 apb_fopen(void *mod_priv,
 	  struct elasto_conn *conn,
 	  const char *path,
-	  uint64_t flags);
+	  uint64_t flags,
+	  struct elasto_ftoken_list *toks);
 
 int
 apb_fclose(void *mod_priv,
