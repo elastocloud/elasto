@@ -107,12 +107,12 @@ apb_frmdir(void *mod_priv,
 
 	if ((apb_fh->path.acc == NULL)
 	 || (apb_fh->path.ctnr == NULL)) {
-		dbg(0, "invalid mkdir path: must include account and container "
+		dbg(0, "invalid rmdir path: must include account and container "
 		       "components\n");
 		goto err_path_free;
 	}
 	if (apb_fh->path.blob != NULL) {
-		dbg(0, "invalid mkdir path: blob component must not be "
+		dbg(0, "invalid rmdir path: blob component must not be "
 		       "present\n");
 		goto err_path_free;
 	}
