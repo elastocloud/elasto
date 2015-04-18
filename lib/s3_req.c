@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -907,22 +907,59 @@ s3_req_obj_get_free(struct s3_req_obj_get *obj_get)
 	free(obj_get->obj_name);
 }
 
+static int
+s3_req_obj_get_hdr_fill(struct s3_req_obj_get *obj_get_req,
+			struct op *op)
+{
+	int ret;
+	char *hdr_str;
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = asprintf(&hdr_str, "bytes=%" PRIu64 "-%" PRIu64,
+		       obj_get_req->off,
+		       (obj_get_req->off + obj_get_req->len - 1));
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_hdrs_free;
+	}
+	ret = op_req_hdr_add(op, "Range", hdr_str);
+	free(hdr_str);
+	if (ret < 0) {
+		goto err_hdrs_free;
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
 /*
  * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
- * fom the file at path @buf if @data_type is ELASTO_DATA_FILE.
+ * from the file at path @buf if @data_type is ELASTO_DATA_FILE.
+ *
+ * If @src_len is zero then ignore @src_off and retrieve entire blob
  */
 int
 s3_req_obj_get(const char *bkt_name,
-		  const char *obj_name,
-		  struct elasto_data *data,
-		  struct op **_op)
+	       const char *obj_name,
+	       uint64_t src_off,
+	       uint64_t src_len,
+	       struct elasto_data *dest_data,
+	       struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
 	struct s3_req_obj_get *obj_get_req;
 
-	if ((data == NULL) || (data->type == ELASTO_DATA_NONE)) {
+	if ((dest_data == NULL) || (dest_data->type == ELASTO_DATA_NONE)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -946,10 +983,16 @@ s3_req_obj_get(const char *bkt_name,
 		goto err_bkt_free;
 	}
 
-	if (data == NULL) {
+	if (src_len > 0) {
+		/* retrieve a specific range */
+		obj_get_req->off = src_off;
+		obj_get_req->len = src_len;
+	}
+
+	if (dest_data == NULL) {
 		dbg(3, "no recv buffer, allocating on arrival\n");
 	}
-	op->rsp.data = data;
+	op->rsp.data = dest_data;
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_GET;
@@ -964,7 +1007,7 @@ s3_req_obj_get(const char *bkt_name,
 		goto err_uhost_free;
 	}
 
-	ret = s3_req_fill_hdr_common(op);
+	ret = s3_req_obj_get_hdr_fill(obj_get_req, op);
 	if (ret < 0) {
 		goto err_upath_free;
 	}

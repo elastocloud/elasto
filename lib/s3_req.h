@@ -92,6 +92,8 @@ struct s3_req_obj_put {
 struct s3_req_obj_get {
 	char *bkt_name;
 	char *obj_name;
+	uint64_t off;
+	uint64_t len;
 };
 
 struct s3_req_obj_del {
@@ -224,15 +226,17 @@ s3_req_bkt_loc_get(const char *bkt_name,
 
 int
 s3_req_obj_put(const char *bkt_name,
-		  const char *obj_name,
-		  struct elasto_data *data,
-		  struct op **_op);
+	       const char *obj_name,
+	       struct elasto_data *data,
+	       struct op **_op);
 
 int
 s3_req_obj_get(const char *bkt_name,
-		  const char *obj_name,
-		  struct elasto_data *data,
-		  struct op **_op);
+	       const char *obj_name,
+	       uint64_t src_off,
+	       uint64_t src_len,
+	       struct elasto_data *dest_data,
+	       struct op **_op);
 
 int
 s3_req_obj_del(const char *bkt_name,

@@ -257,6 +257,7 @@ cli_get_obj_handle(struct cli_args *cli_args)
 
 	ret = s3_req_obj_get(cli_args->s3.bkt_name,
 			    cli_args->s3.obj_name,
+			    0, 0, /* entire obj */
 			    op_data,
 			    &op);
 	if (ret < 0) {
