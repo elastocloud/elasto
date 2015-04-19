@@ -22,6 +22,7 @@ struct elasto_fh;
 
 enum elasto_ftype {
 	ELASTO_FILE_AZURE = 1,
+	ELASTO_FILE_S3,
 };
 
 struct elasto_fauth {
@@ -30,6 +31,9 @@ struct elasto_fauth {
 		struct {
 			char *ps_path;
 		} az;
+		struct {
+			char *creds_path;
+		} s3;
 	};
 	bool insecure_http;
 };

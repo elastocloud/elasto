@@ -1,0 +1,21 @@
+def options(opt):
+	opt.load('compiler_c')
+
+def configure(conf):
+	conf.load('compiler_c')
+	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
+
+def call_ldconfig(bld):
+	bld.exec_command('/sbin/ldconfig')
+
+def build(bld):
+	bld.shlib(source='''s3_dir.c s3_handle.c s3_io.c s3_open.c s3_stat.c''',
+		  target='elasto_file_mod_s3',
+		  vnum='0.0.2',
+		  lib=['crypto', 'expat', 'ssl',
+		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  use=['elasto_file', 'elasto_req_s3'],
+		  includes = '. .. ../../ ../../../',
+		  defines = ['_GNU_SOURCE'])
+	if bld.cmd == 'install':
+		bld.add_post_fun(call_ldconfig)
