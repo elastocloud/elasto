@@ -6,15 +6,17 @@ def configure(conf):
 	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 	if not conf.check(lib='cmocka', mandatory=False):
 		conf.env.SKIP_TEST = "yes"
+	if not conf.check(lib='uuid', mandatory=False):
+		conf.env.SKIP_TEST = "yes"
 
 def build(bld):
 	if bld.env.SKIP_TEST in ["yes"]:
-		print("Skipping test: Cmocka library required")
+		print("Skipping test: Cmocka and uuid libraries required")
 		return
 	bld.program(source='''cm_unity.c cm_data.c  cm_sign_azure.c cm_sign_s3.c
 			      cm_file.c cm_xml.c cm_az_fs.c''',
 		    target='cm_unity',
-		    lib=['crypto', 'cmocka', 'expat', 'ssl',
+		    lib=['crypto', 'cmocka', 'expat', 'ssl', 'uuid',
 			 ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		    use=['elasto_req_azure', 'elasto_req_s3', 'elasto_file'],
 		    includes = '. .. ../lib',
