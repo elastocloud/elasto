@@ -109,6 +109,50 @@ err_out:
 }
 
 int
+elasto_fallocate(struct elasto_fh *fh,
+		 uint32_t mode,
+		 uint64_t dest_off,
+		 uint64_t dest_len)
+{
+	int ret;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (fh->ops.allocate == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
+	if (fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
+		dbg(1, "invalid IO request for directory handle\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if ((mode & ELASTO_FALLOC_ALL_MASK) == mode) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	dbg(3, "hole-punching range at %" PRIu64 ", len %" PRIu64 "\n",
+	    dest_off, dest_len);
+
+	ret = fh->ops.allocate(fh->mod_priv, fh->conn,
+			       mode,
+			       dest_off, dest_len);
+	if (ret < 0) {
+		goto err_out;
+	}
+	ret = 0;
+
+err_out:
+	return ret;
+}
+
+int
 elasto_ftruncate(struct elasto_fh *fh,
 		 uint64_t len)
 {
