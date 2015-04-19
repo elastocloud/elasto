@@ -109,7 +109,7 @@ elasto_fh_init(const struct elasto_fauth *auth,
 		goto err_dl_close;
 	}
 
-	assert(ARRAY_SIZE(fh->magic) == sizeof(ELASTO_FH_MAGIC));
+	BUILD_ASSERT(sizeof(ELASTO_FH_MAGIC) <= ARRAY_SIZE(fh->magic));
 	memcpy(fh->magic, ELASTO_FH_MAGIC, sizeof(ELASTO_FH_MAGIC));
 
 	*_fh = fh;
@@ -140,7 +140,7 @@ elasto_fh_free(struct elasto_fh *fh)
 	}
 
 	BUILD_ASSERT(sizeof(ELASTO_FH_POISON) <= ARRAY_SIZE(fh->magic));
-	memcpy(fh->magic, ELASTO_FH_MAGIC, sizeof(ELASTO_FH_MAGIC));
+	memcpy(fh->magic, ELASTO_FH_POISON, sizeof(ELASTO_FH_POISON));
 
 	free(fh);
 }
