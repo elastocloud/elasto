@@ -11,24 +11,20 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
-#ifndef _S3_HANDLE_H_
-#define _S3_HANDLE_H_
+#ifndef _S3_PATH_H_
+#define _S3_PATH_H_
 
-struct s3_fh {
-	struct elasto_s3_path path;
-	char *iam_user;
-	char *key_id;
-	char *secret;
+struct elasto_s3_path {
+	char *host;
+	char *bkt;
+	char *obj;
 };
 
-/* module entry point */
 int
-elasto_file_mod_fh_init(const struct elasto_fauth *auth,
-			void **_fh_priv,
-			struct elasto_conn **_conn,
-			struct elasto_fh_mod_ops *mod_ops);
+elasto_s3_path_parse(const char *path,
+		     struct elasto_s3_path *s3_path);
 
 void
-s3_fh_free(void *mod_priv);
+elasto_s3_path_free(struct elasto_s3_path *s3_path);
 
-#endif /* _S3_HANDLE_H_ */
+#endif /* _S3_PATH_H_ */

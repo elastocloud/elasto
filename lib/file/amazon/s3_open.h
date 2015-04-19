@@ -15,13 +15,6 @@
 #define _S3_OPEN_H_
 
 int
-s3_fpath_parse(const char *path,
-	       struct elasto_fh_s3_path *s3_path);
-
-void
-s3_fpath_free(struct elasto_fh_s3_path *s3_path);
-
-int
 s3_fopen(void *mod_priv,
 	 struct elasto_conn *conn,
 	 const char *path,

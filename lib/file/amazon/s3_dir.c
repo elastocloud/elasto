@@ -27,6 +27,7 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"
+#include "lib/s3_path.h"
 #include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/util.h"
@@ -47,7 +48,7 @@ s3_fmkdir(void *mod_priv,
 	struct op *op;
 	struct s3_fh *s3_fh = mod_priv;
 
-	ret = s3_fpath_parse(path, &s3_fh->path);
+	ret = elasto_s3_path_parse(path, &s3_fh->path);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -77,7 +78,7 @@ s3_fmkdir(void *mod_priv,
 
 	ret = 0;
 err_path_free:
-	s3_fpath_free(&s3_fh->path);
+	elasto_s3_path_free(&s3_fh->path);
 err_out:
 	return ret;
 }
@@ -91,7 +92,7 @@ s3_frmdir(void *mod_priv,
 	struct op *op;
 	struct s3_fh *s3_fh = mod_priv;
 
-	ret = s3_fpath_parse(path, &s3_fh->path);
+	ret = elasto_s3_path_parse(path, &s3_fh->path);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -120,7 +121,7 @@ s3_frmdir(void *mod_priv,
 
 	ret = 0;
 err_path_free:
-	s3_fpath_free(&s3_fh->path);
+	elasto_s3_path_free(&s3_fh->path);
 err_out:
 	return ret;
 }

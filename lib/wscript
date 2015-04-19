@@ -16,7 +16,7 @@ def build(bld):
 		  use=['ccan'],
 		  includes = '. ..',
 		  defines = ['_GNU_SOURCE'])
-	bld.shlib(source='s3_creds.c s3_req.c',
+	bld.shlib(source='s3_creds.c s3_req.c s3_path.c',
 		  target='elasto_req_s3',
 		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',

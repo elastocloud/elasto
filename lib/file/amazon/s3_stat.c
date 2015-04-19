@@ -27,6 +27,7 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"
+#include "lib/s3_path.h"
 #include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/util.h"
