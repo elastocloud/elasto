@@ -161,6 +161,11 @@ elasto_ftruncate(struct elasto_fh *fh,
 		goto err_out;
 	}
 
+	if (fh->ops.truncate == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
 	if (fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
 		dbg(1, "invalid IO request for directory handle\n");
 		ret = -EINVAL;
