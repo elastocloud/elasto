@@ -54,19 +54,17 @@ elasto_fwrite(struct elasto_fh *fh,
 		goto err_out;
 	}
 
-	dbg(3, "%s range at %" PRIu64 ", len %" PRIu64 "\n",
-	    (src_data == NULL ? "clearing" : "writing"),
+	if (src_data == NULL) {
+		/* used to punch a hole here, now separate ftruncate fn */
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	dbg(3, "writing range at %" PRIu64 ", len %" PRIu64 "\n",
 	    dest_off, dest_len);
 
-	if (src_data == NULL) {
-		/* TODO split into a separate API fn */
-		ret = fh->ops.allocate(fh->mod_priv, fh->conn,
-				       ELASTO_FALLOC_PUNCH_HOLE,
-				       dest_off, dest_len);
-	} else {
-		ret = fh->ops.write(fh->mod_priv, fh->conn, dest_off, dest_len,
-				    src_data);
-	}
+	ret = fh->ops.write(fh->mod_priv, fh->conn, dest_off, dest_len,
+			    src_data);
 	if (ret < 0) {
 		goto err_out;
 	}
