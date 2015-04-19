@@ -15,6 +15,7 @@
 #define _S3_HANDLE_H_
 
 struct elasto_fh_s3_path {
+	char *host;
 	char *bkt;
 	char *obj;
 };

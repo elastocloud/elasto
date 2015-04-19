@@ -40,6 +40,60 @@
 #include "s3_open.h"
 
 #define S3_FOPEN_LOCATION_DEFAULT "eu-central-1"
+/* default host. bkt is normally added as prefix for bkt and obj operations */
+#define S3_FOPEN_HOST_DEFAULT "s3.amazonaws.com"
+
+#define S3_URI_PREFIX "s3://"
+
+/* _very_ basic URI host component parser. Doesn't come close to RFC 3986 */
+static int
+s3_fpath_uri_pull(const char *path,
+		  char **_host,
+		  char **_after_host)
+{
+	int ret;
+	char *host;
+	char *s = (char *)path;
+
+	if (strncmp(s, S3_URI_PREFIX, sizeof(S3_URI_PREFIX) - 1) != 0) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	s += (sizeof(S3_URI_PREFIX) - 1);
+
+	while (*s == '/')
+		s++;
+
+	if (*s == '\0') {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	host = strdup(s);
+	if (host == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	s = strchr(host, '/');
+	if (s == NULL) {
+		/* host only */
+		ret = -EINVAL;
+		goto err_host_free;
+	}
+
+	*(s++) = '\0';	/* null term for host */
+	*_host = host;
+	*_after_host = s;
+
+	return 0;
+
+err_host_free:
+	free(host);
+err_out:
+	return ret;
+}
 
 int
 s3_fpath_parse(const char *path,
@@ -47,14 +101,32 @@ s3_fpath_parse(const char *path,
 {
 	int ret;
 	char *s;
+	char *host = NULL;
 	char *comp1 = NULL;
 	char *comp2 = NULL;
 
 	if ((path == NULL) || (s3_path == NULL)) {
-		return -EINVAL;
+		ret = -EINVAL;
+		goto err_out;
 	}
 
-	s = (char *)path;
+	if (strstr(path, "://")) {
+		char *after_host;
+		ret = s3_fpath_uri_pull(path, &host, &after_host);
+		if (ret < 0) {
+			goto err_out;
+		}
+		s = after_host;
+	} else {
+		s = (char *)path;
+
+		host = strdup(S3_FOPEN_HOST_DEFAULT);
+		if (host == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+	}
+
 	while (*s == '/')
 		s++;
 
@@ -66,7 +138,7 @@ s3_fpath_parse(const char *path,
 	comp1 = strdup(s);
 	if (comp1 == NULL) {
 		ret = -ENOMEM;
-		goto err_out;
+		goto err_host_free;
 	}
 
 	s = strchr(comp1, '/');
@@ -97,10 +169,11 @@ s3_fpath_parse(const char *path,
 		goto err_2_free;
 	}
 done:
+	s3_path->host = host;
 	s3_path->bkt = comp1;
 	s3_path->obj = comp2;
-	dbg(2, "parsed %s as S3 path: bkt=%s, obj=%s\n",
-	    path, (s3_path->bkt ? s3_path->bkt : ""),
+	dbg(2, "parsed %s as S3 path: host=%s, bkt=%s, obj=%s\n",
+	    path, s3_path->host, (s3_path->bkt ? s3_path->bkt : ""),
 	    (s3_path->obj ? s3_path->obj : ""));
 
 	return 0;
@@ -109,6 +182,8 @@ err_2_free:
 	free(comp2);
 err_1_free:
 	free(comp1);
+err_host_free:
+	free(comp1);
 err_out:
 	return ret;
 }
@@ -116,6 +191,8 @@ err_out:
 void
 s3_fpath_free(struct elasto_fh_s3_path *s3_path)
 {
+	free(s3_path->host);
+	s3_path->host = NULL;
 	free(s3_path->bkt);
 	s3_path->bkt = NULL;
 	free(s3_path->obj);
