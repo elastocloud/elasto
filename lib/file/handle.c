@@ -54,7 +54,11 @@ elasto_fh_init(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	if (auth->type != ELASTO_FILE_AZURE) {
+	if (auth->type == ELASTO_FILE_AZURE) {
+		mod_path = "libelasto_file_mod_apb.so";
+	} else if (auth->type == ELASTO_FILE_S3) {
+		mod_path = "libelasto_file_mod_s3.so";
+	} else {
 		dbg(0, "unsupported auth type: %d\n", auth->type);
 		ret = -EINVAL;
 		goto err_out;
@@ -66,13 +70,7 @@ elasto_fh_init(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 	memset(fh, 0, sizeof(*fh));
-
-	if (auth->type == ELASTO_FILE_AZURE) {
-		fh->type = ELASTO_FILE_AZURE;
-		mod_path = "libelasto_file_mod_apb.so";
-	} else {
-		assert(false);
-	}
+	fh->type = auth->type;
 
 	fh->mod_dl_h = dlopen(mod_path, RTLD_NOW);
 	if (fh->mod_dl_h == NULL) {
@@ -111,7 +109,7 @@ elasto_fh_init(const struct elasto_fauth *auth,
 		goto err_dl_close;
 	}
 
-	assert(ARRAY_SIZE(fh->magic) == sizeof(ELASTO_FH_MAGIC));
+	BUILD_ASSERT(sizeof(ELASTO_FH_MAGIC) <= ARRAY_SIZE(fh->magic));
 	memcpy(fh->magic, ELASTO_FH_MAGIC, sizeof(ELASTO_FH_MAGIC));
 
 	*_fh = fh;
@@ -142,7 +140,7 @@ elasto_fh_free(struct elasto_fh *fh)
 	}
 
 	BUILD_ASSERT(sizeof(ELASTO_FH_POISON) <= ARRAY_SIZE(fh->magic));
-	memcpy(fh->magic, ELASTO_FH_MAGIC, sizeof(ELASTO_FH_MAGIC));
+	memcpy(fh->magic, ELASTO_FH_POISON, sizeof(ELASTO_FH_POISON));
 
 	free(fh);
 }

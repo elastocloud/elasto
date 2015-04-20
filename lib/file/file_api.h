@@ -22,6 +22,7 @@ struct elasto_fh;
 
 enum elasto_ftype {
 	ELASTO_FILE_AZURE = 1,
+	ELASTO_FILE_S3,
 };
 
 struct elasto_fauth {
@@ -30,6 +31,9 @@ struct elasto_fauth {
 		struct {
 			char *ps_path;
 		} az;
+		struct {
+			char *creds_path;
+		} s3;
 	};
 	bool insecure_http;
 };
@@ -91,7 +95,15 @@ elasto_fread(struct elasto_fh *fh,
 
 enum elasto_falloc_flags {
 	ELASTO_FALLOC_PUNCH_HOLE	= 0x0001,
+
+	ELASTO_FALLOC_ALL_MASK		= 0x0001,
 };
+
+int
+elasto_fallocate(struct elasto_fh *fh,
+		 uint32_t mode,
+		 uint64_t dest_off,
+		 uint64_t dest_len);
 
 int
 elasto_ftruncate(struct elasto_fh *fh,

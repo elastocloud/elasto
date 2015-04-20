@@ -5,6 +5,7 @@ def configure(conf):
 	conf.load('compiler_c')
 	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 	conf.recurse('azure')
+	conf.recurse('amazon')
 
 def call_ldconfig(bld):
 	bld.exec_command('/sbin/ldconfig')
@@ -24,3 +25,4 @@ def build(bld):
 	if bld.cmd == 'install':
 		bld.add_post_fun(call_ldconfig)
 	bld.recurse('azure')
+	bld.recurse('amazon')
