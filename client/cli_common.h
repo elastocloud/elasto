@@ -51,6 +51,8 @@ struct cli_args {
 	char *progname;
 	enum cli_type type;
 	enum cli_fl flags;
+	/* unparsed path for libfile */
+	char *path;
 	union {
 		struct {
 			char *ps_file;
