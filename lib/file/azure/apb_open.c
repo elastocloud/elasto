@@ -225,8 +225,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 		dbg(1, "path already exists, but exclusive create specified\n");
 		ret = -EEXIST;
 		goto err_op_free;
-	} else if ((ret < 0) && op_rsp_error_match(op, 404)
-					&& (flags & ELASTO_FOPEN_CREATE)) {
+	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
 		ret = az_req_blob_put(apb_fh->path.acc, apb_fh->path.ctnr,
@@ -296,8 +295,7 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 		dbg(1, "path already exists, but exclusive create specified\n");
 		ret = -EEXIST;
 		goto err_op_free;
-	} else if ((ret < 0) && op_rsp_error_match(op, 404)
-					&& (flags & ELASTO_FOPEN_CREATE)) {
+	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
 		ret = az_req_ctnr_create(apb_fh->path.acc, apb_fh->path.ctnr,
@@ -423,8 +421,7 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 		dbg(1, "path already exists, but exclusive create specified\n");
 		ret = -EEXIST;
 		goto err_op_free;
-	} else if ((ret < 0) && op_rsp_error_match(op, 404)
-					&& (flags & ELASTO_FOPEN_CREATE)) {
+	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		const char *location;
 
 		dbg(4, "path not found, creating\n");
@@ -464,6 +461,8 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 			}
 		}
 	} else if (ret < 0) {
+		dbg(4, "failed to retrieve account properties: %s\n",
+		    strerror(-ret));
 		goto err_op_free;
 	}
 

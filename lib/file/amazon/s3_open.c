@@ -69,8 +69,7 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		dbg(1, "path already exists, but exclusive create specified\n");
 		ret = -EEXIST;
 		goto err_op_free;
-	} else if ((ret < 0) && op_rsp_error_match(op, 404)
-					&& (flags & ELASTO_FOPEN_CREATE)) {
+	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		struct elasto_data data;
 
 		/* put a zero length object */
@@ -125,8 +124,7 @@ s3_fopen_bkt(struct s3_fh *s3_fh,
 		dbg(1, "path already exists, but exclusive create specified\n");
 		ret = -EEXIST;
 		goto err_op_free;
-	} else if ((ret < 0) && op_rsp_error_match(op, 404)
-					&& (flags & ELASTO_FOPEN_CREATE)) {
+	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		const char *location;
 
 		dbg(4, "path not found, creating\n");
