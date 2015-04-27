@@ -411,15 +411,6 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	/*
-	 * signing setup not needed for mgmt reqs, but in case of readdir
-	 * (List Containers)
-	 */
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
-	if (ret < 0) {
-		goto err_out;
-	}
-
 	ret = az_mgmt_req_acc_prop_get(apb_fh->sub_id, apb_fh->path.acc,
 				       &op);
 	if (ret < 0) {
@@ -475,6 +466,16 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 	} else if (ret < 0) {
 		goto err_op_free;
 	}
+
+	/*
+	 * signing setup not needed for mgmt reqs, but in case of readdir
+	 * (List Containers)
+	 */
+	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 
 	ret = 0;
 err_op_free:
