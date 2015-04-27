@@ -153,7 +153,8 @@ elasto_fh_validate(struct elasto_fh *fh)
 		return -EINVAL;
 	}
 
-	if (fh->type != ELASTO_FILE_AZURE) {
+	if ((fh->type != ELASTO_FILE_AZURE)
+	 && (fh->type != ELASTO_FILE_S3)) {
 		dbg(0, "handle has invalid type %x\n", fh->type);
 		return -EINVAL;
 	}
