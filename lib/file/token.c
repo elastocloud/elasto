@@ -99,8 +99,12 @@ elasto_ftoken_find(struct elasto_ftoken_list *toks,
 {
 	struct elasto_kv *kv;
 
-	if ((toks == NULL) || (*_val == NULL)) {
+	if (*_val == NULL) {
 		return -EINVAL;
+	}
+
+	if (toks == NULL) {
+		return -ENOENT;
 	}
 
 	list_for_each(&toks->kvs, kv, list) {
