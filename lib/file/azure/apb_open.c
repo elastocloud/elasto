@@ -321,6 +321,81 @@ err_out:
 	return ret;
 }
 
+#define APB_OP_POLL_PERIOD 2
+#define APB_OP_POLL_TIMEOUT 10	/* multiplied by APB_OP_POLL_PERIOD */
+
+/* FIXME duplicate of cli_op_wait() */
+static int
+apb_fopen_acc_create_wait(struct apb_fh *apb_fh,
+			  struct elasto_conn *conn,
+			  const char *req_id)
+{
+	struct op *op;
+	int i;
+	enum az_req_status status;
+	int err_code;
+	int ret;
+
+	for (i = 0; i < APB_OP_POLL_TIMEOUT; i++) {
+		struct az_mgmt_rsp_status_get *sts_get_rsp;
+
+		ret = az_mgmt_req_status_get(apb_fh->sub_id, req_id, &op);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		ret = elasto_conn_op_txrx(conn, op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+
+		if (op->rsp.is_error) {
+			ret = -EIO;
+			dbg(0, "failed get status response: %d\n",
+			       op->rsp.err_code);
+			goto err_op_free;
+		}
+
+		sts_get_rsp = az_mgmt_rsp_status_get(op);
+		if (sts_get_rsp == NULL) {
+			ret = -ENOMEM;
+			goto err_op_free;
+		}
+
+		if (sts_get_rsp->status != AOP_STATUS_IN_PROGRESS) {
+			status = sts_get_rsp->status;
+			if (sts_get_rsp->status == AOP_STATUS_FAILED) {
+				err_code = sts_get_rsp->err.code;
+			}
+			op_free(op);
+			break;
+		}
+
+		op_free(op);
+
+		sleep(APB_OP_POLL_PERIOD);
+	}
+
+	if (i >= APB_OP_POLL_TIMEOUT) {
+		dbg(0, "timeout waiting for req %s to complete\n", req_id);
+		ret = -ETIMEDOUT;
+		goto err_out;
+	}
+	if (status == AOP_STATUS_FAILED) {
+		ret = -EIO;
+		dbg(0, "failed async response: %d\n", err_code);
+		goto err_out;
+	} else {
+		dbg(3, "create completed successfully\n");
+	}
+
+	return 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
 static int
 apb_fopen_acc(struct apb_fh *apb_fh,
 	      struct elasto_conn *conn,
@@ -388,6 +463,14 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 		ret = elasto_fop_send_recv(conn, op);
 		if (ret < 0) {
 			goto err_op_free;
+		}
+
+		if (op->rsp.err_code == 202) {
+			ret = apb_fopen_acc_create_wait(apb_fh, conn,
+							op->rsp.req_id);
+			if (ret < 0) {
+				goto err_op_free;
+			}
 		}
 	} else if (ret < 0) {
 		goto err_op_free;
