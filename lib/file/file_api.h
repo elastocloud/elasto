@@ -21,8 +21,10 @@ extern "C" {
 struct elasto_fh;
 
 enum elasto_ftype {
-	ELASTO_FILE_AZURE = 1,
-	ELASTO_FILE_S3,
+	ELASTO_FILE_AZURE = 1,	/* Alias for APB */
+	ELASTO_FILE_APB = 1,	/* Azure page blob store */
+	ELASTO_FILE_S3,		/* S3 object store */
+	ELASTO_FILE_ABB,	/* Azure block blob store */
 };
 
 struct elasto_fauth {

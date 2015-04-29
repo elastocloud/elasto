@@ -37,4 +37,12 @@ int
 apb_fclose(void *mod_priv,
 	   struct elasto_conn *conn);
 
+/* block blobs */
+int
+abb_fopen(void *mod_priv,
+	  struct elasto_conn *conn,
+	  const char *path,
+	  uint64_t flags,
+	  struct elasto_ftoken_list *open_toks);
+
 #endif /* _APB_OPEN_H_ */

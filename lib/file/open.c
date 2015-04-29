@@ -46,7 +46,8 @@ elasto_fopen(const struct elasto_fauth *auth,
 	struct elasto_fh *fh;
 
 	if ((auth->type != ELASTO_FILE_AZURE)
-	 && (auth->type != ELASTO_FILE_S3)) {
+	 && (auth->type != ELASTO_FILE_S3)
+	 && (auth->type != ELASTO_FILE_ABB)) {
 		ret = -ENOTSUP;
 		goto err_out;
 	}

@@ -14,6 +14,7 @@
 #ifndef _APB_STAT_H_
 #define _APB_STAT_H_
 
+/* page blob operations */
 int
 apb_fstat(void *mod_priv,
 	  struct elasto_conn *conn,
@@ -21,6 +22,17 @@ apb_fstat(void *mod_priv,
 
 int
 apb_fstatvfs(void *mod_priv,
+	     struct elasto_conn *conn,
+	     struct elasto_fstatfs *fstatfs);
+
+/* block blob operations */
+int
+abb_fstat(void *mod_priv,
+	  struct elasto_conn *conn,
+	  struct elasto_fstat *fstat);
+
+int
+abb_fstatvfs(void *mod_priv,
 	     struct elasto_conn *conn,
 	     struct elasto_fstatfs *fstatfs);
 
