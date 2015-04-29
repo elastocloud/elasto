@@ -296,40 +296,40 @@ err_out:
 static int
 cli_create_handle_bkt(struct cli_args *cli_args)
 {
-	struct elasto_conn *econn;
-	struct op *op;
+	struct elasto_fh *fh;
+	struct elasto_ftoken_list *toks = NULL;
+	struct elasto_fauth auth;
 	int ret;
 
-	ret = elasto_conn_init_s3(cli_args->s3.key_id,
-				  cli_args->s3.secret,
-				  cli_args->insecure_http, &econn);
-	if (ret < 0) {
+	if (cli_args->type != CLI_TYPE_S3) {
+		ret = -ENOTSUP;
 		goto err_out;
 	}
 
-	ret = s3_req_bkt_create(cli_args->s3.bkt_name,
-			       cli_args->create.location,
-			       &op);
-	if (ret < 0) {
-		goto err_conn_free;
+	if (cli_args->create.location != NULL) {
+		ret = elasto_ftoken_add(ELASTO_FOPEN_TOK_CREATE_AT_LOCATION,
+					cli_args->create.location, &toks);
+		if (ret < 0) {
+			goto err_out;
+		}
 	}
 
-	ret = elasto_conn_op_txrx(econn, op);
+	auth.type = ELASTO_FILE_S3;
+	auth.s3.creds_path = cli_args->s3.creds_file;
+	auth.insecure_http = cli_args->insecure_http;
+	ret = elasto_fopen(&auth, cli_args->path, ELASTO_FOPEN_CREATE
+						| ELASTO_FOPEN_EXCL
+						| ELASTO_FOPEN_DIRECTORY,
+			   toks, &fh);
 	if (ret < 0) {
-		goto err_op_free;
+		printf("%s path creation failed with: %s\n",
+		       cli_args->path, strerror(-ret));
+		goto err_out;
 	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
+	printf("successfully created path at %s\n", cli_args->path);
+	elasto_fclose(fh);
 
 	ret = 0;
-err_op_free:
-	op_free(op);
-err_conn_free:
-	elasto_conn_free(econn);
 err_out:
 	return ret;
 }
