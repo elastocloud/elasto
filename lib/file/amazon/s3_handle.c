@@ -51,24 +51,6 @@ s3_fh_init(const struct elasto_fauth *auth,
 	int ret;
 	struct s3_fh *s3_fh;
 	struct elasto_conn *conn;
-	struct elasto_fh_mod_ops ops = {
-		.fh_free = s3_fh_free,
-		.open = s3_fopen,
-		.close = s3_fclose,
-		.write = s3_fwrite,
-		.read = s3_fread,
-		.allocate = NULL,
-		.truncate = NULL,
-		.stat = s3_fstat,
-		.statfs = s3_fstatvfs,
-		.lease_acquire = NULL,
-		.lease_break = NULL,
-		.lease_release = NULL,
-		.lease_free = NULL,
-		.mkdir = s3_fmkdir,
-		.rmdir = s3_frmdir,
-		.readdir = s3_freaddir,
-	};
 
 	assert(auth->type == ELASTO_FILE_S3);
 
@@ -95,7 +77,24 @@ s3_fh_init(const struct elasto_fauth *auth,
 
 	*_fh_priv = s3_fh;
 	*_conn = conn;
-	*_ops = ops;
+	*_ops = (struct elasto_fh_mod_ops){
+		.fh_free = s3_fh_free,
+		.open = s3_fopen,
+		.close = s3_fclose,
+		.write = s3_fwrite,
+		.read = s3_fread,
+		.allocate = NULL,
+		.truncate = NULL,
+		.stat = s3_fstat,
+		.statfs = s3_fstatvfs,
+		.lease_acquire = NULL,
+		.lease_break = NULL,
+		.lease_release = NULL,
+		.lease_free = NULL,
+		.mkdir = s3_fmkdir,
+		.rmdir = s3_frmdir,
+		.readdir = s3_freaddir,
+	};
 
 	return 0;
 
