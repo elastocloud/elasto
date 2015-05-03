@@ -42,6 +42,7 @@
 #include "apb_open.h"
 #include "apb_dir.h"
 #include "apb_stat.h"
+#include "apb_unlink.h"
 
 static int
 apb_fh_init(const struct elasto_fauth *auth,
@@ -118,6 +119,7 @@ elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			.mkdir = apb_fmkdir,
 			.rmdir = apb_frmdir,
 			.readdir = apb_freaddir,
+			.unlink = apb_funlink,
 		};
 	} else if (auth->type == ELASTO_FILE_ABB) {
 		/*
@@ -141,6 +143,7 @@ elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			.mkdir = apb_fmkdir,
 			.rmdir = apb_frmdir,
 			.readdir = apb_freaddir,
+			.unlink = apb_funlink,
 		};
 	} else {
 		return -EINVAL;

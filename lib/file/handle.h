@@ -73,6 +73,8 @@ struct elasto_fh_mod_ops {
 		       void *cli_priv,
 		       int (*dent_cb)(struct elasto_dent *,
 				      void *));
+	int (*unlink)(void *mod_priv,
+		      struct elasto_conn *conn);
 };
 
 /* fh init calls this entry point for the corresponding module */

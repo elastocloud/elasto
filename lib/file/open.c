@@ -118,6 +118,28 @@ elasto_fclose(struct elasto_fh *fh)
 }
 
 int
+elasto_funlink_close(struct elasto_fh *fh)
+{
+	int ret;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = fh->ops.unlink(fh->mod_priv, fh->conn);
+	if (ret < 0) {
+		return ret;
+	}
+
+	fh->ops.close(fh->mod_priv, fh->conn);
+
+	elasto_fh_free(fh);
+
+	return 0;
+}
+
+int
 elasto_fdebug(int level)
 {
 	int ret = dbg_level_get();

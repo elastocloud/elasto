@@ -211,6 +211,9 @@ elasto_freaddir(struct elasto_fh *fh,
 			       void *));
 
 int
+elasto_funlink_close(struct elasto_fh *fh);
+
+int
 elasto_fdebug(int level);
 
 #ifdef  __cplusplus

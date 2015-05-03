@@ -41,6 +41,7 @@
 #include "s3_open.h"
 #include "s3_dir.h"
 #include "s3_stat.h"
+#include "s3_unlink.h"
 
 static int
 s3_fh_init(const struct elasto_fauth *auth,
@@ -94,6 +95,7 @@ s3_fh_init(const struct elasto_fauth *auth,
 		.mkdir = s3_fmkdir,
 		.rmdir = s3_frmdir,
 		.readdir = s3_freaddir,
+		.unlink = s3_funlink,
 	};
 
 	return 0;
