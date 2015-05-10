@@ -617,15 +617,16 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 		ret = -EEXIST;
 		goto err_op_free;
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
-		struct elasto_data data;
-
+		struct elasto_data *data;
 		/* put a zero length block blob */
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		memset(&data, 0, sizeof(data));
-		data.type = ELASTO_DATA_IOV;
+		ret = elasto_data_iov_new(NULL, 0, 0, false, &data);
+		if (ret < 0) {
+			goto err_out;
+		}
 		ret = az_req_blob_put(apb_fh->path.acc, apb_fh->path.ctnr,
-				      apb_fh->path.blob, &data, 0,
+				      apb_fh->path.blob, data, 0,
 				      &op);
 		if (ret < 0) {
 			goto err_out;
