@@ -353,7 +353,7 @@ cm_az_fs_file_io(void **state)
 	assert_true(!op->rsp.is_error);
 	op_free(op);
 
-	cm_file_buf_fill(buf, ARRAY_SIZE(buf));
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
 	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
 	assert_true(ret >= 0);
 
@@ -384,7 +384,7 @@ cm_az_fs_file_io(void **state)
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
-	cm_file_buf_check(buf, ARRAY_SIZE(buf));
+	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
 	op->rsp.data = NULL;
 	op_free(op);
 	data->iov.buf = NULL;
