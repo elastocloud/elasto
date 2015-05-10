@@ -130,23 +130,25 @@ cm_file_create(void **state)
 
 void
 cm_file_buf_fill(uint8_t *buf,
-		 size_t len)
+		 size_t len,
+		 int pattern_off)
 {
 	int i;
 
-	for (i = 0; i < len; i++) {
-		buf[i] = (i & 0xff);
+	for (i = 0; i < len; i++, pattern_off++) {
+		buf[i] = (pattern_off & 0xff);
 	}
 }
 
 void
 cm_file_buf_check(uint8_t *buf,
-		  size_t len)
+		  size_t len,
+		  int pattern_off)
 {
 	int i;
 
-	for (i = 0; i < len; i++) {
-		assert_int_equal(buf[i], (i & 0xff));
+	for (i = 0; i < len; i++, pattern_off++) {
+		assert_int_equal(buf[i], (pattern_off & 0xff));
 	}
 }
 
@@ -190,7 +192,7 @@ cm_file_io(void **state)
 	ret = elasto_ftruncate(fh, (1024 * 1024 * 1024));
 	assert_false(ret < 0);
 
-	cm_file_buf_fill(buf, ARRAY_SIZE(buf));
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
 	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
 	assert_false(ret < 0);
 
@@ -208,7 +210,7 @@ cm_file_io(void **state)
 	ret = elasto_fread(fh, 0, ARRAY_SIZE(buf), data);
 	assert_false(ret < 0);
 
-	cm_file_buf_check(buf, ARRAY_SIZE(buf));
+	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
 	data->iov.buf = NULL;
 	elasto_data_free(data);
 
