@@ -907,11 +907,9 @@ cm_file_dir_stat(void **state)
 
 	ret = elasto_fstat(fh, &fstat);
 	assert_int_equal(ret, 0);
-	assert_true(fstat.field_mask == (ELASTO_FSTAT_FIELD_TYPE
-					| ELASTO_FSTAT_FIELD_BSIZE));
+	assert_true(fstat.field_mask == ELASTO_FSTAT_FIELD_TYPE);
 	assert_true(fstat.ent_type == (ELASTO_FSTAT_ENT_DIR
 					| ELASTO_FSTAT_ENT_ROOT));
-	assert_true(fstat.blksize == 512);
 
 	ret = elasto_fclose(fh);
 	assert_true(ret >= 0);
@@ -929,10 +927,8 @@ cm_file_dir_stat(void **state)
 
 	ret = elasto_fstat(fh, &fstat);
 	assert_int_equal(ret, 0);
-	assert_true(fstat.field_mask == (ELASTO_FSTAT_FIELD_TYPE
-					| ELASTO_FSTAT_FIELD_BSIZE));
+	assert_true(fstat.field_mask == ELASTO_FSTAT_FIELD_TYPE);
 	assert_true(fstat.ent_type == ELASTO_FSTAT_ENT_DIR);
-	assert_true(fstat.blksize == 512);
 
 	ret = elasto_fclose(fh);
 	assert_true(ret >= 0);
@@ -952,10 +948,8 @@ cm_file_dir_stat(void **state)
 	ret = elasto_fstat(fh, &fstat);
 	assert_int_equal(ret, 0);
 	assert_true(fstat.field_mask == (ELASTO_FSTAT_FIELD_TYPE
-					| ELASTO_FSTAT_FIELD_BSIZE
 					| ELASTO_FSTAT_FIELD_LEASE));
 	assert_true(fstat.ent_type == ELASTO_FSTAT_ENT_DIR);
-	assert_true(fstat.blksize == 512);
 	assert_true(fstat.lease_status == ELASTO_FLEASE_UNLOCKED);
 
 	ret = elasto_fclose(fh);
