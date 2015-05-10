@@ -187,8 +187,15 @@ ev_write_alloc_std(struct op *op,
 		}
 		/* TODO, could fallocate entire file */
 		break;
+	case ELASTO_DATA_CB:
+		/* only need to allocate enough to handle this cb */
+		op->rsp.data->cb.next_in_buf = malloc(cb_nbytes);
+		if (op->rsp.data->cb.next_in_buf == NULL) {
+			return -ENOMEM;
+		}
+		break;
 	default:
-		assert(true);
+		assert(false);
 		break;
 	}
 
@@ -280,8 +287,31 @@ ev_write_std(struct op *op,
 			return -EBADF;
 		}
 		break;
+	case ELASTO_DATA_CB:
+		/* TODO could avoid the copy here */
+		ret = evbuffer_remove(ev_in_buf,
+				      (void *)(op->rsp.data->cb.next_in_buf),
+				      num_bytes);
+		/* no tolerance for partial IO */
+		if ((ret < 0) || (ret != num_bytes)) {
+			dbg(0, "unable to remove %" PRIu64 " bytes from "
+			       "buffer for callback\n", num_bytes);
+			return -EIO;
+		}
+		/* callback is responsible for freeing next_in_buf */
+		ret = op->rsp.data->cb.in_cb(write_off, num_bytes,
+					     op->rsp.data->cb.next_in_buf,
+					     num_bytes, op->rsp.data->cb.priv);
+		op->rsp.data->cb.next_in_buf = NULL;
+		if (ret < 0) {
+			dbg(0, "data in_cb returned an error (%d), ending "
+			       "xfer\n", ret);
+			return -EIO;
+		}
+
+		break;
 	default:
-		assert(true);
+		assert(false);
 		break;
 	}
 	op->rsp.data->off += num_bytes;
@@ -494,6 +524,16 @@ elasto_conn_seg_cleanup_cb(struct evbuffer_file_segment const *seg,
 	}
 }
 
+static void
+elasto_read_evbuffer_cleanup_cb(const void *data,
+				size_t datalen,
+				void *extra)
+{
+	uint8_t *out_buf = extra;
+	dbg(4, "freeing read data %p following cleanup callback\n", out_buf);
+	free(out_buf);
+}
+
 static int
 elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
 				   struct elasto_data *req_data,
@@ -557,6 +597,40 @@ elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
 		evbuffer_file_segment_add_cleanup_cb(ev_seg,
 						     elasto_conn_seg_cleanup_cb,
 						     req_data);
+	} else if (req_data->type == ELASTO_DATA_CB) {
+		uint8_t *out_buf = NULL;
+		uint64_t buf_len = 0;
+		/* cb must provide a buffer with enough data to satisfy req */
+		ret = req_data->cb.out_cb(read_off, num_bytes, &out_buf,
+					  &buf_len, req_data->cb.priv);
+		if (ret < 0) {
+			dbg(0, "data out_cb returned an error (%d), ending "
+			       "xfer\n", ret);
+			ret = -EIO;
+			goto err_out;
+		} else if (out_buf == NULL) {
+			ret = -EINVAL;
+			goto err_out;
+		} else if (buf_len < num_bytes) {
+			dbg(0, "out_cb didn't provide enough data: needed %"
+			       PRIu64 " got %" PRIu64 "\n", num_bytes, buf_len);
+			/* conn layer now owns buf, so must cleanup */
+			free(out_buf);
+			ret = -EINVAL;
+			goto err_out;
+		}
+		/* avoid a memcpy, libevent calls cleanup when sent */
+		ret = evbuffer_add_reference(ev_out_buf, (const void *)out_buf,
+					     num_bytes,
+					     elasto_read_evbuffer_cleanup_cb,
+					     out_buf);
+		if (ret < 0) {
+			dbg(0, "failed to add iov output buffer reference\n");
+			free(out_buf);
+			ret = -EFAULT;
+			goto err_out;
+		}
+		dbg(4, "added out_cb read data %p\n", out_buf);
 	}
 	req_data->off += num_bytes;
 

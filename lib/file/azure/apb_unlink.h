@@ -11,29 +11,11 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
-#ifndef _APB_STAT_H_
-#define _APB_STAT_H_
-
-/* page blob operations */
-int
-apb_fstat(void *mod_priv,
-	  struct elasto_conn *conn,
-	  struct elasto_fstat *fstat);
+#ifndef _APB_UNLINK_H_
+#define _APB_UNLINK_H_
 
 int
-apb_fstatvfs(void *mod_priv,
-	     struct elasto_conn *conn,
-	     struct elasto_fstatfs *fstatfs);
+apb_funlink(void *mod_priv,
+	    struct elasto_conn *conn);
 
-/* block blob operations */
-int
-abb_fstat(void *mod_priv,
-	  struct elasto_conn *conn,
-	  struct elasto_fstat *fstat);
-
-int
-abb_fstatvfs(void *mod_priv,
-	     struct elasto_conn *conn,
-	     struct elasto_fstatfs *fstatfs);
-
-#endif /* _APB_STAT_H_ */
+#endif /* _APB_UNLINK_H_ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -31,6 +31,7 @@
 #include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
+#include "lib/file/file_api.h"
 #include "cli_common.h"
 #include "cli_sign.h"
 #include "cli_util.h"
@@ -39,6 +40,7 @@
 void
 cli_create_args_free(struct cli_args *cli_args)
 {
+	free(cli_args->path);
 	if (cli_args->type == CLI_TYPE_AZURE) {
 		free(cli_args->az.blob_acc);
 		free(cli_args->az.ctnr_name);
@@ -161,6 +163,13 @@ cli_create_args_parse(int argc,
 		}
 	}
 
+	/* path is parsed by libfile on open. FIXME use for share too */
+	cli_args->path = strdup(argv[optind]);
+	if (cli_args->path == NULL) {
+		ret = -ENOMEM;
+		goto err_args_free;
+	}
+
 	if (cli_args->type == CLI_TYPE_AZURE) {
 		ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
 					  argv[optind],
@@ -192,118 +201,43 @@ err_args_free:
 }
 
 static int
-cli_create_handle_acc(struct cli_args *cli_args)
+cli_create_handle_apb(struct cli_args *cli_args)
 {
-	struct elasto_conn *econn;
-	struct op *op;
+	struct elasto_fh *fh;
+	struct elasto_ftoken_list *toks = NULL;
+	struct elasto_fauth auth;
 	int ret;
 
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
-					  cli_args->insecure_http, &econn);
-	} else {
+	if (cli_args->type != CLI_TYPE_AZURE) {
 		ret = -ENOTSUP;
-	}
-	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = az_mgmt_req_acc_create(cli_args->az.sub_id,
-				  cli_args->az.blob_acc,
-				  cli_args->create.label,
-				  cli_args->create.desc,
-				  cli_args->create.affin_grp,
-				  cli_args->create.location,
-				  &op);
-	if (ret < 0) {
-		goto err_conn_free;
-	}
-
-	ret = elasto_conn_op_txrx(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
-
-	if (op->rsp.err_code == 202) {
-		enum az_req_status status;
-		int err_code;
-		/* asynchronously handled */
-		ret = cli_op_wait(econn, cli_args->az.sub_id, op->rsp.req_id,
-				  &status, &err_code);
+	if (cli_args->create.location != NULL) {
+		ret = elasto_ftoken_add(ELASTO_FOPEN_TOK_CREATE_AT_LOCATION,
+					cli_args->create.location, &toks);
 		if (ret < 0) {
-			goto err_op_free;
+			goto err_out;
 		}
-		if (status == AOP_STATUS_FAILED) {
-			ret = -EIO;
-			printf("failed async response: %d\n", err_code);
-			goto err_op_free;
-		} else {
-			printf("create completed successfully\n");
-		}
+		/* FIXME label, desc and affin_grp are ignored */
 	}
 
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_conn_free:
-	elasto_conn_free(econn);
-err_out:
-	return ret;
-}
-
-static int
-cli_create_handle_ctnr(struct cli_args *cli_args)
-{
-	struct elasto_conn *econn;
-	struct op *op;
-	int ret;
-
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
-					  cli_args->insecure_http, &econn);
-	} else {
-		ret = -ENOTSUP;
-	}
+	auth.type = ELASTO_FILE_ABB;	/* FIXME support cli page blobs */
+	auth.az.ps_path = cli_args->az.ps_file;
+	auth.insecure_http = cli_args->insecure_http;
+	ret = elasto_fopen(&auth, cli_args->path, ELASTO_FOPEN_CREATE
+						| ELASTO_FOPEN_EXCL
+						| ELASTO_FOPEN_DIRECTORY,
+			   toks, &fh);
 	if (ret < 0) {
+		printf("%s path creation failed with: %s\n",
+		       cli_args->path, strerror(-ret));
 		goto err_out;
 	}
-
-	ret = cli_sign_conn_setup(econn,
-				  cli_args->az.blob_acc,
-				  cli_args->az.sub_id);
-	if (ret < 0) {
-		goto err_conn_free;
-	}
-
-	ret = az_req_ctnr_create(cli_args->az.blob_acc,
-				   cli_args->az.ctnr_name,
-				   &op);
-	if (ret < 0) {
-		goto err_conn_free;
-	}
-
-	ret = elasto_conn_op_txrx(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
+	printf("successfully created path at %s\n", cli_args->path);
+	elasto_fclose(fh);
 
 	ret = 0;
-err_op_free:
-	op_free(op);
-err_conn_free:
-	elasto_conn_free(econn);
 err_out:
 	return ret;
 }
@@ -362,40 +296,40 @@ err_out:
 static int
 cli_create_handle_bkt(struct cli_args *cli_args)
 {
-	struct elasto_conn *econn;
-	struct op *op;
+	struct elasto_fh *fh;
+	struct elasto_ftoken_list *toks = NULL;
+	struct elasto_fauth auth;
 	int ret;
 
-	ret = elasto_conn_init_s3(cli_args->s3.key_id,
-				  cli_args->s3.secret,
-				  cli_args->insecure_http, &econn);
-	if (ret < 0) {
+	if (cli_args->type != CLI_TYPE_S3) {
+		ret = -ENOTSUP;
 		goto err_out;
 	}
 
-	ret = s3_req_bkt_create(cli_args->s3.bkt_name,
-			       cli_args->create.location,
-			       &op);
-	if (ret < 0) {
-		goto err_conn_free;
+	if (cli_args->create.location != NULL) {
+		ret = elasto_ftoken_add(ELASTO_FOPEN_TOK_CREATE_AT_LOCATION,
+					cli_args->create.location, &toks);
+		if (ret < 0) {
+			goto err_out;
+		}
 	}
 
-	ret = elasto_conn_op_txrx(econn, op);
+	auth.type = ELASTO_FILE_S3;
+	auth.s3.creds_path = cli_args->s3.creds_file;
+	auth.insecure_http = cli_args->insecure_http;
+	ret = elasto_fopen(&auth, cli_args->path, ELASTO_FOPEN_CREATE
+						| ELASTO_FOPEN_EXCL
+						| ELASTO_FOPEN_DIRECTORY,
+			   toks, &fh);
 	if (ret < 0) {
-		goto err_op_free;
+		printf("%s path creation failed with: %s\n",
+		       cli_args->path, strerror(-ret));
+		goto err_out;
 	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
+	printf("successfully created path at %s\n", cli_args->path);
+	elasto_fclose(fh);
 
 	ret = 0;
-err_op_free:
-	op_free(op);
-err_conn_free:
-	elasto_conn_free(econn);
 err_out:
 	return ret;
 }
@@ -406,10 +340,9 @@ cli_create_handle(struct cli_args *cli_args)
 	int ret = -ENOTSUP;
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		if (cli_args->create.type == CLI_CMD_CREATE_ACC) {
-			ret = cli_create_handle_acc(cli_args);
-		} else if (cli_args->create.type == CLI_CMD_CREATE_CTNR) {
-			ret = cli_create_handle_ctnr(cli_args);
+		if ((cli_args->create.type == CLI_CMD_CREATE_ACC)
+		 || (cli_args->create.type == CLI_CMD_CREATE_CTNR)) {
+			ret = cli_create_handle_apb(cli_args);
 		} else if (cli_args->create.type == CLI_CMD_CREATE_SHARE) {
 			ret = cli_create_handle_share(cli_args);
 		}

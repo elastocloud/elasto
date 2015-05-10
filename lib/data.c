@@ -157,3 +157,31 @@ elasto_data_iov_grow(struct elasto_data *data,
 	return 0;
 }
 
+int
+elasto_data_cb_new(int (*out_cb)(uint64_t stream_off,
+				 uint64_t need,
+				 uint8_t **_out_buf,
+				 uint64_t *buf_len,
+				 void *priv),
+		   int (*in_cb)(uint64_t stream_off,
+				uint64_t got,
+				uint8_t *in_buf,
+				uint64_t buf_len,
+				void *priv),
+		   void *cb_priv,
+		   struct elasto_data **_data)
+{
+	struct elasto_data *data;
+
+	data = malloc(sizeof(*data));
+	if (data == NULL) {
+		return -ENOMEM;
+	}
+	memset(data, 0, sizeof(*data));
+
+	data->type = ELASTO_DATA_CB;
+	data->cb.out_cb = out_cb;
+	data->cb.in_cb = in_cb;
+	data->cb.priv = cb_priv;
+	return 0;
+}

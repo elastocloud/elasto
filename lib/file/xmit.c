@@ -45,8 +45,16 @@ elasto_fop_send_recv(struct elasto_conn *conn,
 	}
 
 	if (op->rsp.is_error) {
-		dbg(0, "failed response: %d\n", op->rsp.err_code);
-		return -EIO;
+		dbg(1, "failed response: %d\n", op->rsp.err_code);
+
+		switch (op->rsp.err_code) {
+			case 404:
+				return -ENOENT;
+				break;
+			default:
+				return -EIO;
+				break;
+		}
 	}
 
 	return 0;

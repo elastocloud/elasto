@@ -37,6 +37,7 @@
 #include "lib/file/xmit.h"
 #include "lib/file/handle.h"
 #include "apb_handle.h"
+#include "apb_stat.h"
 #include "apb_io.h"
 
 int
@@ -181,3 +182,102 @@ err_out:
 	return ret;
 }
 
+int
+abb_fwrite(void *mod_priv,
+	   struct elasto_conn *conn,
+	   uint64_t dest_off,
+	   uint64_t dest_len,
+	   struct elasto_data *src_data)
+{
+	int ret;
+	struct op *op;
+	struct elasto_fstat fstat;
+	struct apb_fh *apb_fh = mod_priv;
+
+	if (dest_len == 0) {
+		ret = 0;
+		goto err_out;
+	}
+
+	if (dest_off != 0) {
+		dbg(0, "Azure block blobs don't allow writes at arbitrary "
+		    "offsets\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/* check current length <= dest_len, otherwise overwrite truncates */
+	ret = abb_fstat(mod_priv, conn, &fstat);
+	if (ret < 0) {
+		goto err_out;
+	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	if (fstat.size > dest_len) {
+		dbg(0, "Azure block blobs don't allow overwrites when IO len (%"
+		    PRIu64 ") < current len (%" PRIu64 ")\n",
+		    dest_len, fstat.size);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/* TODO split large IOs into multi-part uploads */
+	ret = az_req_blob_put(apb_fh->path.acc,
+			      apb_fh->path.ctnr,
+			      apb_fh->path.blob,
+			      src_data, 0,	/* non-page block blob */
+			      &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+	ret = 0;
+
+err_op_free:
+	op->req.data = NULL;
+	op_free(op);
+err_out:
+	return ret;
+}
+
+int
+abb_fread(void *mod_priv,
+	  struct elasto_conn *conn,
+	  uint64_t src_off,
+	  uint64_t src_len,
+	  struct elasto_data *dest_data)
+{
+	int ret;
+	struct op *op;
+	struct apb_fh *apb_fh = mod_priv;
+
+	ret = az_req_blob_get(apb_fh->path.acc,
+			      apb_fh->path.ctnr,
+			      apb_fh->path.blob,
+			      false,
+			      dest_data,
+			      src_off,
+			      src_len,
+			      &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+	ret = 0;
+
+err_op_free:
+	op->rsp.data = NULL;
+	op_free(op);
+err_out:
+	return ret;
+}

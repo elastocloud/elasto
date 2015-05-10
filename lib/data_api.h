@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -22,6 +22,7 @@ enum elasto_data_type {
 	ELASTO_DATA_NONE = 0,
 	ELASTO_DATA_IOV,
 	ELASTO_DATA_FILE,
+	ELASTO_DATA_CB,
 };
 
 /*
@@ -43,6 +44,20 @@ struct elasto_data {
 			char *path;
 			int fd;
 		} file;
+		struct {
+			void *priv;
+			int (*out_cb)(uint64_t stream_off,
+				      uint64_t need,
+				      uint8_t **_out_buf,
+				      uint64_t *buf_len,
+				      void *priv);
+			uint8_t *next_in_buf;
+			int (*in_cb)(uint64_t stream_off,
+				     uint64_t got,
+				     uint8_t *in_buf,
+				     uint64_t buf_len,
+				     void *priv);
+		} cb;
 	};
 };
 
@@ -67,6 +82,33 @@ elasto_data_iov_new(uint8_t *buf,
 int
 elasto_data_iov_grow(struct elasto_data *data,
 		     uint64_t grow_by);
+
+/**
+ * elasto_data_cb_new - initialise a callback data struct
+ *
+ * @out_cb:	Called when a request needs data to send. Following callback,
+ *		@out_buf is owned by the caller, and will be freed after use.
+ *		TODO: should add an @out_free callback?
+ * @in_cb:	Called when a response has non-error data to write. @stream_off
+ *		is the total number of bytes into the response data. @in_buf is
+ * 		subsequently owned by the callee, and should be freed after use.
+ * @cb_priv:	Opaque blob that should be passed to the out/in_cb functions.
+ * @_data:	Data struct allocated and returned on success.
+ * @return:	0 on success, -errno on failure.
+ */
+int
+elasto_data_cb_new(int (*out_cb)(uint64_t stream_off,
+				 uint64_t need,
+				 uint8_t **_out_buf,
+				 uint64_t *buf_len,
+				 void *priv),
+		   int (*in_cb)(uint64_t stream_off,
+				uint64_t got,
+				uint8_t *in_buf,
+				uint64_t buf_len,
+				void *priv),
+		   void *cb_priv,
+		   struct elasto_data **_data);
 
 #ifdef  __cplusplus
 }

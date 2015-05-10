@@ -14,6 +14,7 @@
 #ifndef _APB_IO_H_
 #define _APB_IO_H_
 
+/* page blob operations */
 int
 apb_fwrite(void *mod_priv,
 	   struct elasto_conn *conn,
@@ -39,5 +40,20 @@ apb_fallocate(void *mod_priv,
 	      uint32_t mode,
 	      uint64_t dest_off,
 	      uint64_t dest_len);
+
+/* block blob operations */
+int
+abb_fwrite(void *mod_priv,
+	   struct elasto_conn *conn,
+	   uint64_t dest_off,
+	   uint64_t dest_len,
+	   struct elasto_data *src_data);
+
+int
+abb_fread(void *mod_priv,
+	  struct elasto_conn *conn,
+	  uint64_t src_off,
+	  uint64_t src_len,
+	  struct elasto_data *dest_data);
 
 #endif /* _APB_IO_H_ */

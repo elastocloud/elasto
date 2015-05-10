@@ -54,7 +54,8 @@ elasto_fh_init(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	if (auth->type == ELASTO_FILE_AZURE) {
+	if ((auth->type == ELASTO_FILE_AZURE)
+	 || (auth->type == ELASTO_FILE_ABB)) {
 		mod_path = "libelasto_file_mod_apb.so";
 	} else if (auth->type == ELASTO_FILE_S3) {
 		mod_path = "libelasto_file_mod_s3.so";
@@ -153,7 +154,9 @@ elasto_fh_validate(struct elasto_fh *fh)
 		return -EINVAL;
 	}
 
-	if (fh->type != ELASTO_FILE_AZURE) {
+	if ((fh->type != ELASTO_FILE_AZURE)
+	 && (fh->type != ELASTO_FILE_S3)
+	 && (fh->type != ELASTO_FILE_ABB)) {
 		dbg(0, "handle has invalid type %x\n", fh->type);
 		return -EINVAL;
 	}

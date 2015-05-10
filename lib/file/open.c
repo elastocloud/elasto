@@ -46,7 +46,8 @@ elasto_fopen(const struct elasto_fauth *auth,
 	struct elasto_fh *fh;
 
 	if ((auth->type != ELASTO_FILE_AZURE)
-	 && (auth->type != ELASTO_FILE_S3)) {
+	 && (auth->type != ELASTO_FILE_S3)
+	 && (auth->type != ELASTO_FILE_ABB)) {
 		ret = -ENOTSUP;
 		goto err_out;
 	}
@@ -56,6 +57,8 @@ elasto_fopen(const struct elasto_fauth *auth,
 		ret = -EINVAL;
 		goto err_out;
 	}
+
+	dbg(3, "opening path %s with flags 0x%" PRIx64 "\n", path, flags);
 
 	ret = elasto_conn_subsys_init();
 	if (ret < 0) {
@@ -105,6 +108,28 @@ elasto_fclose(struct elasto_fh *fh)
 			/* the lid still needs to be freed on failure */
 			fh->ops.lease_free(fh->mod_priv, &fh->flease_h);
 		}
+	}
+
+	fh->ops.close(fh->mod_priv, fh->conn);
+
+	elasto_fh_free(fh);
+
+	return 0;
+}
+
+int
+elasto_funlink_close(struct elasto_fh *fh)
+{
+	int ret;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = fh->ops.unlink(fh->mod_priv, fh->conn);
+	if (ret < 0) {
+		return ret;
 	}
 
 	fh->ops.close(fh->mod_priv, fh->conn);

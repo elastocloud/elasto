@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -25,6 +25,7 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/data_api.h"
+#include "lib/file/file_api.h"
 #include "lib/op.h"
 #include "lib/azure_mgmt_req.h"
 #include "lib/azure_blob_req.h"
@@ -36,91 +37,9 @@
 #include "cli_del.h"
 
 void
-cli_del_az_args_free(struct cli_args *cli_args)
-{
-	free(cli_args->az.blob_acc);
-	free(cli_args->az.ctnr_name);
-	free(cli_args->az.blob_name);
-}
-
-void
-cli_del_s3_args_free(struct cli_args *cli_args)
-{
-	free(cli_args->s3.bkt_name);
-	free(cli_args->s3.obj_name);
-}
-
-void
 cli_del_args_free(struct cli_args *cli_args)
 {
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		return cli_del_az_args_free(cli_args);
-	} else if (cli_args->type == CLI_TYPE_S3) {
-		return cli_del_s3_args_free(cli_args);
-	}
-}
-
-int
-cli_del_args_parse_az(int argc,
-		      char * const *argv,
-		      struct cli_args *cli_args)
-{
-	int ret;
-
-	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
-				  argv[1],
-				  &cli_args->az.blob_acc,
-				  &cli_args->az.ctnr_name,
-				  &cli_args->az.blob_name);
-	if (ret < 0)
-		goto err_out;
-
-	if (cli_args->az.blob_acc == NULL) {
-		cli_args_usage(cli_args->progname, cli_args->flags,
-			       "Invalid remote path, must be "
-			       "<account>[/<container>[/<blob>]]");
-		ret = -EINVAL;
-		goto err_args_free;
-	}
-
-	cli_args->cmd = CLI_CMD_DEL;
-	return 0;
-
-err_args_free:
-	cli_del_az_args_free(cli_args);
-err_out:
-	return ret;
-}
-
-int
-cli_del_args_parse_s3(int argc,
-		      char * const *argv,
-		      struct cli_args *cli_args)
-{
-	int ret;
-
-	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
-				  argv[1],
-				  &cli_args->s3.bkt_name,
-				  &cli_args->s3.obj_name, NULL);
-	if (ret < 0)
-		goto err_out;
-
-	if (cli_args->s3.bkt_name == NULL) {
-		cli_args_usage(cli_args->progname, cli_args->flags,
-			       "Invalid remote path, must be "
-			       "<bucket>[/<object>]");
-		ret = -EINVAL;
-		goto err_args_free;
-	}
-
-	cli_args->cmd = CLI_CMD_DEL;
-	return 0;
-
-err_args_free:
-	cli_del_s3_args_free(cli_args);
-err_out:
-	return ret;
+	free(cli_args->path);
 }
 
 int
@@ -128,251 +47,58 @@ cli_del_args_parse(int argc,
 		   char * const *argv,
 		   struct cli_args *cli_args)
 {
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		return cli_del_args_parse_az(argc, argv, cli_args);
-	} else if (cli_args->type == CLI_TYPE_S3) {
-		return cli_del_args_parse_s3(argc, argv, cli_args);
-	}
-	return -ENOTSUP;
-}
-
-static int
-cli_del_acc_handle(struct elasto_conn *econn,
-		   const char *sub_id,
-		   const char *acc_name)
-{
-	struct op *op;
-	int ret;
-
-	ret = az_mgmt_req_acc_del(sub_id,
-			       acc_name, &op);
-	if (ret < 0) {
-		goto err_out;
+	/* path is parsed by libfile on open */
+	cli_args->path = strdup(argv[1]);
+	if (cli_args->path == NULL) {
+		return -ENOMEM;
 	}
 
-	ret = elasto_conn_op_txrx(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
-
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_out:
-	return ret;
-}
-
-static int
-cli_del_blob_handle(struct elasto_conn *econn,
-		   const char *acc_name,
-		   const char *ctnr_name,
-		   const char *blob_name)
-{
-	struct op *op;
-	int ret;
-
-	ret = az_req_blob_del(acc_name,
-				ctnr_name,
-				blob_name,
-				&op);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	ret = elasto_conn_op_txrx(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
-
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_out:
-	return ret;
-}
-
-static int
-cli_del_ctnr_handle(struct elasto_conn *econn,
-		    const char *acc_name,
-		    const char *ctnr_name)
-{
-	struct op *op;
-	int ret;
-
-
-	ret = az_req_ctnr_del(acc_name,
-				ctnr_name,
-				&op);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	ret = elasto_conn_op_txrx(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
-
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_out:
-	return ret;
-}
-
-static int
-cli_del_bkt_handle(struct elasto_conn *econn,
-		   char *bkt_name)
-{
-	struct op *op;
-	int ret;
-
-	ret = s3_req_bkt_del(bkt_name, &op);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	ret = elasto_conn_op_txrx(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
-
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_out:
-	return ret;
-}
-
-static int
-cli_del_obj_handle(struct elasto_conn *econn,
-		   char *bkt_name,
-		   char *obj_name)
-{
-	struct op *op;
-	int ret;
-
-	ret = s3_req_obj_del(bkt_name, obj_name, &op);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	ret = elasto_conn_op_txrx(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
-
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_out:
-	return ret;
-}
-
-int
-cli_del_az_handle(struct cli_args *cli_args)
-{
-	struct elasto_conn *econn;
-	int ret;
-
-	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
-				  cli_args->insecure_http, &econn);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	if ((cli_args->az.blob_name == NULL)
-	 && (cli_args->az.ctnr_name == NULL)) {
-		/* delete account for subscription, signing setup not needed */
-		ret = cli_del_acc_handle(econn, cli_args->az.sub_id,
-					 cli_args->az.blob_acc);
-		elasto_conn_free(econn);
-		return ret;
-	}
-
-	ret = cli_sign_conn_setup(econn,
-				  cli_args->az.blob_acc,
-				  cli_args->az.sub_id);
-	if (ret < 0) {
-		goto err_conn_free;
-	}
-
-	if (cli_args->az.blob_name != NULL) {
-		ret = cli_del_blob_handle(econn, cli_args->az.blob_acc,
-					  cli_args->az.ctnr_name,
-					  cli_args->az.blob_name);
-	} else {
-		ret = cli_del_ctnr_handle(econn, cli_args->az.blob_acc,
-					  cli_args->az.ctnr_name);
-	}
-
-err_conn_free:
-	elasto_conn_free(econn);
-err_out:
-	return ret;
-}
-
-int
-cli_del_s3_handle(struct cli_args *cli_args)
-{
-	struct elasto_conn *econn;
-	int ret;
-
-	ret = elasto_conn_init_s3(cli_args->s3.key_id,
-				  cli_args->s3.secret,
-				  cli_args->insecure_http, &econn);
-	if (ret < 0) {
-		goto err_out;
-	}
-	if (cli_args->s3.obj_name != NULL) {
-		ret = cli_del_obj_handle(econn, cli_args->s3.bkt_name,
-					 cli_args->s3.obj_name);
-	} else {
-		ret = cli_del_bkt_handle(econn, cli_args->s3.bkt_name);
-	}
-	elasto_conn_free(econn);
-err_out:
-	return ret;
+	return 0;
 }
 
 int
 cli_del_handle(struct cli_args *cli_args)
 {
-	int ret = -ENOTSUP;
+	struct elasto_fh *fh;
+	struct elasto_fauth auth;
+	int ret;
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = cli_del_az_handle(cli_args);
+		auth.type = ELASTO_FILE_ABB;
+		auth.az.ps_path = cli_args->az.ps_file;
 	} else if (cli_args->type == CLI_TYPE_S3) {
-		ret = cli_del_s3_handle(cli_args);
+		auth.type = ELASTO_FILE_S3;
+		auth.s3.creds_path = cli_args->s3.creds_file;
+	} else {
+		ret = -ENOTSUP;
+		goto err_out;
 	}
+	auth.insecure_http = cli_args->insecure_http;
+
+	/* XXX not sure whether we've been given a dir or file path, try both */
+	ret = elasto_fopen(&auth, cli_args->path, ELASTO_FOPEN_DIRECTORY, NULL,
+			   &fh);
+	if (ret < 0) {
+		ret = elasto_fopen(&auth, cli_args->path, 0, NULL,
+				   &fh);
+		if (ret < 0) {
+			printf("%s path open failed as dir and file\n",
+			       cli_args->path);
+			goto err_out;
+		}
+	}
+
+	ret = elasto_funlink_close(fh);
+	if (ret < 0) {
+		printf("%s path unlink failed with: %s\n",
+		       cli_args->path, strerror(-ret));
+		if (elasto_fclose(fh) < 0) {
+			printf("close failed\n");
+		}
+		goto err_out;
+	}
+
+	ret = 0;
+err_out:
 	return ret;
 }

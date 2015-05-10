@@ -533,7 +533,7 @@ s3_op_bkt_create_fill_body(const char *location,
 	char *xml_data;
 	int buf_remain;
 	struct elasto_data *req_data;
-	const char *xml_printf_format =
+	const char xml_printf_format[] =
 			"<CreateBucketConfiguration "
 			   "xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
 				"<LocationConstraint>%s</LocationConstraint>"
@@ -544,7 +544,7 @@ s3_op_bkt_create_fill_body(const char *location,
 		return 0;
 	}
 
-	buf_remain = sizeof(xml_printf_format) + strlen(location);
+	buf_remain = ARRAY_SIZE(xml_printf_format) + strlen(location);
 	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -556,6 +556,8 @@ s3_op_bkt_create_fill_body(const char *location,
 		       xml_printf_format,
 		       location);
 	if ((ret < 0) || (ret >= buf_remain)) {
+		dbg(0, "unable to pack XML req data. ret %d, remain %d\n",
+		    ret, buf_remain);
 		/* truncated or error */
 		ret = -E2BIG;
 		goto err_buf_free;

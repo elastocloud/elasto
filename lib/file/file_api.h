@@ -21,8 +21,10 @@ extern "C" {
 struct elasto_fh;
 
 enum elasto_ftype {
-	ELASTO_FILE_AZURE = 1,
-	ELASTO_FILE_S3,
+	ELASTO_FILE_AZURE = 1,	/* Alias for APB */
+	ELASTO_FILE_APB = 1,	/* Azure page blob store */
+	ELASTO_FILE_S3,		/* S3 object store */
+	ELASTO_FILE_ABB,	/* Azure block blob store */
 };
 
 struct elasto_fauth {
@@ -207,6 +209,9 @@ elasto_freaddir(struct elasto_fh *fh,
 		void *priv,
 		int (*dent_cb)(struct elasto_dent *,
 			       void *));
+
+int
+elasto_funlink_close(struct elasto_fh *fh);
 
 int
 elasto_fdebug(int level);
