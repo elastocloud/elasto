@@ -963,6 +963,76 @@ cm_file_dir_stat(void **state)
 	free(path);
 }
 
+/*
+ * Azure block blobs are different to page blobs, in that writes at arbitrary
+ * offsets aren't supported.
+ */
+static void
+cm_file_abb_io(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct elasto_fh *fh;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct elasto_data *data;
+	uint8_t buf[1024];
+	uint64_t half;
+
+	auth.type = ELASTO_FILE_ABB;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d/abb_io_test",
+		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_CREATE,
+			   NULL, &fh);
+	assert_false(ret < 0);
+
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	assert_false(ret < 0);
+
+	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
+	assert_false(ret < 0);
+
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	memset(buf, 0, ARRAY_SIZE(buf));
+
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	assert_false(ret < 0);
+
+	/* read at arbitrary offsets, first half then second */
+	half = ARRAY_SIZE(buf) / 2;
+	ret = elasto_fread(fh, 0, half, data);
+	assert_false(ret < 0);
+
+	cm_file_buf_check(buf, half, 0);
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	memset(buf, 0, ARRAY_SIZE(buf));
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	assert_false(ret < 0);
+
+	ret = elasto_fread(fh, half, half, data);
+	assert_false(ret < 0);
+
+	cm_file_buf_check(buf, half, half);
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	ret = elasto_fclose(fh);
+	assert_false(ret < 0);
+	free(path);
+}
+
 static const UnitTest cm_file_tests[] = {
 	unit_test_setup_teardown(cm_file_create,
 				 cm_file_mkdir, cm_file_rmdir),
@@ -987,6 +1057,8 @@ static const UnitTest cm_file_tests[] = {
 				 cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_dir_readdir, NULL, NULL),
 	unit_test_setup_teardown(cm_file_dir_stat,
+				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_abb_io,
 				 cm_file_mkdir, cm_file_rmdir),
 };
 
