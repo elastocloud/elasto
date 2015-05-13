@@ -158,11 +158,13 @@ elasto_data_iov_grow(struct elasto_data *data,
 }
 
 int
-elasto_data_cb_new(int (*out_cb)(uint64_t stream_off,
+elasto_data_cb_new(uint64_t out_len,
+		   int (*out_cb)(uint64_t stream_off,
 				 uint64_t need,
 				 uint8_t **_out_buf,
 				 uint64_t *buf_len,
 				 void *priv),
+		   uint64_t in_len,
 		   int (*in_cb)(uint64_t stream_off,
 				uint64_t got,
 				uint8_t *in_buf,
@@ -173,15 +175,39 @@ elasto_data_cb_new(int (*out_cb)(uint64_t stream_off,
 {
 	struct elasto_data *data;
 
+	if (((in_len != 0) && (in_cb == NULL))
+	 || ((out_len != 0) && (out_cb == NULL))) {
+		dbg(0, "data_cb type requires cb for non-zero len\n");
+		return -EINVAL;
+	}
+
+	if (((in_len == 0) && (in_cb != NULL))
+	 || ((out_len == 0) && (out_cb != NULL))) {
+		dbg(0, "data_cb type requires NULL cb for zero len\n");
+		return -EINVAL;
+	}
+
+	if ((in_len * out_len) != 0) {
+		dbg(0, "data_cb type only supports a sigle direction\n");
+		return -EINVAL;
+	}
+
 	data = malloc(sizeof(*data));
 	if (data == NULL) {
 		return -ENOMEM;
 	}
 	memset(data, 0, sizeof(*data));
 
+	if (in_len != 0) {
+		data->len = in_len;
+	} else {
+		data->len = out_len;
+	}
 	data->type = ELASTO_DATA_CB;
 	data->cb.out_cb = out_cb;
 	data->cb.in_cb = in_cb;
 	data->cb.priv = cb_priv;
+	*_data = data;
+
 	return 0;
 }

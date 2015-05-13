@@ -86,9 +86,11 @@ elasto_data_iov_grow(struct elasto_data *data,
 /**
  * elasto_data_cb_new - initialise a callback data struct
  *
+ * @out_len:	Amount of data to send.
  * @out_cb:	Called when a request needs data to send. Following callback,
  *		@out_buf is owned by the caller, and will be freed after use.
  *		TODO: should add an @out_free callback?
+ * @in_len:	Amount of data to retrieve.
  * @in_cb:	Called when a response has non-error data to write. @stream_off
  *		is the total number of bytes into the response data. @in_buf is
  * 		subsequently owned by the callee, and should be freed after use.
@@ -97,11 +99,13 @@ elasto_data_iov_grow(struct elasto_data *data,
  * @return:	0 on success, -errno on failure.
  */
 int
-elasto_data_cb_new(int (*out_cb)(uint64_t stream_off,
+elasto_data_cb_new(uint64_t out_len,
+		   int (*out_cb)(uint64_t stream_off,
 				 uint64_t need,
 				 uint8_t **_out_buf,
 				 uint64_t *buf_len,
 				 void *priv),
+		   uint64_t in_len,
 		   int (*in_cb)(uint64_t stream_off,
 				uint64_t got,
 				uint8_t *in_buf,
