@@ -551,7 +551,8 @@ elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
 	}
 
 	if ((req_data->type != ELASTO_DATA_IOV)
-	 && (req_data->type != ELASTO_DATA_FILE)) {
+	 && (req_data->type != ELASTO_DATA_FILE)
+	 && (req_data->type != ELASTO_DATA_CB)) {
 		ret = -EINVAL;	/* unsupported */
 		goto err_out;
 	}
