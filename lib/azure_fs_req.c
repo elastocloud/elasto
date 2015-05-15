@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -237,6 +237,106 @@ err_acc_free:
 	free(share_del_req->acc);
 err_ebo_free:
 	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
+az_fs_req_share_prop_get_free(struct az_fs_req_share_prop_get *share_prop_get_req)
+{
+	free(share_prop_get_req->acc);
+	free(share_prop_get_req->share);
+}
+
+int
+az_fs_req_share_prop_get(const char *acc,
+			 const char *share,
+			 struct op **_op)
+{
+	int ret;
+	struct az_fs_ebo *ebo;
+	struct op *op;
+	struct az_fs_req_share_prop_get *share_prop_get_req;
+
+	if ((acc == NULL) || (share == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_ebo_init(AOP_FS_SHARE_PROP_GET, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	share_prop_get_req = &ebo->req.share_prop_get;
+
+	share_prop_get_req->acc = strdup(acc);
+	if (share_prop_get_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	share_prop_get_req->share = strdup(share);
+	if (share_prop_get_req->share == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	op->method = REQ_METHOD_HEAD;
+	op->url_https_only = false;
+	ret = asprintf(&op->url_host,
+		       "%s.file.core.windows.net", acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_share_free;
+	}
+	ret = asprintf(&op->url_path, "/%s?restype=share",
+		       share);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_share_free:
+	free(share_prop_get_req->share);
+err_acc_free:
+	free(share_prop_get_req->acc);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static int
+az_fs_rsp_share_prop_get_process(struct op *op,
+			struct az_fs_rsp_share_prop_get *share_prop_get_rsp)
+{
+	int ret;
+
+	assert(op->opcode == AOP_FS_SHARE_PROP_GET);
+
+	ret = op_hdr_date_time_val_lookup(&op->rsp.hdrs, "Last-Modified",
+					  &share_prop_get_rsp->last_mod);
+	if (ret < 0) {
+		/* mandatory header, error if not present */
+		goto err_out;
+	}
+
+	return 0;
+
 err_out:
 	return ret;
 }
@@ -1617,6 +1717,9 @@ az_fs_req_free(struct op *op)
 	case AOP_FS_SHARE_DEL:
 		az_fs_req_share_del_free(&ebo->req.share_del);
 		break;
+	case AOP_FS_SHARE_PROP_GET:
+		az_fs_req_share_prop_get_free(&ebo->req.share_prop_get);
+		break;
 	case AOP_FS_DIRS_FILES_LIST:
 		az_fs_req_dirs_files_list_free(&ebo->req.dirs_files_list);
 		break;
@@ -1664,6 +1767,7 @@ az_fs_rsp_free(struct op *op)
 		break;
 	case AOP_FS_SHARE_CREATE:
 	case AOP_FS_SHARE_DEL:
+	case AOP_FS_SHARE_PROP_GET:
 	case AOP_FS_DIR_CREATE:
 	case AOP_FS_DIR_DEL:
 	case AOP_FS_FILE_CREATE:
@@ -1698,6 +1802,10 @@ az_fs_rsp_process(struct op *op)
 	}
 
 	switch (op->opcode) {
+	case AOP_FS_SHARE_PROP_GET:
+		ret = az_fs_rsp_share_prop_get_process(op,
+						      &ebo->rsp.share_prop_get);
+		break;
 	case AOP_FS_DIRS_FILES_LIST:
 		ret = az_fs_rsp_dirs_files_list_process(op,
 						&ebo->rsp.dirs_files_list);
@@ -1724,6 +1832,13 @@ az_fs_rsp_process(struct op *op)
 	};
 
 	return ret;
+}
+
+struct az_fs_rsp_share_prop_get *
+az_fs_rsp_share_prop_get(struct op *op)
+{
+	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
+	return &ebo->rsp.share_prop_get;
 }
 
 struct az_fs_rsp_dirs_files_list *

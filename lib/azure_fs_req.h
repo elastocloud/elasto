@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -17,6 +17,7 @@
 enum az_fs_opcode {
 	AOP_FS_SHARE_CREATE = 101,
 	AOP_FS_SHARE_DEL,
+	AOP_FS_SHARE_PROP_GET,
 	AOP_FS_DIRS_FILES_LIST,
 	AOP_FS_DIR_CREATE,
 	AOP_FS_DIR_DEL,
@@ -36,6 +37,15 @@ struct az_fs_req_share_create {
 struct az_fs_req_share_del {
 	char *acc;
 	char *share;
+};
+
+struct az_fs_req_share_prop_get {
+	char *acc;
+	char *share;
+};
+
+struct az_fs_rsp_share_prop_get {
+	time_t last_mod;
 };
 
 struct az_fs_req_dirs_files_list {
@@ -153,6 +163,7 @@ struct az_fs_req {
 	union {
 		struct az_fs_req_share_create share_create;
 		struct az_fs_req_share_del share_del;
+		struct az_fs_req_share_prop_get share_prop_get;
 		struct az_fs_req_dirs_files_list dirs_files_list;
 		struct az_fs_req_dir_create dir_create;
 		struct az_fs_req_dir_del dir_del;
@@ -167,6 +178,7 @@ struct az_fs_req {
 
 struct az_fs_rsp {
 	union {
+		struct az_fs_rsp_share_prop_get share_prop_get;
 		struct az_fs_rsp_dirs_files_list dirs_files_list;
 		struct az_fs_rsp_file_prop_get file_prop_get;
 		/*
@@ -194,6 +206,14 @@ int
 az_fs_req_share_del(const char *acc,
 		    const char *share,
 		    struct op **_op);
+
+int
+az_fs_req_share_prop_get(const char *acc,
+			 const char *share,
+			 struct op **_op);
+
+struct az_fs_rsp_share_prop_get *
+az_fs_rsp_share_prop_get(struct op *op);
 
 int
 az_fs_req_dirs_files_list(const char *acc,
