@@ -66,6 +66,13 @@ exml_base64_want(struct xml_doc *xdoc,
 	     char **value,
 	     bool *present);
 
+int
+exml_date_time_want(struct xml_doc *xdoc,
+		    const char *xp_expr,
+		    bool required,
+		    time_t *value,
+		    bool *present);
+
 typedef int (*exml_want_cb_t)(struct xml_doc *xdoc,
 			     const char *path,
 			     const char *val,

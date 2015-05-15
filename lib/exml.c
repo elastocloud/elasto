@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <search.h>
 #include <inttypes.h>
+#include <time.h>
 
 #include <expat.h>
 
@@ -34,6 +35,7 @@ enum xml_val_type {
 	XML_VAL_U64,
 	XML_VAL_BOOL,
 	XML_VAL_B64,
+	XML_VAL_DATE_TIME,
 	XML_VAL_CALLBACK,
 	XML_VAL_PATH_CB,
 };
@@ -54,6 +56,7 @@ struct xml_finder {
 		uint64_t *u64;
 		bool *bl;
 		char **b64_decode;
+		time_t *date_time;
 		struct {
 			exml_want_cb_t fn;
 			void *data;
@@ -323,6 +326,7 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		     struct xml_finder *finder)
 {
 	char *sval_end;
+	struct tm tm;
 	int ret;
 
 	switch (finder->type) {
@@ -380,6 +384,26 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 		}
 		/* zero terminate */
 		(*finder->ret_val.b64_decode)[ret] = '\0';
+		break;
+	case XML_VAL_DATE_TIME:
+		if (strlen(got) <= 0) {
+			return -EINVAL;
+		}
+		sval_end = strptime(got, "%a, %d %b %Y %H:%M:%S %Z", &tm);
+		if (sval_end == NULL) {
+			dbg(0, "invalid time format at %s: %s\n",
+			    xdoc->el_path, got);
+			return -EINVAL;
+		}
+		if (*sval_end != '\0') {
+			dbg(2, "got time trailer: %s\n", sval_end);
+		}
+
+		tm.tm_isdst = -1;	/* Not set by strptime() */
+		*finder->ret_val.date_time = mktime(&tm);
+		if (*finder->ret_val.date_time == -1) {
+			return -EINVAL;
+		}
 		break;
 	case XML_VAL_CALLBACK:
 		ret = finder->ret_val.cb.fn(xdoc, xdoc->el_path, got,
@@ -1098,6 +1122,25 @@ exml_base64_want(struct xml_doc *xdoc,
 		return ret;
 	}
 	finder->ret_val.b64_decode = value;
+	return 0;
+}
+
+int
+exml_date_time_want(struct xml_doc *xdoc,
+		    const char *xp_expr,
+		    bool required,
+		    time_t *value,
+		    bool *present)
+{
+	int ret;
+	struct xml_finder *finder;
+
+	ret = exml_finder_init(xdoc, xp_expr, required, XML_VAL_DATE_TIME,
+			       present, &finder);
+	if (ret < 0) {
+		return ret;
+	}
+	finder->ret_val.date_time = value;
 	return 0;
 }
 
