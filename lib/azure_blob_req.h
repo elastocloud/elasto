@@ -239,12 +239,15 @@ enum az_cp_status {
 	AOP_CP_STATUS_ABORTED,
 	AOP_CP_STATUS_FAILED,
 };
+
 struct az_req_blob_prop_get {
 	char *account;
 	char *container;
 	char *bname;
 };
+
 struct az_rsp_blob_prop_get {
+	time_t last_mod;
 	bool is_page;
 	uint64_t len;
 	char *content_type;

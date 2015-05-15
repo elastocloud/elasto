@@ -2468,6 +2468,13 @@ az_rsp_blob_prop_get_process(struct op *op,
 	char *hdr_val;
 
 	assert(op->opcode == AOP_BLOB_PROP_GET);
+
+	ret = op_hdr_date_time_val_lookup(&op->rsp.hdrs, "Last-Modified",
+					  &blob_prop_get_rsp->last_mod);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	ret = op_hdr_val_lookup(&op->rsp.hdrs,
 				"x-ms-blob-type",
 				&hdr_val);
