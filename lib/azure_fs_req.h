@@ -15,7 +15,8 @@
 #define _AZURE_FS_REQ_H_
 
 enum az_fs_opcode {
-	AOP_FS_SHARE_CREATE = 101,
+	AOP_FS_SHARES_LIST = 100,
+	AOP_FS_SHARE_CREATE,
 	AOP_FS_SHARE_DEL,
 	AOP_FS_SHARE_PROP_GET,
 	AOP_FS_DIRS_FILES_LIST,
@@ -28,6 +29,21 @@ enum az_fs_opcode {
 	AOP_FS_FILE_PUT,
 	AOP_FS_FILE_PROP_GET,
 	AOP_FS_FILE_PROP_SET,
+};
+
+struct az_fs_req_shares_list {
+	char *acc;
+};
+
+struct az_fs_share {
+	struct list_node list;
+	char *name;
+	time_t last_mod;
+};
+
+struct az_fs_rsp_shares_list {
+	int num_shares;
+	struct list_head shares;
 };
 
 struct az_fs_req_share_create {
@@ -173,6 +189,7 @@ struct az_fs_req_file_prop_set {
 
 struct az_fs_req {
 	union {
+		struct az_fs_req_shares_list shares_list;
 		struct az_fs_req_share_create share_create;
 		struct az_fs_req_share_del share_del;
 		struct az_fs_req_share_prop_get share_prop_get;
@@ -191,6 +208,7 @@ struct az_fs_req {
 
 struct az_fs_rsp {
 	union {
+		struct az_fs_rsp_shares_list shares_list;
 		struct az_fs_rsp_share_prop_get share_prop_get;
 		struct az_fs_rsp_dirs_files_list dirs_files_list;
 		struct az_fs_rsp_dir_prop_get dir_prop_get;
@@ -210,6 +228,13 @@ struct az_fs_rsp {
 		 */
 	};
 };
+
+int
+az_fs_req_shares_list(const char *acc,
+		      struct op **_op);
+
+struct az_fs_rsp_shares_list *
+az_fs_rsp_shares_list(struct op *op);
 
 int
 az_fs_req_share_create(const char *acc,

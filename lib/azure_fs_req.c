@@ -86,6 +86,196 @@ az_fs_ebo_init(enum az_fs_opcode opcode,
 }
 
 static void
+az_fs_req_shares_list_free(struct az_fs_req_shares_list *shares_list_req)
+{
+	free(shares_list_req->acc);
+}
+
+static void
+az_fs_share_free(struct az_fs_share **_share)
+{
+	struct az_fs_share *share = *_share;
+
+	free(share->name);
+	free(share);
+}
+
+static void
+az_fs_rsp_shares_list_free(struct az_fs_rsp_shares_list *shares_list_rsp)
+{
+	struct az_fs_share *share;
+	struct az_fs_share *share_n;
+
+	if (shares_list_rsp->num_shares == 0) {
+		return;
+	}
+
+	list_for_each_safe(&shares_list_rsp->shares, share, share_n, list) {
+		az_fs_share_free(&share);
+	}
+}
+
+int
+az_fs_req_shares_list(const char *acc,
+		      struct op **_op)
+{
+	int ret;
+	struct az_fs_ebo *ebo;
+	struct op *op;
+	struct az_fs_req_shares_list *shares_list_req;
+
+	if (acc == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_ebo_init(AOP_FS_SHARES_LIST, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	shares_list_req = &ebo->req.shares_list;
+
+	shares_list_req->acc = strdup(acc);
+	if (shares_list_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	op->method = REQ_METHOD_GET;
+	op->url_https_only = false;
+	ret = asprintf(&op->url_host,
+		       "%s.file.core.windows.net", acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+	ret = asprintf(&op->url_path, "/?comp=list");
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_acc_free:
+	free(shares_list_req->acc);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static int
+az_fs_rsp_share_iter_process(struct xml_doc *xdoc,
+			     const char *path,
+			     const char *val,
+			     void *cb_data)
+{
+	int ret;
+	struct az_fs_rsp_shares_list *shares_list_rsp
+				= (struct az_fs_rsp_shares_list *)cb_data;
+	struct az_fs_share *share;
+
+	/* request callback for subsequent share descriptors */
+	ret = exml_path_cb_want(xdoc,
+				"/EnumerationResults/Shares/Share", false,
+				az_fs_rsp_share_iter_process,
+				shares_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	share = malloc(sizeof(*share));
+	if (share == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(share, 0, sizeof(*share));
+
+	ret = exml_str_want(xdoc, "./Name", true, &share->name, NULL);
+	if (ret < 0) {
+		goto err_share_free;
+	}
+
+	ret = exml_date_time_want(xdoc, "./Properties/Last-Modified", true,
+				  &share->last_mod, NULL);
+	if (ret < 0) {
+		goto err_share_free;
+	}
+
+	list_add_tail(&shares_list_rsp->shares, &share->list);
+	shares_list_rsp->num_shares++;
+
+	return 0;
+
+err_share_free:
+	free(share);
+err_out:
+	return ret;
+}
+
+static int
+az_fs_rsp_shares_list_process(struct op *op,
+			struct az_fs_rsp_shares_list *shares_list_rsp)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	struct az_fs_share *share;
+	struct az_fs_share *share_n;
+
+	assert(op->opcode == AOP_FS_SHARES_LIST);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	assert(op->rsp.data->base_off == 0);
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	list_head_init(&shares_list_rsp->shares);
+
+	/* request callback for first share */
+	ret = exml_path_cb_want(xdoc,
+				"/EnumerationResults/Shares/Share", false,
+				az_fs_rsp_share_iter_process,
+				shares_list_rsp, NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
+	}
+
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		/* need to walk list in case cb fired */
+		goto err_shares_free;
+	}
+
+	exml_free(xdoc);
+	return 0;
+
+err_shares_free:
+	list_for_each_safe(&shares_list_rsp->shares, share, share_n, list) {
+		az_fs_share_free(&share);
+	}
+err_xdoc_free:
+	exml_free(xdoc);
+err_out:
+	return ret;
+}
+
+static void
 az_fs_req_share_create_free(struct az_fs_req_share_create *share_create_req)
 {
 	free(share_create_req->acc);
@@ -1835,6 +2025,9 @@ az_fs_req_free(struct op *op)
 	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
 
 	switch (ebo->opcode) {
+	case AOP_FS_SHARES_LIST:
+		az_fs_req_shares_list_free(&ebo->req.shares_list);
+		break;
 	case AOP_FS_SHARE_CREATE:
 		az_fs_req_share_create_free(&ebo->req.share_create);
 		break;
@@ -1886,6 +2079,9 @@ az_fs_rsp_free(struct op *op)
 	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
 
 	switch (ebo->opcode) {
+	case AOP_FS_SHARES_LIST:
+		az_fs_rsp_shares_list_free(&ebo->rsp.shares_list);
+		break;
 	case AOP_FS_DIRS_FILES_LIST:
 		az_fs_rsp_dirs_files_list_free(&ebo->rsp.dirs_files_list);
 		break;
@@ -1930,6 +2126,10 @@ az_fs_rsp_process(struct op *op)
 	}
 
 	switch (op->opcode) {
+	case AOP_FS_SHARES_LIST:
+		ret = az_fs_rsp_shares_list_process(op,
+						    &ebo->rsp.shares_list);
+		break;
 	case AOP_FS_SHARE_PROP_GET:
 		ret = az_fs_rsp_share_prop_get_process(op,
 						      &ebo->rsp.share_prop_get);
@@ -1964,6 +2164,13 @@ az_fs_rsp_process(struct op *op)
 	};
 
 	return ret;
+}
+
+struct az_fs_rsp_shares_list *
+az_fs_rsp_shares_list(struct op *op)
+{
+	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
+	return &ebo->rsp.shares_list;
 }
 
 struct az_fs_rsp_share_prop_get *
