@@ -579,7 +579,7 @@ az_fs_req_dirs_files_list(const char *acc,
 	struct op *op;
 	struct az_fs_req_dirs_files_list *dirs_files_list_req;
 
-	if ((acc == NULL) || (share == NULL) || (dir_path == NULL)) {
+	if ((acc == NULL) || (share == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -603,22 +603,24 @@ az_fs_req_dirs_files_list(const char *acc,
 		goto err_acc_free;
 	}
 
-	dirs_files_list_req->dir_path = strdup(dir_path);
-	if (dirs_files_list_req->dir_path == NULL) {
-		ret = -ENOMEM;
-		goto err_share_free;
+	if (dir_path != NULL) {
+		dirs_files_list_req->dir_path = strdup(dir_path);
+		if (dirs_files_list_req->dir_path == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
 	}
 
 	op->method = REQ_METHOD_GET;
-	op->url_https_only = false;	/* TODO check! */
+	op->url_https_only = false;
 	ret = asprintf(&op->url_host,
 		       "%s.file.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_path_free;
+		goto err_dir_free;
 	}
 	ret = asprintf(&op->url_path, "/%s/%s?restype=directory&comp=list",
-		       share, dir_path);
+		       share, (dir_path ? dir_path : ""));
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -637,7 +639,7 @@ err_upath_free:
 	free(op->url_path);
 err_uhost_free:
 	free(op->url_host);
-err_path_free:
+err_dir_free:
 	free(dirs_files_list_req->dir_path);
 err_share_free:
 	free(dirs_files_list_req->share);

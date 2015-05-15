@@ -68,7 +68,7 @@ struct az_fs_rsp_share_prop_get {
 struct az_fs_req_dirs_files_list {
 	char *acc;
 	char *share;
-	char *dir_path;
+	char *dir_path;	/* NULL for share child listings */
 };
 
 /* @file.size may be incorrect due to SMB oplocks etc. */
@@ -257,7 +257,7 @@ az_fs_rsp_share_prop_get(struct op *op);
 int
 az_fs_req_dirs_files_list(const char *acc,
 			  const char *share,
-			  const char *dir_path,
+			  const char *dir_path,	/* optional */
 			  struct op **_op);
 
 struct az_fs_rsp_dirs_files_list *
