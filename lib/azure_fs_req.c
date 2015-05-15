@@ -817,6 +817,130 @@ err_out:
 }
 
 static void
+az_fs_req_dir_prop_get_free(struct az_fs_req_dir_prop_get *dir_prop_get_req)
+{
+	free(dir_prop_get_req->acc);
+	free(dir_prop_get_req->share);
+	free(dir_prop_get_req->parent_dir_path);
+	free(dir_prop_get_req->dir);
+}
+
+int
+az_fs_req_dir_prop_get(const char *acc,
+		       const char *share,
+		       const char *parent_dir_path,	/* optional */
+		       const char *dir,
+		       struct op **_op)
+{
+	int ret;
+	struct az_fs_ebo *ebo;
+	struct op *op;
+	struct az_fs_req_dir_prop_get *dir_prop_get_req;
+
+	if ((acc == NULL) || (share == NULL) || (dir == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_ebo_init(AOP_FS_DIR_PROP_GET, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	dir_prop_get_req = &ebo->req.dir_prop_get;
+
+	dir_prop_get_req->acc = strdup(acc);
+	if (dir_prop_get_req->acc == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	dir_prop_get_req->share = strdup(share);
+	if (dir_prop_get_req->share == NULL) {
+		ret = -ENOMEM;
+		goto err_acc_free;
+	}
+
+	if (parent_dir_path != NULL) {
+		dir_prop_get_req->parent_dir_path = strdup(parent_dir_path);
+		if (dir_prop_get_req->parent_dir_path == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+	}
+
+	dir_prop_get_req->dir = strdup(dir);
+	if (dir_prop_get_req->dir == NULL) {
+		ret = -ENOMEM;
+		goto err_parent_free;
+	}
+
+	op->method = REQ_METHOD_HEAD;
+	op->url_https_only = false;
+	ret = asprintf(&op->url_host,
+		       "%s.file.core.windows.net", acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_dir_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s%s%s?restype=directory",
+		       share,
+		       (parent_dir_path ? parent_dir_path : ""),
+		       (parent_dir_path ? "/" : ""), dir);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_dir_free:
+	free(dir_prop_get_req->dir);
+err_parent_free:
+	free(dir_prop_get_req->parent_dir_path);
+err_share_free:
+	free(dir_prop_get_req->share);
+err_acc_free:
+	free(dir_prop_get_req->acc);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static int
+az_fs_rsp_dir_prop_get_process(struct op *op,
+			       struct az_fs_rsp_dir_prop_get *dir_prop_get_rsp)
+{
+	int ret;
+
+	assert(op->opcode == AOP_FS_DIR_PROP_GET);
+
+	ret = op_hdr_date_time_val_lookup(&op->rsp.hdrs, "Last-Modified",
+					  &dir_prop_get_rsp->last_mod);
+	if (ret < 0) {
+		/* mandatory header, error if not present */
+		goto err_out;
+	}
+
+	return 0;
+
+err_out:
+	return ret;
+}
+
+static void
 az_fs_req_file_create_free(struct az_fs_req_file_create *file_create_req)
 {
 	free(file_create_req->acc);
@@ -1729,6 +1853,9 @@ az_fs_req_free(struct op *op)
 	case AOP_FS_DIR_DEL:
 		az_fs_req_dir_del_free(&ebo->req.dir_del);
 		break;
+	case AOP_FS_DIR_PROP_GET:
+		az_fs_req_dir_prop_get_free(&ebo->req.dir_prop_get);
+		break;
 	case AOP_FS_FILE_CREATE:
 		az_fs_req_file_create_free(&ebo->req.file_create);
 		break;
@@ -1770,6 +1897,7 @@ az_fs_rsp_free(struct op *op)
 	case AOP_FS_SHARE_PROP_GET:
 	case AOP_FS_DIR_CREATE:
 	case AOP_FS_DIR_DEL:
+	case AOP_FS_DIR_PROP_GET:
 	case AOP_FS_FILE_CREATE:
 	case AOP_FS_FILE_DEL:
 	case AOP_FS_FILE_GET:
@@ -1810,6 +1938,10 @@ az_fs_rsp_process(struct op *op)
 		ret = az_fs_rsp_dirs_files_list_process(op,
 						&ebo->rsp.dirs_files_list);
 		break;
+	case AOP_FS_DIR_PROP_GET:
+		ret = az_fs_rsp_dir_prop_get_process(op,
+						     &ebo->rsp.dir_prop_get);
+		break;
 	case AOP_FS_FILE_PROP_GET:
 		ret = az_fs_rsp_file_prop_get_process(op,
 						      &ebo->rsp.file_prop_get);
@@ -1846,6 +1978,13 @@ az_fs_rsp_dirs_files_list(struct op *op)
 {
 	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
 	return &ebo->rsp.dirs_files_list;
+}
+
+struct az_fs_rsp_dir_prop_get *
+az_fs_rsp_dir_prop_get(struct op *op)
+{
+	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
+	return &ebo->rsp.dir_prop_get;
 }
 
 struct az_fs_rsp_file_prop_get *

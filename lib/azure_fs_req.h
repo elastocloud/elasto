@@ -21,6 +21,7 @@ enum az_fs_opcode {
 	AOP_FS_DIRS_FILES_LIST,
 	AOP_FS_DIR_CREATE,
 	AOP_FS_DIR_DEL,
+	AOP_FS_DIR_PROP_GET,
 	AOP_FS_FILE_CREATE,
 	AOP_FS_FILE_DEL,
 	AOP_FS_FILE_GET,
@@ -91,6 +92,17 @@ struct az_fs_req_dir_del {
 	char *share;
 	char *parent_dir_path;
 	char *dir;
+};
+
+struct az_fs_req_dir_prop_get {
+	char *acc;
+	char *share;
+	char *parent_dir_path;
+	char *dir;
+};
+
+struct az_fs_rsp_dir_prop_get {
+	time_t last_mod;
 };
 
 /* @parent_dir_path optional */
@@ -167,6 +179,7 @@ struct az_fs_req {
 		struct az_fs_req_dirs_files_list dirs_files_list;
 		struct az_fs_req_dir_create dir_create;
 		struct az_fs_req_dir_del dir_del;
+		struct az_fs_req_dir_prop_get dir_prop_get;
 		struct az_fs_req_file_create file_create;
 		struct az_fs_req_file_del file_del;
 		struct az_fs_req_file_get file_get;
@@ -180,6 +193,7 @@ struct az_fs_rsp {
 	union {
 		struct az_fs_rsp_share_prop_get share_prop_get;
 		struct az_fs_rsp_dirs_files_list dirs_files_list;
+		struct az_fs_rsp_dir_prop_get dir_prop_get;
 		struct az_fs_rsp_file_prop_get file_prop_get;
 		/*
 		 * No response specific data handled yet:
@@ -237,6 +251,16 @@ az_fs_req_dir_del(const char *acc,
 		  const char *parent_dir_path,	/* optional */
 		  const char *dir,
 		  struct op **_op);
+
+int
+az_fs_req_dir_prop_get(const char *acc,
+		       const char *share,
+		       const char *parent_dir_path,	/* optional */
+		       const char *dir,
+		       struct op **_op);
+
+struct az_fs_rsp_dir_prop_get *
+az_fs_rsp_dir_prop_get(struct op *op);
 
 int
 az_fs_req_file_create(const char *acc,
