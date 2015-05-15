@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2014-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -135,6 +135,28 @@ cm_az_fs_deinit(void **state)
 }
 
 static void
+cm_az_fs_share_props(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct az_fs_rsp_share_prop_get *share_prop_get;
+
+	ret = az_fs_req_share_prop_get(cm_us->acc, cm_op_az_fs_state.share,
+				       &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	share_prop_get = az_fs_rsp_share_prop_get(op);
+	assert_true(share_prop_get->last_mod != 0);
+
+	op_free(op);
+}
+
+static void
 cm_az_fs_dir_create(void **state)
 {
 	int ret;
@@ -228,6 +250,37 @@ cm_az_fs_dir_create(void **state)
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
+	op_free(op);
+}
+
+static void
+cm_az_fs_dir_props(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct az_fs_rsp_dir_prop_get *dir_prop_get;
+
+	ret = az_fs_req_dir_create(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				   "dir1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	ret = az_fs_req_dir_prop_get(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				     "dir1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	dir_prop_get = az_fs_rsp_dir_prop_get(op);
+	assert_true(dir_prop_get->last_mod != 0);
+
 	op_free(op);
 }
 
@@ -482,7 +535,9 @@ cm_az_fs_file_props(void **state)
 }
 
 static const UnitTest cm_az_fs_tests[] = {
+	unit_test_setup_teardown(cm_az_fs_share_props, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_dir_create, cm_az_fs_init, cm_az_fs_deinit),
+	unit_test_setup_teardown(cm_az_fs_dir_props, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_file_create, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_file_io, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_file_props, cm_az_fs_init, cm_az_fs_deinit),
