@@ -283,6 +283,20 @@ cm_az_fs_dir_create(void **state)
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
+
+	/* check that share is now empty - this time use a NULL dir component */
+	ret = az_fs_req_dirs_files_list(cm_us->acc, cm_op_az_fs_state.share,
+					NULL, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	dirs_files_list_rsp = az_fs_rsp_dirs_files_list(op);
+	assert_true(dirs_files_list_rsp != NULL);
+	assert_true(dirs_files_list_rsp->num_ents == 0);
+	op_free(op);
 }
 
 static void
