@@ -219,7 +219,8 @@ cli_args_usage(const char *progname,
 		 */
 		if ((cmd->feature_flags & flags & CLI_FL_BIN_ARG)
 		 || (cmd->feature_flags & flags & CLI_FL_PROMPT)) {
-			if ((cmd->feature_flags | CLI_FL_S3 | CLI_FL_AZ) == 0) {
+			if ((cmd->feature_flags
+				| CLI_FL_S3 | CLI_FL_AZ | CLI_FL_AFS) == 0) {
 				continue;
 			}
 			if (cmd->feature_flags & flags & CLI_FL_AZ) {
@@ -428,14 +429,13 @@ err_out:
 /**
  * Parse REST URI in the form proto://server
  * TODO currently only the following protocols are supported:
- * Azure Block Blob service:	azure_bb://
- *				abb://
- * Amazon S3 service:		s3://
  */
 #define CLI_URI_AZURE_BLOCK_BLOB_LONG "azure_bb://"
 #define CLI_URI_AZURE_BLOCK_BLOB_SHORT "abb://"
 #define CLI_URI_AMAZON_S3_LONG "amazon_s3://"
 #define CLI_URI_AMAZON_S3_SHORT "s3://"
+#define CLI_URI_AZURE_FILE_SERVICE_LONG "azure_fs://"
+#define CLI_URI_AZURE_FILE_SERVICE_SHORT "afs://"
 static int
 cli_uri_parse(const char *uri,
 	      enum cli_type *type)
@@ -456,6 +456,12 @@ cli_uri_parse(const char *uri,
 	} else if (strncmp(uri, CLI_URI_AMAZON_S3_SHORT,
 	    sizeof(CLI_URI_AMAZON_S3_SHORT) - 1) == 0) {
 		*type = CLI_TYPE_S3;
+	} else if (strncmp(uri, CLI_URI_AZURE_FILE_SERVICE_SHORT,
+	    sizeof(CLI_URI_AZURE_FILE_SERVICE_SHORT) - 1) == 0) {
+		*type = CLI_TYPE_AFS;
+	} else if (strncmp(uri, CLI_URI_AZURE_FILE_SERVICE_LONG,
+	    sizeof(CLI_URI_AZURE_FILE_SERVICE_LONG) - 1) == 0) {
+		*type = CLI_TYPE_AFS;
 	} else {
 		dbg(0, "invalid URI string: %s\n", uri);
 		return -EINVAL;
@@ -579,7 +585,8 @@ cli_args_parse(int argc,
 		assert(false);
 	}
 
-	if (cli_args->type == CLI_TYPE_AZURE) {
+	if ((cli_args->type == CLI_TYPE_AZURE)
+	 || (cli_args->type == CLI_TYPE_AFS)) {
 		if (pub_settings == NULL) {
 			dbg(0, "PublishSettings file required for Azure URI\n");
 			ret = -EINVAL;

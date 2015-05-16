@@ -26,22 +26,30 @@ enum cli_cmd {
 	CLI_CMD_EXIT,
 };
 
+/**
+ * @CLI_TYPE_AZURE:	Azure Block Blob service
+ * @CLI_TYPE_S3:	Amazon S3 service
+ * @CLI_TYPE_AFS:	Azure File Service
+ */
 enum cli_type {
 	CLI_TYPE_AZURE = 1,
 	CLI_TYPE_S3,
+	CLI_TYPE_AFS,
 };
 
-/*
+/**
  * @CLI_FL_BIN_ARG:	run as argument to binary
  * @CLI_FL_PROMPT:	run from elasto> prompt
- * @CLI_FL_AZ:		command can be run against Azure
+ * @CLI_FL_AZ:		command can be run against Azure Blob Service
  * @CLI_FL_S3:		command can be run against Amazon S3
+ * @CLI_FL_AFS:		command can be run against Azure File Service
  */
 enum cli_fl {
 	CLI_FL_BIN_ARG	= 0x00000001,
 	CLI_FL_PROMPT	= 0x00000002,
 	CLI_FL_AZ	= 0x00000004,
 	CLI_FL_S3	= 0x00000008,
+	CLI_FL_AFS	= 0x00000010,
 };
 
 /*
