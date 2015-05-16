@@ -31,6 +31,7 @@
 	<arg><option>-k</option><replaceable class="parameter">Amazon IAM credentials file</replaceable></arg>
 	<arg><option>-d</option><replaceable class="parameter">log level</replaceable></arg>
 	<arg><option>-i</option></arg>
+	<arg><option>-h</option><replaceable class="parameter">CLI history file</replaceable></arg>
 	<arg>-- <replaceable class="parameter">command</replaceable></arg>
 	</cmdsynopsis>
 </refsynopsisdiv>
@@ -76,6 +77,14 @@
 	<term><option>-i</option></term>
 	<listitem><para>Use HTTP instead of HTTPS where possible, for improved
 	performance.</para></listitem>
+</varlistentry>
+
+<varlistentry>
+	<term><option>-h</option>
+	<replaceable>CLI history file</replaceable></term>
+	<listitem><para>Specify a file to use as storage for Elasto CLI command
+	history, rather than the default <replaceable>~/.elasto_history
+	</replaceable> path.</para></listitem>
 </varlistentry>
 
 <varlistentry>
