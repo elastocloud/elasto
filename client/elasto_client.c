@@ -423,6 +423,45 @@ err_out:
 	return ret;
 }
 
+/**
+ * Parse REST URI in the form proto://server
+ * TODO currently only the following protocols are supported:
+ * Azure Block Blob service:	azure_bb://
+ *				abb://
+ * Amazon S3 service:		s3://
+ */
+#define CLI_URI_AZURE_BLOCK_BLOB_LONG "azure_bb://"
+#define CLI_URI_AZURE_BLOCK_BLOB_SHORT "abb://"
+#define CLI_URI_AMAZON_S3_LONG "amazon_s3://"
+#define CLI_URI_AMAZON_S3_SHORT "s3://"
+static int
+cli_uri_parse(const char *uri,
+	      enum cli_type *type)
+{
+	if (type == NULL) {
+		return -EINVAL;
+	}
+
+	if (strncmp(uri, CLI_URI_AZURE_BLOCK_BLOB_LONG,
+	    sizeof(CLI_URI_AZURE_BLOCK_BLOB_LONG) - 1) == 0) {
+		*type = CLI_TYPE_AZURE;
+	} else if (strncmp(uri, CLI_URI_AZURE_BLOCK_BLOB_SHORT,
+	    sizeof(CLI_URI_AZURE_BLOCK_BLOB_SHORT) - 1) == 0) {
+		*type = CLI_TYPE_AZURE;
+	} else if (strncmp(uri, CLI_URI_AMAZON_S3_LONG,
+	    sizeof(CLI_URI_AMAZON_S3_LONG) - 1) == 0) {
+		*type = CLI_TYPE_S3;
+	} else if (strncmp(uri, CLI_URI_AMAZON_S3_SHORT,
+	    sizeof(CLI_URI_AMAZON_S3_SHORT) - 1) == 0) {
+		*type = CLI_TYPE_S3;
+	} else {
+		dbg(0, "invalid URI string: %s\n", uri);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static void
 cli_args_free(const struct cli_cmd_spec *cmd,
 	      struct cli_args *cli_args)
@@ -456,6 +495,7 @@ cli_args_parse(int argc,
 	char *pub_settings = NULL;
 	char *s3_creds_file = NULL;
 	char *history_file = NULL;
+	char *uri = NULL;
 	char *progname = strdup(argv[0]);
 	if (progname == NULL) {
 		ret = -ENOMEM;
@@ -465,7 +505,7 @@ cli_args_parse(int argc,
 	/* show help for all backends by default */
 	cli_args->flags = CLI_FL_AZ | CLI_FL_S3;
 
-	while ((opt = getopt(argc, argv, "s:k:d:?ih:")) != -1) {
+	while ((opt = getopt(argc, argv, "s:k:d:?ih:u:")) != -1) {
 		uint32_t debug_level;
 		switch (opt) {
 		case 's':
@@ -496,6 +536,13 @@ cli_args_parse(int argc,
 				goto err_out;
 			}
 			break;
+		case 'u':
+			uri = strdup(optarg);
+			if (uri == NULL) {
+				ret = -ENOMEM;
+				goto err_out;
+			}
+			break;
 		default: /* '?' */
 			cli_args_usage(progname,
 				       CLI_FL_BIN_ARG | CLI_FL_AZ | CLI_FL_S3,
@@ -514,18 +561,42 @@ cli_args_parse(int argc,
 		goto err_out;
 	}
 
-	if (pub_settings != NULL) {
+	if (uri != NULL) {
+		/* parse only provider portion of the URI. TODO parse host */
+		ret = cli_uri_parse(uri, &cli_args->type);
+		if (ret < 0) {
+			goto err_out;
+		}
+	} else if (pub_settings != NULL) {
+		/* publish settings argument - assume Azure Bock Blob service */
 		cli_args->type = CLI_TYPE_AZURE;
+	} else if (s3_creds_file != NULL) {
+		/* iam creds argument - assume Amazon S3 service */
+		cli_args->type = CLI_TYPE_S3;
+	} else {
+		assert(false);
+	}
+
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		if (pub_settings == NULL) {
+			dbg(0, "PublishSettings file required for Azure URI\n");
+			ret = -EINVAL;
+			goto err_out;
+		}
 		/* don't show S3 usage strings */
 		cli_args->flags &= ~CLI_FL_S3;
 		cli_args->az.ps_file = pub_settings;
-	} else {
-		assert(s3_creds_file != NULL);
-		cli_args->type = CLI_TYPE_S3;
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		if (s3_creds_file == NULL) {
+			dbg(0, "S3 creds required for Amazon URI\n");
+			ret = -EINVAL;
+			goto err_out;
+		}
 		/* don't show Azure usage strings */
 		cli_args->flags &= ~CLI_FL_AZ;
 		cli_args->s3.creds_file = s3_creds_file;
 	}
+
 	if (history_file == NULL) {
 		/* default ~/.elasto_history */
 		struct passwd *pw = getpwuid(getuid());
