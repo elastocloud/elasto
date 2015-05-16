@@ -41,70 +41,10 @@ void
 cli_create_args_free(struct cli_args *cli_args)
 {
 	free(cli_args->path);
-	if ((cli_args->type == CLI_TYPE_AZURE)
-	 || (cli_args->type == CLI_TYPE_AFS)) {
-		free(cli_args->az.blob_acc);
-		free(cli_args->az.ctnr_name);
-	} else if (cli_args->type == CLI_TYPE_S3) {
-		free(cli_args->s3.bkt_name);
-	}
 	free(cli_args->create.label);
 	free(cli_args->create.desc);
 	free(cli_args->create.affin_grp);
 	free(cli_args->create.location);
-}
-
-static int
-cli_create_args_validate_az(struct cli_args *cli_args)
-{
-	if (cli_args->az.blob_acc == NULL) {
-		cli_args_usage(cli_args->progname, cli_args->flags,
-			       "Create must include an <account> argument");
-		return -EINVAL;
-	}
-
-	if (cli_args->az.ctnr_name != NULL) {
-		/* container creation */
-		if ((cli_args->create.label != NULL)
-		 || (cli_args->create.desc != NULL)
-		 || (cli_args->create.location != NULL)
-		 || (cli_args->create.affin_grp != NULL)) {
-			cli_args_usage(cli_args->progname, cli_args->flags,
-				       "container creation does take "
-				       "-l, -d, -A or -L arguments");
-			return -EINVAL;
-		}
-		cli_args->create.type = CLI_CMD_CREATE_CTNR;
-		return 0;
-	}
-
-	cli_args->create.type = CLI_CMD_CREATE_ACC;
-	if (cli_args->create.label == NULL) {
-		cli_args_usage(cli_args->progname, cli_args->flags,
-			       "Account creation requires a <label> argument");
-		return -EINVAL;
-	}
-	if ((cli_args->create.location == NULL)
-	 && (cli_args->create.affin_grp == NULL)) {
-		cli_args_usage(cli_args->progname, cli_args->flags,
-			       "Create must specify either a <location> or "
-			       "<affinity group>");
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static int
-cli_create_args_validate_s3(struct cli_args *cli_args)
-{
-	if (cli_args->s3.bkt_name == NULL) {
-		cli_args_usage(cli_args->progname, cli_args->flags,
-			       "Create must include a <bucket> argument");
-		return -EINVAL;
-	}
-
-	return 0;
 }
 
 int
@@ -118,6 +58,7 @@ cli_create_args_parse(int argc,
 	extern int optind;
 	/* reset index to start scanning again */
 	optind = 1;
+	cli_args->path = NULL;
 
 	memset(&cli_args->create, 0, sizeof(cli_args->create));
 	while ((opt = getopt(argc, argv, "l:d:A:L:s")) != -1) {
@@ -166,29 +107,12 @@ cli_create_args_parse(int argc,
 		goto err_args_free;
 	}
 
-	/* TODO can be removed. all path parsing now done by libfile */
-	if ((cli_args->type == CLI_TYPE_AZURE)
-	 || (cli_args->type == CLI_TYPE_AFS)) {
-		ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
-					  argv[optind],
-					  &cli_args->az.blob_acc,
-					  &cli_args->az.ctnr_name, NULL);
-		if (ret < 0)
-			goto err_args_free;
-		ret = cli_create_args_validate_az(cli_args);
-	} else if (cli_args->type == CLI_TYPE_S3) {
-		ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
-					  argv[optind],
-					  &cli_args->s3.bkt_name,
-					  NULL, NULL);
-		if (ret < 0)
-			goto err_args_free;
-		ret = cli_create_args_validate_s3(cli_args);
-	} else {
+	if ((cli_args->type != CLI_TYPE_AZURE)
+	 && (cli_args->type != CLI_TYPE_AFS)
+	 && (cli_args->type == CLI_TYPE_S3)) {
 		ret = -ENOTSUP;
-	}
-	if (ret < 0)
 		goto err_args_free;
+	}
 
 	cli_args->cmd = CLI_CMD_CREATE;
 	return 0;
