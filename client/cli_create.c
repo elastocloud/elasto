@@ -41,7 +41,8 @@ void
 cli_create_args_free(struct cli_args *cli_args)
 {
 	free(cli_args->path);
-	if (cli_args->type == CLI_TYPE_AZURE) {
+	if ((cli_args->type == CLI_TYPE_AZURE)
+	 || (cli_args->type == CLI_TYPE_AFS)) {
 		free(cli_args->az.blob_acc);
 		free(cli_args->az.ctnr_name);
 	} else if (cli_args->type == CLI_TYPE_S3) {
@@ -73,9 +74,7 @@ cli_create_args_validate_az(struct cli_args *cli_args)
 				       "-l, -d, -A or -L arguments");
 			return -EINVAL;
 		}
-		if (cli_args->create.type != CLI_CMD_CREATE_SHARE) {
-			cli_args->create.type = CLI_CMD_CREATE_CTNR;
-		}
+		cli_args->create.type = CLI_CMD_CREATE_CTNR;
 		return 0;
 	}
 
@@ -151,9 +150,6 @@ cli_create_args_parse(int argc,
 				goto err_args_free;
 			}
 			break;
-		case 's':
-			cli_args->create.type = CLI_CMD_CREATE_SHARE;
-			break;
 		default: /* '?' */
 			cli_args_usage(cli_args->progname, cli_args->flags,
 				       "invalid create argument");
@@ -163,14 +159,16 @@ cli_create_args_parse(int argc,
 		}
 	}
 
-	/* path is parsed by libfile on open. FIXME use for share too */
+	/* path is parsed by libfile on open */
 	cli_args->path = strdup(argv[optind]);
 	if (cli_args->path == NULL) {
 		ret = -ENOMEM;
 		goto err_args_free;
 	}
 
-	if (cli_args->type == CLI_TYPE_AZURE) {
+	/* TODO can be removed. all path parsing now done by libfile */
+	if ((cli_args->type == CLI_TYPE_AZURE)
+	 || (cli_args->type == CLI_TYPE_AFS)) {
 		ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
 					  argv[optind],
 					  &cli_args->az.blob_acc,
@@ -243,52 +241,43 @@ err_out:
 }
 
 static int
-cli_create_handle_share(struct cli_args *cli_args)
+cli_create_handle_afs(struct cli_args *cli_args)
 {
-	struct elasto_conn *econn;
-	struct op *op;
+	struct elasto_fh *fh;
+	struct elasto_ftoken_list *toks = NULL;
+	struct elasto_fauth auth;
 	int ret;
 
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
-					  cli_args->insecure_http, &econn);
-	} else {
+	if (cli_args->type != CLI_TYPE_AFS) {
 		ret = -ENOTSUP;
-	}
-	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = cli_sign_conn_setup(econn,
-				  cli_args->az.blob_acc,
-				  cli_args->az.sub_id);
-	if (ret < 0) {
-		goto err_conn_free;
+	if (cli_args->create.location != NULL) {
+		ret = elasto_ftoken_add(ELASTO_FOPEN_TOK_CREATE_AT_LOCATION,
+					cli_args->create.location, &toks);
+		if (ret < 0) {
+			goto err_out;
+		}
+		/* FIXME label, desc and affin_grp are ignored */
 	}
 
-	ret = az_fs_req_share_create(cli_args->az.blob_acc,
-				     cli_args->az.ctnr_name,
-				     &op);
+	auth.type = ELASTO_FILE_AFS;
+	auth.az.ps_path = cli_args->az.ps_file;
+	auth.insecure_http = cli_args->insecure_http;
+	ret = elasto_fopen(&auth, cli_args->path, ELASTO_FOPEN_CREATE
+						| ELASTO_FOPEN_EXCL
+						| ELASTO_FOPEN_DIRECTORY,
+			   toks, &fh);
 	if (ret < 0) {
-		goto err_conn_free;
+		printf("%s path creation failed with: %s\n",
+		       cli_args->path, strerror(-ret));
+		goto err_out;
 	}
-
-	ret = elasto_conn_op_txrx(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
+	printf("successfully created path at %s\n", cli_args->path);
+	elasto_fclose(fh);
 
 	ret = 0;
-err_op_free:
-	op_free(op);
-err_conn_free:
-	elasto_conn_free(econn);
 err_out:
 	return ret;
 }
@@ -340,14 +329,11 @@ cli_create_handle(struct cli_args *cli_args)
 	int ret = -ENOTSUP;
 
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		if ((cli_args->create.type == CLI_CMD_CREATE_ACC)
-		 || (cli_args->create.type == CLI_CMD_CREATE_CTNR)) {
-			ret = cli_create_handle_apb(cli_args);
-		} else if (cli_args->create.type == CLI_CMD_CREATE_SHARE) {
-			ret = cli_create_handle_share(cli_args);
-		}
+		ret = cli_create_handle_apb(cli_args);
 	} else if (cli_args->type == CLI_TYPE_S3) {
 		ret = cli_create_handle_bkt(cli_args);
+	} else if (cli_args->type == CLI_TYPE_AFS) {
+		ret = cli_create_handle_afs(cli_args);
 	}
 
 	return ret;
