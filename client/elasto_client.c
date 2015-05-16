@@ -204,7 +204,9 @@ cli_args_usage(const char *progname,
 "-d log_level:		Log debug messages (default: 0)\n"
 "-i			Insecure, use HTTP where possible "
 "(default: HTTPS only)\n"
-"-h history		CLI history file (default: ~/.elasto_history)\n\n",
+"-h history:		CLI history file (default: ~/.elasto_history)\n"
+"-u URI:		REST Server URI (default: derived from credentials "
+"file)\n\n",
 			progname);
 	}
 
