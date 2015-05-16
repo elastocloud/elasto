@@ -44,7 +44,8 @@ elasto_fmkdir(const struct elasto_fauth *auth,
 
 	if ((auth->type != ELASTO_FILE_AZURE)
 	 && (auth->type != ELASTO_FILE_S3)
-	 && (auth->type != ELASTO_FILE_ABB)) {
+	 && (auth->type != ELASTO_FILE_ABB)
+	 && (auth->type != ELASTO_FILE_AFS)) {
 		ret = -ENOTSUP;
 		goto err_out;
 	}
@@ -76,7 +77,8 @@ elasto_frmdir(const struct elasto_fauth *auth,
 
 	if ((auth->type != ELASTO_FILE_AZURE)
 	 && (auth->type != ELASTO_FILE_S3)
-	 && (auth->type != ELASTO_FILE_ABB)) {
+	 && (auth->type != ELASTO_FILE_ABB)
+	 && (auth->type != ELASTO_FILE_AFS)) {
 		ret = -ENOTSUP;
 		goto err_out;
 	}
