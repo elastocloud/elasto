@@ -42,7 +42,7 @@
 #include "apb_handle.h"
 #include "apb_open.h"
 
-#define APB_FOPEN_LOCATION_DEFAULT "Netherlands"
+#define APB_FOPEN_LOCATION_DEFAULT "West Europe"
 
 /* XXX dup of path parsing code in elasto_cli.c */
 int

@@ -42,7 +42,7 @@
 #include "afs_handle.h"
 #include "afs_open.h"
 
-#define AFS_FOPEN_LOCATION_DEFAULT "Netherlands"
+#define AFS_FOPEN_LOCATION_DEFAULT "West Europe"
 
 int
 afs_fpath_parse(const char *path,
