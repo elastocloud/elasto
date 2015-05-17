@@ -65,7 +65,8 @@ cli_ls_args_parse(int argc,
 		  struct cli_args *cli_args)
 {
 	if ((cli_args->type != CLI_TYPE_AZURE)
-	 && (cli_args->type != CLI_TYPE_S3)) {
+	 && (cli_args->type != CLI_TYPE_S3)
+	 && (cli_args->type != CLI_TYPE_AFS)) {
 		return -ENOTSUP;
 	}
 
@@ -120,6 +121,9 @@ cli_ls_handle(struct cli_args *cli_args)
 	} else if (cli_args->type == CLI_TYPE_S3) {
 		auth.type = ELASTO_FILE_S3;
 		auth.s3.creds_path = cli_args->s3.creds_file;
+	} else if (cli_args->type == CLI_TYPE_AFS) {
+		auth.type = ELASTO_FILE_AFS;
+		auth.az.ps_path = cli_args->az.ps_file;
 	}
 	auth.insecure_http = cli_args->insecure_http;
 
