@@ -1869,7 +1869,7 @@ az_fs_req_file_prop_set_hdr_fill(
 		goto err_out;
 	}
 
-	if (file_prop_set_req->relevant | AZ_FS_FILE_PROP_LEN) {
+	if (file_prop_set_req->relevant & AZ_FS_FILE_PROP_LEN) {
 		char *hdr_str;
 		ret = asprintf(&hdr_str, "%" PRIu64, file_prop_set_req->len);
 		if (ret < 0) {
@@ -1883,7 +1883,7 @@ az_fs_req_file_prop_set_hdr_fill(
 		}
 	}
 
-	if (file_prop_set_req->relevant | AZ_FS_FILE_PROP_CTYPE) {
+	if (file_prop_set_req->relevant & AZ_FS_FILE_PROP_CTYPE) {
 		ret = op_req_hdr_add(op, "x-ms-content-type",
 				     file_prop_set_req->content_type);
 		if (ret < 0) {
@@ -1952,13 +1952,13 @@ az_fs_req_file_prop_set(const char *acc,
 		goto err_path_free;
 	}
 
-	if (relevant | AZ_FS_FILE_PROP_LEN) {
+	if (relevant & AZ_FS_FILE_PROP_LEN) {
 		relevant &= (~AZ_FS_FILE_PROP_LEN);
 		file_prop_set_req->relevant |= AZ_FS_FILE_PROP_LEN;
 		file_prop_set_req->len = len;
 	}
 
-	if (relevant | AZ_FS_FILE_PROP_CTYPE) {
+	if (relevant & AZ_FS_FILE_PROP_CTYPE) {
 		relevant &= (~AZ_FS_FILE_PROP_CTYPE);
 		file_prop_set_req->relevant |= AZ_FS_FILE_PROP_CTYPE;
 		file_prop_set_req->content_type = strdup(content_type);
