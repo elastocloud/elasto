@@ -74,6 +74,103 @@ err_out:
 	return ret;
 }
 
+struct cli_get_data_ctx {
+	int fd;
+	char *path;
+	uint64_t len;
+};
+
+static int
+cli_get_data_in_cb(uint64_t stream_off,
+		   uint64_t got,
+		   uint8_t *in_buf,
+		   uint64_t buf_len,
+		   void *priv)
+{
+	struct cli_get_data_ctx *data_ctx = priv;
+	size_t wrote;
+	int ret;
+
+	wrote = pwrite(data_ctx->fd, in_buf, got, stream_off);
+	if ((wrote == -1) || (wrote != got)) {
+		printf("write callback failed: %s\n", strerror(errno));
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	free(in_buf);
+
+	ret = 0;
+err_out:
+	return ret;
+}
+
+static int
+cli_get_data_setup(const char *path,
+		   uint64_t len,
+		   struct elasto_data **_data)
+{
+	struct elasto_data *data;
+	struct cli_get_data_ctx *data_ctx;
+	int ret;
+
+	data_ctx = malloc(sizeof(*data_ctx));
+	if (data_ctx == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	data_ctx->fd = open(path, (O_CREAT | O_WRONLY),
+			    (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH));
+	if (data_ctx->fd == -1) {
+		ret = -errno;
+		goto err_ctx_free;
+	}
+
+	/* TODO fallocate file */
+
+	data_ctx->path = strdup(path);
+	if (data_ctx->path == NULL) {
+		ret = -ENOMEM;
+		goto err_fd_close;
+	}
+	data_ctx->len = len;
+
+	ret = elasto_data_cb_new(0, NULL,
+				 len, cli_get_data_in_cb,
+				 data_ctx, &data);
+	if (ret < 0) {
+		goto err_path_free;
+	}
+
+	*_data = data;
+
+	return 0;
+
+err_path_free:
+	free(data_ctx->path);
+err_fd_close:
+	close(data_ctx->fd);
+err_ctx_free:
+	free(data_ctx);
+err_out:
+	return ret;
+}
+
+static void
+cli_get_data_free(struct elasto_data *data)
+{
+	/* TODO implement and use elasto_data_cbpriv_get */
+	struct cli_get_data_ctx *data_ctx = data->cb.priv;
+
+	free(data_ctx->path);
+	if (close(data_ctx->fd) == -1) {
+		printf("close failed: %s\n", strerror(errno));
+	}
+	free(data_ctx);
+	elasto_data_free(data);
+}
+
 int
 cli_get_handle(struct cli_args *cli_args)
 {
@@ -125,10 +222,8 @@ cli_get_handle(struct cli_args *cli_args)
 	printf("getting %" PRIu64 " bytes from %s for %s\n",
 	       fstat.size, cli_args->path, cli_args->get.local_path);
 
-	ret = elasto_data_file_new(cli_args->get.local_path, 0, 0,
-				   O_CREAT | O_WRONLY,
-				   (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH),
-				   &dest_data);
+	ret = cli_get_data_setup(cli_args->get.local_path, fstat.size,
+				 &dest_data);
 	if (ret < 0) {
 		goto err_fclose;
 	}
@@ -138,12 +233,12 @@ cli_get_handle(struct cli_args *cli_args)
 	ret = elasto_fread(fh, 0, fstat.size, dest_data);
 	if (ret < 0) {
 		printf("read failed with: %s\n", strerror(-ret));
-		goto err_fclose;
+		goto err_data_cleanup;
 	}
 
-	elasto_data_free(dest_data);
-
 	ret = 0;
+err_data_cleanup:
+	cli_get_data_free(dest_data);
 err_fclose:
 	if (elasto_fclose(fh) < 0) {
 		printf("close failed\n");
