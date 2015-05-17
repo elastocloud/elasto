@@ -259,12 +259,34 @@ afs_fwrite(void *mod_priv,
 	int ret;
 	struct op *op;
 	struct afs_fh *afs_fh = mod_priv;
+	struct elasto_fstat fstat;
 
 	if ((src_data->type != ELASTO_DATA_CB)
 				&& (src_data->type != ELASTO_DATA_IOV)) {
 		dbg(0, "afs write only supports CB and IOV data types\n");
 		ret = -EINVAL;
 		goto err_out;
+	}
+
+	ret = afs_fstat(mod_priv, conn, &fstat);
+	if (ret < 0) {
+		dbg(0, "failed to stat dest file: %s\n", strerror(-ret));
+		goto err_out;
+	}
+
+	if (fstat.size < dest_off + dest_len) {
+		/*
+		 * Need to truncate file out to new (larger) length, as AFS Put
+		 * Range doesn't allow writes past the current length.
+		 */
+		dbg(0, "truncating file to %" PRIu64 " prior to write\n",
+		    dest_off + dest_len);
+		ret = afs_ftruncate(mod_priv, conn, dest_off + dest_len);
+		if (ret < 0) {
+			dbg(0, "failed to truncate dest file: %s\n",
+			    strerror(-ret));
+			goto err_out;
+		}
 	}
 
 	if (dest_len > AFS_MAX_WRITE) {
