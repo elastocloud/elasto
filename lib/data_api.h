@@ -51,7 +51,6 @@ struct elasto_data {
 				      uint8_t **_out_buf,
 				      uint64_t *buf_len,
 				      void *priv);
-			uint8_t *next_in_buf;
 			int (*in_cb)(uint64_t stream_off,
 				     uint64_t got,
 				     uint8_t *in_buf,

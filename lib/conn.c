@@ -188,11 +188,10 @@ ev_write_alloc_std(struct op *op,
 		/* TODO, could fallocate entire file */
 		break;
 	case ELASTO_DATA_CB:
-		/* only need to allocate enough to handle this cb */
-		op->rsp.data->cb.next_in_buf = malloc(cb_nbytes);
-		if (op->rsp.data->cb.next_in_buf == NULL) {
-			return -ENOMEM;
-		}
+		/*
+		 * cb_in_buf allocation is handled in the write handler, as we
+		 * don't need to do anything smart with the clen.
+		 */
 		break;
 	default:
 		assert(false);
@@ -242,6 +241,7 @@ ev_write_std(struct op *op,
 	int ret;
 	off_t soff;
 	uint64_t write_off = op->rsp.data->base_off + op->rsp.data->off;
+	uint8_t *cb_in_buf;
 
 	/* rsp buffer must have been allocated */
 	assert(op->rsp.data != NULL);
@@ -288,24 +288,28 @@ ev_write_std(struct op *op,
 		}
 		break;
 	case ELASTO_DATA_CB:
-		/* TODO could avoid the copy here */
+		/* allocate a buffer to hold only this cb data */
+		cb_in_buf = malloc(num_bytes);
+		if (cb_in_buf == NULL) {
+			return -ENOMEM;
+		}
 		ret = evbuffer_remove(ev_in_buf,
-				      (void *)(op->rsp.data->cb.next_in_buf),
+				      cb_in_buf,
 				      num_bytes);
 		/* no tolerance for partial IO */
 		if ((ret < 0) || (ret != num_bytes)) {
 			dbg(0, "unable to remove %" PRIu64 " bytes from "
 			       "buffer for callback\n", num_bytes);
+			free(cb_in_buf);
 			return -EIO;
 		}
-		/* callback is responsible for freeing next_in_buf */
-		ret = op->rsp.data->cb.in_cb(write_off, num_bytes,
-					     op->rsp.data->cb.next_in_buf,
+		/* in_cb is responsible for freeing cb_in_buf on success */
+		ret = op->rsp.data->cb.in_cb(write_off, num_bytes, cb_in_buf,
 					     num_bytes, op->rsp.data->cb.priv);
-		op->rsp.data->cb.next_in_buf = NULL;
 		if (ret < 0) {
 			dbg(0, "data in_cb returned an error (%d), ending "
 			       "xfer\n", ret);
+			free(cb_in_buf);
 			return -EIO;
 		}
 
