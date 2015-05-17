@@ -47,6 +47,9 @@
  * service returns status code 413 (Request Entity Too Large).
  */
 #define AFS_MAX_WRITE (4 * BYTES_IN_MB)
+#define AFS_IO_SIZE_HTTP AFS_MAX_WRITE
+/* FIXME: https writes over 16KB timeout. */
+#define AFS_IO_SIZE_HTTPS (16 * BYTES_IN_KB)
 
 struct afs_fwrite_multi_data_ctx {
 	uint64_t this_off;
@@ -190,7 +193,8 @@ afs_fwrite_multi(struct afs_fh *afs_fh,
 		 struct elasto_conn *conn,
 		 uint64_t dest_off,
 		 uint64_t dest_len,
-		 struct elasto_data *src_data)
+		 struct elasto_data *src_data,
+		 uint64_t max_io)
 {
 	int ret;
 	struct op *op;
@@ -200,7 +204,7 @@ afs_fwrite_multi(struct afs_fh *afs_fh,
 
 	while (data_remain > 0) {
 		uint64_t this_off = dest_off + data_off;
-		uint64_t this_len = MIN(AFS_MAX_WRITE, data_remain);
+		uint64_t this_len = MIN(max_io, data_remain);
 
 		dbg(0, "multi fwrite: off=%" PRIu64 ", len=%" PRIu64 "\n",
 		    this_off, this_len);
@@ -260,6 +264,7 @@ afs_fwrite(void *mod_priv,
 	struct op *op;
 	struct afs_fh *afs_fh = mod_priv;
 	struct elasto_fstat fstat;
+	uint64_t max_io;
 
 	if ((src_data->type != ELASTO_DATA_CB)
 				&& (src_data->type != ELASTO_DATA_IOV)) {
@@ -289,9 +294,10 @@ afs_fwrite(void *mod_priv,
 		}
 	}
 
-	if (dest_len > AFS_MAX_WRITE) {
+	max_io = (conn->insecure_http ? AFS_IO_SIZE_HTTP : AFS_IO_SIZE_HTTPS);
+	if (dest_len > max_io) {
 		ret = afs_fwrite_multi(afs_fh, conn, dest_off, dest_len,
-				       src_data);
+				       src_data, max_io);
 		return ret;
 	}
 
