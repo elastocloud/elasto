@@ -40,7 +40,14 @@ op_hdr_add(struct list_head *hdrs,
 	   const char *val)
 {
 	int ret;
-	struct op_hdr *hdr = malloc(sizeof(*hdr));
+	struct op_hdr *hdr;
+
+	if ((key == NULL) || (val == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	hdr = malloc(sizeof(*hdr));
 	if (hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
