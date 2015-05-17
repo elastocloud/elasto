@@ -263,7 +263,7 @@ afs_fopen_file(struct afs_fh *afs_fh,
 					    afs_fh->path.share,
 					    afs_fh->path.parent_dir,
 					    afs_fh->path.file,
-					    BYTES_IN_TB,	/* max len */
+					    0,	/* initial size */
 					    &op);
 		if (ret < 0) {
 			goto err_out;
