@@ -1441,14 +1441,6 @@ err_out:
 }
 
 static void
-s3_part_free(struct s3_part **_part)
-{
-	struct s3_part *part = *_part;
-	free(part->etag);
-	free(part);
-}
-
-static void
 s3_req_mp_done_free(struct s3_req_mp_done *mp_done_req)
 {
 	struct s3_part *part;
@@ -1457,12 +1449,6 @@ s3_req_mp_done_free(struct s3_req_mp_done *mp_done_req)
 	free(mp_done_req->bkt_name);
 	free(mp_done_req->obj_name);
 	free(mp_done_req->upload_id);
-	if (mp_done_req->parts == NULL) {
-		return;
-	}
-	list_for_each_safe(mp_done_req->parts, part, part_n, list) {
-		s3_part_free(&part);
-	}
 }
 
 static int
@@ -1536,6 +1522,9 @@ err_out:
 	return ret;
 }
 
+/*
+ * @parts is not retained with the request.
+ */
 int
 s3_req_mp_done(const char *bkt,
 	       const char *obj,
@@ -1595,8 +1584,6 @@ s3_req_mp_done(const char *bkt,
 	if (ret < 0) {
 		goto err_hdrs_free;
 	}
-	/* XXX should copy list */
-	mp_done_req->parts = parts;
 
 	*_op = op;
 	return 0;

@@ -347,6 +347,18 @@ err_out:
 	return ret;
 }
 
+static void
+s3_fwrite_parts_free(struct list_head *parts)
+{
+	struct s3_part *part;
+	struct s3_part *part_n;
+
+	list_for_each_safe(parts, part, part_n, list) {
+		free(part->etag);
+		free(part);
+	}
+}
+
 static int
 s3_fwrite_multi(struct s3_fh *s3_fh,
 		struct elasto_conn *conn,
@@ -402,7 +414,7 @@ s3_fwrite_multi(struct s3_fh *s3_fh,
 		goto err_mp_abort;
 	}
 	free(upload_id);
-	/* TODO free parts? */
+	s3_fwrite_parts_free(&parts);
 
 	return 0;
 
@@ -411,7 +423,7 @@ err_data_free:
 err_mp_abort:
 	s3_fwrite_multi_abort(s3_fh, conn, upload_id);
 	free(upload_id);
-	/* TODO free parts? */
+	s3_fwrite_parts_free(&parts);
 err_out:
 	return ret;
 }

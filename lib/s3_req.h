@@ -141,7 +141,6 @@ struct s3_req_mp_done {
 	char *bkt_name;
 	char *obj_name;
 	char *upload_id;
-	struct list_head *parts;
 };
 
 struct s3_req_mp_abort {
