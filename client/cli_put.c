@@ -863,6 +863,9 @@ cli_put_file_handle(struct cli_args *cli_args)
 	if (cli_args->type == CLI_TYPE_AFS) {
 		auth.type = ELASTO_FILE_AFS;
 		auth.az.ps_path = cli_args->az.ps_file;
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		auth.type = ELASTO_FILE_S3;
+		auth.s3.creds_path = cli_args->s3.creds_file;
 	} else {
 		ret = -ENOTSUP;
 		goto err_out;
@@ -916,9 +919,8 @@ cli_put_handle(struct cli_args *cli_args)
 {
 	if (cli_args->type == CLI_TYPE_AZURE) {
 		return cli_put_blob_handle(cli_args);
-	} else if (cli_args->type == CLI_TYPE_S3) {
-		return cli_put_obj_handle(cli_args);
-	} else if (cli_args->type == CLI_TYPE_AFS) {
+	} else if ((cli_args->type == CLI_TYPE_AFS)
+					|| (cli_args->type == CLI_TYPE_S3)) {
 		return cli_put_file_handle(cli_args);
 	}
 
