@@ -1710,14 +1710,17 @@ az_req_block_list_put_free(struct az_req_block_list_put *blk_list_put_req)
 {
 	struct azure_block *blk;
 	struct azure_block *blk_n;
+
 	free(blk_list_put_req->account);
 	free(blk_list_put_req->container);
 	free(blk_list_put_req->bname);
+	if (blk_list_put_req->blks == NULL) {
+		return;
+	}
 	list_for_each_safe(blk_list_put_req->blks, blk, blk_n, list) {
 		free(blk->id);
 		free(blk);
 	}
-	free(blk_list_put_req->blks);
 }
 
 static int
