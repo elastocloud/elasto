@@ -392,6 +392,7 @@ err_out:
 static int
 abb_fwrite_multi_finish(struct apb_fh *apb_fh,
 			struct elasto_conn *conn,
+			uint64_t num_blks,
 			struct list_head *blks)
 {
 	int ret;
@@ -400,8 +401,7 @@ abb_fwrite_multi_finish(struct apb_fh *apb_fh,
 	ret = az_req_block_list_put(apb_fh->path.acc,
 				    apb_fh->path.ctnr,
 				    apb_fh->path.blob,
-				    blks,
-				    &op);
+				    num_blks, blks, &op);
 	if (ret < 0) {
 		struct azure_block *blk;
 		struct azure_block *blk_n;
@@ -498,7 +498,7 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 		blk_num++;
 	}
 
-	ret = abb_fwrite_multi_finish(apb_fh, conn, &blks);
+	ret = abb_fwrite_multi_finish(apb_fh, conn, blk_num, &blks);
 	if (ret < 0) {
 		/* don't abort, as finish frees blks unconditionally */
 		goto err_out;

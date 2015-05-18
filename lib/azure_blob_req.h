@@ -201,6 +201,7 @@ struct az_req_block_list_put {
 	char *account;
 	char *container;
 	char *bname;
+	uint64_t num_blks;
 	struct list_head *blks;
 };
 
@@ -400,6 +401,7 @@ int
 az_req_block_list_put(const char *account,
 		      const char *container,
 		      const char *bname,
+		      uint64_t num_blks,
 		      struct list_head *blks,
 		      struct op **_op);
 

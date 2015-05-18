@@ -1723,18 +1723,34 @@ az_req_block_list_put_free(struct az_req_block_list_put *blk_list_put_req)
 	}
 }
 
+#define AZ_REQ_BLK_LIST_PUT_PFX \
+		"<?xml version=\"1.0\" encoding=\"utf-8\"?>" \
+		"<BlockList>"
+/*
+ * Prior to encoding, the blockid string must be less than or equal to 64 bytes
+ * in size.
+ */
+#define AZ_REQ_BLK_LIST_PUT_ENT_MAXLEN ((64 * 4 / 3 + 4) \
+					+ (2 * sizeof("</Uncommitted>")))
+#define AZ_REQ_BLK_LIST_PUT_SFX "</BlockList>"
+
 static int
-az_req_block_list_put_body_fill(struct list_head *blks,
+az_req_block_list_put_body_fill(uint64_t num_blks,
+				struct list_head *blks,
 				struct elasto_data **req_data_out)
 {
 	int ret;
 	struct azure_block *blk;
 	char *xml_data;
-	int buf_remain;
+	uint64_t buf_remain;
 	struct elasto_data *req_data;
 
-	/* 2k buf, should be listlen calculated */
-	buf_remain = 2048;
+	buf_remain = sizeof(AZ_REQ_BLK_LIST_PUT_PFX)
+				+ (num_blks * AZ_REQ_BLK_LIST_PUT_ENT_MAXLEN)
+				+ sizeof(AZ_REQ_BLK_LIST_PUT_SFX);
+	dbg(4, "allocating block list XML buffer len: %" PRIu64 "\n",
+	    buf_remain);
+
 	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1742,11 +1758,9 @@ az_req_block_list_put_body_fill(struct list_head *blks,
 	}
 
 	xml_data = (char *)req_data->iov.buf;
-	ret = snprintf(xml_data, buf_remain,
-		       "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-		       "<BlockList>");
+	ret = snprintf(xml_data, buf_remain, AZ_REQ_BLK_LIST_PUT_PFX);
 	if ((ret < 0) || (ret >= buf_remain)) {
-		/* truncated or error */
+		dbg(0, "failed to fill blks-put prefix\n");
 		ret = -E2BIG;
 		goto err_buf_free;
 	}
@@ -1782,6 +1796,7 @@ az_req_block_list_put_body_fill(struct list_head *blks,
 			       "<%s>%s</%s>", state, b64_id, state);
 		free(b64_id);
 		if ((ret < 0) || (ret >= buf_remain)) {
+			dbg(0, "failed to fill blks-put entry\n");
 			ret = -E2BIG;
 			goto err_buf_free;
 		}
@@ -1790,9 +1805,9 @@ az_req_block_list_put_body_fill(struct list_head *blks,
 		buf_remain -= ret;
 	}
 
-	ret = snprintf(xml_data, buf_remain,
-		       "</BlockList>");
+	ret = snprintf(xml_data, buf_remain, AZ_REQ_BLK_LIST_PUT_SFX);
 	if ((ret < 0) || (ret >= buf_remain)) {
+		dbg(0, "failed to fill blks-put suffix\n");
 		ret = -E2BIG;
 		goto err_buf_free;
 	}
@@ -1821,6 +1836,7 @@ int
 az_req_block_list_put(const char *account,
 		      const char *container,
 		      const char *bname,
+		      uint64_t num_blks,
 		      struct list_head *blks,
 		      struct op **_op)
 {
@@ -1873,11 +1889,12 @@ az_req_block_list_put(const char *account,
 		goto err_upath_free;
 	}
 
-	ret = az_req_block_list_put_body_fill(blks, &op->req.data);
+	ret = az_req_block_list_put_body_fill(num_blks, blks, &op->req.data);
 	if (ret < 0) {
 		goto err_hdrs_free;
 	}
 
+	blk_list_put_req->num_blks = num_blks;
 	blk_list_put_req->blks = blks;
 
 	/* the connection layer must sign this request before sending */
