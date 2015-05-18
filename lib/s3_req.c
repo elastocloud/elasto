@@ -1475,8 +1475,8 @@ s3_op_mp_done_fill_body(struct list_head *parts,
 	int buf_remain;
 	struct elasto_data *req_data;
 
-	/* 2k buf, should be listlen calculated */
-	buf_remain = 2048;
+	/* FIXME 8k buf, should be listlen calculated */
+	buf_remain = 8 * BYTES_IN_KB;
 	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
