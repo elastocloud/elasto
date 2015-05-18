@@ -70,15 +70,17 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		ret = -EEXIST;
 		goto err_op_free;
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
-		struct elasto_data data;
+		struct elasto_data *data;
 
 		/* put a zero length object */
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		memset(&data, 0, sizeof(data));
-		data.type = ELASTO_DATA_IOV;
+		ret = elasto_data_iov_new(NULL, 0, 0, false, &data);
+		if (ret < 0) {
+			goto err_out;
+		}
 		ret = s3_req_obj_put(s3_fh->path.bkt, s3_fh->path.obj,
-				     &data, &op);
+				     data, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
