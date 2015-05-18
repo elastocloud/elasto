@@ -23,17 +23,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "ccan/list/list.h"
-#include "lib/exml.h"
 #include "lib/data_api.h"
 #include "lib/file/file_api.h"
-#include "lib/op.h"
-#include "lib/azure_blob_req.h"
-#include "lib/s3_req.h"
-#include "lib/conn.h"
-#include "lib/azure_ssl.h"
 #include "cli_common.h"
-#include "cli_sign.h"
 #include "cli_put.h"
 
 /* split any blob over 10MB into separate blocks */
