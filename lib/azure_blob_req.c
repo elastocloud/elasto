@@ -1708,19 +1708,9 @@ err_out:
 static void
 az_req_block_list_put_free(struct az_req_block_list_put *blk_list_put_req)
 {
-	struct azure_block *blk;
-	struct azure_block *blk_n;
-
 	free(blk_list_put_req->account);
 	free(blk_list_put_req->container);
 	free(blk_list_put_req->bname);
-	if (blk_list_put_req->blks == NULL) {
-		return;
-	}
-	list_for_each_safe(blk_list_put_req->blks, blk, blk_n, list) {
-		free(blk->id);
-		free(blk);
-	}
 }
 
 #define AZ_REQ_BLK_LIST_PUT_PFX \
@@ -1830,7 +1820,7 @@ err_out:
 }
 
 /*
- * @blks is a list of blocks to commit, items in the list are not duped
+ * @blks is a list of blocks to commit. It is not retained with the request.
  */
 int
 az_req_block_list_put(const char *account,
@@ -1893,9 +1883,6 @@ az_req_block_list_put(const char *account,
 	if (ret < 0) {
 		goto err_hdrs_free;
 	}
-
-	blk_list_put_req->num_blks = num_blks;
-	blk_list_put_req->blks = blks;
 
 	/* the connection layer must sign this request before sending */
 	op->req_sign = az_req_sign;

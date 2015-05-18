@@ -388,7 +388,6 @@ err_out:
 	return ret;
 }
 
-/* FIXME bad API: the blks list is freed unconditionally */
 static int
 abb_fwrite_multi_finish(struct apb_fh *apb_fh,
 			struct elasto_conn *conn,
@@ -403,14 +402,7 @@ abb_fwrite_multi_finish(struct apb_fh *apb_fh,
 				    apb_fh->path.blob,
 				    num_blks, blks, &op);
 	if (ret < 0) {
-		struct azure_block *blk;
-		struct azure_block *blk_n;
-
 		dbg(0, "multi-part done req init failed: %s\n", strerror(-ret));
-		list_for_each_safe(blks, blk, blk_n, list) {
-			free(blk->id);
-			free(blk);
-		}
 		goto err_out;
 	}
 
@@ -428,10 +420,8 @@ err_out:
 	return ret;
 }
 
-static int
-abb_fwrite_multi_abort(struct apb_fh *apb_fh,
-		       struct elasto_conn *conn,
-		       struct list_head *blks)
+static void
+abb_fwrite_blks_free(struct list_head *blks)
 {
 	struct azure_block *blk;
 	struct azure_block *blk_n;
@@ -440,8 +430,6 @@ abb_fwrite_multi_abort(struct apb_fh *apb_fh,
 		free(blk->id);
 		free(blk);
 	}
-	/* FIXME cleanup uploaded blob blocks */
-	return 0;
 }
 
 static int
@@ -500,16 +488,17 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 
 	ret = abb_fwrite_multi_finish(apb_fh, conn, blk_num, &blks);
 	if (ret < 0) {
-		/* don't abort, as finish frees blks unconditionally */
-		goto err_out;
+		goto err_mp_abort;
 	}
+	abb_fwrite_blks_free(&blks);
 
 	return 0;
 
 err_data_free:
 	abb_fwrite_multi_data_free(this_data);
 err_mp_abort:
-	abb_fwrite_multi_abort(apb_fh, conn, &blks);
+	/* FIXME cleanup uploaded blob blocks */
+	abb_fwrite_blks_free(&blks);
 err_out:
 	return ret;
 }

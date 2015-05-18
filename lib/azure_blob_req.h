@@ -201,8 +201,6 @@ struct az_req_block_list_put {
 	char *account;
 	char *container;
 	char *bname;
-	uint64_t num_blks;
-	struct list_head *blks;
 };
 
 struct az_req_block_list_get {
