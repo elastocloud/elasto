@@ -42,8 +42,8 @@
 
 #define S3_MAX_PART (5 * BYTES_IN_MB)
 #define S3_IO_SIZE_HTTP S3_MAX_PART
-/* FIXME: https writes over 16KB timeout. */
-#define S3_IO_SIZE_HTTPS (16 * BYTES_IN_KB)
+/* FIXME: https writes over 16KB timeout, but S3 requires 5MB part uploads! */
+#define S3_IO_SIZE_HTTPS S3_MAX_PART
 
 /* FIXME data_ctx is a dup of afx_io. combine in vfs */
 struct s3_fwrite_multi_data_ctx {
@@ -289,6 +289,7 @@ static int
 s3_fwrite_multi_finish(struct s3_fh *s3_fh,
 		       struct elasto_conn *conn,
 		       char *upload_id,
+		       uint64_t num_parts,
 		       struct list_head *parts)
 {
 	int ret;
@@ -296,9 +297,7 @@ s3_fwrite_multi_finish(struct s3_fh *s3_fh,
 
 	ret = s3_req_mp_done(s3_fh->path.bkt,
 			     s3_fh->path.obj,
-			     upload_id,
-			     parts,
-			     &op);
+			     upload_id, num_parts, parts, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -386,8 +385,8 @@ s3_fwrite_multi(struct s3_fh *s3_fh,
 		uint64_t this_off = dest_off + data_off;
 		uint64_t this_len = MIN(max_io, data_remain);
 
-		dbg(0, "multi fwrite: off=%" PRIu64 ", len=%" PRIu64 "\n",
-		    this_off, this_len);
+		dbg(0, "%" PRIu64 " multi fwrite: off=%" PRIu64 ", len=%"
+		       PRIu64 "\n", part_num, this_off, this_len);
 
 		ret = s3_fwrite_multi_data_setup(this_off, this_len, src_data,
 						  &this_data);
@@ -409,7 +408,9 @@ s3_fwrite_multi(struct s3_fh *s3_fh,
 		part_num++;
 	}
 
-	ret = s3_fwrite_multi_finish(s3_fh, conn, upload_id, &parts);
+	/* -1, as @part_num starts at 1 */
+	ret = s3_fwrite_multi_finish(s3_fh, conn, upload_id, part_num - 1,
+				     &parts);
 	if (ret < 0) {
 		goto err_mp_abort;
 	}

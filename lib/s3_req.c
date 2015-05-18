@@ -1443,26 +1443,39 @@ err_out:
 static void
 s3_req_mp_done_free(struct s3_req_mp_done *mp_done_req)
 {
-	struct s3_part *part;
-	struct s3_part *part_n;
-
 	free(mp_done_req->bkt_name);
 	free(mp_done_req->obj_name);
 	free(mp_done_req->upload_id);
 }
 
+#define S3_REQ_MP_DONE_PFX "<CompleteMultipartUpload>"
+#define S3_REQ_MP_DONE_ENT_FMT	"<Part>" \
+					"<PartNumber>%u</PartNumber>" \
+					"<ETag>%s</ETag>" \
+				"</Part>"
+/*
+ * Amazon currently returns 32 byte etags, and part numbers can be up to 10000
+ */
+#define S3_REQ_MP_DONE_ENT_MAXLEN (sizeof(S3_REQ_MP_DONE_ENT_FMT) \
+					+ 32 + sizeof("10000"))
+#define S3_REQ_MP_DONE_SFX "</CompleteMultipartUpload>"
+
 static int
-s3_op_mp_done_fill_body(struct list_head *parts,
+s3_op_mp_done_fill_body(uint64_t num_parts,
+			struct list_head *parts,
 			struct elasto_data **req_data_out)
 {
 	int ret;
 	struct s3_part *part;
 	char *xml_data;
-	int buf_remain;
+	uint64_t buf_remain;
 	struct elasto_data *req_data;
 
-	/* FIXME 8k buf, should be listlen calculated */
-	buf_remain = 8 * BYTES_IN_KB;
+	buf_remain = sizeof(S3_REQ_MP_DONE_PFX)
+		+ (num_parts * S3_REQ_MP_DONE_ENT_MAXLEN)
+		+ sizeof(S3_REQ_MP_DONE_SFX);
+	dbg(4, "allocating mp-done XML buffer len: %" PRIu64 "\n", buf_remain);
+
 	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1470,10 +1483,9 @@ s3_op_mp_done_fill_body(struct list_head *parts,
 	}
 
 	xml_data = (char *)req_data->iov.buf;
-	ret = snprintf(xml_data, buf_remain,
-		       "<CompleteMultipartUpload>");
+	ret = snprintf(xml_data, buf_remain, S3_REQ_MP_DONE_PFX);
 	if ((ret < 0) || (ret >= buf_remain)) {
-		/* truncated or error */
+		dbg(0, "failed to fill mp-done prefix\n");
 		ret = -E2BIG;
 		goto err_buf_free;
 	}
@@ -1482,14 +1494,11 @@ s3_op_mp_done_fill_body(struct list_head *parts,
 	buf_remain -= ret;
 
 	list_for_each(parts, part, list) {
-		ret = snprintf(xml_data, buf_remain,
-			       "<Part>"
-					"<PartNumber>%u</PartNumber>"
-					"<ETag>%s</ETag>"
-			       "</Part>",
+		ret = snprintf(xml_data, buf_remain, S3_REQ_MP_DONE_ENT_FMT,
 			       (unsigned int)part->pnum,
 			       part->etag);
 		if ((ret < 0) || (ret >= buf_remain)) {
+			dbg(0, "failed to fill mp-done entry\n");
 			ret = -E2BIG;
 			goto err_buf_free;
 		}
@@ -1498,9 +1507,9 @@ s3_op_mp_done_fill_body(struct list_head *parts,
 		buf_remain -= ret;
 	}
 
-	ret = snprintf(xml_data, buf_remain,
-		       "</CompleteMultipartUpload>");
+	ret = snprintf(xml_data, buf_remain, S3_REQ_MP_DONE_SFX);
 	if ((ret < 0) || (ret >= buf_remain)) {
+		dbg(0, "failed to fill mp-done suffix\n");
 		ret = -E2BIG;
 		goto err_buf_free;
 	}
@@ -1529,6 +1538,7 @@ int
 s3_req_mp_done(const char *bkt,
 	       const char *obj,
 	       const char *upload_id,
+	       uint64_t num_parts,
 	       struct list_head *parts,
 	       struct op **_op)
 {
@@ -1580,7 +1590,7 @@ s3_req_mp_done(const char *bkt,
 		goto err_upath_free;
 	}
 
-	ret = s3_op_mp_done_fill_body(parts, &op->req.data);
+	ret = s3_op_mp_done_fill_body(num_parts, parts, &op->req.data);
 	if (ret < 0) {
 		goto err_hdrs_free;
 	}
@@ -1710,6 +1720,17 @@ s3_req_part_put(const char *bkt,
 	struct s3_ebo *ebo;
 	struct op *op;
 	struct s3_req_part_put *part_put_req;
+
+	if ((bkt == NULL) || (obj == NULL) || (upload_id == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if ((pnum < 1) || (pnum > 10000)) {
+		dbg(0, "invalid part number: %" PRIu32 "\n", pnum);
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = s3_ebo_init(S3OP_PART_PUT, &ebo);
 	if (ret < 0) {
