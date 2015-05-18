@@ -68,48 +68,8 @@ cm_data_iovec(void **state)
 	elasto_data_free(data);
 }
 
-static void
-cm_data_file(void **state)
-{
-	int ret;
-	struct elasto_data *data;
-	char dir_path[PATH_MAX];
-	char file_path[PATH_MAX];
-	struct stat st;
-
-	strncpy(dir_path, "/tmp/elasto_cm_data_file_XXXXXX", PATH_MAX);
-	char *dir = mkdtemp(dir_path);
-	assert_true(dir != NULL);
-
-	snprintf(file_path, PATH_MAX, "%s/cm_data_file0", dir);
-
-	ret = elasto_data_file_new(file_path, 0, 0,
-				   O_CREAT | O_WRONLY,
-				   (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH),
-				   &data),
-	assert_int_equal(ret, 0);
-	assert_string_equal(file_path, data->file.path);
-
-	ret = fstat(data->file.fd, &st);
-	assert_int_equal(ret, 0);
-	assert_true((st.st_mode & (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH))
-			== (S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH));
-	elasto_data_free(data);
-
-	/* elasto_data_free() should have closed file, confirm */
-	ret = stat(file_path, &st);
-	assert_int_equal(ret, 0);
-	unlink(file_path);
-	rmdir(dir_path);
-
-	/*
-	 * TODO test (unimplemented) file truncation on open
-	 */
-}
-
 static const UnitTest cm_data_tests[] = {
 	unit_test(cm_data_iovec),
-	unit_test(cm_data_file),
 };
 
 int

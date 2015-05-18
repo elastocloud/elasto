@@ -176,17 +176,6 @@ ev_write_alloc_std(struct op *op,
 		}
 		/* FIXME check for space on !op->rsp.clen_recvd */
 		break;
-	case ELASTO_DATA_FILE:
-		if (op->rsp.clen_recvd) {
-			op->rsp.data->len = op->rsp.clen
-						+ op->rsp.data->base_off;
-		} else if (op->rsp.write_cbs == 1) {
-			op->rsp.data->len = cb_nbytes + op->rsp.data->base_off;
-		} else {
-			op->rsp.data->len += cb_nbytes;
-		}
-		/* TODO, could fallocate entire file */
-		break;
 	case ELASTO_DATA_CB:
 		/*
 		 * cb_in_buf allocation is handled in the write handler, as we
@@ -264,27 +253,6 @@ ev_write_std(struct op *op,
 			dbg(0, "unable to remove %" PRIu64 " bytes from buffer\n",
 			    num_bytes);
 			return -EIO;
-		}
-		break;
-	case ELASTO_DATA_FILE:
-		if (write_off + num_bytes > op->rsp.data->len) {
-			dbg(0, "fatal: write file exceeded, "
-			       "len %" PRIu64 " off %" PRIu64 " io_sz %" PRIu64
-			       "\n", op->rsp.data->len, write_off, num_bytes);
-			return -E2BIG;
-		}
-
-		soff = lseek(op->rsp.data->file.fd, write_off, SEEK_SET);
-		if ((soff < 0) || (soff != write_off)) {
-			dbg(0, "failed to seek off %" PRIu64 "\n", write_off);
-			return -EIO;
-		}
-		ret = evbuffer_write_atmost(ev_in_buf, op->rsp.data->file.fd,
-					    num_bytes);
-		/* no tolerance for partial IO */
-		if ((ret < 0) || (ret != num_bytes)) {
-			dbg(0, "file write io failed: %s\n", strerror(errno));
-			return -EBADF;
 		}
 		break;
 	case ELASTO_DATA_CB:
@@ -513,22 +481,6 @@ ev_err_cb(enum evhttp_request_error ev_req_error,
 }
 
 static void
-elasto_conn_seg_cleanup_cb(struct evbuffer_file_segment const *seg,
-			   int flags,
-			   void *data)
-{
-	struct elasto_data *req_data = (struct elasto_data *)data;
-
-	if (req_data->type != ELASTO_DATA_FILE) {
-		dbg(0, "ev segment cleanup callback for unexpected type 0x%x\n",
-		    req_data->type);
-	} else {
-		dbg(0, "Got ev segment cleanup callback for %s\n",
-		    req_data->file.path);
-	}
-}
-
-static void
 elasto_read_evbuffer_cleanup_cb(const void *data,
 				size_t datalen,
 				void *extra)
@@ -555,7 +507,6 @@ elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
 	}
 
 	if ((req_data->type != ELASTO_DATA_IOV)
-	 && (req_data->type != ELASTO_DATA_FILE)
 	 && (req_data->type != ELASTO_DATA_CB)) {
 		ret = -EINVAL;	/* unsupported */
 		goto err_out;
@@ -579,29 +530,6 @@ elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
 			ret = -EFAULT;
 			goto err_out;
 		}
-	} else if (req_data->type == ELASTO_DATA_FILE) {
-		struct evbuffer_file_segment *ev_seg;
-
-		ev_seg = evbuffer_file_segment_new(req_data->file.fd,
-						   read_off, num_bytes, 0);
-		if (ev_seg == NULL) {
-			dbg(0, "failed to create file segment buffer\n");
-			ret = -EBADF;
-			goto err_out;
-		}
-		/* offset and len are relative to the segment! */
-		ret = evbuffer_add_file_segment(ev_out_buf, ev_seg, 0,
-						num_bytes);
-		if (ret < 0) {
-			evbuffer_file_segment_free(ev_seg);
-			dbg(0, "failed to add file output buffer\n");
-			ret = -EBADF;
-			goto err_out;
-		}
-
-		evbuffer_file_segment_add_cleanup_cb(ev_seg,
-						     elasto_conn_seg_cleanup_cb,
-						     req_data);
 	} else if (req_data->type == ELASTO_DATA_CB) {
 		uint8_t *out_buf = NULL;
 		uint64_t buf_len = 0;

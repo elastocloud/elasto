@@ -827,8 +827,7 @@ s3_req_obj_put_free(struct s3_req_obj_put *obj_put)
 }
 
 /*
- * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
- * fom the file at path @buf if @data_type is ELASTO_DATA_FILE.
+ * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV.
  */
 int
 s3_req_obj_put(const char *bkt_name,
@@ -943,8 +942,7 @@ err_out:
 }
 
 /*
- * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
- * from the file at path @buf if @data_type is ELASTO_DATA_FILE.
+ * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV.
  *
  * If @src_len is zero then ignore @src_off and retrieve entire blob
  */

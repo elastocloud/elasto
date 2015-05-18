@@ -1584,8 +1584,7 @@ az_req_block_put_free(struct az_req_block_put *blk_put_req)
 }
 
 /*
- * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
- * fom the file at path @buf if @data_type is ELASTO_DATA_FILE.
+ * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV.
  * Note: For a given blob, the length of the value specified for the blockid
  *	 parameter must be the same size for each block.
  */

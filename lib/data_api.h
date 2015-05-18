@@ -21,7 +21,6 @@ extern "C" {
 enum elasto_data_type {
 	ELASTO_DATA_NONE = 0,
 	ELASTO_DATA_IOV,
-	ELASTO_DATA_FILE,
 	ELASTO_DATA_CB,
 };
 
@@ -40,11 +39,6 @@ struct elasto_data {
 			uint8_t *buf;
 		} iov;
 		struct {
-			/* file is @len bytes in size */
-			char *path;
-			int fd;
-		} file;
-		struct {
 			void *priv;
 			int (*out_cb)(uint64_t stream_off,
 				      uint64_t need,
@@ -62,14 +56,6 @@ struct elasto_data {
 
 void
 elasto_data_free(struct elasto_data *data);
-
-int
-elasto_data_file_new(char *path,
-		     uint64_t file_len,
-		     uint64_t base_off,
-		     int open_flags,
-		     mode_t create_mode,
-		     struct elasto_data **_data);
 
 int
 elasto_data_iov_new(uint8_t *buf,

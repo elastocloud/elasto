@@ -38,61 +38,8 @@ elasto_data_free(struct elasto_data *data)
 		return;
 	if (data->type == ELASTO_DATA_IOV) {
 		free(data->iov.buf);
-	} else if (data->type == ELASTO_DATA_FILE) {
-		free(data->file.path);
-		close(data->file.fd);
 	}
 	free(data);
-}
-
-/*
- * allocate a file based data structure, opening the underlying file
- */
-int
-elasto_data_file_new(char *path,
-		     uint64_t file_len,
-		     uint64_t base_off,
-		     int open_flags,
-		     mode_t create_mode,
-		     struct elasto_data **_data)
-{
-	int ret;
-	struct elasto_data *data;
-
-	data = malloc(sizeof(*data));
-	if (data == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	data->type = ELASTO_DATA_FILE;
-	if (open_flags | O_CREAT)
-		data->file.fd = open(path, open_flags, create_mode);
-	else
-		data->file.fd = open(path, open_flags);
-
-	if (data->file.fd == -1) {
-		ret = -errno;
-		goto err_data_free;
-	}
-	data->file.path = strdup(path);
-	if (data->file.path == NULL) {
-		ret = -ENOMEM;
-		goto err_fd_close;
-	}
-	data->len = file_len;
-	data->off = 0;
-	data->base_off = base_off;
-	*_data = data;
-
-	return 0;
-
-err_fd_close:
-	close(data->file.fd);
-err_data_free:
-	free(data);
-err_out:
-	return ret;
 }
 
 /*
