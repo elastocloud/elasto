@@ -24,15 +24,10 @@ enum elasto_data_type {
 	ELASTO_DATA_CB,
 };
 
-/*
- * @base_off is the base offset into the input/output
- * buffer. i.e. @iov.base_off + @off = read/write offset
- */
 struct elasto_data {
 	enum elasto_data_type type;
 	uint64_t len;
 	uint64_t off;
-	uint64_t base_off;
 	union {
 		struct {
 			/* @buf is allocated io buffer of size @len */
@@ -60,7 +55,6 @@ elasto_data_free(struct elasto_data *data);
 int
 elasto_data_iov_new(uint8_t *buf,
 		    uint64_t buf_len,
-		    uint64_t base_off,
 		    bool buf_alloc,
 		    struct elasto_data **_data);
 

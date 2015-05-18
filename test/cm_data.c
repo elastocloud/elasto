@@ -44,22 +44,20 @@ cm_data_iovec(void **state)
 	uint8_t buf[100];
 	uint8_t *buf_alloc = NULL;
 
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 50, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_int_equal(ret, 0);
 	assert_true(data->type == ELASTO_DATA_IOV);
 	assert_true(data->len == ARRAY_SIZE(buf));
 	assert_true(data->off == 0);
-	assert_true(data->base_off == 50);
 	assert_true(data->iov.buf == buf);
 	data->iov.buf = NULL;	/* don't free stack */
 	elasto_data_free(data);
 
-	ret = elasto_data_iov_new(buf_alloc, 100, 0, true, &data);
+	ret = elasto_data_iov_new(buf_alloc, 100, true, &data);
 	assert_int_equal(ret, 0);
 	assert_true(data->type == ELASTO_DATA_IOV);
 	assert_true(data->len == 100);
 	assert_true(data->off == 0);
-	assert_true(data->base_off == 0);
 	assert_true(data->iov.buf != NULL);
 
 	ret = elasto_data_iov_grow(data, 100);

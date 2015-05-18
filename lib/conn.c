@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -127,8 +127,6 @@ ev_write_alloc_err(struct op *op,
 /*
  * @cb_nbytes is the number of bytes provided by this callback, clen is the
  * number of bytes expected across all callbacks, but may not be known.
- * FIXME this is too complicated! Clean it up by adding a higher layer callback
- * to the request structure and removing all data buffer types.
  */
 static int
 ev_write_alloc_std(struct op *op,
@@ -143,7 +141,7 @@ ev_write_alloc_std(struct op *op,
 		uint64_t sz = (op->rsp.clen_recvd ? op->rsp.clen : cb_nbytes);
 		/* requester wants us to allocate a recv iov */
 		/* TODO check clen isn't too huge */
-		ret = elasto_data_iov_new(NULL, sz, 0, true, &op->rsp.data);
+		ret = elasto_data_iov_new(NULL, sz, true, &op->rsp.data);
 		op->rsp.recv_cb_alloced = true;
 		return ret;
 	}
@@ -166,8 +164,7 @@ ev_write_alloc_std(struct op *op,
 			return 0;
 		}
 		/* external req buffer */
-		if (op->rsp.clen_recvd && (op->rsp.clen
-				+ op->rsp.data->base_off > op->rsp.data->len)) {
+		if (op->rsp.clen_recvd && (op->rsp.clen > op->rsp.data->len)) {
 				dbg(0, "preallocated rsp buf not large enough "
 				       "- alloced=%" PRIu64 ", "
 				       "received clen=%" PRIu64 "\n",
@@ -228,8 +225,7 @@ ev_write_std(struct op *op,
 	     uint64_t num_bytes)
 {
 	int ret;
-	off_t soff;
-	uint64_t write_off = op->rsp.data->base_off + op->rsp.data->off;
+	uint64_t write_off = op->rsp.data->off;
 	uint8_t *cb_in_buf;
 
 	/* rsp buffer must have been allocated */
@@ -518,7 +514,7 @@ elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
 		goto err_out;
 	}
 
-	read_off = req_data->base_off + req_data->off;
+	read_off = req_data->off;
 	num_bytes = req_data->len - req_data->off;
 
 	if (req_data->type == ELASTO_DATA_IOV) {

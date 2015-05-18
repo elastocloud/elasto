@@ -193,7 +193,7 @@ cm_file_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_false(ret < 0);
 
 	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
@@ -204,7 +204,7 @@ cm_file_io(void **state)
 
 	memset(buf, 0, ARRAY_SIZE(buf));
 
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_false(ret < 0);
 
 	ret = elasto_fread(fh, 0, ARRAY_SIZE(buf), data);
@@ -988,7 +988,7 @@ cm_file_abb_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_false(ret < 0);
 
 	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
@@ -999,7 +999,7 @@ cm_file_abb_io(void **state)
 
 	memset(buf, 0, ARRAY_SIZE(buf));
 
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_false(ret < 0);
 
 	/* read at arbitrary offsets, first half then second */
@@ -1012,7 +1012,7 @@ cm_file_abb_io(void **state)
 	elasto_data_free(data);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_false(ret < 0);
 
 	ret = elasto_fread(fh, half, half, data);

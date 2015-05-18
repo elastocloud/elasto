@@ -453,7 +453,7 @@ cm_az_fs_file_io(void **state)
 	op_free(op);
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_true(ret >= 0);
 
 	ret = az_fs_req_file_put(cm_us->acc, cm_op_az_fs_state.share, NULL,
@@ -472,7 +472,7 @@ cm_az_fs_file_io(void **state)
 
 	memset(buf, 0, ARRAY_SIZE(buf));
 
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_true(ret >= 0);
 
 	ret = az_fs_req_file_get(cm_us->acc, cm_op_az_fs_state.share, NULL,
@@ -490,7 +490,7 @@ cm_az_fs_file_io(void **state)
 	elasto_data_free(data);
 
 	/* read from offset after allocated range, should be zero */
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_true(ret >= 0);
 
 	ret = az_fs_req_file_get(cm_us->acc, cm_op_az_fs_state.share, NULL,

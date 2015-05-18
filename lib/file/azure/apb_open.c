@@ -621,7 +621,7 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 		/* put a zero length block blob */
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = elasto_data_iov_new(NULL, 0, 0, false, &data);
+		ret = elasto_data_iov_new(NULL, 0, false, &data);
 		if (ret < 0) {
 			goto err_out;
 		}

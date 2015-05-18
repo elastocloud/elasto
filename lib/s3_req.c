@@ -279,7 +279,6 @@ s3_rsp_svc_list_process(struct op *op,
 	assert(op->opcode == S3OP_SVC_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -479,7 +478,6 @@ s3_rsp_bkt_list_process(struct op *op,
 	assert(op->opcode == S3OP_BKT_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -545,7 +543,7 @@ s3_op_bkt_create_fill_body(const char *location,
 	}
 
 	buf_remain = ARRAY_SIZE(xml_printf_format) + strlen(location);
-	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	ret = elasto_data_iov_new(NULL, buf_remain, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -788,7 +786,6 @@ s3_rsp_bkt_loc_get_process(struct op *op,
 
 	assert(op->opcode == S3OP_BKT_LOCATION_GET);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
-	assert(op->rsp.data->base_off == 0);
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
@@ -1408,7 +1405,6 @@ s3_rsp_mp_start_process(struct op *op,
 	assert(op->opcode == S3OP_MULTIPART_START);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -1474,7 +1470,7 @@ s3_op_mp_done_fill_body(uint64_t num_parts,
 		+ sizeof(S3_REQ_MP_DONE_SFX);
 	dbg(4, "allocating mp-done XML buffer len: %" PRIu64 "\n", buf_remain);
 
-	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	ret = elasto_data_iov_new(NULL, buf_remain, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;

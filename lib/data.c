@@ -44,12 +44,11 @@ elasto_data_free(struct elasto_data *data)
 
 /*
  * allocate an iov based data structure
- * if @buf_alloc is set then allocate @buf_len, ignoring @buf and @base_off
+ * if @buf_alloc is set then allocate @buf_len, ignoring @buf
  */
 int
 elasto_data_iov_new(uint8_t *buf,
 		    uint64_t buf_len,
-		    uint64_t base_off,
 		    bool buf_alloc,
 		    struct elasto_data **_data)
 {
@@ -67,10 +66,8 @@ elasto_data_iov_new(uint8_t *buf,
 			free(data);
 			return -ENOMEM;
 		}
-		data->base_off = 0;
 	} else {
 		data->iov.buf = buf;
-		data->base_off = base_off;
 	}
 	data->len = buf_len;
 	data->off = 0;

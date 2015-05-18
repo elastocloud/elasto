@@ -75,7 +75,7 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		/* put a zero length object */
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = elasto_data_iov_new(NULL, 0, 0, false, &data);
+		ret = elasto_data_iov_new(NULL, 0, false, &data);
 		if (ret < 0) {
 			goto err_out;
 		}

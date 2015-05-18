@@ -238,7 +238,6 @@ az_fs_rsp_shares_list_process(struct op *op,
 	assert(op->opcode == AOP_FS_SHARES_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -757,7 +756,6 @@ az_fs_rsp_dirs_files_list_process(struct op *op,
 	assert(op->opcode == AOP_FS_DIRS_FILES_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {

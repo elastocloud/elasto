@@ -218,7 +218,7 @@ az_req_ctnr_list(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	ret = elasto_data_iov_new(NULL, 1024 * 1024, true, &op->rsp.data);
 	if (ret < 0) {
 		goto err_upath_free;
 	}
@@ -324,7 +324,6 @@ az_rsp_ctnr_list_process(struct op *op,
 	assert(op->opcode == AOP_CONTAINER_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -945,7 +944,7 @@ az_req_blob_list(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	ret = elasto_data_iov_new(NULL, 1024 * 1024, true, &op->rsp.data);
 	if (ret < 0) {
 		goto err_upath_free;
 	}
@@ -1070,7 +1069,6 @@ az_rsp_blob_list_process(struct op *op,
 	assert(op->opcode == AOP_BLOB_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -1740,7 +1738,7 @@ az_req_block_list_put_body_fill(uint64_t num_blks,
 	dbg(4, "allocating block list XML buffer len: %" PRIu64 "\n",
 	    buf_remain);
 
-	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	ret = elasto_data_iov_new(NULL, buf_remain, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -1981,7 +1979,7 @@ az_req_block_list_get(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	ret = elasto_data_iov_new(NULL, 1024 * 1024, true, &op->rsp.data);
 	if (ret < 0) {
 		goto err_upath_free;
 	}
@@ -2083,7 +2081,6 @@ az_rsp_block_list_get_process(struct op *op,
 	assert(op->opcode == AOP_BLOCK_LIST_GET);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
