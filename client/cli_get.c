@@ -119,11 +119,13 @@ cli_get_data_setup(const char *path,
 		goto err_ctx_free;
 	}
 
-	ret = fallocate(data_ctx->fd, 0, 0, len);
-	if (ret < 0) {
-		printf("fallocate failed: %s\n", strerror(errno));
-		ret = -EBADF;
-		goto err_fd_close;
+	if (len != 0) {
+		ret = fallocate(data_ctx->fd, 0, 0, len);
+		if (ret < 0) {
+			printf("fallocate failed: %s\n", strerror(errno));
+			ret = -EBADF;
+			goto err_fd_close;
+		}
 	}
 
 	data_ctx->path = strdup(path);
