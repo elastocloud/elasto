@@ -125,12 +125,6 @@ elasto_data_cb_new(uint64_t out_len,
 		return -EINVAL;
 	}
 
-	if (((in_len == 0) && (in_cb != NULL))
-	 || ((out_len == 0) && (out_cb != NULL))) {
-		dbg(0, "data_cb type requires NULL cb for zero len\n");
-		return -EINVAL;
-	}
-
 	if ((in_len * out_len) != 0) {
 		dbg(0, "data_cb type only supports a sigle direction\n");
 		return -EINVAL;
