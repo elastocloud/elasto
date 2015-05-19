@@ -1805,7 +1805,7 @@ az_req_block_list_put_body_fill(uint64_t num_blks,
 	/* truncate buffer to what was written */
 	req_data->len = req_data->len - buf_remain;
 
-	dbg(4, "sending account creation req data: %s\n",
+	dbg(4, "sending put block list req data: %s\n",
 	    (char *)req_data->iov.buf);
 	*req_data_out = req_data;
 
