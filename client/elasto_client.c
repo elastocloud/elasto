@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -140,10 +140,7 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_CREATE,
 		.name = "create",
-		.az_help = "-l <label> [-d <desc>] [-L <location>] "
-			   "[-A <affinity group>] <account>\n"
-			   "\t\t<account>/<container>\n"
-			   "\t\t-s <account>/<share>\n",
+		.az_help = "[-L <location>] <account>[/<container>]",
 		.s3_help = "[-L <location>] <bucket>",
 		.arg_min = 1,
 		.arg_max = 7,

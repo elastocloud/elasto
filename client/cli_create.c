@@ -41,9 +41,6 @@ void
 cli_create_args_free(struct cli_args *cli_args)
 {
 	free(cli_args->path);
-	free(cli_args->create.label);
-	free(cli_args->create.desc);
-	free(cli_args->create.affin_grp);
 	free(cli_args->create.location);
 }
 
@@ -61,29 +58,8 @@ cli_create_args_parse(int argc,
 	cli_args->path = NULL;
 
 	memset(&cli_args->create, 0, sizeof(cli_args->create));
-	while ((opt = getopt(argc, argv, "l:d:A:L:s")) != -1) {
+	while ((opt = getopt(argc, argv, "L:")) != -1) {
 		switch (opt) {
-		case 'l':
-			cli_args->create.label = strdup(optarg);
-			if (cli_args->create.label == NULL) {
-				ret = -ENOMEM;
-				goto err_args_free;
-			}
-			break;
-		case 'd':
-			cli_args->create.desc = strdup(optarg);
-			if (cli_args->create.desc == NULL) {
-				ret = -ENOMEM;
-				goto err_args_free;
-			}
-			break;
-		case 'A':
-			cli_args->create.affin_grp = strdup(optarg);
-			if (cli_args->create.affin_grp == NULL) {
-				ret = -ENOMEM;
-				goto err_args_free;
-			}
-			break;
 		case 'L':
 			cli_args->create.location = strdup(optarg);
 			if (cli_args->create.location == NULL) {
@@ -141,7 +117,7 @@ cli_create_handle_apb(struct cli_args *cli_args)
 		if (ret < 0) {
 			goto err_out;
 		}
-		/* FIXME label, desc and affin_grp are ignored */
+		/* FIXME label, desc and affin_grp are not supported */
 	}
 
 	auth.type = ELASTO_FILE_ABB;	/* FIXME support cli page blobs */
