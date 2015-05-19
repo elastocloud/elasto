@@ -25,6 +25,9 @@
 #include <unistd.h>
 #include <inttypes.h>
 
+/* for encoding */
+#include <event2/http.h>
+
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
@@ -1170,6 +1173,7 @@ az_req_blob_put(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_put *blob_put_req;
+	char *blob_encoded;
 
 	if ((data == NULL)
 	 && (((page_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != page_len)) {
@@ -1221,8 +1225,13 @@ az_req_blob_put(const char *account,
 		ret = -ENOMEM;
 		goto err_free_bname;
 	}
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1322,6 +1331,7 @@ az_req_blob_get(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_get *blob_get_req;
+	char *blob_encoded;
 
 	/* check for correct alignment */
 	if (is_page
@@ -1380,8 +1390,14 @@ az_req_blob_get(const char *account,
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1481,6 +1497,7 @@ az_req_page_put(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_page_put *page_put_req;
+	char *blob_encoded;
 
 	/* check for correct alignment */
 	if (((dest_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != dest_len) {
@@ -1536,8 +1553,14 @@ az_req_page_put(const char *account,
 		ret = -ENOMEM;
 		goto err_data_close;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=page",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1599,6 +1622,7 @@ az_req_block_put(const char *account,
 	struct op *op;
 	struct az_req_block_put *blk_put_req;
 	char *b64_blk_id;
+	char *blob_encoded;
 
 	if ((data == NULL) || (data->type == ELASTO_DATA_NONE)) {
 		ret = -EINVAL;
@@ -1662,12 +1686,15 @@ az_req_block_put(const char *account,
 		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		free(b64_blk_id);
-		goto err_data_close;
+		goto err_b64_free;
+	}
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
 	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=block&blockid=%s",
-		       container, bname, b64_blk_id);
-	free(b64_blk_id);
+		       container, blob_encoded, b64_blk_id);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1687,6 +1714,8 @@ err_upath_free:
 	free(op->url_path);
 err_uhost_free:
 	free(op->url_host);
+err_b64_free:
+	free(b64_blk_id);
 err_data_close:
 	op->req.data = NULL;
 	free(blk_put_req->blk_id);
@@ -1831,6 +1860,7 @@ az_req_block_list_put(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_block_list_put *blk_list_put_req;
+	char *blob_encoded;
 
 	ret = az_blob_ebo_init(AOP_BLOCK_LIST_PUT, &ebo);
 	if (ret < 0) {
@@ -1864,8 +1894,14 @@ az_req_block_list_put(const char *account,
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=blocklist",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1938,6 +1974,7 @@ az_req_block_list_get(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_block_list_get *blk_list_get_req;
+	char *blob_encoded;
 
 	ret = az_blob_ebo_init(AOP_BLOCK_LIST_GET, &ebo);
 	if (ret < 0) {
@@ -1971,8 +2008,14 @@ az_req_block_list_get(const char *account,
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=blocklist&blocklisttype=all",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -2135,6 +2178,7 @@ az_req_blob_del(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_del *blob_del_req;
+	char *blob_encoded;
 
 	ret = az_blob_ebo_init(AOP_BLOB_DEL, &ebo);
 	if (ret < 0) {
@@ -2168,8 +2212,14 @@ az_req_blob_del(const char *account,
 		ret = -ENOMEM;
 		goto err_free_bname;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -2218,18 +2268,28 @@ az_req_blob_cp_hdr_fill(struct az_req_blob_cp *blob_cp_req,
 {
 	int ret;
 	char *hdr_str;
+	char *src_blob_encoded;
 
 	ret = az_req_common_hdr_fill(op, false);
 	if (ret < 0) {
 		goto err_out;
 	}
 
+	src_blob_encoded = evhttp_encode_uri(blob_cp_req->src.bname);
+	if (src_blob_encoded == NULL) {
+		goto err_hdrs_free;
+	}
 	/* tell server to always use https when dealing with the src blob */
 	ret = asprintf(&hdr_str,
 		       "https://%s.blob.core.windows.net/%s/%s",
 		       blob_cp_req->src.account,
 		       blob_cp_req->src.container,
-		       blob_cp_req->src.bname);
+		       src_blob_encoded);
+	free(src_blob_encoded);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_hdrs_free;
+	}
 	ret = op_req_hdr_add(op, "x-ms-copy-source", hdr_str);
 	free(hdr_str);
 	if (ret < 0) {
@@ -2258,6 +2318,7 @@ az_req_blob_cp(const char *src_account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_cp *blob_cp_req;
+	char *dst_blob_encoded;
 
 	ret = az_blob_ebo_init(AOP_BLOB_CP, &ebo);
 	if (ret < 0) {
@@ -2309,8 +2370,14 @@ az_req_blob_cp(const char *src_account,
 		ret = -ENOMEM;
 		goto err_dst_blb_free;
 	}
+
+	dst_blob_encoded = evhttp_encode_uri(dst_bname);
+	if (dst_blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s",
-		       dst_container, dst_bname);
+		       dst_container, dst_blob_encoded);
+	free(dst_blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -2372,6 +2439,7 @@ az_req_blob_prop_get(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_prop_get *blob_prop_get_req;
+	char *blob_encoded;
 
 	ret = az_blob_ebo_init(AOP_BLOB_PROP_GET, &ebo);
 	if (ret < 0) {
@@ -2405,8 +2473,14 @@ az_req_blob_prop_get(const char *account,
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -2625,6 +2699,7 @@ az_req_blob_prop_set(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_prop_set *blob_prop_set_req;
+	char *blob_encoded;
 
 	if (!is_page && (len != 0)) {
 		dbg(0, "non-zero len for block blob invalid\n");
@@ -2667,8 +2742,14 @@ az_req_blob_prop_set(const char *account,
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=properties",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -2791,6 +2872,7 @@ az_req_blob_lease(const char *acc,
 	struct op *op;
 	struct az_req_blob_lease *blob_lease_req;
 	const char *action_str;
+	char *blob_encoded;
 
 	action_str = az_req_lease_actn_enum_map(action);
 	if (action_str == NULL) {
@@ -2897,7 +2979,12 @@ az_req_blob_lease(const char *acc,
 		goto err_lid_prop_free;
 	}
 
-	ret = asprintf(&op->url_path, "/%s/%s?comp=lease", ctnr, blob);
+	blob_encoded = evhttp_encode_uri(blob);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s?comp=lease", ctnr, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
