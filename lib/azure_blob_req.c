@@ -1492,7 +1492,7 @@ az_req_page_put(const char *account,
 		goto err_out;
 	}
 
-	ret = az_blob_ebo_init(AOP_BLOB_PUT, &ebo);
+	ret = az_blob_ebo_init(AOP_PAGE_PUT, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
