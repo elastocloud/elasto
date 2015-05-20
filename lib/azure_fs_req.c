@@ -25,6 +25,9 @@
 #include <unistd.h>
 #include <inttypes.h>
 
+/* for encoding */
+#include <event2/http.h>
+
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
@@ -577,6 +580,7 @@ az_fs_req_dirs_files_list(const char *acc,
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_dirs_files_list *dirs_files_list_req;
+	char *path_encoded = NULL;
 
 	if ((acc == NULL) || (share == NULL)) {
 		ret = -EINVAL;
@@ -603,10 +607,16 @@ az_fs_req_dirs_files_list(const char *acc,
 	}
 
 	if (dir_path != NULL) {
+		path_encoded = evhttp_encode_uri(dir_path);
+		if (path_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+
 		dirs_files_list_req->dir_path = strdup(dir_path);
 		if (dirs_files_list_req->dir_path == NULL) {
 			ret = -ENOMEM;
-			goto err_share_free;
+			goto err_pencoded_free;
 		}
 	}
 
@@ -619,7 +629,9 @@ az_fs_req_dirs_files_list(const char *acc,
 		goto err_dir_free;
 	}
 	ret = asprintf(&op->url_path, "/%s/%s?restype=directory&comp=list",
-		       share, (dir_path ? dir_path : ""));
+		       share, (path_encoded ? path_encoded : ""));
+	free(path_encoded);
+	path_encoded = NULL;
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -640,6 +652,8 @@ err_uhost_free:
 	free(op->url_host);
 err_dir_free:
 	free(dirs_files_list_req->dir_path);
+err_pencoded_free:
+	free(path_encoded);
 err_share_free:
 	free(dirs_files_list_req->share);
 err_acc_free:
@@ -820,6 +834,8 @@ az_fs_req_dir_create(const char *acc,
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_dir_create *dir_create_req;
+	char *parent_encoded = NULL;
+	char *dir_encoded = NULL;
 
 	if ((acc == NULL) || (share == NULL) || (dir == NULL)) {
 		ret = -EINVAL;
@@ -846,10 +862,16 @@ az_fs_req_dir_create(const char *acc,
 	}
 
 	if (parent_dir_path != NULL) {
+		parent_encoded = evhttp_encode_uri(parent_dir_path);
+		if (parent_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+
 		dir_create_req->parent_dir_path = strdup(parent_dir_path);
 		if (dir_create_req->parent_dir_path == NULL) {
 			ret = -ENOMEM;
-			goto err_share_free;
+			goto err_parencode_free;
 		}
 	}
 
@@ -867,10 +889,17 @@ az_fs_req_dir_create(const char *acc,
 		ret = -ENOMEM;
 		goto err_dir_free;
 	}
+
+	dir_encoded = evhttp_encode_uri(dir);
+	if (dir_encoded == NULL) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s%s%s?restype=directory",
 		       share,
-		       (parent_dir_path ? parent_dir_path : ""),
-		       (parent_dir_path ? "/" : ""), dir);
+		       (parent_encoded ? parent_encoded : ""),
+		       (parent_encoded ? "/" : ""), dir_encoded);
+	free(dir_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -893,6 +922,8 @@ err_dir_free:
 	free(dir_create_req->dir);
 err_path_free:
 	free(dir_create_req->parent_dir_path);
+err_parencode_free:
+	free(parent_encoded);
 err_share_free:
 	free(dir_create_req->share);
 err_acc_free:
@@ -923,6 +954,8 @@ az_fs_req_dir_del(const char *acc,
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_dir_del *dir_del_req;
+	char *parent_encoded = NULL;
+	char *dir_encoded = NULL;
 
 	if ((acc == NULL) || (share == NULL) || (dir == NULL)) {
 		ret = -EINVAL;
@@ -949,10 +982,16 @@ az_fs_req_dir_del(const char *acc,
 	}
 
 	if (parent_dir_path != NULL) {
+		parent_encoded = evhttp_encode_uri(parent_dir_path);
+		if (parent_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+
 		dir_del_req->parent_dir_path = strdup(parent_dir_path);
 		if (dir_del_req->parent_dir_path == NULL) {
 			ret = -ENOMEM;
-			goto err_share_free;
+			goto err_parencode_free;
 		}
 	}
 
@@ -970,10 +1009,20 @@ az_fs_req_dir_del(const char *acc,
 		ret = -ENOMEM;
 		goto err_dir_free;
 	}
+
+	dir_encoded = evhttp_encode_uri(dir);
+	if (dir_encoded == NULL) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s%s%s?restype=directory",
 		       share,
-		       (parent_dir_path ? parent_dir_path : ""),
-		       (parent_dir_path ? "/" : ""), dir);
+		       (parent_encoded ? parent_encoded : ""),
+		       (parent_encoded ? "/" : ""), dir_encoded);
+	free(dir_encoded);
+	dir_encoded = NULL;
+	free(parent_encoded);
+	parent_encoded = NULL;
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -996,6 +1045,8 @@ err_dir_free:
 	free(dir_del_req->dir);
 err_path_free:
 	free(dir_del_req->parent_dir_path);
+err_parencode_free:
+	free(parent_encoded);
 err_share_free:
 	free(dir_del_req->share);
 err_acc_free:
@@ -1026,6 +1077,8 @@ az_fs_req_dir_prop_get(const char *acc,
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_dir_prop_get *dir_prop_get_req;
+	char *parent_encoded = NULL;
+	char *dir_encoded = NULL;
 
 	if ((acc == NULL) || (share == NULL) || (dir == NULL)) {
 		ret = -EINVAL;
@@ -1052,10 +1105,16 @@ az_fs_req_dir_prop_get(const char *acc,
 	}
 
 	if (parent_dir_path != NULL) {
+		parent_encoded = evhttp_encode_uri(parent_dir_path);
+		if (parent_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+
 		dir_prop_get_req->parent_dir_path = strdup(parent_dir_path);
 		if (dir_prop_get_req->parent_dir_path == NULL) {
 			ret = -ENOMEM;
-			goto err_share_free;
+			goto err_parencode_free;
 		}
 	}
 
@@ -1073,10 +1132,20 @@ az_fs_req_dir_prop_get(const char *acc,
 		ret = -ENOMEM;
 		goto err_dir_free;
 	}
+
+	dir_encoded = evhttp_encode_uri(dir);
+	if (dir_encoded == NULL) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s%s%s?restype=directory",
 		       share,
-		       (parent_dir_path ? parent_dir_path : ""),
-		       (parent_dir_path ? "/" : ""), dir);
+		       (parent_encoded ? parent_encoded : ""),
+		       (parent_encoded ? "/" : ""), dir_encoded);
+	free(dir_encoded);
+	dir_encoded = NULL;
+	free(parent_encoded);
+	parent_encoded = NULL;
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1099,6 +1168,8 @@ err_dir_free:
 	free(dir_prop_get_req->dir);
 err_parent_free:
 	free(dir_prop_get_req->parent_dir_path);
+err_parencode_free:
+	free(parent_encoded);
 err_share_free:
 	free(dir_prop_get_req->share);
 err_acc_free:
@@ -1187,6 +1258,8 @@ az_fs_req_file_create(const char *acc,
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_file_create *file_create_req;
+	char *parent_encoded = NULL;
+	char *file_encoded = NULL;
 
 	if ((acc == NULL) || (share == NULL) || (file == NULL)
 					|| (max_size_bytes > BYTES_IN_TB)) {
@@ -1214,10 +1287,16 @@ az_fs_req_file_create(const char *acc,
 	}
 
 	if (parent_dir_path != NULL) {
+		parent_encoded = evhttp_encode_uri(parent_dir_path);
+		if (parent_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+
 		file_create_req->parent_dir_path = strdup(parent_dir_path);
 		if (file_create_req->parent_dir_path == NULL) {
 			ret = -ENOMEM;
-			goto err_share_free;
+			goto err_parencode_free;
 		}
 	}
 
@@ -1237,10 +1316,20 @@ az_fs_req_file_create(const char *acc,
 		ret = -ENOMEM;
 		goto err_file_free;
 	}
+
+	file_encoded = evhttp_encode_uri(file);
+	if (file_encoded == NULL) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s%s%s",
 		       share,
-		       (parent_dir_path ? parent_dir_path : ""),
-		       (parent_dir_path ? "/" : ""), file);
+		       (parent_encoded ? parent_encoded : ""),
+		       (parent_encoded ? "/" : ""), file_encoded);
+	free(file_encoded);
+	file_encoded = NULL;
+	free(parent_encoded);
+	parent_encoded = NULL;
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1263,6 +1352,8 @@ err_file_free:
 	free(file_create_req->file);
 err_path_free:
 	free(file_create_req->parent_dir_path);
+err_parencode_free:
+	free(parent_encoded);
 err_share_free:
 	free(file_create_req->share);
 err_acc_free:
@@ -1293,6 +1384,8 @@ az_fs_req_file_del(const char *acc,
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_file_del *file_del_req;
+	char *parent_encoded = NULL;
+	char *file_encoded = NULL;
 
 	if ((acc == NULL) || (share == NULL) || (file == NULL)) {
 		ret = -EINVAL;
@@ -1319,10 +1412,16 @@ az_fs_req_file_del(const char *acc,
 	}
 
 	if (parent_dir_path != NULL) {
+		parent_encoded = evhttp_encode_uri(parent_dir_path);
+		if (parent_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+
 		file_del_req->parent_dir_path = strdup(parent_dir_path);
 		if (file_del_req->parent_dir_path == NULL) {
 			ret = -ENOMEM;
-			goto err_share_free;
+			goto err_parencode_free;
 		}
 	}
 
@@ -1340,10 +1439,20 @@ az_fs_req_file_del(const char *acc,
 		ret = -ENOMEM;
 		goto err_file_free;
 	}
+
+	file_encoded = evhttp_encode_uri(file);
+	if (file_encoded == NULL) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s%s%s",
 		       share,
-		       (parent_dir_path ? parent_dir_path : ""),
-		       (parent_dir_path ? "/" : ""), file);
+		       (parent_encoded ? parent_encoded : ""),
+		       (parent_encoded ? "/" : ""), file_encoded);
+	free(file_encoded);
+	file_encoded = NULL;
+	free(parent_encoded);
+	parent_encoded = NULL;
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1366,6 +1475,8 @@ err_file_free:
 	free(file_del_req->file);
 err_path_free:
 	free(file_del_req->parent_dir_path);
+err_parencode_free:
+	free(parent_encoded);
 err_share_free:
 	free(file_del_req->share);
 err_acc_free:
@@ -1438,6 +1549,8 @@ az_fs_req_file_get(const char *acc,
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_file_get *file_get_req;
+	char *parent_encoded = NULL;
+	char *file_encoded = NULL;
 
 	if ((acc == NULL) || (share == NULL) || (file == NULL)) {
 		ret = -EINVAL;
@@ -1464,10 +1577,16 @@ az_fs_req_file_get(const char *acc,
 	}
 
 	if (parent_dir_path != NULL) {
+		parent_encoded = evhttp_encode_uri(parent_dir_path);
+		if (parent_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+
 		file_get_req->parent_dir_path = strdup(parent_dir_path);
 		if (file_get_req->parent_dir_path == NULL) {
 			ret = -ENOMEM;
-			goto err_share_free;
+			goto err_parencode_free;
 		}
 	}
 
@@ -1496,10 +1615,20 @@ az_fs_req_file_get(const char *acc,
 		ret = -ENOMEM;
 		goto err_file_free;
 	}
+
+	file_encoded = evhttp_encode_uri(file);
+	if (file_encoded == NULL) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s%s%s",
 		       share,
-		       (parent_dir_path ? parent_dir_path : ""),
-		       (parent_dir_path ? "/" : ""), file);
+		       (parent_encoded ? parent_encoded : ""),
+		       (parent_encoded ? "/" : ""), file_encoded);
+	free(file_encoded);
+	file_encoded = NULL;
+	free(parent_encoded);
+	parent_encoded = NULL;
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1522,6 +1651,8 @@ err_file_free:
 	free(file_get_req->file);
 err_path_free:
 	free(file_get_req->parent_dir_path);
+err_parencode_free:
+	free(parent_encoded);
 err_share_free:
 	free(file_get_req->share);
 err_acc_free:
@@ -1607,6 +1738,8 @@ az_fs_req_file_put(const char *acc,
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_file_put *file_put_req;
+	char *parent_encoded = NULL;
+	char *file_encoded = NULL;
 
 	if ((acc == NULL) || (share == NULL) || (file == NULL)) {
 		ret = -EINVAL;
@@ -1633,10 +1766,16 @@ az_fs_req_file_put(const char *acc,
 	}
 
 	if (parent_dir_path != NULL) {
+		parent_encoded = evhttp_encode_uri(parent_dir_path);
+		if (parent_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+
 		file_put_req->parent_dir_path = strdup(parent_dir_path);
 		if (file_put_req->parent_dir_path == NULL) {
 			ret = -ENOMEM;
-			goto err_share_free;
+			goto err_parencode_free;
 		}
 	}
 
@@ -1667,10 +1806,20 @@ az_fs_req_file_put(const char *acc,
 		ret = -ENOMEM;
 		goto err_file_free;
 	}
+
+	file_encoded = evhttp_encode_uri(file);
+	if (file_encoded == NULL) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s%s%s?comp=range",
 		       share,
-		       (parent_dir_path ? parent_dir_path : ""),
-		       (parent_dir_path ? "/" : ""), file);
+		       (parent_encoded ? parent_encoded : ""),
+		       (parent_encoded ? "/" : ""), file_encoded);
+	free(file_encoded);
+	file_encoded = NULL;
+	free(parent_encoded);
+	parent_encoded = NULL;
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1693,6 +1842,8 @@ err_file_free:
 	free(file_put_req->file);
 err_path_free:
 	free(file_put_req->parent_dir_path);
+err_parencode_free:
+	free(parent_encoded);
 err_share_free:
 	free(file_put_req->share);
 err_acc_free:
@@ -1723,6 +1874,8 @@ az_fs_req_file_prop_get(const char *acc,
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_file_prop_get *file_prop_get_req;
+	char *parent_encoded = NULL;
+	char *file_encoded = NULL;
 
 	if ((acc == NULL) || (share == NULL) || (file == NULL)) {
 		ret = -EINVAL;
@@ -1749,10 +1902,16 @@ az_fs_req_file_prop_get(const char *acc,
 	}
 
 	if (parent_dir_path != NULL) {
+		parent_encoded = evhttp_encode_uri(parent_dir_path);
+		if (parent_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+
 		file_prop_get_req->parent_dir_path = strdup(parent_dir_path);
 		if (file_prop_get_req->parent_dir_path == NULL) {
 			ret = -ENOMEM;
-			goto err_share_free;
+			goto err_parencode_free;
 		}
 	}
 
@@ -1770,10 +1929,20 @@ az_fs_req_file_prop_get(const char *acc,
 		ret = -ENOMEM;
 		goto err_file_free;
 	}
+
+	file_encoded = evhttp_encode_uri(file);
+	if (file_encoded == NULL) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s%s%s",
 		       share,
-		       (parent_dir_path ? parent_dir_path : ""),
-		       (parent_dir_path ? "/" : ""), file);
+		       (parent_encoded ? parent_encoded : ""),
+		       (parent_encoded ? "/" : ""), file_encoded);
+	free(file_encoded);
+	file_encoded = NULL;
+	free(parent_encoded);
+	parent_encoded = NULL;
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1796,6 +1965,8 @@ err_file_free:
 	free(file_prop_get_req->file);
 err_path_free:
 	free(file_prop_get_req->parent_dir_path);
+err_parencode_free:
+	free(parent_encoded);
 err_share_free:
 	free(file_prop_get_req->share);
 err_acc_free:
@@ -1911,6 +2082,8 @@ az_fs_req_file_prop_set(const char *acc,
 	struct az_fs_ebo *ebo;
 	struct op *op;
 	struct az_fs_req_file_prop_set *file_prop_set_req;
+	char *parent_encoded = NULL;
+	char *file_encoded = NULL;
 
 	if ((acc == NULL) || (share == NULL) || (file == NULL)) {
 		ret = -EINVAL;
@@ -1937,10 +2110,16 @@ az_fs_req_file_prop_set(const char *acc,
 	}
 
 	if (parent_dir_path != NULL) {
+		parent_encoded = evhttp_encode_uri(parent_dir_path);
+		if (parent_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_share_free;
+		}
+
 		file_prop_set_req->parent_dir_path = strdup(parent_dir_path);
 		if (file_prop_set_req->parent_dir_path == NULL) {
 			ret = -ENOMEM;
-			goto err_share_free;
+			goto err_parencode_free;
 		}
 	}
 
@@ -1981,10 +2160,20 @@ az_fs_req_file_prop_set(const char *acc,
 		ret = -ENOMEM;
 		goto err_ctype_free;
 	}
+
+	file_encoded = evhttp_encode_uri(file);
+	if (file_encoded == NULL) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s%s%s?comp=properties",
 		       share,
-		       (parent_dir_path ? parent_dir_path : ""),
-		       (parent_dir_path ? "/" : ""), file);
+		       (parent_encoded ? parent_encoded : ""),
+		       (parent_encoded ? "/" : ""), file_encoded);
+	free(file_encoded);
+	file_encoded = NULL;
+	free(parent_encoded);
+	parent_encoded = NULL;
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -2009,6 +2198,8 @@ err_file_free:
 	free(file_prop_set_req->file);
 err_path_free:
 	free(file_prop_set_req->parent_dir_path);
+err_parencode_free:
+	free(parent_encoded);
 err_share_free:
 	free(file_prop_set_req->share);
 err_acc_free:

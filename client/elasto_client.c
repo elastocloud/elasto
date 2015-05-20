@@ -160,8 +160,6 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_HELP,
 		.name = "help",
-		.az_help = "",
-		.s3_help = "",
 		.handle = &cli_help_handle,
 		.feature_flags = CLI_FL_PROMPT
 				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
@@ -169,8 +167,6 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_EXIT,
 		.name = "exit",
-		.az_help = "",
-		.s3_help = "",
 		.handle = &cli_exit_handle,
 		/* alias for quit, never display */
 		.feature_flags = 0,
@@ -178,8 +174,6 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_EXIT,
 		.name = "quit",
-		.az_help = "",
-		.s3_help = "",
 		.handle = &cli_exit_handle,
 		.feature_flags = CLI_FL_PROMPT
 				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
@@ -230,13 +224,16 @@ cli_args_usage(const char *progname,
 				continue;
 			}
 			if (cmd->feature_flags & flags & CLI_FL_AZ) {
-				fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->az_help);
+				fprintf(stderr, "\t%s\t%s\n", cmd->name,
+					(cmd->az_help ? cmd->az_help : ""));
 			}
 			if (cmd->feature_flags & flags & CLI_FL_AFS) {
-				fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->afs_help);
+				fprintf(stderr, "\t%s\t%s\n", cmd->name,
+					(cmd->afs_help ? cmd->afs_help : ""));
 			}
 			if (cmd->feature_flags & flags & CLI_FL_S3) {
-				fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->s3_help);
+				fprintf(stderr, "\t%s\t%s\n", cmd->name,
+					(cmd->s3_help ? cmd->s3_help : ""));
 			}
 		}
 	}
