@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2014-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -135,6 +135,60 @@ cm_az_fs_deinit(void **state)
 }
 
 static void
+cm_az_fs_shares_list(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct az_fs_rsp_shares_list *shares_list_rsp;
+	struct az_fs_share *share;
+	bool found_share;
+
+	ret = az_fs_req_shares_list(cm_us->acc, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	shares_list_rsp = az_fs_rsp_shares_list(op);
+
+	found_share = false;
+	list_for_each(&shares_list_rsp->shares, share, list) {
+		if (strcmp(share->name, cm_op_az_fs_state.share) == 0) {
+			found_share = true;
+		}
+		assert_true(share->last_mod != 0);
+	}
+
+	assert_true(found_share);
+
+	op_free(op);
+}
+
+static void
+cm_az_fs_share_props(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct az_fs_rsp_share_prop_get *share_prop_get;
+
+	ret = az_fs_req_share_prop_get(cm_us->acc, cm_op_az_fs_state.share,
+				       &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	share_prop_get = az_fs_rsp_share_prop_get(op);
+	assert_true(share_prop_get->last_mod != 0);
+
+	op_free(op);
+}
+
+static void
 cm_az_fs_dir_create(void **state)
 {
 	int ret;
@@ -228,6 +282,51 @@ cm_az_fs_dir_create(void **state)
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* check that share is now empty - this time use a NULL dir component */
+	ret = az_fs_req_dirs_files_list(cm_us->acc, cm_op_az_fs_state.share,
+					NULL, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	dirs_files_list_rsp = az_fs_rsp_dirs_files_list(op);
+	assert_true(dirs_files_list_rsp != NULL);
+	assert_true(dirs_files_list_rsp->num_ents == 0);
+	op_free(op);
+}
+
+static void
+cm_az_fs_dir_props(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct az_fs_rsp_dir_prop_get *dir_prop_get;
+
+	ret = az_fs_req_dir_create(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				   "dir1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	ret = az_fs_req_dir_prop_get(cm_us->acc, cm_op_az_fs_state.share, NULL,
+				     "dir1", &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	dir_prop_get = az_fs_rsp_dir_prop_get(op);
+	assert_true(dir_prop_get->last_mod != 0);
+
 	op_free(op);
 }
 
@@ -353,8 +452,8 @@ cm_az_fs_file_io(void **state)
 	assert_true(!op->rsp.is_error);
 	op_free(op);
 
-	cm_file_buf_fill(buf, ARRAY_SIZE(buf));
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_true(ret >= 0);
 
 	ret = az_fs_req_file_put(cm_us->acc, cm_op_az_fs_state.share, NULL,
@@ -373,7 +472,7 @@ cm_az_fs_file_io(void **state)
 
 	memset(buf, 0, ARRAY_SIZE(buf));
 
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_true(ret >= 0);
 
 	ret = az_fs_req_file_get(cm_us->acc, cm_op_az_fs_state.share, NULL,
@@ -384,14 +483,14 @@ cm_az_fs_file_io(void **state)
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
-	cm_file_buf_check(buf, ARRAY_SIZE(buf));
+	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
 	op->rsp.data = NULL;
 	op_free(op);
 	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	/* read from offset after allocated range, should be zero */
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_true(ret >= 0);
 
 	ret = az_fs_req_file_get(cm_us->acc, cm_op_az_fs_state.share, NULL,
@@ -482,7 +581,10 @@ cm_az_fs_file_props(void **state)
 }
 
 static const UnitTest cm_az_fs_tests[] = {
+	unit_test_setup_teardown(cm_az_fs_shares_list, cm_az_fs_init, cm_az_fs_deinit),
+	unit_test_setup_teardown(cm_az_fs_share_props, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_dir_create, cm_az_fs_init, cm_az_fs_deinit),
+	unit_test_setup_teardown(cm_az_fs_dir_props, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_file_create, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_file_io, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_file_props, cm_az_fs_init, cm_az_fs_deinit),

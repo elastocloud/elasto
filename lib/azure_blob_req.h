@@ -201,7 +201,6 @@ struct az_req_block_list_put {
 	char *account;
 	char *container;
 	char *bname;
-	struct list_head *blks;
 };
 
 struct az_req_block_list_get {
@@ -239,12 +238,15 @@ enum az_cp_status {
 	AOP_CP_STATUS_ABORTED,
 	AOP_CP_STATUS_FAILED,
 };
+
 struct az_req_blob_prop_get {
 	char *account;
 	char *container;
 	char *bname;
 };
+
 struct az_rsp_blob_prop_get {
+	time_t last_mod;
 	bool is_page;
 	uint64_t len;
 	char *content_type;
@@ -397,6 +399,7 @@ int
 az_req_block_list_put(const char *account,
 		      const char *container,
 		      const char *bname,
+		      uint64_t num_blks,
 		      struct list_head *blks,
 		      struct op **_op);
 

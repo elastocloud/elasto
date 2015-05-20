@@ -21,29 +21,18 @@ extern "C" {
 enum elasto_data_type {
 	ELASTO_DATA_NONE = 0,
 	ELASTO_DATA_IOV,
-	ELASTO_DATA_FILE,
 	ELASTO_DATA_CB,
 };
 
-/*
- * @base_off is the base offset into the input/output
- * buffer. i.e. @iov.base_off + @off = read/write offset
- */
 struct elasto_data {
 	enum elasto_data_type type;
 	uint64_t len;
 	uint64_t off;
-	uint64_t base_off;
 	union {
 		struct {
 			/* @buf is allocated io buffer of size @len */
 			uint8_t *buf;
 		} iov;
-		struct {
-			/* file is @len bytes in size */
-			char *path;
-			int fd;
-		} file;
 		struct {
 			void *priv;
 			int (*out_cb)(uint64_t stream_off,
@@ -51,7 +40,6 @@ struct elasto_data {
 				      uint8_t **_out_buf,
 				      uint64_t *buf_len,
 				      void *priv);
-			uint8_t *next_in_buf;
 			int (*in_cb)(uint64_t stream_off,
 				     uint64_t got,
 				     uint8_t *in_buf,
@@ -65,17 +53,8 @@ void
 elasto_data_free(struct elasto_data *data);
 
 int
-elasto_data_file_new(char *path,
-		     uint64_t file_len,
-		     uint64_t base_off,
-		     int open_flags,
-		     mode_t create_mode,
-		     struct elasto_data **_data);
-
-int
 elasto_data_iov_new(uint8_t *buf,
 		    uint64_t buf_len,
-		    uint64_t base_off,
 		    bool buf_alloc,
 		    struct elasto_data **_data);
 
@@ -86,9 +65,11 @@ elasto_data_iov_grow(struct elasto_data *data,
 /**
  * elasto_data_cb_new - initialise a callback data struct
  *
+ * @out_len:	Amount of data to send.
  * @out_cb:	Called when a request needs data to send. Following callback,
  *		@out_buf is owned by the caller, and will be freed after use.
  *		TODO: should add an @out_free callback?
+ * @in_len:	Amount of data to retrieve.
  * @in_cb:	Called when a response has non-error data to write. @stream_off
  *		is the total number of bytes into the response data. @in_buf is
  * 		subsequently owned by the callee, and should be freed after use.
@@ -97,11 +78,13 @@ elasto_data_iov_grow(struct elasto_data *data,
  * @return:	0 on success, -errno on failure.
  */
 int
-elasto_data_cb_new(int (*out_cb)(uint64_t stream_off,
+elasto_data_cb_new(uint64_t out_len,
+		   int (*out_cb)(uint64_t stream_off,
 				 uint64_t need,
 				 uint8_t **_out_buf,
 				 uint64_t *buf_len,
 				 void *priv),
+		   uint64_t in_len,
 		   int (*in_cb)(uint64_t stream_off,
 				uint64_t got,
 				uint8_t *in_buf,

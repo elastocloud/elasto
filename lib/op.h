@@ -108,6 +108,12 @@ op_hdr_u64_val_lookup(struct list_head *hdrs,
 		      const char *key,
 		      uint64_t *_val);
 
+/* lookup and convert RFC 1123 format to time_t */
+int
+op_hdr_date_time_val_lookup(struct list_head *hdrs,
+			    const char *key,
+			    time_t *_val);
+
 void
 op_hdrs_free(struct list_head *hdrs);
 

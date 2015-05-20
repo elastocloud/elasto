@@ -24,6 +24,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <time.h>
 
 #include "ccan/list/list.h"
 #include "dbg.h"
@@ -39,7 +40,14 @@ op_hdr_add(struct list_head *hdrs,
 	   const char *val)
 {
 	int ret;
-	struct op_hdr *hdr = malloc(sizeof(*hdr));
+	struct op_hdr *hdr;
+
+	if ((key == NULL) || (val == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	hdr = malloc(sizeof(*hdr));
 	if (hdr == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -144,6 +152,43 @@ op_hdr_u64_val_lookup(struct list_head *hdrs,
 	}
 	*_val = val;
 	free(sval);
+	return 0;
+}
+
+int
+op_hdr_date_time_val_lookup(struct list_head *hdrs,
+			    const char *key,
+			    time_t *_val)
+{
+	int ret;
+	char *sval;
+	char *sval_end;
+	struct tm tm;
+	time_t t;
+
+	ret = op_hdr_val_lookup(hdrs, key, &sval);
+	if (ret < 0) {
+		return ret;
+	}
+
+	sval_end = strptime(sval, "%a, %d %b %Y %H:%M:%S %Z", &tm);
+	if (sval_end == NULL) {
+		dbg(0, "invalid time format at %s: %s\n", key, sval);
+		free(sval);
+		return -EINVAL;
+	}
+	if (*sval_end != '\0') {
+		dbg(2, "got time trailer: %s\n", sval_end);
+	}
+	free(sval);
+
+	tm.tm_isdst = -1;	/* Not set by strptime() */
+	t = mktime(&tm);
+	if (t == -1) {
+		return -EINVAL;
+	}
+
+	*_val = t;
 	return 0;
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
+#include <time.h>
 #include <cmocka.h>
 
 #include "ccan/list/list.h"
@@ -34,22 +35,22 @@
 #include "util.h"
 #include "exml.h"
 
-static char *cm_xml_data_str_basic
+static char cm_xml_data_str_basic[]
 	= "<outer><inner1><str>val</str></inner1><str>blah</str></outer>";
-static char *cm_xml_data_str_multi
+static char cm_xml_data_str_multi[]
 	= "<out><in><str>val0</str></in><in><str>val1</str></in>"
 	  "<in><str>val2</str></in></out>";
-static char *cm_xml_data_str_dup
+static char cm_xml_data_str_dup[]
 	= "<outer><dup><str>val</str></dup><dup><str>blah</str></dup></outer>";
-static char *cm_xml_data_num_basic
+static char cm_xml_data_num_basic[]
 	= "<outer><num>100</num><inner1><neg>-100</neg></inner1>"
 	  "<huge>18446744073709551615</huge></outer>";
-static char *cm_xml_data_bool_basic
+static char cm_xml_data_bool_basic[]
 	= "<outer><inner1><bool>true</bool></inner1><next>false</next></outer>";
-static char *cm_xml_data_b64_basic
+static char cm_xml_data_b64_basic[]
 	= "<outer><Label1>dGhpcyBpcyBhIGxhYmVs</Label1>"
 	  "<Label2>aXN0Z3Q=</Label2></outer>";
-static char *cm_xml_data_attr_basic
+static char cm_xml_data_attr_basic[]
 	= "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
 	  "<PublishData>"
 	  "<PublishProfile\n"
@@ -60,7 +61,7 @@ static char *cm_xml_data_attr_basic
 	   "Name=\"3-Month Free Trial\" />"
 	  "</PublishProfile>"
 	  "</PublishData>";
-static char *cm_xml_data_nil_vals
+static char cm_xml_data_nil_vals[]
 	= "<StorageServices xmlns=\"http://schemas.microsoft.com/windowsazure\""
 		       " xmlns:i=\"http://www.w3.org/2001/XMLSchema-instance\">"
 	  "<StorageService>"
@@ -83,17 +84,20 @@ static char *cm_xml_data_nil_vals
 	  "<ExtendedProperties/>"
 	  "</StorageService>"
 	  "</StorageServices>";
-static char *cm_xml_data_attr_empty
+static char cm_xml_data_attr_empty[]
 	= "<root>"
 		"<foo empty=\"\"/>"
 		"<foo full=\"bar\"/>"
 		"<goo />"
 	"</root>";
-static char *cm_xml_data_attr_key_val_match
+static char cm_xml_data_attr_key_val_match[]
 	= "<root>"
 		"<foo key=\"okey\"\n"
 		     "okey=\"dokey\" />"
 	"</root>";
+static char cm_xml_data_date_time_basic[]
+	= "<outer><Label1>Wed, 12 Aug 2009 20:39:39 GMT</Label1>"
+	  "<Label2>Mon, 27 Jan 2014 22:48:29 GMT</Label2></outer>";
 
 /*
  * TODO test:
@@ -1055,6 +1059,51 @@ cm_xml_attr_find_partial(void **state)
 	assert_false(got_attr3);
 }
 
+static void
+cm_xml_date_time_basic(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	time_t val1;
+	time_t val2;
+	struct tm val_tm;
+	char val_str[ARRAY_SIZE(cm_xml_data_date_time_basic)];
+
+	/* ensure that time is always handled in GMT */
+	putenv("TZ=GMT0");
+	tzset();
+
+	ret = exml_slurp(cm_xml_data_date_time_basic,
+			strlen(cm_xml_data_date_time_basic), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_date_time_want(xdoc,
+				  "/outer/Label1",
+				  true,
+				  &val1,
+				  NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_date_time_want(xdoc,
+				  "/outer/Label2",
+				  true,
+				  &val2,
+				  NULL);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	localtime_r(&val1, &val_tm);
+	strftime(val_str, ARRAY_SIZE(val_str), "%a, %d %b %Y %H:%M:%S %Z", &val_tm);
+	assert_string_equal(val_str, "Wed, 12 Aug 2009 20:39:39 GMT");
+
+	localtime_r(&val2, &val_tm);
+	strftime(val_str, ARRAY_SIZE(val_str), "%a, %d %b %Y %H:%M:%S %Z", &val_tm);
+	assert_string_equal(val_str, "Mon, 27 Jan 2014 22:48:29 GMT");
+}
 
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
@@ -1076,6 +1125,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_attr_key_val_match),
 	unit_test(cm_xml_parse_multi),
 	unit_test(cm_xml_attr_find_partial),
+	unit_test(cm_xml_date_time_basic),
 };
 
 int

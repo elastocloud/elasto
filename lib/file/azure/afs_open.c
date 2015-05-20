@@ -28,7 +28,7 @@
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
-#include "lib/azure_blob_req.h"
+#include "lib/azure_fs_req.h"
 #include "lib/azure_mgmt_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -39,23 +39,23 @@
 #include "lib/file/xmit.h"
 #include "lib/file/handle.h"
 #include "lib/file/token.h"
-#include "apb_handle.h"
-#include "apb_open.h"
+#include "afs_handle.h"
+#include "afs_open.h"
 
-#define APB_FOPEN_LOCATION_DEFAULT "West Europe"
+#define AFS_FOPEN_LOCATION_DEFAULT "West Europe"
 
-/* XXX dup of path parsing code in elasto_cli.c */
 int
-apb_fpath_parse(const char *path,
-		struct elasto_fh_az_path *az_path)
+afs_fpath_parse(const char *path,
+		struct elasto_fh_afs_path *afs_path)
 {
 	int ret;
 	char *s;
 	char *comp1 = NULL;
 	char *comp2 = NULL;
-	char *comp3 = NULL;
+	char *midpart = NULL;
+	char *trailer = NULL;
 
-	if ((path == NULL) || (az_path == NULL)) {
+	if ((path == NULL) || (afs_path == NULL)) {
 		return -EINVAL;
 	}
 
@@ -76,7 +76,7 @@ apb_fpath_parse(const char *path,
 
 	s = strchr(comp1, '/');
 	if (s == NULL) {
-		/* account only */
+		/* acc only */
 		goto done;
 	}
 
@@ -85,7 +85,7 @@ apb_fpath_parse(const char *path,
 		s++;
 
 	if (*s == '\0') {
-		/* account + slashes only */
+		/* acc + slashes only */
 		goto done;
 	}
 
@@ -97,45 +97,72 @@ apb_fpath_parse(const char *path,
 
 	s = strchr(comp2, '/');
 	if (s == NULL) {
-		/* ctnr only */
+		/* share only */
 		goto done;
 	}
 
-	*(s++) = '\0';	/* null term for ctnr */
+	*(s++) = '\0';	/* null term for share */
 	while (*s == '/')
 		s++;
 
 	if (*s == '\0') {
-		/* container + slashes only */
+		/* share + slashes only */
 		goto done;
 	}
 
-	comp3 = strdup(s);
-	if (comp3 == NULL) {
+	midpart = strdup(s);
+	if (midpart == NULL) {
 		ret = -ENOMEM;
 		goto err_2_free;
 	}
 
-	s = strchr(comp3, '/');
-	if (s != NULL) {
-		/* blob has a trailing slash */
-		dbg(0, "Invalid remote path: blob has trailing garbage");
-		ret = -EINVAL;
-		goto err_3_free;
+	/* need last component as dir or share */
+	s = strrchr(midpart, '/');
+	if (s == NULL) {
+		/* midpart is the last path component */
+		trailer = midpart;
+		midpart = NULL;
+		goto done;
 	}
+
+	if (strlen(s) <= 1) {
+		/* trailing slash - FIXME: should allow this for dir opens? */
+		dbg(0, "invalid path, trailing garbage: %s\n", midpart);
+		goto err_midpart_free;
+	}
+
+	s++;	/* move past last slash */
+	trailer = strdup(s);
+	if (trailer == NULL) {
+		ret = -ENOMEM;
+		goto err_midpart_free;
+	}
+
+	s--;	/* move back to last slash */
+	while (*s == '/') {
+		*s = '\0';	/* null term for midpart */
+		s--;
+	}
+
+	assert(s >= midpart);
+
 done:
-	az_path->acc = comp1;
-	az_path->ctnr = comp2;
-	az_path->blob = comp3;
-	dbg(2, "parsed %s as APB path: acc=%s, ctnr=%s, blob=%s\n",
-	    path, (az_path->acc ? az_path->acc : ""),
-	    (az_path->ctnr ? az_path->ctnr : ""),
-	    (az_path->blob ? az_path->blob : ""));
+	afs_path->acc = comp1;
+	afs_path->share = comp2;
+	afs_path->parent_dir = midpart;
+	/* fs_ent, file or dir. all are members of the same union */
+	afs_path->fs_ent = trailer;
+	dbg(2, "parsed %s as AFS path: acc=%s, share=%s, parent_dir=%s, "
+	       "file or dir=%s\n",
+	    path, (afs_path->acc ? afs_path->acc : ""),
+	    (afs_path->share ? afs_path->share : ""),
+	    (afs_path->parent_dir ? afs_path->parent_dir : ""),
+	    (afs_path->fs_ent ? afs_path->fs_ent : ""));
 
 	return 0;
 
-err_3_free:
-	free(comp3);
+err_midpart_free:
+	free(midpart);
 err_2_free:
 	free(comp2);
 err_1_free:
@@ -145,19 +172,22 @@ err_out:
 }
 
 void
-apb_fpath_free(struct elasto_fh_az_path *az_path)
+afs_fpath_free(struct elasto_fh_afs_path *afs_path)
 {
-	free(az_path->acc);
-	az_path->acc = NULL;
-	free(az_path->ctnr);
-	az_path->ctnr = NULL;
-	free(az_path->blob);
-	az_path->blob = NULL;
+	free(afs_path->acc);
+	afs_path->acc = NULL;
+	free(afs_path->share);
+	afs_path->share = NULL;
+	free(afs_path->parent_dir);
+	afs_path->parent_dir = NULL;
+	/* file and dir are members of the same union */
+	free(afs_path->fs_ent);
+	afs_path->fs_ent = NULL;
 }
 
 /* XXX dup of cli_sign_conn_setup */
 int
-apb_fsign_conn_setup(struct elasto_conn *conn,
+afs_fsign_conn_setup(struct elasto_conn *conn,
 		     const char *sub_id,
 		     const char *acc)
 {
@@ -193,28 +223,28 @@ err_out:
 }
 
 static int
-apb_fopen_blob(struct apb_fh *apb_fh,
+afs_fopen_file(struct afs_fh *afs_fh,
 	       struct elasto_conn *conn,
 	       uint64_t flags)
 {
 	int ret;
 	struct op *op;
-	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
 
 	if (flags & ELASTO_FOPEN_DIRECTORY) {
-		dbg(1, "attempt to open blob with directory flag set\n");
+		dbg(1, "attempt to open file with directory flag set\n");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
+	ret = afs_fsign_conn_setup(conn, afs_fh->sub_id, afs_fh->path.acc);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = az_req_blob_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   apb_fh->path.blob,
+	ret = az_fs_req_file_prop_get(afs_fh->path.acc,
+				   afs_fh->path.share,
+				   afs_fh->path.parent_dir,
+				   afs_fh->path.file,
 				   &op);
 	if (ret < 0) {
 		goto err_out;
@@ -223,15 +253,18 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 	ret = elasto_fop_send_recv(conn, op);
 	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
 					&& (flags & ELASTO_FOPEN_EXCL)) {
-		dbg(1, "path already exists, but exclusive create specified\n");
+		dbg(1, "file already exists, but exclusive create specified\n");
 		ret = -EEXIST;
 		goto err_op_free;
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
-		dbg(4, "path not found, creating\n");
+		dbg(4, "file not found, creating\n");
 		op_free(op);
-		ret = az_req_blob_put(apb_fh->path.acc, apb_fh->path.ctnr,
-				      apb_fh->path.blob, NULL, 0,
-				      &op);
+		ret = az_fs_req_file_create(afs_fh->path.acc,
+					    afs_fh->path.share,
+					    afs_fh->path.parent_dir,
+					    afs_fh->path.file,
+					    0,	/* initial size */
+					    &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -245,18 +278,6 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 		goto err_op_free;
 	}
 
-	blob_prop_get_rsp = az_rsp_blob_prop_get(op);
-	if (blob_prop_get_rsp == NULL) {
-		goto err_op_free;
-	}
-
-	if (!blob_prop_get_rsp->is_page) {
-		dbg(0, "invalid request to open non-page blob via page blob "
-		    "backend\n");
-		ret = -EINVAL;
-		goto err_op_free;
-	}
-
 done:
 	ret = 0;
 err_op_free:
@@ -266,27 +287,29 @@ err_out:
 }
 
 static int
-apb_fopen_ctnr(struct apb_fh *apb_fh,
-	       struct elasto_conn *conn,
-	       uint64_t flags)
+afs_fopen_dir(struct afs_fh *afs_fh,
+	      struct elasto_conn *conn,
+	      uint64_t flags)
 {
 	int ret;
 	struct op *op;
 
 	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
-		dbg(1, "attempt to open container without dir flag set\n");
+		dbg(1, "attempt to open dir without directory flag\n");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
+	ret = afs_fsign_conn_setup(conn, afs_fh->sub_id, afs_fh->path.acc);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = az_req_ctnr_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   &op);
+	ret = az_fs_req_dir_prop_get(afs_fh->path.acc,
+				     afs_fh->path.share,
+				     afs_fh->path.parent_dir,
+				     afs_fh->path.dir,
+				     &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -300,8 +323,71 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = az_req_ctnr_create(apb_fh->path.acc, apb_fh->path.ctnr,
-					 &op);
+		ret = az_fs_req_dir_create(afs_fh->path.acc,
+					   afs_fh->path.share,
+					   afs_fh->path.parent_dir,
+					   afs_fh->path.dir,
+					   &op);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		ret = elasto_fop_send_recv(conn, op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+		goto done;
+	} else if (ret < 0) {
+		goto err_op_free;
+	}
+
+done:
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+
+static int
+afs_fopen_share(struct afs_fh *afs_fh,
+		struct elasto_conn *conn,
+		uint64_t flags)
+{
+	int ret;
+	struct op *op;
+
+	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
+		dbg(1, "attempt to open share without dir flag set\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = afs_fsign_conn_setup(conn, afs_fh->sub_id, afs_fh->path.acc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = az_fs_req_share_prop_get(afs_fh->path.acc,
+				       afs_fh->path.share,
+				       &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
+					&& (flags & ELASTO_FOPEN_EXCL)) {
+		dbg(1, "path already exists, but exclusive create specified\n");
+		ret = -EEXIST;
+		goto err_op_free;
+	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
+		dbg(4, "path not found, creating\n");
+		op_free(op);
+		ret = az_fs_req_share_create(afs_fh->path.acc,
+					     afs_fh->path.share,
+					     &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -326,7 +412,7 @@ err_out:
 
 /* FIXME duplicate of cli_op_wait() */
 static int
-apb_fopen_acc_create_wait(struct apb_fh *apb_fh,
+afs_fopen_acc_create_wait(struct afs_fh *afs_fh,
 			  struct elasto_conn *conn,
 			  const char *req_id)
 {
@@ -339,7 +425,7 @@ apb_fopen_acc_create_wait(struct apb_fh *apb_fh,
 	for (i = 0; i < APB_OP_POLL_TIMEOUT; i++) {
 		struct az_mgmt_rsp_status_get *sts_get_rsp;
 
-		ret = az_mgmt_req_status_get(apb_fh->sub_id, req_id, &op);
+		ret = az_mgmt_req_status_get(afs_fh->sub_id, req_id, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -396,8 +482,9 @@ err_out:
 	return ret;
 }
 
+/* FIXME duplicate of apb_fopen_acc */
 static int
-apb_fopen_acc(struct apb_fh *apb_fh,
+afs_fopen_acc(struct afs_fh *afs_fh,
 	      struct elasto_conn *conn,
 	      uint64_t flags,
 	      struct elasto_ftoken_list *open_toks)
@@ -411,7 +498,7 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = az_mgmt_req_acc_prop_get(apb_fh->sub_id, apb_fh->path.acc,
+	ret = az_mgmt_req_acc_prop_get(afs_fh->sub_id, afs_fh->path.acc,
 				       &op);
 	if (ret < 0) {
 		goto err_out;
@@ -433,15 +520,15 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 					 ELASTO_FOPEN_TOK_CREATE_AT_LOCATION,
 					 &location);
 		if (ret == -ENOENT) {
-			location = APB_FOPEN_LOCATION_DEFAULT;
+			location = AFS_FOPEN_LOCATION_DEFAULT;
 			dbg(1, "location token not specified for new account "
 			    "%s, using default: %s\n",
-			    apb_fh->path.acc, location);
+			    afs_fh->path.acc, location);
 		}
 
-		ret = az_mgmt_req_acc_create(apb_fh->sub_id,
-					     apb_fh->path.acc,
-					     apb_fh->path.acc, /* label */
+		ret = az_mgmt_req_acc_create(afs_fh->sub_id,
+					     afs_fh->path.acc,
+					     afs_fh->path.acc, /* label */
 					     NULL,	       /* description */
 					     NULL,	       /* affin group */
 					     location,
@@ -456,7 +543,7 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 		}
 
 		if (op->rsp.err_code == 202) {
-			ret = apb_fopen_acc_create_wait(apb_fh, conn,
+			ret = afs_fopen_acc_create_wait(afs_fh, conn,
 							op->rsp.req_id);
 			if (ret < 0) {
 				goto err_op_free;
@@ -472,7 +559,7 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 	 * signing setup not needed for mgmt reqs, but in case of readdir
 	 * (List Containers)
 	 */
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
+	ret = afs_fsign_conn_setup(conn, afs_fh->sub_id, afs_fh->path.acc);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -486,7 +573,7 @@ err_out:
 }
 
 static int
-apb_fopen_root(struct apb_fh *apb_fh,
+afs_fopen_root(struct afs_fh *afs_fh,
 	       struct elasto_conn *conn,
 	       uint64_t flags)
 {
@@ -509,7 +596,7 @@ apb_fopen_root(struct apb_fh *apb_fh,
 	 * XXX use the heavy-weight List Storage Accounts request to check that
 	 * the subscription information is correct at open time.
 	 */
-	ret = az_mgmt_req_acc_list(apb_fh->sub_id, &op);
+	ret = az_mgmt_req_acc_list(afs_fh->sub_id, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -527,181 +614,53 @@ err_out:
 }
 
 int
-apb_fopen(void *mod_priv,
+afs_fopen(void *mod_priv,
 	  struct elasto_conn *conn,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
 	int ret;
-	struct apb_fh *apb_fh = mod_priv;
+	struct afs_fh *afs_fh = mod_priv;
 
-	ret = apb_fpath_parse(path, &apb_fh->path);
+	ret = afs_fpath_parse(path, &afs_fh->path);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	if (apb_fh->path.blob != NULL) {
-		ret = apb_fopen_blob(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
+	if (afs_fh->path.fs_ent != NULL) {
+		if (flags & ELASTO_FOPEN_DIRECTORY) {
+			ret = afs_fopen_dir(afs_fh, conn, flags);
+		} else {
+			ret = afs_fopen_file(afs_fh, conn, flags);
 		}
-	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_fopen_ctnr(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	} else if (apb_fh->path.acc != NULL) {
-		ret = apb_fopen_acc(apb_fh, conn, flags, open_toks);
-		if (ret < 0) {
-			goto err_path_free;
-		}
+	} else if (afs_fh->path.share != NULL) {
+		ret = afs_fopen_share(afs_fh, conn, flags);
+	} else if (afs_fh->path.acc != NULL) {
+		ret = afs_fopen_acc(afs_fh, conn, flags, open_toks);
 	} else {
-		ret = apb_fopen_root(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
+		ret = afs_fopen_root(afs_fh, conn, flags);
 	}
+	if (ret < 0) {
+		goto err_path_free;
+	}
+	afs_fh->open_flags = flags;
 
 	return 0;
 
 err_path_free:
-	apb_fpath_free(&apb_fh->path);
+	afs_fpath_free(&afs_fh->path);
 err_out:
 	return ret;
 }
 
 int
-apb_fclose(void *mod_priv,
+afs_fclose(void *mod_priv,
 	   struct elasto_conn *conn)
 {
-	struct apb_fh *apb_fh = mod_priv;
+	struct afs_fh *afs_fh = mod_priv;
 
-	apb_fpath_free(&apb_fh->path);
-
-	return 0;
-}
-
-static int
-abb_fopen_blob(struct apb_fh *apb_fh,
-	       struct elasto_conn *conn,
-	       uint64_t flags)
-{
-	int ret;
-	struct op *op;
-	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
-
-	if (flags & ELASTO_FOPEN_DIRECTORY) {
-		dbg(1, "attempt to open blob with directory flag set\n");
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	ret = az_req_blob_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   apb_fh->path.blob,
-				   &op);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	ret = elasto_fop_send_recv(conn, op);
-	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
-					&& (flags & ELASTO_FOPEN_EXCL)) {
-		dbg(1, "path already exists, but exclusive create specified\n");
-		ret = -EEXIST;
-		goto err_op_free;
-	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
-		struct elasto_data *data;
-		/* put a zero length block blob */
-		dbg(4, "path not found, creating\n");
-		op_free(op);
-		ret = elasto_data_iov_new(NULL, 0, false, &data);
-		if (ret < 0) {
-			goto err_out;
-		}
-		ret = az_req_blob_put(apb_fh->path.acc, apb_fh->path.ctnr,
-				      apb_fh->path.blob, data, 0,
-				      &op);
-		if (ret < 0) {
-			goto err_out;
-		}
-
-		ret = elasto_fop_send_recv(conn, op);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-		goto done;
-	} else if (ret < 0) {
-		goto err_op_free;
-	}
-
-	blob_prop_get_rsp = az_rsp_blob_prop_get(op);
-	if (blob_prop_get_rsp == NULL) {
-		goto err_op_free;
-	}
-
-	if (blob_prop_get_rsp->is_page) {
-		dbg(0, "invalid request to open page blob via block blob "
-		    "backend\n");
-		ret = -EINVAL;
-		goto err_op_free;
-	}
-
-done:
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_out:
-	return ret;
-}
-
-int
-abb_fopen(void *mod_priv,
-	  struct elasto_conn *conn,
-	  const char *path,
-	  uint64_t flags,
-	  struct elasto_ftoken_list *open_toks)
-{
-	int ret;
-	struct apb_fh *apb_fh = mod_priv;
-
-	ret = apb_fpath_parse(path, &apb_fh->path);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	if (apb_fh->path.blob != NULL) {
-		ret = abb_fopen_blob(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_fopen_ctnr(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	} else if (apb_fh->path.acc != NULL) {
-		ret = apb_fopen_acc(apb_fh, conn, flags, open_toks);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	} else {
-		ret = apb_fopen_root(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	}
+	afs_fpath_free(&afs_fh->path);
 
 	return 0;
-
-err_path_free:
-	apb_fpath_free(&apb_fh->path);
-err_out:
-	return ret;
 }

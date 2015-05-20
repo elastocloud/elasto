@@ -25,6 +25,9 @@
 #include <unistd.h>
 #include <inttypes.h>
 
+/* for encoding */
+#include <event2/http.h>
+
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
@@ -218,7 +221,7 @@ az_req_ctnr_list(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	ret = elasto_data_iov_new(NULL, 1024 * 1024, true, &op->rsp.data);
 	if (ret < 0) {
 		goto err_upath_free;
 	}
@@ -324,7 +327,6 @@ az_rsp_ctnr_list_process(struct op *op,
 	assert(op->opcode == AOP_CONTAINER_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -945,7 +947,7 @@ az_req_blob_list(const char *account,
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	ret = elasto_data_iov_new(NULL, 1024 * 1024, true, &op->rsp.data);
 	if (ret < 0) {
 		goto err_upath_free;
 	}
@@ -1070,7 +1072,6 @@ az_rsp_blob_list_process(struct op *op,
 	assert(op->opcode == AOP_BLOB_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -1172,6 +1173,7 @@ az_req_blob_put(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_put *blob_put_req;
+	char *blob_encoded;
 
 	if ((data == NULL)
 	 && (((page_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != page_len)) {
@@ -1223,8 +1225,13 @@ az_req_blob_put(const char *account,
 		ret = -ENOMEM;
 		goto err_free_bname;
 	}
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1324,6 +1331,7 @@ az_req_blob_get(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_get *blob_get_req;
+	char *blob_encoded;
 
 	/* check for correct alignment */
 	if (is_page
@@ -1382,8 +1390,14 @@ az_req_blob_get(const char *account,
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1483,6 +1497,7 @@ az_req_page_put(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_page_put *page_put_req;
+	char *blob_encoded;
 
 	/* check for correct alignment */
 	if (((dest_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != dest_len) {
@@ -1494,7 +1509,7 @@ az_req_page_put(const char *account,
 		goto err_out;
 	}
 
-	ret = az_blob_ebo_init(AOP_BLOB_PUT, &ebo);
+	ret = az_blob_ebo_init(AOP_PAGE_PUT, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -1538,8 +1553,14 @@ az_req_page_put(const char *account,
 		ret = -ENOMEM;
 		goto err_data_close;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=page",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1584,8 +1605,7 @@ az_req_block_put_free(struct az_req_block_put *blk_put_req)
 }
 
 /*
- * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
- * fom the file at path @buf if @data_type is ELASTO_DATA_FILE.
+ * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV.
  * Note: For a given blob, the length of the value specified for the blockid
  *	 parameter must be the same size for each block.
  */
@@ -1602,6 +1622,7 @@ az_req_block_put(const char *account,
 	struct op *op;
 	struct az_req_block_put *blk_put_req;
 	char *b64_blk_id;
+	char *blob_encoded;
 
 	if ((data == NULL) || (data->type == ELASTO_DATA_NONE)) {
 		ret = -EINVAL;
@@ -1665,12 +1686,15 @@ az_req_block_put(const char *account,
 		       "%s.blob.core.windows.net", account);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		free(b64_blk_id);
-		goto err_data_close;
+		goto err_b64_free;
+	}
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
 	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=block&blockid=%s",
-		       container, bname, b64_blk_id);
-	free(b64_blk_id);
+		       container, blob_encoded, b64_blk_id);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1690,6 +1714,8 @@ err_upath_free:
 	free(op->url_path);
 err_uhost_free:
 	free(op->url_host);
+err_b64_free:
+	free(b64_blk_id);
 err_data_close:
 	op->req.data = NULL;
 	free(blk_put_req->blk_id);
@@ -1708,42 +1734,49 @@ err_out:
 static void
 az_req_block_list_put_free(struct az_req_block_list_put *blk_list_put_req)
 {
-	struct azure_block *blk;
-	struct azure_block *blk_n;
 	free(blk_list_put_req->account);
 	free(blk_list_put_req->container);
 	free(blk_list_put_req->bname);
-	list_for_each_safe(blk_list_put_req->blks, blk, blk_n, list) {
-		free(blk->id);
-		free(blk);
-	}
-	free(blk_list_put_req->blks);
 }
 
+#define AZ_REQ_BLK_LIST_PUT_PFX \
+		"<?xml version=\"1.0\" encoding=\"utf-8\"?>" \
+		"<BlockList>"
+/*
+ * Prior to encoding, the blockid string must be less than or equal to 64 bytes
+ * in size.
+ */
+#define AZ_REQ_BLK_LIST_PUT_ENT_MAXLEN ((64 * 4 / 3 + 4) \
+					+ (2 * sizeof("</Uncommitted>")))
+#define AZ_REQ_BLK_LIST_PUT_SFX "</BlockList>"
+
 static int
-az_req_block_list_put_body_fill(struct list_head *blks,
+az_req_block_list_put_body_fill(uint64_t num_blks,
+				struct list_head *blks,
 				struct elasto_data **req_data_out)
 {
 	int ret;
 	struct azure_block *blk;
 	char *xml_data;
-	int buf_remain;
+	uint64_t buf_remain;
 	struct elasto_data *req_data;
 
-	/* 2k buf, should be listlen calculated */
-	buf_remain = 2048;
-	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	buf_remain = sizeof(AZ_REQ_BLK_LIST_PUT_PFX)
+				+ (num_blks * AZ_REQ_BLK_LIST_PUT_ENT_MAXLEN)
+				+ sizeof(AZ_REQ_BLK_LIST_PUT_SFX);
+	dbg(4, "allocating block list XML buffer len: %" PRIu64 "\n",
+	    buf_remain);
+
+	ret = elasto_data_iov_new(NULL, buf_remain, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
 	xml_data = (char *)req_data->iov.buf;
-	ret = snprintf(xml_data, buf_remain,
-		       "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-		       "<BlockList>");
+	ret = snprintf(xml_data, buf_remain, AZ_REQ_BLK_LIST_PUT_PFX);
 	if ((ret < 0) || (ret >= buf_remain)) {
-		/* truncated or error */
+		dbg(0, "failed to fill blks-put prefix\n");
 		ret = -E2BIG;
 		goto err_buf_free;
 	}
@@ -1779,6 +1812,7 @@ az_req_block_list_put_body_fill(struct list_head *blks,
 			       "<%s>%s</%s>", state, b64_id, state);
 		free(b64_id);
 		if ((ret < 0) || (ret >= buf_remain)) {
+			dbg(0, "failed to fill blks-put entry\n");
 			ret = -E2BIG;
 			goto err_buf_free;
 		}
@@ -1787,9 +1821,9 @@ az_req_block_list_put_body_fill(struct list_head *blks,
 		buf_remain -= ret;
 	}
 
-	ret = snprintf(xml_data, buf_remain,
-		       "</BlockList>");
+	ret = snprintf(xml_data, buf_remain, AZ_REQ_BLK_LIST_PUT_SFX);
 	if ((ret < 0) || (ret >= buf_remain)) {
+		dbg(0, "failed to fill blks-put suffix\n");
 		ret = -E2BIG;
 		goto err_buf_free;
 	}
@@ -1800,7 +1834,7 @@ az_req_block_list_put_body_fill(struct list_head *blks,
 	/* truncate buffer to what was written */
 	req_data->len = req_data->len - buf_remain;
 
-	dbg(4, "sending account creation req data: %s\n",
+	dbg(4, "sending put block list req data: %s\n",
 	    (char *)req_data->iov.buf);
 	*req_data_out = req_data;
 
@@ -1812,12 +1846,13 @@ err_out:
 }
 
 /*
- * @blks is a list of blocks to commit, items in the list are not duped
+ * @blks is a list of blocks to commit. It is not retained with the request.
  */
 int
 az_req_block_list_put(const char *account,
 		      const char *container,
 		      const char *bname,
+		      uint64_t num_blks,
 		      struct list_head *blks,
 		      struct op **_op)
 {
@@ -1825,6 +1860,7 @@ az_req_block_list_put(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_block_list_put *blk_list_put_req;
+	char *blob_encoded;
 
 	ret = az_blob_ebo_init(AOP_BLOCK_LIST_PUT, &ebo);
 	if (ret < 0) {
@@ -1858,8 +1894,14 @@ az_req_block_list_put(const char *account,
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=blocklist",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1870,12 +1912,10 @@ az_req_block_list_put(const char *account,
 		goto err_upath_free;
 	}
 
-	ret = az_req_block_list_put_body_fill(blks, &op->req.data);
+	ret = az_req_block_list_put_body_fill(num_blks, blks, &op->req.data);
 	if (ret < 0) {
 		goto err_hdrs_free;
 	}
-
-	blk_list_put_req->blks = blks;
 
 	/* the connection layer must sign this request before sending */
 	op->req_sign = az_req_sign;
@@ -1934,6 +1974,7 @@ az_req_block_list_get(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_block_list_get *blk_list_get_req;
+	char *blob_encoded;
 
 	ret = az_blob_ebo_init(AOP_BLOCK_LIST_GET, &ebo);
 	if (ret < 0) {
@@ -1967,15 +2008,21 @@ az_req_block_list_get(const char *account,
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=blocklist&blocklisttype=all",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
 	}
 
 	/* Response does not include a content-length header, alloc buf here */
-	ret = elasto_data_iov_new(NULL, 1024 * 1024, 0, true, &op->rsp.data);
+	ret = elasto_data_iov_new(NULL, 1024 * 1024, true, &op->rsp.data);
 	if (ret < 0) {
 		goto err_upath_free;
 	}
@@ -2077,7 +2124,6 @@ az_rsp_block_list_get_process(struct op *op,
 	assert(op->opcode == AOP_BLOCK_LIST_GET);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -2132,6 +2178,7 @@ az_req_blob_del(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_del *blob_del_req;
+	char *blob_encoded;
 
 	ret = az_blob_ebo_init(AOP_BLOB_DEL, &ebo);
 	if (ret < 0) {
@@ -2165,8 +2212,14 @@ az_req_blob_del(const char *account,
 		ret = -ENOMEM;
 		goto err_free_bname;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -2215,18 +2268,28 @@ az_req_blob_cp_hdr_fill(struct az_req_blob_cp *blob_cp_req,
 {
 	int ret;
 	char *hdr_str;
+	char *src_blob_encoded;
 
 	ret = az_req_common_hdr_fill(op, false);
 	if (ret < 0) {
 		goto err_out;
 	}
 
+	src_blob_encoded = evhttp_encode_uri(blob_cp_req->src.bname);
+	if (src_blob_encoded == NULL) {
+		goto err_hdrs_free;
+	}
 	/* tell server to always use https when dealing with the src blob */
 	ret = asprintf(&hdr_str,
 		       "https://%s.blob.core.windows.net/%s/%s",
 		       blob_cp_req->src.account,
 		       blob_cp_req->src.container,
-		       blob_cp_req->src.bname);
+		       src_blob_encoded);
+	free(src_blob_encoded);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_hdrs_free;
+	}
 	ret = op_req_hdr_add(op, "x-ms-copy-source", hdr_str);
 	free(hdr_str);
 	if (ret < 0) {
@@ -2255,6 +2318,7 @@ az_req_blob_cp(const char *src_account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_cp *blob_cp_req;
+	char *dst_blob_encoded;
 
 	ret = az_blob_ebo_init(AOP_BLOB_CP, &ebo);
 	if (ret < 0) {
@@ -2306,8 +2370,14 @@ az_req_blob_cp(const char *src_account,
 		ret = -ENOMEM;
 		goto err_dst_blb_free;
 	}
+
+	dst_blob_encoded = evhttp_encode_uri(dst_bname);
+	if (dst_blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s",
-		       dst_container, dst_bname);
+		       dst_container, dst_blob_encoded);
+	free(dst_blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -2369,6 +2439,7 @@ az_req_blob_prop_get(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_prop_get *blob_prop_get_req;
+	char *blob_encoded;
 
 	ret = az_blob_ebo_init(AOP_BLOB_PROP_GET, &ebo);
 	if (ret < 0) {
@@ -2402,8 +2473,14 @@ az_req_blob_prop_get(const char *account,
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -2468,6 +2545,13 @@ az_rsp_blob_prop_get_process(struct op *op,
 	char *hdr_val;
 
 	assert(op->opcode == AOP_BLOB_PROP_GET);
+
+	ret = op_hdr_date_time_val_lookup(&op->rsp.hdrs, "Last-Modified",
+					  &blob_prop_get_rsp->last_mod);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	ret = op_hdr_val_lookup(&op->rsp.hdrs,
 				"x-ms-blob-type",
 				&hdr_val);
@@ -2615,6 +2699,7 @@ az_req_blob_prop_set(const char *account,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_blob_prop_set *blob_prop_set_req;
+	char *blob_encoded;
 
 	if (!is_page && (len != 0)) {
 		dbg(0, "non-zero len for block blob invalid\n");
@@ -2657,8 +2742,14 @@ az_req_blob_prop_set(const char *account,
 		ret = -ENOMEM;
 		goto err_bname_free;
 	}
+
+	blob_encoded = evhttp_encode_uri(bname);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=properties",
-		       container, bname);
+		       container, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -2781,6 +2872,7 @@ az_req_blob_lease(const char *acc,
 	struct op *op;
 	struct az_req_blob_lease *blob_lease_req;
 	const char *action_str;
+	char *blob_encoded;
 
 	action_str = az_req_lease_actn_enum_map(action);
 	if (action_str == NULL) {
@@ -2887,7 +2979,12 @@ az_req_blob_lease(const char *acc,
 		goto err_lid_prop_free;
 	}
 
-	ret = asprintf(&op->url_path, "/%s/%s?comp=lease", ctnr, blob);
+	blob_encoded = evhttp_encode_uri(blob);
+	if (blob_encoded == NULL) {
+		goto err_uhost_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s?comp=lease", ctnr, blob_encoded);
+	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;

@@ -25,6 +25,7 @@ enum elasto_ftype {
 	ELASTO_FILE_APB = 1,	/* Azure page blob store */
 	ELASTO_FILE_S3,		/* S3 object store */
 	ELASTO_FILE_ABB,	/* Azure block blob store */
+	ELASTO_FILE_AFS,	/* Azure file service */
 };
 
 struct elasto_fauth {

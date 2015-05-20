@@ -130,23 +130,25 @@ cm_file_create(void **state)
 
 void
 cm_file_buf_fill(uint8_t *buf,
-		 size_t len)
+		 size_t len,
+		 int pattern_off)
 {
 	int i;
 
-	for (i = 0; i < len; i++) {
-		buf[i] = (i & 0xff);
+	for (i = 0; i < len; i++, pattern_off++) {
+		buf[i] = (pattern_off & 0xff);
 	}
 }
 
 void
 cm_file_buf_check(uint8_t *buf,
-		  size_t len)
+		  size_t len,
+		  int pattern_off)
 {
 	int i;
 
-	for (i = 0; i < len; i++) {
-		assert_int_equal(buf[i], (i & 0xff));
+	for (i = 0; i < len; i++, pattern_off++) {
+		assert_int_equal(buf[i], (pattern_off & 0xff));
 	}
 }
 
@@ -190,8 +192,8 @@ cm_file_io(void **state)
 	ret = elasto_ftruncate(fh, (1024 * 1024 * 1024));
 	assert_false(ret < 0);
 
-	cm_file_buf_fill(buf, ARRAY_SIZE(buf));
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_false(ret < 0);
 
 	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
@@ -202,13 +204,13 @@ cm_file_io(void **state)
 
 	memset(buf, 0, ARRAY_SIZE(buf));
 
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), 0, false, &data);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_false(ret < 0);
 
 	ret = elasto_fread(fh, 0, ARRAY_SIZE(buf), data);
 	assert_false(ret < 0);
 
-	cm_file_buf_check(buf, ARRAY_SIZE(buf));
+	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
 	data->iov.buf = NULL;
 	elasto_data_free(data);
 
@@ -905,11 +907,9 @@ cm_file_dir_stat(void **state)
 
 	ret = elasto_fstat(fh, &fstat);
 	assert_int_equal(ret, 0);
-	assert_true(fstat.field_mask == (ELASTO_FSTAT_FIELD_TYPE
-					| ELASTO_FSTAT_FIELD_BSIZE));
+	assert_true(fstat.field_mask == ELASTO_FSTAT_FIELD_TYPE);
 	assert_true(fstat.ent_type == (ELASTO_FSTAT_ENT_DIR
 					| ELASTO_FSTAT_ENT_ROOT));
-	assert_true(fstat.blksize == 512);
 
 	ret = elasto_fclose(fh);
 	assert_true(ret >= 0);
@@ -927,10 +927,8 @@ cm_file_dir_stat(void **state)
 
 	ret = elasto_fstat(fh, &fstat);
 	assert_int_equal(ret, 0);
-	assert_true(fstat.field_mask == (ELASTO_FSTAT_FIELD_TYPE
-					| ELASTO_FSTAT_FIELD_BSIZE));
+	assert_true(fstat.field_mask == ELASTO_FSTAT_FIELD_TYPE);
 	assert_true(fstat.ent_type == ELASTO_FSTAT_ENT_DIR);
-	assert_true(fstat.blksize == 512);
 
 	ret = elasto_fclose(fh);
 	assert_true(ret >= 0);
@@ -950,14 +948,162 @@ cm_file_dir_stat(void **state)
 	ret = elasto_fstat(fh, &fstat);
 	assert_int_equal(ret, 0);
 	assert_true(fstat.field_mask == (ELASTO_FSTAT_FIELD_TYPE
-					| ELASTO_FSTAT_FIELD_BSIZE
 					| ELASTO_FSTAT_FIELD_LEASE));
 	assert_true(fstat.ent_type == ELASTO_FSTAT_ENT_DIR);
-	assert_true(fstat.blksize == 512);
 	assert_true(fstat.lease_status == ELASTO_FLEASE_UNLOCKED);
 
 	ret = elasto_fclose(fh);
 	assert_true(ret >= 0);
+	free(path);
+}
+
+/*
+ * Azure block blobs are different to page blobs, in that writes at arbitrary
+ * offsets aren't supported.
+ */
+static void
+cm_file_abb_io(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct elasto_fh *fh;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct elasto_data *data;
+	uint8_t buf[1024];
+	uint64_t half;
+
+	auth.type = ELASTO_FILE_ABB;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d/abb_io_test",
+		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_CREATE,
+			   NULL, &fh);
+	assert_false(ret < 0);
+
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_false(ret < 0);
+
+	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
+	assert_false(ret < 0);
+
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	memset(buf, 0, ARRAY_SIZE(buf));
+
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_false(ret < 0);
+
+	/* read at arbitrary offsets, first half then second */
+	half = ARRAY_SIZE(buf) / 2;
+	ret = elasto_fread(fh, 0, half, data);
+	assert_false(ret < 0);
+
+	cm_file_buf_check(buf, half, 0);
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	memset(buf, 0, ARRAY_SIZE(buf));
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_false(ret < 0);
+
+	ret = elasto_fread(fh, half, half, data);
+	assert_false(ret < 0);
+
+	cm_file_buf_check(buf, half, half);
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	ret = elasto_fclose(fh);
+	assert_false(ret < 0);
+	free(path);
+}
+
+static int
+cm_file_data_out_cb(uint64_t stream_off,
+		    uint64_t need,
+		    uint8_t **_out_buf,
+		    uint64_t *buf_len,
+		    void *priv)
+{
+	uint8_t *buf = malloc(need);
+	assert_false(buf == NULL);
+
+	assert_false(_out_buf == NULL);
+	assert_true(*_out_buf == NULL);
+	assert_false(buf_len == NULL);
+
+	cm_file_buf_fill(buf, need, stream_off);
+	*_out_buf = buf;
+	*buf_len = need;
+
+
+	return 0;
+}
+
+static int
+cm_file_data_in_cb(uint64_t stream_off,
+		   uint64_t got,
+		   uint8_t *in_buf,
+		   uint64_t buf_len,
+		   void *priv)
+{
+	cm_file_buf_check(in_buf, buf_len, stream_off);
+
+	return 0;
+}
+
+static void
+cm_file_data_cb(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct elasto_fh *fh;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct elasto_data *data;
+
+	auth.type = ELASTO_FILE_ABB;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d/cb_io_test",
+		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_CREATE,
+			   NULL, &fh);
+	assert_false(ret < 0);
+
+	ret = elasto_data_cb_new(1024, cm_file_data_out_cb, 0,
+				 NULL, NULL,
+				 &data);
+	assert_false(ret < 0);
+
+	ret = elasto_fwrite(fh, 0, 1024, data);
+	assert_false(ret < 0);
+	elasto_data_free(data);
+
+	ret = elasto_data_cb_new(0, NULL, 1024,
+				 cm_file_data_in_cb, NULL,
+				 &data);
+	assert_false(ret < 0);
+
+	ret = elasto_fread(fh, 0, 1024, data);
+	assert_false(ret < 0);
+
+	ret = elasto_fclose(fh);
+	assert_false(ret < 0);
 	free(path);
 }
 
@@ -985,6 +1131,10 @@ static const UnitTest cm_file_tests[] = {
 				 cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_dir_readdir, NULL, NULL),
 	unit_test_setup_teardown(cm_file_dir_stat,
+				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_abb_io,
+				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_data_cb,
 				 cm_file_mkdir, cm_file_rmdir),
 };
 

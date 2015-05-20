@@ -141,7 +141,6 @@ struct s3_req_mp_done {
 	char *bkt_name;
 	char *obj_name;
 	char *upload_id;
-	struct list_head *parts;
 };
 
 struct s3_req_mp_abort {
@@ -262,10 +261,11 @@ s3_req_mp_start(const char *bkt,
 
 int
 s3_req_mp_done(const char *bkt,
-		  const char *obj,
-		  const char *upload_id,
-		  struct list_head *parts,
-		  struct op **_op);
+	       const char *obj,
+	       const char *upload_id,
+	       uint64_t num_parts,
+	       struct list_head *parts,
+	       struct op **_op);
 
 int
 s3_req_mp_abort(const char *bkt,

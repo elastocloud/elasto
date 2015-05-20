@@ -18,5 +18,14 @@ def build(bld):
 		  use=['elasto_file', 'elasto_req_azure'],
 		  includes = '. .. ../../ ../../../',
 		  defines = ['_GNU_SOURCE'])
+	bld.shlib(source='''afs_dir.c afs_handle.c afs_io.c afs_open.c
+			    afs_stat.c afs_unlink.c''',
+		  target='elasto_file_mod_afs',
+		  vnum='0.0.2',
+		  lib=['crypto', 'expat', 'ssl',
+		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  use=['elasto_file', 'elasto_req_azure'],
+		  includes = '. .. ../../ ../../../',
+		  defines = ['_GNU_SOURCE'])
 	if bld.cmd == 'install':
 		bld.add_post_fun(call_ldconfig)

@@ -31,6 +31,8 @@
 	<arg><option>-k</option><replaceable class="parameter">Amazon IAM credentials file</replaceable></arg>
 	<arg><option>-d</option><replaceable class="parameter">log level</replaceable></arg>
 	<arg><option>-i</option></arg>
+	<arg><option>-h</option><replaceable class="parameter">CLI history file</replaceable></arg>
+	<arg><option>-u</option><replaceable class="parameter">REST Server URI</replaceable></arg>
 	<arg>-- <replaceable class="parameter">command</replaceable></arg>
 	</cmdsynopsis>
 </refsynopsisdiv>
@@ -76,6 +78,27 @@
 	<term><option>-i</option></term>
 	<listitem><para>Use HTTP instead of HTTPS where possible, for improved
 	performance.</para></listitem>
+</varlistentry>
+
+<varlistentry>
+	<term><option>-h</option>
+	<replaceable>CLI history file</replaceable></term>
+	<listitem><para>Specify a file to use as storage for Elasto CLI command
+	history, rather than the default <replaceable>~/.elasto_history
+	</replaceable> path.</para></listitem>
+</varlistentry>
+
+<varlistentry>
+	<term><option>-u</option>
+	<replaceable>REST server URI</replaceable></term>
+	<listitem><para>Specify a protocol and server to use for the connection,
+	instead of deriving it from the credentials file.</para></listitem>
+	<listitem><para>currently only the protocol in the URI is processed.
+	Supported values are:</para></listitem>
+	<listitem><para>azure_bb://: Azure Block Blob</para></listitem>
+	<listitem><para>abb://: Azure Block Blob</para></listitem>
+	<listitem><para>amazon_s3://: Amazon S3</para></listitem>
+	<listitem><para>s3://: Amazon S3</para></listitem>
 </varlistentry>
 
 <varlistentry>

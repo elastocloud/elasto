@@ -179,7 +179,6 @@ az_mgmt_rsp_acc_keys_get_process(struct op *op,
 	assert(op->opcode == AOP_MGMT_ACC_KEYS_GET);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -405,7 +404,6 @@ az_mgmt_rsp_acc_list_process(struct op *op,
 	assert(op->opcode == AOP_MGMT_ACC_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -486,7 +484,7 @@ az_mgmt_req_acc_create_body_fill(struct azure_account *acc,
 
 	/* 2k buf, should be strlen calculated */
 	buf_remain = 2048;
-	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	ret = elasto_data_iov_new(NULL, buf_remain, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -855,7 +853,6 @@ az_mgmt_rsp_acc_prop_get_process(struct op *op,
 	assert(op->opcode == AOP_MGMT_ACC_PROP_GET);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -1019,7 +1016,6 @@ az_mgmt_rsp_status_get_process(struct op *op,
 	assert(op->opcode == AOP_MGMT_STATUS_GET);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {

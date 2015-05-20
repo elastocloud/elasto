@@ -49,11 +49,13 @@ cm_file_run(void);
 
 void
 cm_file_buf_fill(uint8_t *buf,
-		 size_t len);
+		 size_t len,
+		 int pattern_off);
 
 void
 cm_file_buf_check(uint8_t *buf,
-		  size_t len);
+		  size_t len,
+		  int pattern_off);
 
 void
 cm_file_buf_check_zero(uint8_t *buf,

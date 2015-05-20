@@ -279,7 +279,6 @@ s3_rsp_svc_list_process(struct op *op,
 	assert(op->opcode == S3OP_SVC_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -479,7 +478,6 @@ s3_rsp_bkt_list_process(struct op *op,
 	assert(op->opcode == S3OP_BKT_LIST);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -545,7 +543,7 @@ s3_op_bkt_create_fill_body(const char *location,
 	}
 
 	buf_remain = ARRAY_SIZE(xml_printf_format) + strlen(location);
-	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	ret = elasto_data_iov_new(NULL, buf_remain, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -788,7 +786,6 @@ s3_rsp_bkt_loc_get_process(struct op *op,
 
 	assert(op->opcode == S3OP_BKT_LOCATION_GET);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
-	assert(op->rsp.data->base_off == 0);
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
@@ -827,8 +824,7 @@ s3_req_obj_put_free(struct s3_req_obj_put *obj_put)
 }
 
 /*
- * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
- * fom the file at path @buf if @data_type is ELASTO_DATA_FILE.
+ * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV.
  */
 int
 s3_req_obj_put(const char *bkt_name,
@@ -943,8 +939,7 @@ err_out:
 }
 
 /*
- * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV, or @len bytes
- * from the file at path @buf if @data_type is ELASTO_DATA_FILE.
+ * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV.
  *
  * If @src_len is zero then ignore @src_off and retrieve entire blob
  */
@@ -1410,7 +1405,6 @@ s3_rsp_mp_start_process(struct op *op,
 	assert(op->opcode == S3OP_MULTIPART_START);
 	assert(op->rsp.data->type == ELASTO_DATA_IOV);
 
-	assert(op->rsp.data->base_off == 0);
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
 	if (ret < 0) {
@@ -1441,53 +1435,51 @@ err_out:
 }
 
 static void
-s3_part_free(struct s3_part **_part)
-{
-	struct s3_part *part = *_part;
-	free(part->etag);
-	free(part);
-}
-
-static void
 s3_req_mp_done_free(struct s3_req_mp_done *mp_done_req)
 {
-	struct s3_part *part;
-	struct s3_part *part_n;
-
 	free(mp_done_req->bkt_name);
 	free(mp_done_req->obj_name);
 	free(mp_done_req->upload_id);
-	if (mp_done_req->parts == NULL) {
-		return;
-	}
-	list_for_each_safe(mp_done_req->parts, part, part_n, list) {
-		s3_part_free(&part);
-	}
 }
 
+#define S3_REQ_MP_DONE_PFX "<CompleteMultipartUpload>"
+#define S3_REQ_MP_DONE_ENT_FMT	"<Part>" \
+					"<PartNumber>%u</PartNumber>" \
+					"<ETag>%s</ETag>" \
+				"</Part>"
+/*
+ * Amazon currently returns 32 byte etags, and part numbers can be up to 10000
+ */
+#define S3_REQ_MP_DONE_ENT_MAXLEN (sizeof(S3_REQ_MP_DONE_ENT_FMT) \
+					+ 32 + sizeof("10000"))
+#define S3_REQ_MP_DONE_SFX "</CompleteMultipartUpload>"
+
 static int
-s3_op_mp_done_fill_body(struct list_head *parts,
+s3_op_mp_done_fill_body(uint64_t num_parts,
+			struct list_head *parts,
 			struct elasto_data **req_data_out)
 {
 	int ret;
 	struct s3_part *part;
 	char *xml_data;
-	int buf_remain;
+	uint64_t buf_remain;
 	struct elasto_data *req_data;
 
-	/* 2k buf, should be listlen calculated */
-	buf_remain = 2048;
-	ret = elasto_data_iov_new(NULL, buf_remain, 0, true, &req_data);
+	buf_remain = sizeof(S3_REQ_MP_DONE_PFX)
+		+ (num_parts * S3_REQ_MP_DONE_ENT_MAXLEN)
+		+ sizeof(S3_REQ_MP_DONE_SFX);
+	dbg(4, "allocating mp-done XML buffer len: %" PRIu64 "\n", buf_remain);
+
+	ret = elasto_data_iov_new(NULL, buf_remain, true, &req_data);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
 	xml_data = (char *)req_data->iov.buf;
-	ret = snprintf(xml_data, buf_remain,
-		       "<CompleteMultipartUpload>");
+	ret = snprintf(xml_data, buf_remain, S3_REQ_MP_DONE_PFX);
 	if ((ret < 0) || (ret >= buf_remain)) {
-		/* truncated or error */
+		dbg(0, "failed to fill mp-done prefix\n");
 		ret = -E2BIG;
 		goto err_buf_free;
 	}
@@ -1496,14 +1488,11 @@ s3_op_mp_done_fill_body(struct list_head *parts,
 	buf_remain -= ret;
 
 	list_for_each(parts, part, list) {
-		ret = snprintf(xml_data, buf_remain,
-			       "<Part>"
-					"<PartNumber>%u</PartNumber>"
-					"<ETag>%s</ETag>"
-			       "</Part>",
+		ret = snprintf(xml_data, buf_remain, S3_REQ_MP_DONE_ENT_FMT,
 			       (unsigned int)part->pnum,
 			       part->etag);
 		if ((ret < 0) || (ret >= buf_remain)) {
+			dbg(0, "failed to fill mp-done entry\n");
 			ret = -E2BIG;
 			goto err_buf_free;
 		}
@@ -1512,9 +1501,9 @@ s3_op_mp_done_fill_body(struct list_head *parts,
 		buf_remain -= ret;
 	}
 
-	ret = snprintf(xml_data, buf_remain,
-		       "</CompleteMultipartUpload>");
+	ret = snprintf(xml_data, buf_remain, S3_REQ_MP_DONE_SFX);
 	if ((ret < 0) || (ret >= buf_remain)) {
+		dbg(0, "failed to fill mp-done suffix\n");
 		ret = -E2BIG;
 		goto err_buf_free;
 	}
@@ -1536,10 +1525,14 @@ err_out:
 	return ret;
 }
 
+/*
+ * @parts is not retained with the request.
+ */
 int
 s3_req_mp_done(const char *bkt,
 	       const char *obj,
 	       const char *upload_id,
+	       uint64_t num_parts,
 	       struct list_head *parts,
 	       struct op **_op)
 {
@@ -1591,12 +1584,10 @@ s3_req_mp_done(const char *bkt,
 		goto err_upath_free;
 	}
 
-	ret = s3_op_mp_done_fill_body(parts, &op->req.data);
+	ret = s3_op_mp_done_fill_body(num_parts, parts, &op->req.data);
 	if (ret < 0) {
 		goto err_hdrs_free;
 	}
-	/* XXX should copy list */
-	mp_done_req->parts = parts;
 
 	*_op = op;
 	return 0;
@@ -1723,6 +1714,17 @@ s3_req_part_put(const char *bkt,
 	struct s3_ebo *ebo;
 	struct op *op;
 	struct s3_req_part_put *part_put_req;
+
+	if ((bkt == NULL) || (obj == NULL) || (upload_id == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if ((pnum < 1) || (pnum > 10000)) {
+		dbg(0, "invalid part number: %" PRIu32 "\n", pnum);
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = s3_ebo_init(S3OP_PART_PUT, &ebo);
 	if (ret < 0) {

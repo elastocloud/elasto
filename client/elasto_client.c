@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -61,6 +61,7 @@ struct cli_cmd_spec {
 	enum cli_cmd id;
 	char *name;
 	char *az_help;
+	char *afs_help;
 	char *s3_help;
 	int arg_min;
 	int arg_max;
@@ -75,6 +76,7 @@ struct cli_cmd_spec {
 		.id = CLI_CMD_LS,
 		.name = "ls",
 		.az_help = "[<account>[/container[/blob]]]",
+		.afs_help = "[<account>[/share[/dir path]]]",
 		.s3_help = "[<bucket>]",
 		.arg_min = 0,
 		.arg_max = 1,
@@ -82,12 +84,13 @@ struct cli_cmd_spec {
 		.handle = &cli_ls_handle,
 		.args_free = &cli_ls_args_free,
 		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-					| CLI_FL_AZ | CLI_FL_S3,
+					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_PUT,
 		.name = "put",
 		.az_help = "<local path> <account>/<container>/<blob>",
+		.afs_help = "<local path> <account>/<share>/<file path>",
 		.s3_help = "<local path> <bucket>/<object>",
 		.arg_min = 2,
 		.arg_max = 2,
@@ -95,12 +98,13 @@ struct cli_cmd_spec {
 		.handle = &cli_put_handle,
 		.args_free = &cli_put_args_free,
 		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-					| CLI_FL_AZ | CLI_FL_S3,
+					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_GET,
 		.name = "get",
 		.az_help = "<account>/<container>/<blob> <local path>",
+		.afs_help = "<account>/<share>/<file path> <local path>",
 		.s3_help = "<bucket>/<object> <local path>",
 		.arg_min = 2,
 		.arg_max = 2,
@@ -108,12 +112,13 @@ struct cli_cmd_spec {
 		.handle = &cli_get_handle,
 		.args_free = &cli_get_args_free,
 		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-					| CLI_FL_AZ | CLI_FL_S3,
+					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_DEL,
 		.name = "del",
 		.az_help = "<account>[/<container>[/<blob>]]",
+		.afs_help = "<account>[/<share>[/<file path>]]",
 		.s3_help = "<bucket>[/<object>]",
 		.arg_min = 1,
 		.arg_max = 1,
@@ -121,13 +126,14 @@ struct cli_cmd_spec {
 		.handle = &cli_del_handle,
 		.args_free = &cli_del_args_free,
 		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-					| CLI_FL_AZ | CLI_FL_S3,
+					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_CP,
 		.name = "cp",
 		.az_help = "<src_acc>/<src_ctnr>/<src_blob> "
 			   "<dst_acc>/<dst_ctnr>/<dst_blob>",
+		.afs_help = "",
 		.s3_help = "<bucket>/<object> <bucket>/<object>",
 		.arg_min = 2,
 		.arg_max = 2,
@@ -140,10 +146,8 @@ struct cli_cmd_spec {
 	{
 		.id = CLI_CMD_CREATE,
 		.name = "create",
-		.az_help = "-l <label> [-d <desc>] [-L <location>] "
-			   "[-A <affinity group>] <account>\n"
-			   "\t\t<account>/<container>\n"
-			   "\t\t-s <account>/<share>\n",
+		.az_help = "[-L <location>] <account>[/<container>]",
+		.afs_help = "[-L <location>] <account>[/<share>[/<dir path>]]",
 		.s3_help = "[-L <location>] <bucket>",
 		.arg_min = 1,
 		.arg_max = 7,
@@ -151,7 +155,7 @@ struct cli_cmd_spec {
 		.handle = &cli_create_handle,
 		.args_free = &cli_create_args_free,
 		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-				| CLI_FL_AZ | CLI_FL_S3,
+				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_HELP,
@@ -159,7 +163,8 @@ struct cli_cmd_spec {
 		.az_help = "",
 		.s3_help = "",
 		.handle = &cli_help_handle,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_AZ | CLI_FL_S3,
+		.feature_flags = CLI_FL_PROMPT
+				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_EXIT,
@@ -176,7 +181,8 @@ struct cli_cmd_spec {
 		.az_help = "",
 		.s3_help = "",
 		.handle = &cli_exit_handle,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_AZ | CLI_FL_S3,
+		.feature_flags = CLI_FL_PROMPT
+				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
 		/* must be last entry */
@@ -204,7 +210,9 @@ cli_args_usage(const char *progname,
 "-d log_level:		Log debug messages (default: 0)\n"
 "-i			Insecure, use HTTP where possible "
 "(default: HTTPS only)\n"
-"-h history		CLI history file (default: ~/.elasto_history)\n\n",
+"-h history:		CLI history file (default: ~/.elasto_history)\n"
+"-u URI:		REST Server URI (default: derived from credentials "
+"file)\n\n",
 			progname);
 	}
 
@@ -217,11 +225,15 @@ cli_args_usage(const char *progname,
 		 */
 		if ((cmd->feature_flags & flags & CLI_FL_BIN_ARG)
 		 || (cmd->feature_flags & flags & CLI_FL_PROMPT)) {
-			if ((cmd->feature_flags | CLI_FL_S3 | CLI_FL_AZ) == 0) {
+			if ((cmd->feature_flags
+				| CLI_FL_S3 | CLI_FL_AZ | CLI_FL_AFS) == 0) {
 				continue;
 			}
 			if (cmd->feature_flags & flags & CLI_FL_AZ) {
 				fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->az_help);
+			}
+			if (cmd->feature_flags & flags & CLI_FL_AFS) {
+				fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->afs_help);
 			}
 			if (cmd->feature_flags & flags & CLI_FL_S3) {
 				fprintf(stderr, "\t%s\t%s\n", cmd->name, cmd->s3_help);
@@ -423,6 +435,50 @@ err_out:
 	return ret;
 }
 
+/**
+ * Parse REST URI in the form proto://server
+ * TODO currently only the following protocols are supported:
+ */
+#define CLI_URI_AZURE_BLOCK_BLOB_LONG "azure_bb://"
+#define CLI_URI_AZURE_BLOCK_BLOB_SHORT "abb://"
+#define CLI_URI_AMAZON_S3_LONG "amazon_s3://"
+#define CLI_URI_AMAZON_S3_SHORT "s3://"
+#define CLI_URI_AZURE_FILE_SERVICE_LONG "azure_fs://"
+#define CLI_URI_AZURE_FILE_SERVICE_SHORT "afs://"
+static int
+cli_uri_parse(const char *uri,
+	      enum cli_type *type)
+{
+	if (type == NULL) {
+		return -EINVAL;
+	}
+
+	if (strncmp(uri, CLI_URI_AZURE_BLOCK_BLOB_LONG,
+	    sizeof(CLI_URI_AZURE_BLOCK_BLOB_LONG) - 1) == 0) {
+		*type = CLI_TYPE_AZURE;
+	} else if (strncmp(uri, CLI_URI_AZURE_BLOCK_BLOB_SHORT,
+	    sizeof(CLI_URI_AZURE_BLOCK_BLOB_SHORT) - 1) == 0) {
+		*type = CLI_TYPE_AZURE;
+	} else if (strncmp(uri, CLI_URI_AMAZON_S3_LONG,
+	    sizeof(CLI_URI_AMAZON_S3_LONG) - 1) == 0) {
+		*type = CLI_TYPE_S3;
+	} else if (strncmp(uri, CLI_URI_AMAZON_S3_SHORT,
+	    sizeof(CLI_URI_AMAZON_S3_SHORT) - 1) == 0) {
+		*type = CLI_TYPE_S3;
+	} else if (strncmp(uri, CLI_URI_AZURE_FILE_SERVICE_SHORT,
+	    sizeof(CLI_URI_AZURE_FILE_SERVICE_SHORT) - 1) == 0) {
+		*type = CLI_TYPE_AFS;
+	} else if (strncmp(uri, CLI_URI_AZURE_FILE_SERVICE_LONG,
+	    sizeof(CLI_URI_AZURE_FILE_SERVICE_LONG) - 1) == 0) {
+		*type = CLI_TYPE_AFS;
+	} else {
+		dbg(0, "invalid URI string: %s\n", uri);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static void
 cli_args_free(const struct cli_cmd_spec *cmd,
 	      struct cli_args *cli_args)
@@ -456,6 +512,7 @@ cli_args_parse(int argc,
 	char *pub_settings = NULL;
 	char *s3_creds_file = NULL;
 	char *history_file = NULL;
+	char *uri = NULL;
 	char *progname = strdup(argv[0]);
 	if (progname == NULL) {
 		ret = -ENOMEM;
@@ -463,9 +520,9 @@ cli_args_parse(int argc,
 	}
 	cli_args->insecure_http = false;
 	/* show help for all backends by default */
-	cli_args->flags = CLI_FL_AZ | CLI_FL_S3;
+	cli_args->flags = CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3;
 
-	while ((opt = getopt(argc, argv, "s:k:d:?ih:")) != -1) {
+	while ((opt = getopt(argc, argv, "s:k:d:?ih:u:")) != -1) {
 		uint32_t debug_level;
 		switch (opt) {
 		case 's':
@@ -496,9 +553,17 @@ cli_args_parse(int argc,
 				goto err_out;
 			}
 			break;
+		case 'u':
+			uri = strdup(optarg);
+			if (uri == NULL) {
+				ret = -ENOMEM;
+				goto err_out;
+			}
+			break;
 		default: /* '?' */
 			cli_args_usage(progname,
-				       CLI_FL_BIN_ARG | CLI_FL_AZ | CLI_FL_S3,
+				       CLI_FL_BIN_ARG
+				       | CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 				       NULL);
 			ret = -EINVAL;
 			goto err_out;
@@ -507,25 +572,59 @@ cli_args_parse(int argc,
 	}
 	if (((pub_settings == NULL) && (s3_creds_file == NULL))
 	 || ((pub_settings != NULL) && (s3_creds_file != NULL))) {
-		cli_args_usage(argv[0], CLI_FL_BIN_ARG | CLI_FL_AZ | CLI_FL_S3,
+		cli_args_usage(argv[0], CLI_FL_BIN_ARG
+					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 			       "Either an Azure PublishSettings file, or "
 			       "Amazon S3 key file is required");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
-	if (pub_settings != NULL) {
+	if (uri != NULL) {
+		/* parse only provider portion of the URI. TODO parse host */
+		ret = cli_uri_parse(uri, &cli_args->type);
+		if (ret < 0) {
+			goto err_out;
+		}
+	} else if (pub_settings != NULL) {
+		/* publish settings argument - assume Azure Bock Blob service */
 		cli_args->type = CLI_TYPE_AZURE;
-		/* don't show S3 usage strings */
-		cli_args->flags &= ~CLI_FL_S3;
-		cli_args->az.ps_file = pub_settings;
-	} else {
-		assert(s3_creds_file != NULL);
+	} else if (s3_creds_file != NULL) {
+		/* iam creds argument - assume Amazon S3 service */
 		cli_args->type = CLI_TYPE_S3;
+	} else {
+		assert(false);
+	}
+
+	if (cli_args->type == CLI_TYPE_AZURE) {
+		if (pub_settings == NULL) {
+			dbg(0, "PublishSettings file required for Azure URI\n");
+			ret = -EINVAL;
+			goto err_out;
+		}
+		/* don't show S3 usage strings */
+		cli_args->flags &= ~(CLI_FL_S3 | CLI_FL_AFS);
+		cli_args->az.ps_file = pub_settings;
+	} else if (cli_args->type == CLI_TYPE_AFS) {
+		if (pub_settings == NULL) {
+			dbg(0, "PublishSettings file required for Azure URI\n");
+			ret = -EINVAL;
+			goto err_out;
+		}
+		/* don't show S3 or ABB usage strings */
+		cli_args->flags &= ~(CLI_FL_S3 | CLI_FL_AZ);
+		cli_args->az.ps_file = pub_settings;
+	} else if (cli_args->type == CLI_TYPE_S3) {
+		if (s3_creds_file == NULL) {
+			dbg(0, "S3 creds required for Amazon URI\n");
+			ret = -EINVAL;
+			goto err_out;
+		}
 		/* don't show Azure usage strings */
 		cli_args->flags &= ~CLI_FL_AZ;
 		cli_args->s3.creds_file = s3_creds_file;
 	}
+
 	if (history_file == NULL) {
 		/* default ~/.elasto_history */
 		struct passwd *pw = getpwuid(getuid());
@@ -703,7 +802,8 @@ main(int argc, char * const *argv)
 		goto err_args_free;
 	}
 
-	if (cli_args.type == CLI_TYPE_AZURE) {
+	if ((cli_args.type == CLI_TYPE_AZURE)
+	 || (cli_args.type == CLI_TYPE_AFS)) {
 		ret = azure_ssl_pubset_process(cli_args.az.ps_file,
 					       &cli_args.az.pem_file,
 					       &cli_args.az.sub_id,
@@ -732,7 +832,8 @@ main(int argc, char * const *argv)
 
 	ret = 0;
 err_ps_cleanup:
-	if (cli_args.type == CLI_TYPE_AZURE) {
+	if ((cli_args.type == CLI_TYPE_AZURE)
+	 || (cli_args.type == CLI_TYPE_AFS)) {
 		azure_ssl_pubset_cleanup(cli_args.az.pem_file);
 	}
 err_global_clean:

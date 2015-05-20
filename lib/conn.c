@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -127,8 +127,6 @@ ev_write_alloc_err(struct op *op,
 /*
  * @cb_nbytes is the number of bytes provided by this callback, clen is the
  * number of bytes expected across all callbacks, but may not be known.
- * FIXME this is too complicated! Clean it up by adding a higher layer callback
- * to the request structure and removing all data buffer types.
  */
 static int
 ev_write_alloc_std(struct op *op,
@@ -143,7 +141,7 @@ ev_write_alloc_std(struct op *op,
 		uint64_t sz = (op->rsp.clen_recvd ? op->rsp.clen : cb_nbytes);
 		/* requester wants us to allocate a recv iov */
 		/* TODO check clen isn't too huge */
-		ret = elasto_data_iov_new(NULL, sz, 0, true, &op->rsp.data);
+		ret = elasto_data_iov_new(NULL, sz, true, &op->rsp.data);
 		op->rsp.recv_cb_alloced = true;
 		return ret;
 	}
@@ -166,8 +164,7 @@ ev_write_alloc_std(struct op *op,
 			return 0;
 		}
 		/* external req buffer */
-		if (op->rsp.clen_recvd && (op->rsp.clen
-				+ op->rsp.data->base_off > op->rsp.data->len)) {
+		if (op->rsp.clen_recvd && (op->rsp.clen > op->rsp.data->len)) {
 				dbg(0, "preallocated rsp buf not large enough "
 				       "- alloced=%" PRIu64 ", "
 				       "received clen=%" PRIu64 "\n",
@@ -176,23 +173,11 @@ ev_write_alloc_std(struct op *op,
 		}
 		/* FIXME check for space on !op->rsp.clen_recvd */
 		break;
-	case ELASTO_DATA_FILE:
-		if (op->rsp.clen_recvd) {
-			op->rsp.data->len = op->rsp.clen
-						+ op->rsp.data->base_off;
-		} else if (op->rsp.write_cbs == 1) {
-			op->rsp.data->len = cb_nbytes + op->rsp.data->base_off;
-		} else {
-			op->rsp.data->len += cb_nbytes;
-		}
-		/* TODO, could fallocate entire file */
-		break;
 	case ELASTO_DATA_CB:
-		/* only need to allocate enough to handle this cb */
-		op->rsp.data->cb.next_in_buf = malloc(cb_nbytes);
-		if (op->rsp.data->cb.next_in_buf == NULL) {
-			return -ENOMEM;
-		}
+		/*
+		 * cb_in_buf allocation is handled in the write handler, as we
+		 * don't need to do anything smart with the clen.
+		 */
 		break;
 	default:
 		assert(false);
@@ -240,8 +225,8 @@ ev_write_std(struct op *op,
 	     uint64_t num_bytes)
 {
 	int ret;
-	off_t soff;
-	uint64_t write_off = op->rsp.data->base_off + op->rsp.data->off;
+	uint64_t write_off = op->rsp.data->off;
+	uint8_t *cb_in_buf;
 
 	/* rsp buffer must have been allocated */
 	assert(op->rsp.data != NULL);
@@ -266,46 +251,29 @@ ev_write_std(struct op *op,
 			return -EIO;
 		}
 		break;
-	case ELASTO_DATA_FILE:
-		if (write_off + num_bytes > op->rsp.data->len) {
-			dbg(0, "fatal: write file exceeded, "
-			       "len %" PRIu64 " off %" PRIu64 " io_sz %" PRIu64
-			       "\n", op->rsp.data->len, write_off, num_bytes);
-			return -E2BIG;
-		}
-
-		soff = lseek(op->rsp.data->file.fd, write_off, SEEK_SET);
-		if ((soff < 0) || (soff != write_off)) {
-			dbg(0, "failed to seek off %" PRIu64 "\n", write_off);
-			return -EIO;
-		}
-		ret = evbuffer_write_atmost(ev_in_buf, op->rsp.data->file.fd,
-					    num_bytes);
-		/* no tolerance for partial IO */
-		if ((ret < 0) || (ret != num_bytes)) {
-			dbg(0, "file write io failed: %s\n", strerror(errno));
-			return -EBADF;
-		}
-		break;
 	case ELASTO_DATA_CB:
-		/* TODO could avoid the copy here */
+		/* allocate a buffer to hold only this cb data */
+		cb_in_buf = malloc(num_bytes);
+		if (cb_in_buf == NULL) {
+			return -ENOMEM;
+		}
 		ret = evbuffer_remove(ev_in_buf,
-				      (void *)(op->rsp.data->cb.next_in_buf),
+				      cb_in_buf,
 				      num_bytes);
 		/* no tolerance for partial IO */
 		if ((ret < 0) || (ret != num_bytes)) {
 			dbg(0, "unable to remove %" PRIu64 " bytes from "
 			       "buffer for callback\n", num_bytes);
+			free(cb_in_buf);
 			return -EIO;
 		}
-		/* callback is responsible for freeing next_in_buf */
-		ret = op->rsp.data->cb.in_cb(write_off, num_bytes,
-					     op->rsp.data->cb.next_in_buf,
+		/* in_cb is responsible for freeing cb_in_buf on success */
+		ret = op->rsp.data->cb.in_cb(write_off, num_bytes, cb_in_buf,
 					     num_bytes, op->rsp.data->cb.priv);
-		op->rsp.data->cb.next_in_buf = NULL;
 		if (ret < 0) {
 			dbg(0, "data in_cb returned an error (%d), ending "
 			       "xfer\n", ret);
+			free(cb_in_buf);
 			return -EIO;
 		}
 
@@ -509,22 +477,6 @@ ev_err_cb(enum evhttp_request_error ev_req_error,
 }
 
 static void
-elasto_conn_seg_cleanup_cb(struct evbuffer_file_segment const *seg,
-			   int flags,
-			   void *data)
-{
-	struct elasto_data *req_data = (struct elasto_data *)data;
-
-	if (req_data->type != ELASTO_DATA_FILE) {
-		dbg(0, "ev segment cleanup callback for unexpected type 0x%x\n",
-		    req_data->type);
-	} else {
-		dbg(0, "Got ev segment cleanup callback for %s\n",
-		    req_data->file.path);
-	}
-}
-
-static void
 elasto_read_evbuffer_cleanup_cb(const void *data,
 				size_t datalen,
 				void *extra)
@@ -551,7 +503,7 @@ elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
 	}
 
 	if ((req_data->type != ELASTO_DATA_IOV)
-	 && (req_data->type != ELASTO_DATA_FILE)) {
+	 && (req_data->type != ELASTO_DATA_CB)) {
 		ret = -EINVAL;	/* unsupported */
 		goto err_out;
 	}
@@ -562,7 +514,7 @@ elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
 		goto err_out;
 	}
 
-	read_off = req_data->base_off + req_data->off;
+	read_off = req_data->off;
 	num_bytes = req_data->len - req_data->off;
 
 	if (req_data->type == ELASTO_DATA_IOV) {
@@ -574,29 +526,6 @@ elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
 			ret = -EFAULT;
 			goto err_out;
 		}
-	} else if (req_data->type == ELASTO_DATA_FILE) {
-		struct evbuffer_file_segment *ev_seg;
-
-		ev_seg = evbuffer_file_segment_new(req_data->file.fd,
-						   read_off, num_bytes, 0);
-		if (ev_seg == NULL) {
-			dbg(0, "failed to create file segment buffer\n");
-			ret = -EBADF;
-			goto err_out;
-		}
-		/* offset and len are relative to the segment! */
-		ret = evbuffer_add_file_segment(ev_out_buf, ev_seg, 0,
-						num_bytes);
-		if (ret < 0) {
-			evbuffer_file_segment_free(ev_seg);
-			dbg(0, "failed to add file output buffer\n");
-			ret = -EBADF;
-			goto err_out;
-		}
-
-		evbuffer_file_segment_add_cleanup_cb(ev_seg,
-						     elasto_conn_seg_cleanup_cb,
-						     req_data);
 	} else if (req_data->type == ELASTO_DATA_CB) {
 		uint8_t *out_buf = NULL;
 		uint64_t buf_len = 0;
