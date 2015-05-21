@@ -44,7 +44,6 @@
 
 #define APB_FOPEN_LOCATION_DEFAULT "West Europe"
 
-/* XXX dup of path parsing code in elasto_cli.c */
 int
 apb_fpath_parse(const char *path,
 		struct elasto_fh_az_path *az_path)

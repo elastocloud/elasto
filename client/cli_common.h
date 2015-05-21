@@ -92,14 +92,6 @@ struct cli_args {
 	};
 };
 
-int
-cli_args_path_parse(const char *progname,
-		    enum cli_fl flags,
-		    const char *path,
-		    char **comp1_out,
-		    char **comp2_out,
-		    char **comp3_out);
-
 void
 cli_args_usage(const char *progname,
 	       enum cli_fl flags,
