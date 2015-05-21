@@ -23,19 +23,10 @@
 #include <sys/stat.h>
 #include <inttypes.h>
 
-#include "ccan/list/list.h"
 #include "lib/util.h"
-#include "lib/exml.h"
 #include "lib/data_api.h"
 #include "lib/file/file_api.h"
-#include "lib/op.h"
-#include "lib/azure_mgmt_req.h"
-#include "lib/azure_blob_req.h"
-#include "lib/s3_req.h"
-#include "lib/conn.h"
-#include "lib/azure_ssl.h"
 #include "cli_common.h"
-#include "cli_sign.h"
 #include "cli_ls.h"
 
 static void
