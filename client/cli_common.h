@@ -67,11 +67,6 @@ struct cli_args {
 		} az;
 		struct {
 			char *creds_file;
-			char *iam_user;
-			char *key_id;
-			char *secret;
-			char *bkt_name;
-			char *obj_name;
 		} s3;
 	};
 	bool insecure_http;

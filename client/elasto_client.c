@@ -486,9 +486,6 @@ cli_args_free(const struct cli_cmd_spec *cmd,
 		free(cli_args->az.ps_file);
 	} else if (cli_args->type == CLI_TYPE_S3) {
 		free(cli_args->s3.creds_file);
-		free(cli_args->s3.iam_user);
-		free(cli_args->s3.key_id);
-		free(cli_args->s3.secret);
 	}
 	free(cli_args->progname);
 }
@@ -794,16 +791,6 @@ main(int argc, char * const *argv)
 	ret = elasto_conn_subsys_init();
 	if (ret < 0) {
 		goto err_args_free;
-	}
-
-	if (cli_args.type == CLI_TYPE_S3) {
-		ret = s3_creds_csv_process(cli_args.s3.creds_file,
-					   &cli_args.s3.iam_user,
-					   &cli_args.s3.key_id,
-					   &cli_args.s3.secret);
-		if (ret < 0) {
-			goto err_global_clean;
-		}
 	}
 
 	if (cmd == NULL) {
