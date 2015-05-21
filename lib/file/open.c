@@ -67,7 +67,7 @@ elasto_fopen(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	ret = elasto_fh_init(auth, &fh);
+	ret = elasto_fh_init(auth, path, flags, &fh);
 	if (ret < 0) {
 		dbg(0, "failed to initialize elasto fh\n");
 		/* don't deinit subsystem on error */
@@ -78,7 +78,6 @@ elasto_fopen(const struct elasto_fauth *auth,
 	if (ret < 0) {
 		goto err_fh_free;
 	}
-	fh->open_flags = flags;
 
 	*_fh = fh;
 	return 0;

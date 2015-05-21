@@ -97,6 +97,7 @@ struct elasto_fh {
 	char magic[8];
 	struct elasto_conn *conn;
 	enum elasto_ftype type;
+	char *open_path;
 	uint64_t open_flags;
 	void *mod_dl_h;
 	void *mod_priv;
@@ -110,6 +111,8 @@ struct elasto_fh {
 
 int
 elasto_fh_init(const struct elasto_fauth *auth,
+	       const char *open_path,
+	       uint64_t open_flags,
 	       struct elasto_fh **_fh);
 
 void

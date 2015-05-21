@@ -55,7 +55,7 @@ elasto_fmkdir(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	ret = elasto_fh_init(auth, &fh);
+	ret = elasto_fh_init(auth, path, ELASTO_FOPEN_DIRECTORY, &fh);
 	if (ret < 0) {
 		/* don't deinit subsystem on error */
 		goto err_out;
@@ -88,7 +88,7 @@ elasto_frmdir(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	ret = elasto_fh_init(auth, &fh);
+	ret = elasto_fh_init(auth, path, ELASTO_FOPEN_DIRECTORY, &fh);
 	if (ret < 0) {
 		/* don't deinit subsystem on error */
 		goto err_out;

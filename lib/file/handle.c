@@ -38,6 +38,8 @@
 
 int
 elasto_fh_init(const struct elasto_fauth *auth,
+	       const char *open_path,
+	       uint64_t open_flags,
 	       struct elasto_fh **_fh)
 {
 	struct elasto_fh *fh;
@@ -75,12 +77,18 @@ elasto_fh_init(const struct elasto_fauth *auth,
 	memset(fh, 0, sizeof(*fh));
 	fh->type = auth->type;
 
+	fh->open_path = strdup(open_path);
+	if (fh->open_path == NULL) {
+		goto err_fh_free;
+	}
+	fh->open_flags = open_flags;
+
 	fh->mod_dl_h = dlopen(mod_path, RTLD_NOW);
 	if (fh->mod_dl_h == NULL) {
 		dbg(0, "failed to load module (%d) at path \"%s\": %s\n",
 		    auth->type, mod_path, dlerror());
 		ret = -EFAULT;
-		goto err_fh_free;
+		goto err_path_free;
 	}
 
 	_mod_vers = dlsym(fh->mod_dl_h, ELASTO_FILE_MOD_VERS_SYM);
@@ -121,6 +129,8 @@ elasto_fh_init(const struct elasto_fauth *auth,
 
 err_dl_close:
 	dlclose(fh->mod_dl_h);
+err_path_free:
+	free(fh->open_path);
 err_fh_free:
 	free(fh);
 err_out:
@@ -141,6 +151,7 @@ elasto_fh_free(struct elasto_fh *fh)
 		dbg(0, "failed to unload module (%d): %s\n",
 		    fh->type, dlerror());
 	}
+	free(fh->open_path);
 
 	BUILD_ASSERT(sizeof(ELASTO_FH_POISON) <= ARRAY_SIZE(fh->magic));
 	memcpy(fh->magic, ELASTO_FH_POISON, sizeof(ELASTO_FH_POISON));
