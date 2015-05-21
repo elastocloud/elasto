@@ -185,7 +185,7 @@ afs_fpath_free(struct elasto_fh_afs_path *afs_path)
 	afs_path->fs_ent = NULL;
 }
 
-/* XXX dup of cli_sign_conn_setup */
+/* XXX dup of apb_fsign_conn_setup */
 int
 afs_fsign_conn_setup(struct elasto_conn *conn,
 		     const char *sub_id,

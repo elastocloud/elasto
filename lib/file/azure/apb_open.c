@@ -155,7 +155,6 @@ apb_fpath_free(struct elasto_fh_az_path *az_path)
 	az_path->blob = NULL;
 }
 
-/* XXX dup of cli_sign_conn_setup */
 int
 apb_fsign_conn_setup(struct elasto_conn *conn,
 		     const char *sub_id,
