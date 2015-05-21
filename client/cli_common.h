@@ -64,12 +64,6 @@ struct cli_args {
 	union {
 		struct {
 			char *ps_file;
-			char *pem_file;
-			char *sub_name;
-			char *sub_id;
-			char *blob_acc;
-			char *ctnr_name;
-			char *blob_name;
 		} az;
 		struct {
 			char *creds_file;

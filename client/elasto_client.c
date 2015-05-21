@@ -483,10 +483,7 @@ cli_args_free(const struct cli_cmd_spec *cmd,
 	if ((cmd != NULL) && (cmd->args_free != NULL))
 		cmd->args_free(cli_args);
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		free(cli_args->az.sub_name);
-		free(cli_args->az.sub_id);
 		free(cli_args->az.ps_file);
-		free(cli_args->az.pem_file);
 	} else if (cli_args->type == CLI_TYPE_S3) {
 		free(cli_args->s3.creds_file);
 		free(cli_args->s3.iam_user);
@@ -799,16 +796,7 @@ main(int argc, char * const *argv)
 		goto err_args_free;
 	}
 
-	if ((cli_args.type == CLI_TYPE_AZURE)
-	 || (cli_args.type == CLI_TYPE_AFS)) {
-		ret = azure_ssl_pubset_process(cli_args.az.ps_file,
-					       &cli_args.az.pem_file,
-					       &cli_args.az.sub_id,
-					       &cli_args.az.sub_name);
-		if (ret < 0) {
-			goto err_global_clean;
-		}
-	} else if (cli_args.type == CLI_TYPE_S3) {
+	if (cli_args.type == CLI_TYPE_S3) {
 		ret = s3_creds_csv_process(cli_args.s3.creds_file,
 					   &cli_args.s3.iam_user,
 					   &cli_args.s3.key_id,
@@ -824,15 +812,10 @@ main(int argc, char * const *argv)
 		ret = cmd->handle(&cli_args);
 	}
 	if (ret < 0) {
-		goto err_ps_cleanup;
+		goto err_global_clean;
 	}
 
 	ret = 0;
-err_ps_cleanup:
-	if ((cli_args.type == CLI_TYPE_AZURE)
-	 || (cli_args.type == CLI_TYPE_AFS)) {
-		azure_ssl_pubset_cleanup(cli_args.az.pem_file);
-	}
 err_global_clean:
 	elasto_conn_subsys_deinit();
 err_args_free:
