@@ -34,7 +34,6 @@
 #include "lib/file/file_api.h"
 #include "cli_common.h"
 #include "cli_sign.h"
-#include "cli_util.h"
 #include "cli_create.h"
 
 void

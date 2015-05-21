@@ -410,7 +410,6 @@ err_out:
 #define APB_OP_POLL_PERIOD 2
 #define APB_OP_POLL_TIMEOUT 10	/* multiplied by APB_OP_POLL_PERIOD */
 
-/* FIXME duplicate of cli_op_wait() */
 static int
 afs_fopen_acc_create_wait(struct afs_fh *afs_fh,
 			  struct elasto_conn *conn,
@@ -430,15 +429,8 @@ afs_fopen_acc_create_wait(struct afs_fh *afs_fh,
 			goto err_out;
 		}
 
-		ret = elasto_conn_op_txrx(conn, op);
+		ret = elasto_fop_send_recv(conn, op);
 		if (ret < 0) {
-			goto err_op_free;
-		}
-
-		if (op->rsp.is_error) {
-			ret = -EIO;
-			dbg(0, "failed get status response: %d\n",
-			       op->rsp.err_code);
 			goto err_op_free;
 		}
 
