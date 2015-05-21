@@ -41,6 +41,14 @@ apb_fallocate(void *mod_priv,
 	      uint64_t dest_off,
 	      uint64_t dest_len);
 
+int
+apb_fsplice(struct elasto_conn *conn,
+	    void *src_mod_priv,
+	    uint64_t src_off,
+	    void *dest_mod_priv,
+	    uint64_t dest_off,
+	    uint64_t len);
+
 /* block blob operations */
 int
 abb_fwrite(void *mod_priv,
@@ -55,5 +63,13 @@ abb_fread(void *mod_priv,
 	  uint64_t src_off,
 	  uint64_t src_len,
 	  struct elasto_data *dest_data);
+
+int
+abb_fsplice(struct elasto_conn *conn,
+	    void *src_mod_priv,
+	    uint64_t src_off,
+	    void *dest_mod_priv,
+	    uint64_t dest_off,
+	    uint64_t len);
 
 #endif /* _APB_IO_H_ */

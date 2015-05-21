@@ -183,6 +183,92 @@ err_out:
 	return ret;
 }
 
+int
+apb_fsplice(struct elasto_conn *conn,
+	    void *src_mod_priv,
+	    uint64_t src_off,
+	    void *dest_mod_priv,
+	    uint64_t dest_off,
+	    uint64_t len)
+{
+	struct apb_fh *src_apb_fh = src_mod_priv;
+	struct apb_fh *dest_apb_fh = dest_mod_priv;
+	struct op *op;
+	struct elasto_fstat fstat;
+	int ret;
+
+	if (len == 0) {
+		ret = 0;
+		goto err_out;
+	}
+
+	if ((src_off != 0) || (dest_off != 0)) {
+		dbg(0, "Azure blob backend doesn't support copies at arbitrary "
+		       "offsets\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/* check source length matches the copy length */
+	ret = apb_fstat(src_mod_priv, conn, &fstat);
+	if (ret < 0) {
+		goto err_out;
+	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	if (fstat.size != len) {
+		dbg(0, "Azure blob backend doesn't allow partial copies: "
+		       "src_len=%" PRIu64 ", copy_len=%" PRIu64 "\n",
+		       fstat.size, len);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/*
+	 * check dest file's current length <= copy len, otherwise overwrite
+	 * truncates.
+	 */
+	ret = apb_fstat(dest_mod_priv, conn, &fstat);
+	if (ret < 0) {
+		goto err_out;
+	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	if (fstat.size > len) {
+		dbg(0, "Azure backend doesn't allow splice overwrites when IO "
+		       "len (%" PRIu64 ") < current len (%" PRIu64 ")\n",
+		       len, fstat.size);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_req_blob_cp(src_apb_fh->path.acc,
+			     src_apb_fh->path.ctnr,
+			     src_apb_fh->path.blob,
+			     dest_apb_fh->path.acc,
+			     dest_apb_fh->path.ctnr,
+			     dest_apb_fh->path.blob,
+			     &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
 #define ABB_MAX_PART (4 * BYTES_IN_MB)
 #define ABB_IO_SIZE_HTTP ABB_MAX_PART
 /* FIXME: https writes over 16KB timeout. */
@@ -606,6 +692,92 @@ abb_fread(void *mod_priv,
 
 err_op_free:
 	op->rsp.data = NULL;
+	op_free(op);
+err_out:
+	return ret;
+}
+
+int
+abb_fsplice(struct elasto_conn *conn,
+	    void *src_mod_priv,
+	    uint64_t src_off,
+	    void *dest_mod_priv,
+	    uint64_t dest_off,
+	    uint64_t len)
+{
+	struct apb_fh *src_apb_fh = src_mod_priv;
+	struct apb_fh *dest_apb_fh = dest_mod_priv;
+	struct op *op;
+	struct elasto_fstat fstat;
+	int ret;
+
+	if (len == 0) {
+		ret = 0;
+		goto err_out;
+	}
+
+	if ((src_off != 0) || (dest_off != 0)) {
+		dbg(0, "Azure blob backend doesn't support copies at arbitrary "
+		       "offsets\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/* check source length matches the copy length */
+	ret = abb_fstat(src_mod_priv, conn, &fstat);
+	if (ret < 0) {
+		goto err_out;
+	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	if (fstat.size != len) {
+		dbg(0, "Azure blob backend doesn't allow partial copies: "
+		       "src_len=%" PRIu64 ", copy_len=%" PRIu64 "\n",
+		       fstat.size, len);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/*
+	 * check dest file's current length <= copy len, otherwise overwrite
+	 * truncates.
+	 */
+	ret = abb_fstat(dest_mod_priv, conn, &fstat);
+	if (ret < 0) {
+		goto err_out;
+	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	if (fstat.size > len) {
+		dbg(0, "Azure backend doesn't allow splice overwrites when IO "
+		       "len (%" PRIu64 ") < current len (%" PRIu64 ")\n",
+		       len, fstat.size);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_req_blob_cp(src_apb_fh->path.acc,
+			     src_apb_fh->path.ctnr,
+			     src_apb_fh->path.blob,
+			     dest_apb_fh->path.acc,
+			     dest_apb_fh->path.ctnr,
+			     dest_apb_fh->path.blob,
+			     &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
 	op_free(op);
 err_out:
 	return ret;
