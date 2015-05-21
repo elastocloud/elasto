@@ -183,3 +183,55 @@ elasto_ftruncate(struct elasto_fh *fh,
 err_out:
 	return ret;
 }
+
+int
+elasto_fsplice(struct elasto_fh *src_fh,
+	       uint64_t src_off,
+	       struct elasto_fh *dest_fh,
+	       uint64_t dest_off,
+	       uint64_t len)
+{
+	int ret;
+
+	ret = elasto_fh_validate(src_fh);
+	if (ret < 0) {
+		goto err_out;
+	}
+	ret = elasto_fh_validate(dest_fh);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	/* source and dest handles must use the same backend */
+	if (src_fh->type != dest_fh->type) {
+		ret = -EINVAL;
+		dbg(0, "splice src and dest must be of the same type\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (src_fh->ops.splice == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
+	if ((src_fh->open_flags & ELASTO_FOPEN_DIRECTORY)
+			|| (dest_fh->open_flags & ELASTO_FOPEN_DIRECTORY)) {
+		dbg(1, "invalid IO request for directory handle\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	dbg(3, "splicing %" PRIu64 " bytes from %s to %s\n",
+	    len, src_fh->open_path, dest_fh->open_path);
+
+	ret = src_fh->ops.splice(src_fh->conn, src_fh->mod_priv, src_off,
+				 dest_fh->mod_priv, dest_off, len);
+	if (ret < 0) {
+		goto err_out;
+	}
+	ret = 0;
+
+err_out:
+	return ret;
+}

@@ -113,6 +113,13 @@ elasto_ftruncate(struct elasto_fh *fh,
 		 uint64_t len);
 
 int
+elasto_fsplice(struct elasto_fh *src_fh,
+	       uint64_t src_off,
+	       struct elasto_fh *dest_fh,
+	       uint64_t dest_off,
+	       uint64_t len);
+
+int
 elasto_fclose(struct elasto_fh *fh);
 
 int

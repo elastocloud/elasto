@@ -44,6 +44,12 @@ struct elasto_fh_mod_ops {
 	int (*truncate)(void *mod_priv,
 			struct elasto_conn *conn,
 			uint64_t len);
+	int (*splice)(struct elasto_conn *conn,
+		      void *src_mod_priv,
+		      uint64_t src_off,
+		      void *dest_mod_priv,
+		      uint64_t dest_off,
+		      uint64_t len);
 	int (*stat)(void *mod_priv,
 		    struct elasto_conn *conn,
 		    struct elasto_fstat *fstat);
