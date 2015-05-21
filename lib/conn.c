@@ -252,6 +252,11 @@ ev_write_std(struct op *op,
 		}
 		break;
 	case ELASTO_DATA_CB:
+		if (op->rsp.data->cb.in_cb == NULL) {
+			dbg(0, "error: data received with NULL in_cb\n");
+			return -EIO;
+		}
+
 		/* allocate a buffer to hold only this cb data */
 		cb_in_buf = malloc(num_bytes);
 		if (cb_in_buf == NULL) {
@@ -267,6 +272,7 @@ ev_write_std(struct op *op,
 			free(cb_in_buf);
 			return -EIO;
 		}
+
 		/* in_cb is responsible for freeing cb_in_buf on success */
 		ret = op->rsp.data->cb.in_cb(write_off, num_bytes, cb_in_buf,
 					     num_bytes, op->rsp.data->cb.priv);
@@ -529,6 +535,12 @@ elasto_conn_send_prepare_read_data(struct evhttp_request *ev_req,
 	} else if (req_data->type == ELASTO_DATA_CB) {
 		uint8_t *out_buf = NULL;
 		uint64_t buf_len = 0;
+
+		if (req_data->cb.out_cb == NULL) {
+			dbg(0, "error: data to send, but out_cb is NULL\n");
+			return -EIO;
+		}
+
 		/* cb must provide a buffer with enough data to satisfy req */
 		ret = req_data->cb.out_cb(read_off, num_bytes, &out_buf,
 					  &buf_len, req_data->cb.priv);
