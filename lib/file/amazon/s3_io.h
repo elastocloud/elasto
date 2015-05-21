@@ -28,4 +28,12 @@ s3_fread(void *mod_priv,
 	  uint64_t src_len,
 	  struct elasto_data *dest_data);
 
+int
+s3_fsplice(struct elasto_conn *conn,
+	   void *src_mod_priv,
+	   uint64_t src_off,
+	   void *dest_mod_priv,
+	   uint64_t dest_off,
+	   uint64_t len);
+
 #endif /* _S3_IO_H_ */

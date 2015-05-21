@@ -532,3 +532,87 @@ err_op_free:
 err_out:
 	return ret;
 }
+
+int
+s3_fsplice(struct elasto_conn *conn,
+	   void *src_mod_priv,
+	   uint64_t src_off,
+	   void *dest_mod_priv,
+	   uint64_t dest_off,
+	   uint64_t len)
+{
+	struct s3_fh *src_s3_fh = src_mod_priv;
+	struct s3_fh *dest_s3_fh = dest_mod_priv;
+	struct op *op;
+	struct elasto_fstat fstat;
+	int ret;
+
+	if (len == 0) {
+		ret = 0;
+		goto err_out;
+	}
+
+	if ((src_off != 0) || (dest_off != 0)) {
+		dbg(0, "S3 backend doesn't support copies at arbitrary "
+		       "offsets\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/* check source length matches the copy length */
+	ret = s3_fstat(src_mod_priv, conn, &fstat);
+	if (ret < 0) {
+		goto err_out;
+	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	if (fstat.size != len) {
+		/* TODO could play with multi-part copies here */
+		dbg(0, "S3 backend doesn't allow partial copies: src_len=%"
+		    PRIu64 ", copy_len=%" PRIu64 "\n", fstat.size, len);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/*
+	 * check dest file's current length <= copy len, otherwise overwrite
+	 * truncates.
+	 */
+	ret = s3_fstat(dest_mod_priv, conn, &fstat);
+	if (ret < 0) {
+		goto err_out;
+	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	if (fstat.size > len) {
+		dbg(0, "S3 backend doesn't allow splice overwrites when IO len "
+		       "(%" PRIu64 ") < current len (%" PRIu64 ")\n",
+		       len, fstat.size);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = s3_req_obj_cp(src_s3_fh->path.bkt,
+			    src_s3_fh->path.obj,
+			    dest_s3_fh->path.bkt,
+			    dest_s3_fh->path.obj,
+			    &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
