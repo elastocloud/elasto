@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -22,133 +22,18 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <inttypes.h>
 
-#include "ccan/list/list.h"
-#include "lib/exml.h"
 #include "lib/data_api.h"
-#include "lib/op.h"
-#include "lib/azure_blob_req.h"
-#include "lib/s3_req.h"
-#include "lib/conn.h"
-#include "lib/azure_ssl.h"
+#include "lib/file/file_api.h"
 #include "cli_common.h"
-#include "cli_sign.h"
 #include "cli_cp.h"
 
 void
 cli_cp_args_free(struct cli_args *cli_args)
 {
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		free(cli_args->az.blob_name);
-		free(cli_args->az.ctnr_name);
-		free(cli_args->az.blob_acc);
-		free(cli_args->cp.az.src_blob);
-		free(cli_args->cp.az.src_ctnr);
-		free(cli_args->cp.az.src_acc);
-	} else if (cli_args->type == CLI_TYPE_S3) {
-		free(cli_args->s3.bkt_name);
-		free(cli_args->s3.obj_name);
-		free(cli_args->cp.s3.src_bkt);
-		free(cli_args->cp.s3.src_obj);
-	}
-}
-
-static int
-cli_cp_args_az_parse(int argc,
-		     char * const *argv,
-		     struct cli_args *cli_args)
-{
-	int ret;
-
-	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
-				  argv[1],
-				  &cli_args->cp.az.src_acc,
-				  &cli_args->cp.az.src_ctnr,
-				  &cli_args->cp.az.src_blob);
-	if (ret < 0)
-		goto err_out;
-
-	if (cli_args->cp.az.src_blob == NULL) {
-		cli_args_usage(cli_args->progname, cli_args->flags,
-	   "Invalid cp source path, must be <account>/<container>/<blob>");
-		ret = -EINVAL;
-		goto err_src_free;
-	}
-
-	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
-				  argv[2],
-				  &cli_args->az.blob_acc,
-				  &cli_args->az.ctnr_name,
-				  &cli_args->az.blob_name);
-	if (ret < 0)
-		goto err_src_free;
-
-	if (cli_args->az.blob_name == NULL) {
-		cli_args_usage(cli_args->progname, cli_args->flags,
-	   "Invalid cp destination path, must be <account>/<container>/<blob>");
-		ret = -EINVAL;
-		goto err_dst_free;
-	}
-
-	return 0;
-
-err_dst_free:
-	free(cli_args->az.blob_name);
-	free(cli_args->az.ctnr_name);
-	free(cli_args->az.blob_acc);
-err_src_free:
-	free(cli_args->cp.az.src_blob);
-	free(cli_args->cp.az.src_ctnr);
-	free(cli_args->cp.az.src_acc);
-err_out:
-	return ret;
-}
-
-static int
-cli_cp_args_s3_parse(int argc,
-		     char * const *argv,
-		     struct cli_args *cli_args)
-{
-	int ret;
-
-	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
-				  argv[1],
-				  &cli_args->cp.s3.src_bkt,
-				  &cli_args->cp.s3.src_obj, NULL);
-	if (ret < 0)
-		goto err_out;
-
-	if (cli_args->cp.s3.src_obj== NULL) {
-		cli_args_usage(cli_args->progname, cli_args->flags,
-		   "Invalid S3 cp source path, must be <bucket>/<object>");
-		ret = -EINVAL;
-		goto err_src_free;
-	}
-
-	ret = cli_args_path_parse(cli_args->progname, cli_args->flags,
-				  argv[2],
-				  &cli_args->s3.bkt_name,
-				  &cli_args->s3.obj_name, NULL);
-	if (ret < 0)
-		goto err_src_free;
-
-	if (cli_args->s3.obj_name == NULL) {
-		cli_args_usage(cli_args->progname, cli_args->flags,
-		   "Invalid S3 cp destination path, must be <bucket>/<object>");
-		ret = -EINVAL;
-		goto err_dst_free;
-	}
-
-	return 0;
-
-err_dst_free:
-	free(cli_args->s3.obj_name);
-	free(cli_args->s3.bkt_name);
-err_src_free:
-	free(cli_args->cp.s3.src_obj);
-	free(cli_args->cp.s3.src_bkt);
-err_out:
-	return ret;
+	free(cli_args->cp.src_path);
+	free(cli_args->path);
 }
 
 int
@@ -158,126 +43,26 @@ cli_cp_args_parse(int argc,
 {
 	int ret;
 
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		ret = cli_cp_args_az_parse(argc, argv, cli_args);
-	} else if (cli_args->type == CLI_TYPE_S3) {
-		ret = cli_cp_args_s3_parse(argc, argv, cli_args);
-	} else {
-		ret = -ENOTSUP;
-	}
-	if (ret < 0) {
+	/* path is parsed by libfile on open */
+	cli_args->cp.src_path = strdup(argv[1]);
+	if (cli_args->cp.src_path == NULL) {
+		ret = -ENOMEM;
 		goto err_out;
 	}
+
+	/* path is parsed by libfile on open */
+	cli_args->path = strdup(argv[2]);
+	if (cli_args->path == NULL) {
+		ret = -ENOMEM;
+		goto err_src_free;
+	}
+
 	cli_args->cmd = CLI_CMD_CP;
 
 	return 0;
 
-err_out:
-	return ret;
-}
-
-static int
-cli_cp_blob_handle(struct cli_args *cli_args)
-{
-	struct elasto_conn *econn;
-	struct op *op;
-	int ret;
-
-	assert(cli_args->type == CLI_TYPE_AZURE);
-
-	ret = elasto_conn_init_az(cli_args->az.pem_file, NULL,
-				  cli_args->insecure_http, &econn);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	ret = cli_sign_conn_setup(econn,
-				  cli_args->az.blob_acc,
-				  cli_args->az.sub_id);
-	if (ret < 0) {
-		goto err_conn_free;
-	}
-
-	printf("copying blob %s to %s\n",
-	       cli_args->cp.az.src_blob,
-	       cli_args->az.blob_name);
-
-	ret = az_req_blob_cp(cli_args->cp.az.src_acc,
-			     cli_args->cp.az.src_ctnr,
-			     cli_args->cp.az.src_blob,
-			     cli_args->az.blob_acc,
-			     cli_args->az.ctnr_name,
-			     cli_args->az.blob_name,
-			     &op);
-	if (ret < 0) {
-		goto err_conn_free;
-	}
-
-	ret = elasto_conn_op_txrx(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
-
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_conn_free:
-	elasto_conn_free(econn);
-err_out:
-	return ret;
-}
-
-int
-cli_cp_obj_handle(struct cli_args *cli_args)
-{
-	struct elasto_conn *econn;
-	struct op *op;
-	int ret;
-
-	assert(cli_args->type == CLI_TYPE_S3);
-
-	ret = elasto_conn_init_s3(cli_args->s3.key_id,
-				  cli_args->s3.secret,
-				  cli_args->insecure_http, &econn);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	printf("copying object %s to %s\n",
-	       cli_args->cp.s3.src_obj,
-	       cli_args->s3.obj_name);
-
-	ret = s3_req_obj_cp(cli_args->cp.s3.src_bkt,
-			    cli_args->cp.s3.src_obj,
-			    cli_args->s3.bkt_name,
-			    cli_args->s3.obj_name,
-			    &op);
-	if (ret < 0) {
-		goto err_conn_free;
-	}
-
-	ret = elasto_conn_op_txrx(econn, op);
-	if (ret < 0) {
-		goto err_op_free;
-	}
-
-	if (op->rsp.is_error) {
-		ret = -EIO;
-		printf("failed response: %d\n", op->rsp.err_code);
-		goto err_op_free;
-	}
-
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_conn_free:
-	elasto_conn_free(econn);
+err_src_free:
+	free(cli_args->cp.src_path);
 err_out:
 	return ret;
 }
@@ -285,11 +70,66 @@ err_out:
 int
 cli_cp_handle(struct cli_args *cli_args)
 {
+	struct elasto_fh *src_fh;
+	struct elasto_fh *dest_fh;
+	struct elasto_fauth auth;
+	struct elasto_fstat fstat;
+	int ret;
+
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		return cli_cp_blob_handle(cli_args);
+		auth.type = ELASTO_FILE_ABB;
+		auth.az.ps_path = cli_args->az.ps_file;
 	} else if (cli_args->type == CLI_TYPE_S3) {
-		return cli_cp_obj_handle(cli_args);
+		auth.type = ELASTO_FILE_S3;
+		auth.s3.creds_path = cli_args->s3.creds_file;
+	} else {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+	auth.insecure_http = cli_args->insecure_http;
+
+	/* open source without create or dir flags */
+	ret = elasto_fopen(&auth, cli_args->cp.src_path, 0, NULL, &src_fh);
+	if (ret < 0) {
+		printf("%s path open failed with: %s\n",
+		       cli_args->cp.src_path, strerror(-ret));
+		goto err_out;
 	}
 
-	return -ENOTSUP;
+	/* stat to determine size to copy */
+	ret = elasto_fstat(src_fh, &fstat);
+	if (ret < 0) {
+		printf("stat failed with: %s\n", strerror(-ret));
+		goto err_src_close;
+	}
+
+	/* open dest with create flag */
+	ret = elasto_fopen(&auth, cli_args->path, ELASTO_FOPEN_CREATE, NULL,
+			   &dest_fh);
+	if (ret < 0) {
+		printf("%s path open failed with: %s\n",
+		       cli_args->path, strerror(-ret));
+		goto err_src_close;
+	}
+
+	printf("copying %" PRIu64 " bytes from %s to %s\n",
+	       fstat.size, cli_args->cp.src_path, cli_args->path);
+
+	ret = elasto_fsplice(src_fh, 0, dest_fh, 0, fstat.size);
+	if (ret < 0) {
+		printf("copy failed with: %s\n", strerror(-ret));
+		goto err_dest_close;
+	}
+
+	ret = 0;
+err_dest_close:
+	if (elasto_fclose(dest_fh) < 0) {
+		printf("dest close failed\n");
+	}
+err_src_close:
+	if (elasto_fclose(src_fh) < 0) {
+		printf("src close failed\n");
+	}
+err_out:
+	return ret;
 }
