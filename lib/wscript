@@ -16,7 +16,7 @@ def build(bld):
 		  use=['ccan'],
 		  includes = '. ..',
 		  defines = ['_GNU_SOURCE'])
-	bld.shlib(source='s3_creds.c s3_req.c s3_path.c',
+	bld.stlib(source='s3_creds.c s3_req.c s3_path.c',
 		  target='elasto_req_s3',
 		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',
@@ -24,13 +24,28 @@ def build(bld):
 		  use=['elasto_core'],
 		  includes = '. ..',
 		  defines = ['_GNU_SOURCE'])
-	bld.shlib(source='''azure_ssl.c azure_req.c azure_blob_req.c
-			    azure_fs_req.c azure_mgmt_req.c''',
-		  target='elasto_req_azure',
+	bld.shlib(source='''azure_ssl.c azure_req.c azure_mgmt_req.c''',
+		  target='elasto_req_azure_core',
 		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto_core'],
+		  includes = '. ..',
+		  defines = ['_GNU_SOURCE'])
+	bld.stlib(source='''azure_fs_req.c''',
+		  target='elasto_req_azure_fs',
+		  vnum='0.0.2',
+		  lib=['crypto', 'expat', 'ssl',
+		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  use=['elasto_req_azure_core'],
+		  includes = '. ..',
+		  defines = ['_GNU_SOURCE'])
+	bld.stlib(source='''azure_blob_req.c''',
+		  target='elasto_req_azure_blob',
+		  vnum='0.0.2',
+		  lib=['crypto', 'expat', 'ssl',
+		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  use=['elasto_req_azure_core'],
 		  includes = '. ..',
 		  defines = ['_GNU_SOURCE'])
 	bld.install_as('${INCLUDEDIR}/elasto/data.h', 'data_api.h')
