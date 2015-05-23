@@ -99,12 +99,6 @@ az_mgmt_rsp_acc_keys_get_free(struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp)
 	free(acc_keys_get_rsp->secondary);
 }
 
-static int
-az_mgmt_req_acc_keys_get_hdr_fill(struct op *op)
-{
-	return az_req_common_hdr_fill(op, true);
-}
-
 int
 az_mgmt_req_acc_keys_get(const char *sub_id,
 			 const char *service_name,
@@ -148,7 +142,7 @@ az_mgmt_req_acc_keys_get(const char *sub_id,
 		goto err_uhost_free;
 	}
 
-	ret = az_mgmt_req_acc_keys_get_hdr_fill(op);
+	ret = az_req_common_hdr_fill(op, true);
 	if (ret < 0) {
 		goto err_upath_free;
 	}
@@ -177,7 +171,12 @@ az_mgmt_rsp_acc_keys_get_process(struct op *op,
 	struct xml_doc *xdoc;
 
 	assert(op->opcode == AOP_MGMT_ACC_KEYS_GET);
-	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	if ((op->rsp.data == NULL) || (op->rsp.data->type != ELASTO_DATA_IOV)) {
+		dbg(1, "invalid data buffer in 0x%x response\n", op->opcode);
+		ret = -EIO;
+		goto err_out;
+	}
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
@@ -402,7 +401,12 @@ az_mgmt_rsp_acc_list_process(struct op *op,
 	struct azure_account *acc_n;
 
 	assert(op->opcode == AOP_MGMT_ACC_LIST);
-	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	if ((op->rsp.data == NULL) || (op->rsp.data->type != ELASTO_DATA_IOV)) {
+		dbg(1, "invalid data buffer in 0x%x response\n", op->opcode);
+		ret = -EIO;
+		goto err_out;
+	}
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
@@ -851,7 +855,12 @@ az_mgmt_rsp_acc_prop_get_process(struct op *op,
 	struct xml_doc *xdoc;
 
 	assert(op->opcode == AOP_MGMT_ACC_PROP_GET);
-	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	if ((op->rsp.data == NULL) || (op->rsp.data->type != ELASTO_DATA_IOV)) {
+		dbg(1, "invalid data buffer in 0x%x response\n", op->opcode);
+		ret = -EIO;
+		goto err_out;
+	}
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
@@ -1014,7 +1023,12 @@ az_mgmt_rsp_status_get_process(struct op *op,
 	struct xml_doc *xdoc;
 
 	assert(op->opcode == AOP_MGMT_STATUS_GET);
-	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	if ((op->rsp.data == NULL) || (op->rsp.data->type != ELASTO_DATA_IOV)) {
+		dbg(1, "invalid data buffer in 0x%x response\n", op->opcode);
+		ret = -EIO;
+		goto err_out;
+	}
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);

@@ -231,7 +231,7 @@ err_out:
 
 static int
 az_fs_rsp_shares_list_process(struct op *op,
-			struct az_fs_rsp_shares_list *shares_list_rsp)
+			      struct az_fs_rsp_shares_list *shares_list_rsp)
 {
 	int ret;
 	struct xml_doc *xdoc;
@@ -239,7 +239,12 @@ az_fs_rsp_shares_list_process(struct op *op,
 	struct az_fs_share *share_n;
 
 	assert(op->opcode == AOP_FS_SHARES_LIST);
-	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	if ((op->rsp.data == NULL) || (op->rsp.data->type != ELASTO_DATA_IOV)) {
+		dbg(1, "invalid data buffer in 0x%x response\n", op->opcode);
+		ret = -EIO;
+		goto err_out;
+	}
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
@@ -768,7 +773,12 @@ az_fs_rsp_dirs_files_list_process(struct op *op,
 	struct az_fs_ent *ent_n;
 
 	assert(op->opcode == AOP_FS_DIRS_FILES_LIST);
-	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	if ((op->rsp.data == NULL) || (op->rsp.data->type != ELASTO_DATA_IOV)) {
+		dbg(1, "invalid data buffer in 0x%x response\n", op->opcode);
+		ret = -EIO;
+		goto err_out;
+	}
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);

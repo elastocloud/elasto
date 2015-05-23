@@ -277,7 +277,12 @@ s3_rsp_svc_list_process(struct op *op,
 	struct s3_bucket *bkt_n;
 
 	assert(op->opcode == S3OP_SVC_LIST);
-	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	if ((op->rsp.data == NULL) || (op->rsp.data->type != ELASTO_DATA_IOV)) {
+		dbg(1, "invalid data buffer in 0x%x response\n", op->opcode);
+		ret = -EIO;
+		goto err_out;
+	}
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
@@ -476,7 +481,12 @@ s3_rsp_bkt_list_process(struct op *op,
 	struct s3_object *obj_n;
 
 	assert(op->opcode == S3OP_BKT_LIST);
-	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	if ((op->rsp.data == NULL) || (op->rsp.data->type != ELASTO_DATA_IOV)) {
+		dbg(1, "invalid data buffer in 0x%x response\n", op->opcode);
+		ret = -EIO;
+		goto err_out;
+	}
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
@@ -785,7 +795,12 @@ s3_rsp_bkt_loc_get_process(struct op *op,
 	struct xml_doc *xdoc;
 
 	assert(op->opcode == S3OP_BKT_LOCATION_GET);
-	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	if ((op->rsp.data == NULL) || (op->rsp.data->type != ELASTO_DATA_IOV)) {
+		dbg(1, "invalid data buffer in 0x%x response\n", op->opcode);
+		ret = -EIO;
+		goto err_out;
+	}
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
@@ -1403,7 +1418,12 @@ s3_rsp_mp_start_process(struct op *op,
 	struct xml_doc *xdoc;
 
 	assert(op->opcode == S3OP_MULTIPART_START);
-	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	if ((op->rsp.data == NULL) || (op->rsp.data->type != ELASTO_DATA_IOV)) {
+		dbg(1, "invalid data buffer in 0x%x response\n", op->opcode);
+		ret = -EIO;
+		goto err_out;
+	}
 
 	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
 			 op->rsp.data->off, &xdoc);
