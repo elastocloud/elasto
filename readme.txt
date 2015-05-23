@@ -43,7 +43,11 @@ Running (short version)
   2. Download the PublishSettings file for the account:
      https://manage.windowsazure.com/publishsettings/index
 
-  3. elasto_cli -s Azure_PublishSettings_File
+  - Blob Service -
+  3.a. elasto_cli -s Azure_PublishSettings_File -u abb://
+
+  - File Service -
+  3.b. elasto_cli -s Azure_PublishSettings_File -u afs://
 
 = Amazon S3 =
   1. Create Amazon S3 account
@@ -72,14 +76,14 @@ Running (not so short version)
   The PublishSettings file contains security sensitive information, care
   should be taken to ensure the file remains private.
 
-  The client binary will process the PublishSettings XML at runtime, and
-  output an X.509 <subscriber_id>.pem file in the same directory as the
-  PublishSettings file. This file should also remain private.
-
   Commands can then be issued using the elasto_cli client binary, the
   PublishSettings file is given with the -s argument. E.g.
 
   > elasto_cli -s PublishSettings_file <command>
+
+  elasto_cli will use the Azure Blob Service by default when a
+  PublishSettings file is provided. The Azure File Service can be used
+  by specifying a "-u afs://" argument.
 
 = Amazon S3 =
   Create an Amazon S3 account at https://aws.amazon.com/s3/

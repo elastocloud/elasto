@@ -5,7 +5,7 @@
 \\$2 \(la\\$1\(ra\\$3
 ..
 .if \n(.g .mso www.tmac
-.TH elasto_cli 1 "July 5th, 2013" "" ""
+.TH elasto_cli 1 "May 23rd, 2015" "" ""
 .SH NAME
 elasto_cli \- Cloud Storage Client Utility
 .SH SYNOPSIS
@@ -15,7 +15,7 @@ elasto_cli \- Cloud Storage Client Utility
 \fBelasto_cli\fR \kx
 .if (\nx>(\n(.l/2)) .nr x (\n(.l/5)
 'in \n(.iu+\nxu
-[\fB-?\fR] [\fB-s\fR \fIAzure publish settings file\fR] [\fB-k\fR \fIAmazon IAM credentials file\fR] [\fB-d\fR \fIlog level\fR] [\fB-i\fR] [-- \fIcommand\fR]
+[\fB-?\fR] [\fB-s\fR \fIAzure publish settings file\fR] [\fB-k\fR \fIAmazon IAM credentials file\fR] [\fB-d\fR \fIlog level\fR] [\fB-i\fR] [\fB-h\fR \fICLI history file\fR] [\fB-u\fR \fIREST Server URI\fR] [-- \fIcommand\fR]
 'in \n(.iu-\nxu
 .ad b
 'hy
@@ -40,9 +40,24 @@ Print debugging information.
 Use HTTP instead of HTTPS where possible, for improved
 performance.
 .TP 
+\*(T<\fB\-h\fR\*(T> \fICLI history file\fR
+Specify a file to use as storage for Elasto CLI command
+history, rather than the default \fI~/.elasto_history
+\fRpath.
+.TP 
+\*(T<\fB\-u\fR\*(T> \fIREST server URI\fR
+Specify a protocol and server to use for the connection, instead of deriving it from the credentials file.
+Currently only the protocol in the URI is processed. Supported values are:
+
+\fIabb://\fR: Azure Block Blob Service
+
+\fIafs://\fR: Azure File Service
+
+\fIs3://\fR: Amazon S3
+.TP 
 \fIcommand\fR
 Client command to execute, refer to list below. If no command is present, then the Elasto command line prompt will be entered.
-.SH "AZURE COMMANDS"
+.SH "AZURE BLOB SERVICE COMMANDS"
 .TP 
 ls \fI[account[/container[/blob]]]\fR
 When run without arguments, lists all accounts associated with the given Azure subscription. Otherwise lists all entities under the provided \fIaccount\fR, \fIcontainer\fR, or \fIblob\fR.
@@ -61,11 +76,31 @@ cp \fI<src account/src container/src blob>\fR \fI<dest account/dest container/de
 Copies the given \fIsrc blob\fR to \fIdest blob\fR.
 The copy is performed remotely, such that blob-data does not travel between client and cloud.
 .TP 
-create \fI<-l label> [-d description] <[-L location] | [-A affinity group]> <account>\fR
-Creates an Azure account with the provided attributes. The account name must be unique within Azures namespace. Either a \fIlocation\fR or an \fIaffinity group\fR must be provided. If specified, \fIlocation\fR must match one of Azure's datacenter location names.
+create \fI[-L location] <account>\fR
+Creates an Azure account with the provided attributes. The account name must be unique within Azures namespace. If specified, \fIlocation\fR must match one of Azure's datacenter location names.
 .TP 
 create \fI<account/container>\fR
 Creates the given \fIcontainer\fR.
+.SH "AZURE FILE SERVICE COMMANDS"
+.TP 
+ls \fI[account[/share[/directory/path]]]\fR
+When run without arguments, lists all accounts associated with the given Azure subscription. Otherwise lists all entities under the provided \fIaccount\fR, \fIshare\fR, or \fIdirectory\fR.
+.TP 
+put \fI<local path> <account/share[/directory/path]/file>\fR
+Uploads the file at \fIlocal path\fR to the provided remote \fIpath\fR.
+.TP 
+get \fI<account/share/[/directory/path]/file> <local path>\fR
+Downloads \fIblob\fR, storing it as a file at \fIlocal path\fR.
+.TP 
+del \fI<account>[/share[/directory/path/file]]\fR
+Deletes the given \fIfile\fR, \fIdirectory\fR, \fIshare\fR, or \fIaccount\fR.
+The operation is recursive, e.g. on share deletion, any nested files or directories are also removed.
+.TP 
+create \fI[-L location] <account>\fR
+Creates an Azure account with the provided attributes. The account name must be unique within Azures namespace. If specified, \fIlocation\fR must match one of Azure's datacenter location names.
+.TP 
+create \fI<account/share[/directory/path]>\fR
+Creates the given \fIshare\fR or directory \fIpath\fR.
 .SH "AMAZON S3 COMMANDS"
 .TP 
 ls \fI[bucket]\fR
@@ -85,11 +120,11 @@ cp \fI<src bucket/src object>\fR \fI<dest bucket/dest object>\fR
 Copies the given \fIsrc object\fR to \fIdest object\fR.
 The copy is performed remotely, such that object-data does not travel between client and cloud.
 .TP 
-create \fI<bucket>\fR
+create [-L location]\fI<bucket>\fR
 Creates the given \fIbucket\fR.
 .SH BUGS
 Please report bugs via the 
-.URL https://github.com/ddiss/elasto/issues "issue tracker"
+.URL https://github.com/elastocloud/elasto/issues "issue tracker"
 \&.
 .SH AUTHORS
 The Elasto cloud project was created by David Disseldorp.
