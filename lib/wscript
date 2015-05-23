@@ -10,7 +10,7 @@ def build(bld):
 	bld.shlib(source='''op.c sign.c base64.c conn.c dbg.c data.c exml.c
 			    util.c''',
 		  target='elasto_core',
-		  vnum='0.0.2',
+		  vnum='0.0.3',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['ccan'],
@@ -18,7 +18,6 @@ def build(bld):
 		  defines = ['_GNU_SOURCE'])
 	bld.stlib(source='s3_creds.c s3_req.c s3_path.c',
 		  target='elasto_req_s3',
-		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto_core'],
@@ -26,7 +25,6 @@ def build(bld):
 		  defines = ['_GNU_SOURCE'])
 	bld.shlib(source='''azure_ssl.c azure_req.c azure_mgmt_req.c''',
 		  target='elasto_req_azure_core',
-		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto_core'],
@@ -34,7 +32,6 @@ def build(bld):
 		  defines = ['_GNU_SOURCE'])
 	bld.stlib(source='''azure_fs_req.c''',
 		  target='elasto_req_azure_fs',
-		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto_req_azure_core'],
@@ -42,7 +39,6 @@ def build(bld):
 		  defines = ['_GNU_SOURCE'])
 	bld.stlib(source='''azure_blob_req.c''',
 		  target='elasto_req_azure_blob',
-		  vnum='0.0.2',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto_req_azure_core'],

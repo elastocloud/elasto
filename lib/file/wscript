@@ -14,7 +14,7 @@ def build(bld):
 	bld.shlib(source='''handle.c io.c open.c xmit.c dir.c lease.c
 			    stat.c token.c''',
 		  target='elasto_file',
-		  vnum='0.0.2',
+		  vnum='0.0.3',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5',
 		       'dl'],

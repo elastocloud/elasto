@@ -12,7 +12,7 @@ def build(bld):
 	bld.shlib(source='''apb_dir.c apb_handle.c apb_io.c apb_lease.c
 			    apb_open.c apb_stat.c apb_unlink.c''',
 		  target='elasto_file_mod_apb',
-		  vnum='0.0.2',
+		  vnum='0.0.3',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto_file', 'elasto_req_azure_blob'],
@@ -21,7 +21,7 @@ def build(bld):
 	bld.shlib(source='''afs_dir.c afs_handle.c afs_io.c afs_open.c
 			    afs_stat.c afs_unlink.c''',
 		  target='elasto_file_mod_afs',
-		  vnum='0.0.2',
+		  vnum='0.0.3',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto_file', 'elasto_req_azure_fs'],
