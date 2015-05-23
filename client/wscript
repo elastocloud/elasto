@@ -11,7 +11,7 @@ def build(bld):
 		    target='elasto_cli',
 		    lib=['crypto', 'expat', 'ssl',
 			 ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
-		    use=['elasto_req_azure', 'elasto_req_s3', 'elasto_file'],
+		    use=['elasto_file'],
 		    includes = '. ..',
 		    defines = ['_GNU_SOURCE'],
 		    install_path = '${BINDIR}')
