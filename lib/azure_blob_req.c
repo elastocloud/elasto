@@ -164,7 +164,7 @@ az_req_lease_actn_enum_map(enum az_lease_action action_enum)
 static void
 az_req_ctnr_list_free(struct az_req_ctnr_list *ctnr_list_req)
 {
-	free(ctnr_list_req->account);
+	free(ctnr_list_req->acc);
 }
 
 static void
@@ -183,7 +183,7 @@ az_rsp_ctnr_list_free(struct az_rsp_ctnr_list *ctnr_list_rsp)
 }
 
 int
-az_req_ctnr_list(const char *account,
+az_req_ctnr_list(const char *acc,
 		 struct op **_op)
 {
 
@@ -192,7 +192,7 @@ az_req_ctnr_list(const char *account,
 	struct op *op;
 	struct az_req_ctnr_list *ctnr_list_req;
 
-	if ((account == NULL) || (_op == NULL)) {
+	if ((acc == NULL) || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -204,15 +204,14 @@ az_req_ctnr_list(const char *account,
 	op = &ebo->op;
 	ctnr_list_req = &ebo->req.ctnr_list;
 
-	ctnr_list_req->account = strdup(account);
-	if (ctnr_list_req->account == NULL) {
+	ctnr_list_req->acc = strdup(acc);
+	if (ctnr_list_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_acc_free;
@@ -246,7 +245,7 @@ err_upath_free:
 err_uhost_free:
 	free(op->url_host);
 err_acc_free:
-	free(ctnr_list_req->account);
+	free(ctnr_list_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -372,12 +371,12 @@ err_out:
 static void
 az_req_ctnr_create_free(struct az_req_ctnr_create *ctnr_create_req)
 {
-	free(ctnr_create_req->account);
+	free(ctnr_create_req->acc);
 	free(ctnr_create_req->ctnr);
 }
 
 int
-az_req_ctnr_create(const char *account,
+az_req_ctnr_create(const char *acc,
 		   const char *ctnr,
 		   struct op **_op)
 {
@@ -387,7 +386,7 @@ az_req_ctnr_create(const char *account,
 	struct op *op;
 	struct az_req_ctnr_create *ctnr_create_req;
 
-	if ((account == NULL) || (ctnr == NULL) || (_op == NULL)) {
+	if ((acc == NULL) || (ctnr == NULL) || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -399,8 +398,8 @@ az_req_ctnr_create(const char *account,
 	op = &ebo->op;
 	ctnr_create_req = &ebo->req.ctnr_create;
 
-	ctnr_create_req->account = strdup(account);
-	if (ctnr_create_req->account == NULL) {
+	ctnr_create_req->acc = strdup(acc);
+	if (ctnr_create_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -411,8 +410,7 @@ az_req_ctnr_create(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_ctnr_free;
@@ -442,7 +440,7 @@ err_uhost_free:
 err_ctnr_free:
 	free(ctnr_create_req->ctnr);
 err_acc_free:
-	free(ctnr_create_req->account);
+	free(ctnr_create_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -452,12 +450,12 @@ err_out:
 static void
 az_req_ctnr_del_free(struct az_req_ctnr_del *ctnr_del_req)
 {
-	free(ctnr_del_req->account);
+	free(ctnr_del_req->acc);
 	free(ctnr_del_req->container);
 }
 
 int
-az_req_ctnr_del(const char *account,
+az_req_ctnr_del(const char *acc,
 		const char *container,
 		struct op **_op)
 {
@@ -466,7 +464,7 @@ az_req_ctnr_del(const char *account,
 	struct op *op;
 	struct az_req_ctnr_del *ctnr_del_req;
 
-	if ((account == NULL) || (container == NULL) || (_op == NULL)) {
+	if ((acc == NULL) || (container == NULL) || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -478,8 +476,8 @@ az_req_ctnr_del(const char *account,
 	op = &ebo->op;
 	ctnr_del_req = &ebo->req.ctnr_del;
 
-	ctnr_del_req->account = strdup(account);
-	if (ctnr_del_req->account == NULL) {
+	ctnr_del_req->acc = strdup(acc);
+	if (ctnr_del_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -487,12 +485,11 @@ az_req_ctnr_del(const char *account,
 	ctnr_del_req->container = strdup(container);
 	if (ctnr_del_req->container == NULL) {
 		ret = -ENOMEM;
-		goto err_free_account;
+		goto err_acc_free;
 	}
 
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_free_container;
@@ -520,8 +517,8 @@ err_uhost_free:
 	free(op->url_host);
 err_free_container:
 	free(ctnr_del_req->container);
-err_free_account:
-	free(ctnr_del_req->account);
+err_acc_free:
+	free(ctnr_del_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -896,7 +893,7 @@ err_out:
 static void
 az_req_blob_list_free(struct az_req_blob_list *blob_list_req)
 {
-	free(blob_list_req->account);
+	free(blob_list_req->acc);
 	free(blob_list_req->ctnr);
 }
 
@@ -917,7 +914,7 @@ az_rsp_blob_list_free(struct az_rsp_blob_list *blob_list_rsp)
 }
 
 int
-az_req_blob_list(const char *account,
+az_req_blob_list(const char *acc,
 		 const char *ctnr,
 		 struct op **_op)
 {
@@ -927,7 +924,7 @@ az_req_blob_list(const char *account,
 	struct op *op;
 	struct az_req_blob_list *blob_list_req;
 
-	if ((account == NULL) || (ctnr == NULL) || (_op == NULL)) {
+	if ((acc == NULL) || (ctnr == NULL) || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -939,8 +936,8 @@ az_req_blob_list(const char *account,
 	op = &ebo->op;
 	blob_list_req = &ebo->req.blob_list;
 
-	blob_list_req->account = strdup(account);
-	if (blob_list_req->account == NULL) {
+	blob_list_req->acc = strdup(acc);
+	if (blob_list_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -952,8 +949,7 @@ az_req_blob_list(const char *account,
 	}
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_ctnr_free;
@@ -990,7 +986,7 @@ err_uhost_free:
 err_ctnr_free:
 	free(blob_list_req->ctnr);
 err_acc_free:
-	free(blob_list_req->account);
+	free(blob_list_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1128,7 +1124,7 @@ err_out:
 static void
 az_req_blob_put_free(struct az_req_blob_put *blob_put_req)
 {
-	free(blob_put_req->account);
+	free(blob_put_req->acc);
 	free(blob_put_req->container);
 	free(blob_put_req->bname);
 }
@@ -1181,7 +1177,7 @@ err_out:
  * otherwise it is ignored and @data is uploaded as a block blob.
  */
 int
-az_req_blob_put(const char *account,
+az_req_blob_put(const char *acc,
 		const char *container,
 		const char *bname,
 		struct elasto_data *data,
@@ -1194,7 +1190,7 @@ az_req_blob_put(const char *account,
 	struct az_req_blob_put *blob_put_req;
 	char *blob_encoded;
 
-	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (container == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1216,8 +1212,8 @@ az_req_blob_put(const char *account,
 	op = &ebo->op;
 	blob_put_req = &ebo->req.blob_put;
 
-	blob_put_req->account = strdup(account);
-	if (blob_put_req->account == NULL) {
+	blob_put_req->acc = strdup(acc);
+	if (blob_put_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -1225,7 +1221,7 @@ az_req_blob_put(const char *account,
 	blob_put_req->container = strdup(container);
 	if (blob_put_req->container == NULL) {
 		ret = -ENOMEM;
-		goto err_free_account;
+		goto err_acc_free;
 	}
 
 	blob_put_req->bname = strdup(bname);
@@ -1244,8 +1240,7 @@ az_req_blob_put(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_free_bname;
@@ -1279,8 +1274,8 @@ err_free_bname:
 	free(blob_put_req->bname);
 err_free_container:
 	free(blob_put_req->container);
-err_free_account:
-	free(blob_put_req->account);
+err_acc_free:
+	free(blob_put_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1290,7 +1285,7 @@ err_out:
 static void
 az_req_blob_get_free(struct az_req_blob_get *blob_get_req)
 {
-	free(blob_get_req->account);
+	free(blob_get_req->acc);
 	free(blob_get_req->container);
 	free(blob_get_req->bname);
 }
@@ -1343,7 +1338,7 @@ err_out:
  * if @src_len is zero then ignore @req_off and retrieve entire blob
  */
 int
-az_req_blob_get(const char *account,
+az_req_blob_get(const char *acc,
 		const char *container,
 		const char *bname,
 		bool is_page,
@@ -1358,7 +1353,7 @@ az_req_blob_get(const char *account,
 	struct az_req_blob_get *blob_get_req;
 	char *blob_encoded;
 
-	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (container == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1379,8 +1374,8 @@ az_req_blob_get(const char *account,
 	op = &ebo->op;
 	blob_get_req = &ebo->req.blob_get;
 
-	blob_get_req->account = strdup(account);
-	if (blob_get_req->account == NULL) {
+	blob_get_req->acc = strdup(acc);
+	if (blob_get_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -1415,8 +1410,7 @@ az_req_blob_get(const char *account,
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_bname_free;
@@ -1452,7 +1446,7 @@ err_bname_free:
 err_ctnr_free:
 	free(blob_get_req->container);
 err_acc_free:
-	free(blob_get_req->account);
+	free(blob_get_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1462,7 +1456,7 @@ err_out:
 static void
 az_req_page_put_free(struct az_req_page_put *page_put_req)
 {
-	free(page_put_req->account);
+	free(page_put_req->acc);
 	free(page_put_req->container);
 	free(page_put_req->bname);
 }
@@ -1516,7 +1510,7 @@ err_out:
  * if @src_data is null then clear the byte range, otherwise update.
  */
 int
-az_req_page_put(const char *account,
+az_req_page_put(const char *acc,
 		const char *container,
 		const char *bname,
 		struct elasto_data *src_data,
@@ -1530,7 +1524,7 @@ az_req_page_put(const char *account,
 	struct az_req_page_put *page_put_req;
 	char *blob_encoded;
 
-	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (container == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1553,8 +1547,8 @@ az_req_page_put(const char *account,
 	op = &ebo->op;
 	page_put_req = &ebo->req.page_put;
 
-	page_put_req->account = strdup(account);
-	if (page_put_req->account == NULL) {
+	page_put_req->acc = strdup(acc);
+	if (page_put_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -1564,7 +1558,7 @@ az_req_page_put(const char *account,
 		page_put_req->container = strdup(container);
 		if (page_put_req->container == NULL) {
 			ret = -ENOMEM;
-			goto err_free_account;
+			goto err_acc_free;
 		}
 	}
 	page_put_req->bname = strdup(bname);
@@ -1584,8 +1578,7 @@ az_req_page_put(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_data_close;
@@ -1624,8 +1617,8 @@ err_data_close:
 	free(page_put_req->bname);
 err_free_container:
 	free(page_put_req->container);
-err_free_account:
-	free(page_put_req->account);
+err_acc_free:
+	free(page_put_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1635,7 +1628,7 @@ err_out:
 static void
 az_req_block_put_free(struct az_req_block_put *blk_put_req)
 {
-	free(blk_put_req->account);
+	free(blk_put_req->acc);
 	free(blk_put_req->container);
 	free(blk_put_req->bname);
 	free(blk_put_req->blk_id);
@@ -1647,7 +1640,7 @@ az_req_block_put_free(struct az_req_block_put *blk_put_req)
  *	 parameter must be the same size for each block.
  */
 int
-az_req_block_put(const char *account,
+az_req_block_put(const char *acc,
 		 const char *container,
 		 const char *bname,
 		 const char *blk_id,
@@ -1661,7 +1654,7 @@ az_req_block_put(const char *account,
 	char *b64_blk_id;
 	char *blob_encoded;
 
-	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (container == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1691,8 +1684,8 @@ az_req_block_put(const char *account,
 	op = &ebo->op;
 	blk_put_req = &ebo->req.block_put;
 
-	blk_put_req->account = strdup(account);
-	if (blk_put_req->account == NULL) {
+	blk_put_req->acc = strdup(acc);
+	if (blk_put_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -1700,7 +1693,7 @@ az_req_block_put(const char *account,
 	blk_put_req->container = strdup(container);
 	if (blk_put_req->container == NULL) {
 		ret = -ENOMEM;
-		goto err_account_free;
+		goto err_acc_free;
 	}
 
 	blk_put_req->bname = strdup(bname);
@@ -1725,8 +1718,7 @@ az_req_block_put(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_b64_free;
@@ -1766,8 +1758,8 @@ err_bname_free:
 	free(blk_put_req->bname);
 err_container_free:
 	free(blk_put_req->container);
-err_account_free:
-	free(blk_put_req->account);
+err_acc_free:
+	free(blk_put_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1777,7 +1769,7 @@ err_out:
 static void
 az_req_block_list_put_free(struct az_req_block_list_put *blk_list_put_req)
 {
-	free(blk_list_put_req->account);
+	free(blk_list_put_req->acc);
 	free(blk_list_put_req->container);
 	free(blk_list_put_req->bname);
 }
@@ -1892,7 +1884,7 @@ err_out:
  * @blks is a list of blocks to commit. It is not retained with the request.
  */
 int
-az_req_block_list_put(const char *account,
+az_req_block_list_put(const char *acc,
 		      const char *container,
 		      const char *bname,
 		      uint64_t num_blks,
@@ -1905,7 +1897,7 @@ az_req_block_list_put(const char *account,
 	struct az_req_block_list_put *blk_list_put_req;
 	char *blob_encoded;
 
-	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (container == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1918,8 +1910,8 @@ az_req_block_list_put(const char *account,
 	op = &ebo->op;
 	blk_list_put_req = &ebo->req.block_list_put;
 
-	blk_list_put_req->account = strdup(account);
-	if (blk_list_put_req->account == NULL) {
+	blk_list_put_req->acc = strdup(acc);
+	if (blk_list_put_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -1927,7 +1919,7 @@ az_req_block_list_put(const char *account,
 	blk_list_put_req->container = strdup(container);
 	if (blk_list_put_req->container == NULL) {
 		ret = -ENOMEM;
-		goto err_account_free;
+		goto err_acc_free;
 	}
 
 	blk_list_put_req->bname = strdup(bname);
@@ -1937,8 +1929,7 @@ az_req_block_list_put(const char *account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_bname_free;
@@ -1981,8 +1972,8 @@ err_bname_free:
 	free(blk_list_put_req->bname);
 err_container_free:
 	free(blk_list_put_req->container);
-err_account_free:
-	free(blk_list_put_req->account);
+err_acc_free:
+	free(blk_list_put_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1992,7 +1983,7 @@ err_out:
 static void
 az_req_block_list_get_free(struct az_req_block_list_get *blk_list_get_req)
 {
-	free(blk_list_get_req->account);
+	free(blk_list_get_req->acc);
 	free(blk_list_get_req->container);
 	free(blk_list_get_req->bname);
 }
@@ -2014,7 +2005,7 @@ az_rsp_block_list_get_free(struct az_rsp_block_list_get *blk_list_get_rsp)
 
 /* request a list of all committed and uncommited blocks for @bname */
 int
-az_req_block_list_get(const char *account,
+az_req_block_list_get(const char *acc,
 		      const char *container,
 		      const char *bname,
 		      struct op **_op)
@@ -2025,7 +2016,7 @@ az_req_block_list_get(const char *account,
 	struct az_req_block_list_get *blk_list_get_req;
 	char *blob_encoded;
 
-	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (container == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -2038,8 +2029,8 @@ az_req_block_list_get(const char *account,
 	op = &ebo->op;
 	blk_list_get_req = &ebo->req.block_list_get;
 
-	blk_list_get_req->account = strdup(account);
-	if (blk_list_get_req->account == NULL) {
+	blk_list_get_req->acc = strdup(acc);
+	if (blk_list_get_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -2047,7 +2038,7 @@ az_req_block_list_get(const char *account,
 	blk_list_get_req->container = strdup(container);
 	if (blk_list_get_req->container == NULL) {
 		ret = -ENOMEM;
-		goto err_account_free;
+		goto err_acc_free;
 	}
 
 	blk_list_get_req->bname = strdup(bname);
@@ -2057,8 +2048,7 @@ az_req_block_list_get(const char *account,
 	}
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_bname_free;
@@ -2102,8 +2092,8 @@ err_bname_free:
 	free(blk_list_get_req->bname);
 err_container_free:
 	free(blk_list_get_req->container);
-err_account_free:
-	free(blk_list_get_req->account);
+err_acc_free:
+	free(blk_list_get_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -2218,13 +2208,13 @@ err_out:
 static void
 az_req_blob_del_free(struct az_req_blob_del *blob_del_req)
 {
-	free(blob_del_req->account);
+	free(blob_del_req->acc);
 	free(blob_del_req->container);
 	free(blob_del_req->bname);
 }
 
 int
-az_req_blob_del(const char *account,
+az_req_blob_del(const char *acc,
 		const char *container,
 		const char *bname,
 		struct op **_op)
@@ -2235,7 +2225,7 @@ az_req_blob_del(const char *account,
 	struct az_req_blob_del *blob_del_req;
 	char *blob_encoded;
 
-	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (container == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -2248,8 +2238,8 @@ az_req_blob_del(const char *account,
 	op = &ebo->op;
 	blob_del_req = &ebo->req.blob_del;
 
-	blob_del_req->account = strdup(account);
-	if (blob_del_req->account == NULL) {
+	blob_del_req->acc = strdup(acc);
+	if (blob_del_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -2257,7 +2247,7 @@ az_req_blob_del(const char *account,
 	blob_del_req->container = strdup(container);
 	if (blob_del_req->container == NULL) {
 		ret = -ENOMEM;
-		goto err_free_account;
+		goto err_acc_free;
 	}
 
 	blob_del_req->bname = strdup(bname);
@@ -2267,8 +2257,7 @@ az_req_blob_del(const char *account,
 	}
 
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_free_bname;
@@ -2304,8 +2293,8 @@ err_free_bname:
 	free(blob_del_req->bname);
 err_free_container:
 	free(blob_del_req->container);
-err_free_account:
-	free(blob_del_req->account);
+err_acc_free:
+	free(blob_del_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -2315,10 +2304,10 @@ err_out:
 static void
 az_req_blob_cp_free(struct az_req_blob_cp *blob_cp_req)
 {
-	free(blob_cp_req->src.account);
+	free(blob_cp_req->src.acc);
 	free(blob_cp_req->src.container);
 	free(blob_cp_req->src.bname);
-	free(blob_cp_req->dst.account);
+	free(blob_cp_req->dst.acc);
 	free(blob_cp_req->dst.container);
 	free(blob_cp_req->dst.bname);
 }
@@ -2343,7 +2332,7 @@ az_req_blob_cp_hdr_fill(struct az_req_blob_cp *blob_cp_req,
 	/* tell server to always use https when dealing with the src blob */
 	ret = asprintf(&hdr_str,
 		       "https://%s.blob.core.windows.net/%s/%s",
-		       blob_cp_req->src.account,
+		       blob_cp_req->src.acc,
 		       blob_cp_req->src.container,
 		       src_blob_encoded);
 	free(src_blob_encoded);
@@ -2367,10 +2356,10 @@ err_out:
 }
 
 int
-az_req_blob_cp(const char *src_account,
+az_req_blob_cp(const char *src_acc,
 	       const char *src_container,
 	       const char *src_bname,
-	       const char *dst_account,
+	       const char *dst_acc,
 	       const char *dst_container,
 	       const char *dst_bname,
 	       struct op **_op)
@@ -2381,8 +2370,8 @@ az_req_blob_cp(const char *src_account,
 	struct az_req_blob_cp *blob_cp_req;
 	char *dst_blob_encoded;
 
-	if ((src_account == NULL) || (src_container == NULL)
-	 || (src_bname == NULL) || (dst_account == NULL)
+	if ((src_acc == NULL) || (src_container == NULL)
+	 || (src_bname == NULL) || (dst_acc == NULL)
 	 || (dst_container == NULL) || (dst_bname == NULL) || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -2395,8 +2384,8 @@ az_req_blob_cp(const char *src_account,
 	op = &ebo->op;
 	blob_cp_req = &ebo->req.blob_cp;
 
-	blob_cp_req->src.account = strdup(src_account);
-	if (blob_cp_req->src.account == NULL) {
+	blob_cp_req->src.acc = strdup(src_acc);
+	if (blob_cp_req->src.acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -2413,8 +2402,8 @@ az_req_blob_cp(const char *src_account,
 		goto err_src_ctnr_free;
 	}
 
-	blob_cp_req->dst.account = strdup(dst_account);
-	if (blob_cp_req->dst.account == NULL) {
+	blob_cp_req->dst.acc = strdup(dst_acc);
+	if (blob_cp_req->dst.acc == NULL) {
 		ret = -ENOMEM;
 		goto err_src_blb_free;
 	}
@@ -2432,8 +2421,7 @@ az_req_blob_cp(const char *src_account,
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", dst_account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", dst_acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_dst_blb_free;
@@ -2469,13 +2457,13 @@ err_dst_blb_free:
 err_dst_ctnr_free:
 	free(blob_cp_req->dst.container);
 err_dst_acc_free:
-	free(blob_cp_req->dst.account);
+	free(blob_cp_req->dst.acc);
 err_src_blb_free:
 	free(blob_cp_req->src.bname);
 err_src_ctnr_free:
 	free(blob_cp_req->src.container);
 err_src_acc_free:
-	free(blob_cp_req->src.account);
+	free(blob_cp_req->src.acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -2485,7 +2473,7 @@ err_out:
 static void
 az_req_blob_prop_get_free(struct az_req_blob_prop_get *blob_prop_get_req)
 {
-	free(blob_prop_get_req->account);
+	free(blob_prop_get_req->acc);
 	free(blob_prop_get_req->container);
 	free(blob_prop_get_req->bname);
 }
@@ -2498,7 +2486,7 @@ az_rsp_blob_prop_get_free(struct az_rsp_blob_prop_get *blob_prop_get_rsp)
 }
 
 int
-az_req_blob_prop_get(const char *account,
+az_req_blob_prop_get(const char *acc,
 		     const char *container,
 		     const char *bname,
 		     struct op **_op)
@@ -2509,7 +2497,7 @@ az_req_blob_prop_get(const char *account,
 	struct az_req_blob_prop_get *blob_prop_get_req;
 	char *blob_encoded;
 
-	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (container == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -2522,8 +2510,8 @@ az_req_blob_prop_get(const char *account,
 	op = &ebo->op;
 	blob_prop_get_req = &ebo->req.blob_prop_get;
 
-	blob_prop_get_req->account = strdup(account);
-	if (blob_prop_get_req->account == NULL) {
+	blob_prop_get_req->acc = strdup(acc);
+	if (blob_prop_get_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -2541,8 +2529,7 @@ az_req_blob_prop_get(const char *account,
 	}
 
 	op->method = REQ_METHOD_HEAD;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_bname_free;
@@ -2579,7 +2566,7 @@ err_bname_free:
 err_ctnr_free:
 	free(blob_prop_get_req->container);
 err_acc_free:
-	free(blob_prop_get_req->account);
+	free(blob_prop_get_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -2722,7 +2709,7 @@ err_out:
 static void
 az_req_blob_prop_set_free(struct az_req_blob_prop_set *blob_prop_set_req)
 {
-	free(blob_prop_set_req->account);
+	free(blob_prop_set_req->acc);
 	free(blob_prop_set_req->container);
 	free(blob_prop_set_req->bname);
 }
@@ -2762,7 +2749,7 @@ err_out:
 
 /* page blob truncated to @len if @is_page is set, otherwise ignored */
 int
-az_req_blob_prop_set(const char *account,
+az_req_blob_prop_set(const char *acc,
 		     const char *container,
 		     const char *bname,
 		     bool is_page,
@@ -2775,7 +2762,7 @@ az_req_blob_prop_set(const char *account,
 	struct az_req_blob_prop_set *blob_prop_set_req;
 	char *blob_encoded;
 
-	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (container == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -2794,8 +2781,8 @@ az_req_blob_prop_set(const char *account,
 	op = &ebo->op;
 	blob_prop_set_req = &ebo->req.blob_prop_set;
 
-	blob_prop_set_req->account = strdup(account);
-	if (blob_prop_set_req->account == NULL) {
+	blob_prop_set_req->acc = strdup(acc);
+	if (blob_prop_set_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
@@ -2816,8 +2803,7 @@ az_req_blob_prop_set(const char *account,
 	blob_prop_set_req->len = len;
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host,
-		       "%s.blob.core.windows.net", account);
+	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_bname_free;
@@ -2854,7 +2840,7 @@ err_bname_free:
 err_ctnr_free:
 	free(blob_prop_set_req->container);
 err_acc_free:
-	free(blob_prop_set_req->account);
+	free(blob_prop_set_req->acc);
 err_ebo_free:
 	free(ebo);
 err_out:

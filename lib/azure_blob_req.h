@@ -62,7 +62,7 @@ struct azure_ctnr {
 };
 
 struct az_req_ctnr_list {
-	char *account;
+	char *acc;
 };
 /* @ctnrs: struct azure_ctnr list */
 struct az_rsp_ctnr_list {
@@ -71,12 +71,12 @@ struct az_rsp_ctnr_list {
 };
 
 struct az_req_ctnr_create {
-	char *account;
+	char *acc;
 	char *ctnr;
 };
 
 struct az_req_ctnr_del {
-	char *account;
+	char *acc;
 	char *container;
 };
 
@@ -116,7 +116,7 @@ struct azure_blob {
 };
 
 struct az_req_blob_list {
-	char *account;
+	char *acc;
 	char *ctnr;
 };
 /* @blobs: struct azure_blob list */
@@ -134,7 +134,7 @@ struct az_rsp_blob_list {
 #define BLOB_TYPE_PAGE	"PageBlob"
 #define PBLOB_SECTOR_SZ 512
 struct az_req_blob_put {
-	char *account;
+	char *acc;
 	char *container;
 	char *bname;
 	char *type;
@@ -146,7 +146,7 @@ struct az_rsp_blob_put {
 };
 
 struct az_req_blob_get {
-	char *account;
+	char *acc;
 	char *container;
 	char *bname;
 	char *type;
@@ -159,7 +159,7 @@ struct az_rsp_blob_get {
 };
 
 struct az_req_page_put {
-	char *account;
+	char *acc;
 	char *container;
 	char *bname;
 	uint64_t off;
@@ -175,7 +175,7 @@ struct az_rsp_page_put {
 /* The block must be less than or equal to 4 MB in size. */
 #define BLOB_BLOCK_MAX (4 * 1024 * 1024)
 struct az_req_block_put {
-	char *account;
+	char *acc;
 	char *container;
 	char *bname;
 	char *blk_id;
@@ -198,13 +198,13 @@ struct azure_block {
 	uint64_t len;
 };
 struct az_req_block_list_put {
-	char *account;
+	char *acc;
 	char *container;
 	char *bname;
 };
 
 struct az_req_block_list_get {
-	char *account;
+	char *acc;
 	char *container;
 	char *bname;
 };
@@ -214,19 +214,19 @@ struct az_rsp_block_list_get {
 };
 
 struct az_req_blob_del {
-	char *account;
+	char *acc;
 	char *container;
 	char *bname;
 };
 
 struct az_req_blob_cp {
 	struct {
-		char *account;
+		char *acc;
 		char *container;
 		char *bname;
 	} src;
 	struct {
-		char *account;
+		char *acc;
 		char *container;
 		char *bname;
 	} dst;
@@ -240,7 +240,7 @@ enum az_cp_status {
 };
 
 struct az_req_blob_prop_get {
-	char *account;
+	char *acc;
 	char *container;
 	char *bname;
 };
@@ -257,7 +257,7 @@ struct az_rsp_blob_prop_get {
 };
 
 struct az_req_blob_prop_set {
-	char *account;
+	char *acc;
 	char *container;
 	char *bname;
 	bool is_page;
@@ -328,16 +328,16 @@ struct az_blob_rsp {
 };
 
 int
-az_req_ctnr_list(const char *account,
+az_req_ctnr_list(const char *acc,
 		 struct op **_op);
 
 int
-az_req_ctnr_create(const char *account,
+az_req_ctnr_create(const char *acc,
 		   const char *ctnr,
 		   struct op **_op);
 
 int
-az_req_ctnr_del(const char *account,
+az_req_ctnr_del(const char *acc,
 		const char *container,
 		struct op **_op);
 
@@ -356,12 +356,12 @@ az_req_ctnr_lease(const char *acc,
 		  struct op **_op);
 
 int
-az_req_blob_list(const char *account,
+az_req_blob_list(const char *acc,
 		 const char *ctnr,
 		 struct op **_op);
 
 int
-az_req_blob_put(const char *account,
+az_req_blob_put(const char *acc,
 		const char *container,
 		const char *bname,
 		struct elasto_data *data,
@@ -369,7 +369,7 @@ az_req_blob_put(const char *account,
 		struct op **_op);
 
 int
-az_req_blob_get(const char *account,
+az_req_blob_get(const char *acc,
 		const char *container,
 		const char *bname,
 		bool is_page,
@@ -379,7 +379,7 @@ az_req_blob_get(const char *account,
 		struct op **_op);
 
 int
-az_req_page_put(const char *account,
+az_req_page_put(const char *acc,
 		const char *container,
 		const char *bname,
 		struct elasto_data *src_data,
@@ -388,7 +388,7 @@ az_req_page_put(const char *account,
 		struct op **_op);
 
 int
-az_req_block_put(const char *account,
+az_req_block_put(const char *acc,
 		 const char *container,
 		 const char *bname,
 		 const char *blk_id,
@@ -396,7 +396,7 @@ az_req_block_put(const char *account,
 		 struct op **_op);
 
 int
-az_req_block_list_put(const char *account,
+az_req_block_list_put(const char *acc,
 		      const char *container,
 		      const char *bname,
 		      uint64_t num_blks,
@@ -404,34 +404,34 @@ az_req_block_list_put(const char *account,
 		      struct op **_op);
 
 int
-az_req_block_list_get(const char *account,
+az_req_block_list_get(const char *acc,
 		      const char *container,
 		      const char *bname,
 		      struct op **_op);
 
 int
-az_req_blob_del(const char *account,
+az_req_blob_del(const char *acc,
 		const char *ctnr,
 		const char *bname,
 		struct op **_op);
 
 int
-az_req_blob_cp(const char *src_account,
+az_req_blob_cp(const char *src_acc,
 	       const char *src_ctnr,
 	       const char *src_bname,
-	       const char *dst_account,
+	       const char *dst_acc,
 	       const char *dst_ctnr,
 	       const char *dst_bname,
 	       struct op **_op);
 
 int
-az_req_blob_prop_get(const char *account,
+az_req_blob_prop_get(const char *acc,
 		     const char *container,
 		     const char *bname,
 		     struct op **_op);
 
 int
-az_req_blob_prop_set(const char *account,
+az_req_blob_prop_set(const char *acc,
 		     const char *container,
 		     const char *bname,
 		     bool is_page,
@@ -439,7 +439,7 @@ az_req_blob_prop_set(const char *account,
 		     struct op **_op);
 
 int
-az_req_blob_lease(const char *account,
+az_req_blob_lease(const char *acc,
 		  const char *ctnr,
 		  const char *bname,
 		  const char *lid,
