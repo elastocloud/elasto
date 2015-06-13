@@ -415,8 +415,7 @@ az_req_ctnr_create(const char *acc,
 		ret = -ENOMEM;
 		goto err_ctnr_free;
 	}
-	ret = asprintf(&op->url_path, "/%s?restype=container",
-		       ctnr);
+	ret = asprintf(&op->url_path, "/%s?restype=container", ctnr);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -451,12 +450,12 @@ static void
 az_req_ctnr_del_free(struct az_req_ctnr_del *ctnr_del_req)
 {
 	free(ctnr_del_req->acc);
-	free(ctnr_del_req->container);
+	free(ctnr_del_req->ctnr);
 }
 
 int
 az_req_ctnr_del(const char *acc,
-		const char *container,
+		const char *ctnr,
 		struct op **_op)
 {
 	int ret;
@@ -464,7 +463,7 @@ az_req_ctnr_del(const char *acc,
 	struct op *op;
 	struct az_req_ctnr_del *ctnr_del_req;
 
-	if ((acc == NULL) || (container == NULL) || (_op == NULL)) {
+	if ((acc == NULL) || (ctnr == NULL) || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -482,8 +481,8 @@ az_req_ctnr_del(const char *acc,
 		goto err_ebo_free;
 	}
 
-	ctnr_del_req->container = strdup(container);
-	if (ctnr_del_req->container == NULL) {
+	ctnr_del_req->ctnr = strdup(ctnr);
+	if (ctnr_del_req->ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
@@ -492,10 +491,9 @@ az_req_ctnr_del(const char *acc,
 	ret = asprintf(&op->url_host, "%s.blob.core.windows.net", acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_free_container;
+		goto err_ctnr_free;
 	}
-	ret = asprintf(&op->url_path, "/%s?restype=container",
-		       container);
+	ret = asprintf(&op->url_path, "/%s?restype=container", ctnr);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -515,8 +513,8 @@ err_upath_free:
 	free(op->url_path);
 err_uhost_free:
 	free(op->url_host);
-err_free_container:
-	free(ctnr_del_req->container);
+err_ctnr_free:
+	free(ctnr_del_req->ctnr);
 err_acc_free:
 	free(ctnr_del_req->acc);
 err_ebo_free:
@@ -954,8 +952,7 @@ az_req_blob_list(const char *acc,
 		ret = -ENOMEM;
 		goto err_ctnr_free;
 	}
-	ret = asprintf(&op->url_path, "/%s?restype=container&comp=list",
-		       ctnr);
+	ret = asprintf(&op->url_path, "/%s?restype=container&comp=list", ctnr);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -1125,7 +1122,7 @@ static void
 az_req_blob_put_free(struct az_req_blob_put *blob_put_req)
 {
 	free(blob_put_req->acc);
-	free(blob_put_req->container);
+	free(blob_put_req->ctnr);
 	free(blob_put_req->bname);
 }
 
@@ -1178,7 +1175,7 @@ err_out:
  */
 int
 az_req_blob_put(const char *acc,
-		const char *container,
+		const char *ctnr,
 		const char *bname,
 		struct elasto_data *data,
 		uint64_t page_len,
@@ -1190,7 +1187,7 @@ az_req_blob_put(const char *acc,
 	struct az_req_blob_put *blob_put_req;
 	char *blob_encoded;
 
-	if ((acc == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (ctnr == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1218,8 +1215,8 @@ az_req_blob_put(const char *acc,
 		goto err_ebo_free;
 	}
 
-	blob_put_req->container = strdup(container);
-	if (blob_put_req->container == NULL) {
+	blob_put_req->ctnr = strdup(ctnr);
+	if (blob_put_req->ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
@@ -1227,7 +1224,7 @@ az_req_blob_put(const char *acc,
 	blob_put_req->bname = strdup(bname);
 	if (blob_put_req->bname == NULL) {
 		ret = -ENOMEM;
-		goto err_free_container;
+		goto err_ctnr_free;
 	}
 
 	if (data == NULL) {
@@ -1249,8 +1246,7 @@ az_req_blob_put(const char *acc,
 	if (blob_encoded == NULL) {
 		goto err_uhost_free;
 	}
-	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, blob_encoded);
+	ret = asprintf(&op->url_path, "/%s/%s", ctnr, blob_encoded);
 	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1272,8 +1268,8 @@ err_uhost_free:
 	free(op->url_host);
 err_free_bname:
 	free(blob_put_req->bname);
-err_free_container:
-	free(blob_put_req->container);
+err_ctnr_free:
+	free(blob_put_req->ctnr);
 err_acc_free:
 	free(blob_put_req->acc);
 err_ebo_free:
@@ -1286,7 +1282,7 @@ static void
 az_req_blob_get_free(struct az_req_blob_get *blob_get_req)
 {
 	free(blob_get_req->acc);
-	free(blob_get_req->container);
+	free(blob_get_req->ctnr);
 	free(blob_get_req->bname);
 }
 
@@ -1339,7 +1335,7 @@ err_out:
  */
 int
 az_req_blob_get(const char *acc,
-		const char *container,
+		const char *ctnr,
 		const char *bname,
 		bool is_page,
 		struct elasto_data *dest_data,
@@ -1353,7 +1349,7 @@ az_req_blob_get(const char *acc,
 	struct az_req_blob_get *blob_get_req;
 	char *blob_encoded;
 
-	if ((acc == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (ctnr == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1380,8 +1376,8 @@ az_req_blob_get(const char *acc,
 		goto err_ebo_free;
 	}
 
-	blob_get_req->container = strdup(container);
-	if (blob_get_req->container == NULL) {
+	blob_get_req->ctnr = strdup(ctnr);
+	if (blob_get_req->ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
@@ -1420,8 +1416,7 @@ az_req_blob_get(const char *acc,
 	if (blob_encoded == NULL) {
 		goto err_uhost_free;
 	}
-	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, blob_encoded);
+	ret = asprintf(&op->url_path, "/%s/%s", ctnr, blob_encoded);
 	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1444,7 +1439,7 @@ err_uhost_free:
 err_bname_free:
 	free(blob_get_req->bname);
 err_ctnr_free:
-	free(blob_get_req->container);
+	free(blob_get_req->ctnr);
 err_acc_free:
 	free(blob_get_req->acc);
 err_ebo_free:
@@ -1457,7 +1452,7 @@ static void
 az_req_page_put_free(struct az_req_page_put *page_put_req)
 {
 	free(page_put_req->acc);
-	free(page_put_req->container);
+	free(page_put_req->ctnr);
 	free(page_put_req->bname);
 }
 
@@ -1511,7 +1506,7 @@ err_out:
  */
 int
 az_req_page_put(const char *acc,
-		const char *container,
+		const char *ctnr,
 		const char *bname,
 		struct elasto_data *src_data,
 		uint64_t dest_off,
@@ -1524,7 +1519,7 @@ az_req_page_put(const char *acc,
 	struct az_req_page_put *page_put_req;
 	char *blob_encoded;
 
-	if ((acc == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (ctnr == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1552,11 +1547,11 @@ az_req_page_put(const char *acc,
 		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
-	if (container == NULL) {
-		page_put_req->container = NULL;
+	if (ctnr == NULL) {
+		page_put_req->ctnr = NULL;
 	} else {
-		page_put_req->container = strdup(container);
-		if (page_put_req->container == NULL) {
+		page_put_req->ctnr = strdup(ctnr);
+		if (page_put_req->ctnr == NULL) {
 			ret = -ENOMEM;
 			goto err_acc_free;
 		}
@@ -1564,7 +1559,7 @@ az_req_page_put(const char *acc,
 	page_put_req->bname = strdup(bname);
 	if (page_put_req->bname == NULL) {
 		ret = -ENOMEM;
-		goto err_free_container;
+		goto err_ctnr_free;
 	}
 
 	page_put_req->off = dest_off;
@@ -1588,8 +1583,7 @@ az_req_page_put(const char *acc,
 	if (blob_encoded == NULL) {
 		goto err_uhost_free;
 	}
-	ret = asprintf(&op->url_path, "/%s/%s?comp=page",
-		       container, blob_encoded);
+	ret = asprintf(&op->url_path, "/%s/%s?comp=page", ctnr, blob_encoded);
 	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1615,8 +1609,8 @@ err_data_close:
 		op->req.data = NULL;
 	}
 	free(page_put_req->bname);
-err_free_container:
-	free(page_put_req->container);
+err_ctnr_free:
+	free(page_put_req->ctnr);
 err_acc_free:
 	free(page_put_req->acc);
 err_ebo_free:
@@ -1629,7 +1623,7 @@ static void
 az_req_block_put_free(struct az_req_block_put *blk_put_req)
 {
 	free(blk_put_req->acc);
-	free(blk_put_req->container);
+	free(blk_put_req->ctnr);
 	free(blk_put_req->bname);
 	free(blk_put_req->blk_id);
 }
@@ -1641,7 +1635,7 @@ az_req_block_put_free(struct az_req_block_put *blk_put_req)
  */
 int
 az_req_block_put(const char *acc,
-		 const char *container,
+		 const char *ctnr,
 		 const char *bname,
 		 const char *blk_id,
 		 struct elasto_data *data,
@@ -1654,7 +1648,7 @@ az_req_block_put(const char *acc,
 	char *b64_blk_id;
 	char *blob_encoded;
 
-	if ((acc == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (ctnr == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1690,8 +1684,8 @@ az_req_block_put(const char *acc,
 		goto err_ebo_free;
 	}
 
-	blk_put_req->container = strdup(container);
-	if (blk_put_req->container == NULL) {
+	blk_put_req->ctnr = strdup(ctnr);
+	if (blk_put_req->ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
@@ -1728,7 +1722,7 @@ az_req_block_put(const char *acc,
 		goto err_uhost_free;
 	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=block&blockid=%s",
-		       container, blob_encoded, b64_blk_id);
+		       ctnr, blob_encoded, b64_blk_id);
 	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1757,7 +1751,7 @@ err_data_close:
 err_bname_free:
 	free(blk_put_req->bname);
 err_container_free:
-	free(blk_put_req->container);
+	free(blk_put_req->ctnr);
 err_acc_free:
 	free(blk_put_req->acc);
 err_ebo_free:
@@ -1770,7 +1764,7 @@ static void
 az_req_block_list_put_free(struct az_req_block_list_put *blk_list_put_req)
 {
 	free(blk_list_put_req->acc);
-	free(blk_list_put_req->container);
+	free(blk_list_put_req->ctnr);
 	free(blk_list_put_req->bname);
 }
 
@@ -1885,7 +1879,7 @@ err_out:
  */
 int
 az_req_block_list_put(const char *acc,
-		      const char *container,
+		      const char *ctnr,
 		      const char *bname,
 		      uint64_t num_blks,
 		      struct list_head *blks,
@@ -1897,7 +1891,7 @@ az_req_block_list_put(const char *acc,
 	struct az_req_block_list_put *blk_list_put_req;
 	char *blob_encoded;
 
-	if ((acc == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (ctnr == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -1916,8 +1910,8 @@ az_req_block_list_put(const char *acc,
 		goto err_ebo_free;
 	}
 
-	blk_list_put_req->container = strdup(container);
-	if (blk_list_put_req->container == NULL) {
+	blk_list_put_req->ctnr = strdup(ctnr);
+	if (blk_list_put_req->ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
@@ -1940,7 +1934,7 @@ az_req_block_list_put(const char *acc,
 		goto err_uhost_free;
 	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=blocklist",
-		       container, blob_encoded);
+		       ctnr, blob_encoded);
 	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -1971,7 +1965,7 @@ err_uhost_free:
 err_bname_free:
 	free(blk_list_put_req->bname);
 err_container_free:
-	free(blk_list_put_req->container);
+	free(blk_list_put_req->ctnr);
 err_acc_free:
 	free(blk_list_put_req->acc);
 err_ebo_free:
@@ -1984,7 +1978,7 @@ static void
 az_req_block_list_get_free(struct az_req_block_list_get *blk_list_get_req)
 {
 	free(blk_list_get_req->acc);
-	free(blk_list_get_req->container);
+	free(blk_list_get_req->ctnr);
 	free(blk_list_get_req->bname);
 }
 static void
@@ -2006,7 +2000,7 @@ az_rsp_block_list_get_free(struct az_rsp_block_list_get *blk_list_get_rsp)
 /* request a list of all committed and uncommited blocks for @bname */
 int
 az_req_block_list_get(const char *acc,
-		      const char *container,
+		      const char *ctnr,
 		      const char *bname,
 		      struct op **_op)
 {
@@ -2016,7 +2010,7 @@ az_req_block_list_get(const char *acc,
 	struct az_req_block_list_get *blk_list_get_req;
 	char *blob_encoded;
 
-	if ((acc == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (ctnr == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -2035,8 +2029,8 @@ az_req_block_list_get(const char *acc,
 		goto err_ebo_free;
 	}
 
-	blk_list_get_req->container = strdup(container);
-	if (blk_list_get_req->container == NULL) {
+	blk_list_get_req->ctnr = strdup(ctnr);
+	if (blk_list_get_req->ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
@@ -2059,7 +2053,7 @@ az_req_block_list_get(const char *acc,
 		goto err_uhost_free;
 	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=blocklist&blocklisttype=all",
-		       container, blob_encoded);
+		       ctnr, blob_encoded);
 	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -2091,7 +2085,7 @@ err_uhost_free:
 err_bname_free:
 	free(blk_list_get_req->bname);
 err_container_free:
-	free(blk_list_get_req->container);
+	free(blk_list_get_req->ctnr);
 err_acc_free:
 	free(blk_list_get_req->acc);
 err_ebo_free:
@@ -2209,13 +2203,13 @@ static void
 az_req_blob_del_free(struct az_req_blob_del *blob_del_req)
 {
 	free(blob_del_req->acc);
-	free(blob_del_req->container);
+	free(blob_del_req->ctnr);
 	free(blob_del_req->bname);
 }
 
 int
 az_req_blob_del(const char *acc,
-		const char *container,
+		const char *ctnr,
 		const char *bname,
 		struct op **_op)
 {
@@ -2225,7 +2219,7 @@ az_req_blob_del(const char *acc,
 	struct az_req_blob_del *blob_del_req;
 	char *blob_encoded;
 
-	if ((acc == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (ctnr == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -2244,8 +2238,8 @@ az_req_blob_del(const char *acc,
 		goto err_ebo_free;
 	}
 
-	blob_del_req->container = strdup(container);
-	if (blob_del_req->container == NULL) {
+	blob_del_req->ctnr = strdup(ctnr);
+	if (blob_del_req->ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
@@ -2253,7 +2247,7 @@ az_req_blob_del(const char *acc,
 	blob_del_req->bname = strdup(bname);
 	if (blob_del_req->bname == NULL) {
 		ret = -ENOMEM;
-		goto err_free_container;
+		goto err_ctnr_free;
 	}
 
 	op->method = REQ_METHOD_DELETE;
@@ -2267,8 +2261,7 @@ az_req_blob_del(const char *acc,
 	if (blob_encoded == NULL) {
 		goto err_uhost_free;
 	}
-	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, blob_encoded);
+	ret = asprintf(&op->url_path, "/%s/%s", ctnr, blob_encoded);
 	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -2291,8 +2284,8 @@ err_uhost_free:
 	free(op->url_host);
 err_free_bname:
 	free(blob_del_req->bname);
-err_free_container:
-	free(blob_del_req->container);
+err_ctnr_free:
+	free(blob_del_req->ctnr);
 err_acc_free:
 	free(blob_del_req->acc);
 err_ebo_free:
@@ -2305,10 +2298,10 @@ static void
 az_req_blob_cp_free(struct az_req_blob_cp *blob_cp_req)
 {
 	free(blob_cp_req->src.acc);
-	free(blob_cp_req->src.container);
+	free(blob_cp_req->src.ctnr);
 	free(blob_cp_req->src.bname);
 	free(blob_cp_req->dst.acc);
-	free(blob_cp_req->dst.container);
+	free(blob_cp_req->dst.ctnr);
 	free(blob_cp_req->dst.bname);
 }
 
@@ -2333,7 +2326,7 @@ az_req_blob_cp_hdr_fill(struct az_req_blob_cp *blob_cp_req,
 	ret = asprintf(&hdr_str,
 		       "https://%s.blob.core.windows.net/%s/%s",
 		       blob_cp_req->src.acc,
-		       blob_cp_req->src.container,
+		       blob_cp_req->src.ctnr,
 		       src_blob_encoded);
 	free(src_blob_encoded);
 	if (ret < 0) {
@@ -2357,10 +2350,10 @@ err_out:
 
 int
 az_req_blob_cp(const char *src_acc,
-	       const char *src_container,
+	       const char *src_ctnr,
 	       const char *src_bname,
 	       const char *dst_acc,
-	       const char *dst_container,
+	       const char *dst_ctnr,
 	       const char *dst_bname,
 	       struct op **_op)
 {
@@ -2370,9 +2363,9 @@ az_req_blob_cp(const char *src_acc,
 	struct az_req_blob_cp *blob_cp_req;
 	char *dst_blob_encoded;
 
-	if ((src_acc == NULL) || (src_container == NULL)
+	if ((src_acc == NULL) || (src_ctnr == NULL)
 	 || (src_bname == NULL) || (dst_acc == NULL)
-	 || (dst_container == NULL) || (dst_bname == NULL) || (_op == NULL)) {
+	 || (dst_ctnr == NULL) || (dst_bname == NULL) || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -2390,8 +2383,8 @@ az_req_blob_cp(const char *src_acc,
 		goto err_ebo_free;
 	}
 
-	blob_cp_req->src.container = strdup(src_container);
-	if (blob_cp_req->src.container == NULL) {
+	blob_cp_req->src.ctnr = strdup(src_ctnr);
+	if (blob_cp_req->src.ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_src_acc_free;
 	}
@@ -2408,8 +2401,8 @@ az_req_blob_cp(const char *src_acc,
 		goto err_src_blb_free;
 	}
 
-	blob_cp_req->dst.container = strdup(dst_container);
-	if (blob_cp_req->dst.container == NULL) {
+	blob_cp_req->dst.ctnr = strdup(dst_ctnr);
+	if (blob_cp_req->dst.ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_dst_acc_free;
 	}
@@ -2431,8 +2424,7 @@ az_req_blob_cp(const char *src_acc,
 	if (dst_blob_encoded == NULL) {
 		goto err_uhost_free;
 	}
-	ret = asprintf(&op->url_path, "/%s/%s",
-		       dst_container, dst_blob_encoded);
+	ret = asprintf(&op->url_path, "/%s/%s", dst_ctnr, dst_blob_encoded);
 	free(dst_blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -2455,13 +2447,13 @@ err_uhost_free:
 err_dst_blb_free:
 	free(blob_cp_req->dst.bname);
 err_dst_ctnr_free:
-	free(blob_cp_req->dst.container);
+	free(blob_cp_req->dst.ctnr);
 err_dst_acc_free:
 	free(blob_cp_req->dst.acc);
 err_src_blb_free:
 	free(blob_cp_req->src.bname);
 err_src_ctnr_free:
-	free(blob_cp_req->src.container);
+	free(blob_cp_req->src.ctnr);
 err_src_acc_free:
 	free(blob_cp_req->src.acc);
 err_ebo_free:
@@ -2474,7 +2466,7 @@ static void
 az_req_blob_prop_get_free(struct az_req_blob_prop_get *blob_prop_get_req)
 {
 	free(blob_prop_get_req->acc);
-	free(blob_prop_get_req->container);
+	free(blob_prop_get_req->ctnr);
 	free(blob_prop_get_req->bname);
 }
 
@@ -2487,7 +2479,7 @@ az_rsp_blob_prop_get_free(struct az_rsp_blob_prop_get *blob_prop_get_rsp)
 
 int
 az_req_blob_prop_get(const char *acc,
-		     const char *container,
+		     const char *ctnr,
 		     const char *bname,
 		     struct op **_op)
 {
@@ -2497,7 +2489,7 @@ az_req_blob_prop_get(const char *acc,
 	struct az_req_blob_prop_get *blob_prop_get_req;
 	char *blob_encoded;
 
-	if ((acc == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (ctnr == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -2516,8 +2508,8 @@ az_req_blob_prop_get(const char *acc,
 		goto err_ebo_free;
 	}
 
-	blob_prop_get_req->container = strdup(container);
-	if (blob_prop_get_req->container == NULL) {
+	blob_prop_get_req->ctnr = strdup(ctnr);
+	if (blob_prop_get_req->ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
@@ -2539,8 +2531,7 @@ az_req_blob_prop_get(const char *acc,
 	if (blob_encoded == NULL) {
 		goto err_uhost_free;
 	}
-	ret = asprintf(&op->url_path, "/%s/%s",
-		       container, blob_encoded);
+	ret = asprintf(&op->url_path, "/%s/%s", ctnr, blob_encoded);
 	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -2564,7 +2555,7 @@ err_uhost_free:
 err_bname_free:
 	free(blob_prop_get_req->bname);
 err_ctnr_free:
-	free(blob_prop_get_req->container);
+	free(blob_prop_get_req->ctnr);
 err_acc_free:
 	free(blob_prop_get_req->acc);
 err_ebo_free:
@@ -2710,7 +2701,7 @@ static void
 az_req_blob_prop_set_free(struct az_req_blob_prop_set *blob_prop_set_req)
 {
 	free(blob_prop_set_req->acc);
-	free(blob_prop_set_req->container);
+	free(blob_prop_set_req->ctnr);
 	free(blob_prop_set_req->bname);
 }
 
@@ -2750,7 +2741,7 @@ err_out:
 /* page blob truncated to @len if @is_page is set, otherwise ignored */
 int
 az_req_blob_prop_set(const char *acc,
-		     const char *container,
+		     const char *ctnr,
 		     const char *bname,
 		     bool is_page,
 		     uint64_t len,
@@ -2762,7 +2753,7 @@ az_req_blob_prop_set(const char *acc,
 	struct az_req_blob_prop_set *blob_prop_set_req;
 	char *blob_encoded;
 
-	if ((acc == NULL) || (container == NULL) || (bname == NULL)
+	if ((acc == NULL) || (ctnr == NULL) || (bname == NULL)
 	 || (_op == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
@@ -2787,8 +2778,8 @@ az_req_blob_prop_set(const char *acc,
 		goto err_ebo_free;
 	}
 
-	blob_prop_set_req->container = strdup(container);
-	if (blob_prop_set_req->container == NULL) {
+	blob_prop_set_req->ctnr = strdup(ctnr);
+	if (blob_prop_set_req->ctnr == NULL) {
 		ret = -ENOMEM;
 		goto err_acc_free;
 	}
@@ -2814,7 +2805,7 @@ az_req_blob_prop_set(const char *acc,
 		goto err_uhost_free;
 	}
 	ret = asprintf(&op->url_path, "/%s/%s?comp=properties",
-		       container, blob_encoded);
+		       ctnr, blob_encoded);
 	free(blob_encoded);
 	if (ret < 0) {
 		ret = -ENOMEM;
@@ -2838,7 +2829,7 @@ err_uhost_free:
 err_bname_free:
 	free(blob_prop_set_req->bname);
 err_ctnr_free:
-	free(blob_prop_set_req->container);
+	free(blob_prop_set_req->ctnr);
 err_acc_free:
 	free(blob_prop_set_req->acc);
 err_ebo_free:

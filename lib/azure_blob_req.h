@@ -77,7 +77,7 @@ struct az_req_ctnr_create {
 
 struct az_req_ctnr_del {
 	char *acc;
-	char *container;
+	char *ctnr;
 };
 
 struct az_req_ctnr_prop_get {
@@ -135,7 +135,7 @@ struct az_rsp_blob_list {
 #define PBLOB_SECTOR_SZ 512
 struct az_req_blob_put {
 	char *acc;
-	char *container;
+	char *ctnr;
 	char *bname;
 	char *type;
 	uint64_t pg_len;
@@ -147,7 +147,7 @@ struct az_rsp_blob_put {
 
 struct az_req_blob_get {
 	char *acc;
-	char *container;
+	char *ctnr;
 	char *bname;
 	char *type;
 	uint64_t off;
@@ -160,7 +160,7 @@ struct az_rsp_blob_get {
 
 struct az_req_page_put {
 	char *acc;
-	char *container;
+	char *ctnr;
 	char *bname;
 	uint64_t off;
 	uint64_t len;
@@ -176,7 +176,7 @@ struct az_rsp_page_put {
 #define BLOB_BLOCK_MAX (4 * 1024 * 1024)
 struct az_req_block_put {
 	char *acc;
-	char *container;
+	char *ctnr;
 	char *bname;
 	char *blk_id;
 };
@@ -199,13 +199,13 @@ struct azure_block {
 };
 struct az_req_block_list_put {
 	char *acc;
-	char *container;
+	char *ctnr;
 	char *bname;
 };
 
 struct az_req_block_list_get {
 	char *acc;
-	char *container;
+	char *ctnr;
 	char *bname;
 };
 struct az_rsp_block_list_get {
@@ -215,19 +215,19 @@ struct az_rsp_block_list_get {
 
 struct az_req_blob_del {
 	char *acc;
-	char *container;
+	char *ctnr;
 	char *bname;
 };
 
 struct az_req_blob_cp {
 	struct {
 		char *acc;
-		char *container;
+		char *ctnr;
 		char *bname;
 	} src;
 	struct {
 		char *acc;
-		char *container;
+		char *ctnr;
 		char *bname;
 	} dst;
 };
@@ -241,7 +241,7 @@ enum az_cp_status {
 
 struct az_req_blob_prop_get {
 	char *acc;
-	char *container;
+	char *ctnr;
 	char *bname;
 };
 
@@ -258,7 +258,7 @@ struct az_rsp_blob_prop_get {
 
 struct az_req_blob_prop_set {
 	char *acc;
-	char *container;
+	char *ctnr;
 	char *bname;
 	bool is_page;
 	uint64_t len;
@@ -338,7 +338,7 @@ az_req_ctnr_create(const char *acc,
 
 int
 az_req_ctnr_del(const char *acc,
-		const char *container,
+		const char *ctnr,
 		struct op **_op);
 
 int
@@ -362,7 +362,7 @@ az_req_blob_list(const char *acc,
 
 int
 az_req_blob_put(const char *acc,
-		const char *container,
+		const char *ctnr,
 		const char *bname,
 		struct elasto_data *data,
 		uint64_t page_len,
@@ -370,7 +370,7 @@ az_req_blob_put(const char *acc,
 
 int
 az_req_blob_get(const char *acc,
-		const char *container,
+		const char *ctnr,
 		const char *bname,
 		bool is_page,
 		struct elasto_data *data,
@@ -380,7 +380,7 @@ az_req_blob_get(const char *acc,
 
 int
 az_req_page_put(const char *acc,
-		const char *container,
+		const char *ctnr,
 		const char *bname,
 		struct elasto_data *src_data,
 		uint64_t dest_off,
@@ -389,7 +389,7 @@ az_req_page_put(const char *acc,
 
 int
 az_req_block_put(const char *acc,
-		 const char *container,
+		 const char *ctnr,
 		 const char *bname,
 		 const char *blk_id,
 		 struct elasto_data *data,
@@ -397,7 +397,7 @@ az_req_block_put(const char *acc,
 
 int
 az_req_block_list_put(const char *acc,
-		      const char *container,
+		      const char *ctnr,
 		      const char *bname,
 		      uint64_t num_blks,
 		      struct list_head *blks,
@@ -405,7 +405,7 @@ az_req_block_list_put(const char *acc,
 
 int
 az_req_block_list_get(const char *acc,
-		      const char *container,
+		      const char *ctnr,
 		      const char *bname,
 		      struct op **_op);
 
@@ -426,13 +426,13 @@ az_req_blob_cp(const char *src_acc,
 
 int
 az_req_blob_prop_get(const char *acc,
-		     const char *container,
+		     const char *ctnr,
 		     const char *bname,
 		     struct op **_op);
 
 int
 az_req_blob_prop_set(const char *acc,
-		     const char *container,
+		     const char *ctnr,
 		     const char *bname,
 		     bool is_page,
 		     uint64_t len,
