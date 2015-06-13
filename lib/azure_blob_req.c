@@ -192,7 +192,10 @@ az_req_ctnr_list(const char *account,
 	struct op *op;
 	struct az_req_ctnr_list *ctnr_list_req;
 
-	/* TODO input validation */
+	if ((account == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_blob_ebo_init(AOP_CONTAINER_LIST, &ebo);
 	if (ret < 0) {
@@ -384,7 +387,10 @@ az_req_ctnr_create(const char *account,
 	struct op *op;
 	struct az_req_ctnr_create *ctnr_create_req;
 
-	/* TODO input validation */
+	if ((account == NULL) || (ctnr == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_blob_ebo_init(AOP_CONTAINER_CREATE, &ebo);
 	if (ret < 0) {
@@ -460,6 +466,11 @@ az_req_ctnr_del(const char *account,
 	struct op *op;
 	struct az_req_ctnr_del *ctnr_del_req;
 
+	if ((account == NULL) || (container == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = az_blob_ebo_init(AOP_CONTAINER_DEL, &ebo);
 	if (ret < 0) {
 		goto err_out;
@@ -533,6 +544,11 @@ az_req_ctnr_prop_get(const char *acc,
 	struct az_blob_ebo *ebo;
 	struct op *op;
 	struct az_req_ctnr_prop_get *ctnr_prop_get_req;
+
+	if ((acc == NULL) || (ctnr == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_blob_ebo_init(AOP_CONTAINER_PROP_GET, &ebo);
 	if (ret < 0) {
@@ -911,7 +927,10 @@ az_req_blob_list(const char *account,
 	struct op *op;
 	struct az_req_blob_list *blob_list_req;
 
-	/* TODO input validation */
+	if ((account == NULL) || (ctnr == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_blob_ebo_init(AOP_BLOB_LIST, &ebo);
 	if (ret < 0) {
@@ -1175,6 +1194,12 @@ az_req_blob_put(const char *account,
 	struct az_req_blob_put *blob_put_req;
 	char *blob_encoded;
 
+	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	if ((data == NULL)
 	 && (((page_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != page_len)) {
 		ret = -EINVAL;
@@ -1332,6 +1357,12 @@ az_req_blob_get(const char *account,
 	struct op *op;
 	struct az_req_blob_get *blob_get_req;
 	char *blob_encoded;
+
+	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	/* check for correct alignment */
 	if (is_page
@@ -1499,6 +1530,12 @@ az_req_page_put(const char *account,
 	struct az_req_page_put *page_put_req;
 	char *blob_encoded;
 
+	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	/* check for correct alignment */
 	if (((dest_len / PBLOB_SECTOR_SZ) * PBLOB_SECTOR_SZ) != dest_len) {
 		ret = -EINVAL;
@@ -1624,11 +1661,17 @@ az_req_block_put(const char *account,
 	char *b64_blk_id;
 	char *blob_encoded;
 
+	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	if ((data == NULL) || (data->type == ELASTO_DATA_NONE)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
-	if (strlen(blk_id) > 64) {
+	if ((blk_id == NULL) || (strlen(blk_id) > 64)) {
 		/*
 		 * Prior to encoding, the string must be less than or equal to
 		 * 64 bytes in size.
@@ -1862,6 +1905,12 @@ az_req_block_list_put(const char *account,
 	struct az_req_block_list_put *blk_list_put_req;
 	char *blob_encoded;
 
+	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = az_blob_ebo_init(AOP_BLOCK_LIST_PUT, &ebo);
 	if (ret < 0) {
 		goto err_out;
@@ -1975,6 +2024,12 @@ az_req_block_list_get(const char *account,
 	struct op *op;
 	struct az_req_block_list_get *blk_list_get_req;
 	char *blob_encoded;
+
+	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_blob_ebo_init(AOP_BLOCK_LIST_GET, &ebo);
 	if (ret < 0) {
@@ -2180,6 +2235,12 @@ az_req_blob_del(const char *account,
 	struct az_req_blob_del *blob_del_req;
 	char *blob_encoded;
 
+	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = az_blob_ebo_init(AOP_BLOB_DEL, &ebo);
 	if (ret < 0) {
 		goto err_out;
@@ -2320,6 +2381,13 @@ az_req_blob_cp(const char *src_account,
 	struct az_req_blob_cp *blob_cp_req;
 	char *dst_blob_encoded;
 
+	if ((src_account == NULL) || (src_container == NULL)
+	 || (src_bname == NULL) || (dst_account == NULL)
+	 || (dst_container == NULL) || (dst_bname == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = az_blob_ebo_init(AOP_BLOB_CP, &ebo);
 	if (ret < 0) {
 		goto err_out;
@@ -2440,6 +2508,12 @@ az_req_blob_prop_get(const char *account,
 	struct op *op;
 	struct az_req_blob_prop_get *blob_prop_get_req;
 	char *blob_encoded;
+
+	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_blob_ebo_init(AOP_BLOB_PROP_GET, &ebo);
 	if (ret < 0) {
@@ -2701,6 +2775,12 @@ az_req_blob_prop_set(const char *account,
 	struct az_req_blob_prop_set *blob_prop_set_req;
 	char *blob_encoded;
 
+	if ((account == NULL) || (container == NULL) || (bname == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	if (!is_page && (len != 0)) {
 		dbg(0, "non-zero len for block blob invalid\n");
 		ret = -EINVAL;
@@ -2873,6 +2953,12 @@ az_req_blob_lease(const char *acc,
 	struct az_req_blob_lease *blob_lease_req;
 	const char *action_str;
 	char *blob_encoded;
+
+	if ((acc == NULL) || (ctnr == NULL) || (blob == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	action_str = az_req_lease_actn_enum_map(action);
 	if (action_str == NULL) {
