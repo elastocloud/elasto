@@ -109,6 +109,11 @@ az_mgmt_req_acc_keys_get(const char *sub_id,
 	struct op *op;
 	struct az_mgmt_req_acc_keys_get *acc_keys_get_req;
 
+	if ((sub_id == NULL) || (service_name == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = az_mgmt_ebo_init(AOP_MGMT_ACC_KEYS_GET, &ebo);
 	if (ret < 0) {
 		goto err_out;
@@ -256,7 +261,10 @@ az_mgmt_req_acc_list(const char *sub_id,
 	struct op *op;
 	struct az_mgmt_req_acc_list *acc_list_req;
 
-	/* TODO input validation */
+	if ((sub_id == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_mgmt_ebo_init(AOP_MGMT_ACC_LIST, &ebo);
 	if (ret < 0) {
@@ -684,7 +692,7 @@ static void
 az_mgmt_req_acc_del_free(struct az_mgmt_req_acc_del *acc_del_req)
 {
 	free(acc_del_req->sub_id);
-	free(acc_del_req->account);
+	free(acc_del_req->acc);
 }
 
 static int
@@ -695,13 +703,18 @@ az_mgmt_req_acc_del_hdr_fill(struct op *op)
 
 int
 az_mgmt_req_acc_del(const char *sub_id,
-		    const char *account,
+		    const char *acc,
 		    struct op **_op)
 {
 	int ret;
 	struct az_mgmt_ebo *ebo;
 	struct op *op;
 	struct az_mgmt_req_acc_del *acc_del_req;
+
+	if ((sub_id == NULL) || (acc == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_mgmt_ebo_init(AOP_MGMT_ACC_DEL, &ebo);
 	if (ret < 0) {
@@ -716,8 +729,8 @@ az_mgmt_req_acc_del(const char *sub_id,
 		goto err_ebo_free;
 	}
 
-	acc_del_req->account = strdup(account);
-	if (acc_del_req->account == NULL) {
+	acc_del_req->acc = strdup(acc);
+	if (acc_del_req->acc == NULL) {
 		ret = -ENOMEM;
 		goto err_sub_free;
 	}
@@ -732,7 +745,7 @@ az_mgmt_req_acc_del(const char *sub_id,
 
 	ret = asprintf(&op->url_path,
 		       "/%s/services/storageservices/%s",
-		       sub_id, account);
+		       sub_id, acc);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uhost_free;
@@ -749,7 +762,7 @@ err_upath_free:
 err_uhost_free:
 	free(op->url_host);
 err_acc_free:
-	free(acc_del_req->account);
+	free(acc_del_req->acc);
 err_sub_free:
 	free(acc_del_req->sub_id);
 err_ebo_free:
@@ -780,6 +793,11 @@ az_mgmt_req_acc_prop_get(const char *sub_id,
 	struct az_mgmt_ebo *ebo;
 	struct op *op;
 	struct az_mgmt_req_acc_prop_get *acc_prop_get_req;
+
+	if ((sub_id == NULL) || (acc == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_mgmt_ebo_init(AOP_MGMT_ACC_PROP_GET, &ebo);
 	if (ret < 0) {
@@ -912,6 +930,11 @@ az_mgmt_req_status_get(const char *sub_id,
 	struct az_mgmt_ebo *ebo;
 	struct op *op;
 	struct az_mgmt_req_status_get *sts_get_req;
+
+	if ((sub_id == NULL) || (req_id == NULL) || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_mgmt_ebo_init(AOP_MGMT_STATUS_GET, &ebo);
 	if (ret < 0) {
