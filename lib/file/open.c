@@ -101,7 +101,7 @@ elasto_fclose(struct elasto_fh *fh)
 
 	if (fh->lease_state == ELASTO_FH_LEASE_ACQUIRED) {
 		dbg(4, "cleaning up lease %p on close\n", fh->flease_h);
-		int ret = elasto_flease_release(fh);
+		ret = elasto_flease_release(fh);
 		if (ret < 0) {
 			dbg(0, "failed to release lease %p on close: %s\n",
 			    fh->flease_h, strerror(-ret));
@@ -110,7 +110,10 @@ elasto_fclose(struct elasto_fh *fh)
 		}
 	}
 
-	fh->ops.close(fh->mod_priv, fh->conn);
+	ret = fh->ops.close(fh->mod_priv, fh->conn);
+	if (ret < 0) {
+		return ret;
+	}
 
 	elasto_fh_free(fh);
 
@@ -132,7 +135,10 @@ elasto_funlink_close(struct elasto_fh *fh)
 		return ret;
 	}
 
-	fh->ops.close(fh->mod_priv, fh->conn);
+	ret = fh->ops.close(fh->mod_priv, fh->conn);
+	if (ret < 0) {
+		return ret;
+	}
 
 	elasto_fh_free(fh);
 
