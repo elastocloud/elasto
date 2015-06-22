@@ -50,7 +50,6 @@ afs_fh_init(const struct elasto_fauth *auth,
 {
 	int ret;
 	struct afs_fh *afs_fh;
-	struct elasto_conn *conn;
 
 	afs_fh = malloc(sizeof(*afs_fh));
 	if (afs_fh == NULL) {
@@ -67,21 +66,14 @@ afs_fh_init(const struct elasto_fauth *auth,
 		goto err_priv_free;
 	}
 
-	ret = elasto_conn_init_az(afs_fh->pem_path, NULL, auth->insecure_http,
-				  &conn);
-	if (ret < 0) {
-		goto err_ssl_free;
-	}
+	afs_fh->insecure_http = auth->insecure_http;
+	/* connect on open */
 
 	*_fh_priv = afs_fh;
-	*_conn = conn;
+	*_conn = NULL;
 
 	return 0;
 
-err_ssl_free:
-	free(afs_fh->pem_path);
-	free(afs_fh->sub_id);
-	free(afs_fh->sub_name);
 err_priv_free:
 	free(afs_fh);
 err_out:

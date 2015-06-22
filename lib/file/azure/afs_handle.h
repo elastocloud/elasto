@@ -46,6 +46,9 @@ struct afs_fh {
 	char *pem_path;
 	char *sub_id;
 	char *sub_name;
+	bool insecure_http;
+	struct elasto_conn *mgmt_conn;
+	struct elasto_conn *io_conn;
 };
 
 /* module entry point */

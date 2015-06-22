@@ -42,7 +42,6 @@
 
 static int
 afs_fstat_file(struct afs_fh *afs_fh,
-	       struct elasto_conn *conn,
 	       struct elasto_fstat *fstat)
 {
 	int ret;
@@ -58,7 +57,7 @@ afs_fstat_file(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -86,7 +85,6 @@ err_out:
 
 static int
 afs_fstat_dir(struct afs_fh *afs_fh,
-	      struct elasto_conn *conn,
 	      struct elasto_fstat *fstat)
 {
 	int ret;
@@ -102,7 +100,7 @@ afs_fstat_dir(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -129,8 +127,7 @@ err_out:
 
 static int
 afs_fstat_share(struct afs_fh *afs_fh,
-	       struct elasto_conn *conn,
-	       struct elasto_fstat *fstat)
+		struct elasto_fstat *fstat)
 {
 	int ret;
 	struct op *op;
@@ -143,7 +140,7 @@ afs_fstat_share(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -170,7 +167,6 @@ err_out:
 
 static int
 afs_fstat_acc(struct afs_fh *afs_fh,
-	      struct elasto_conn *conn,
 	      struct elasto_fstat *fstat)
 {
 	int ret;
@@ -184,7 +180,7 @@ afs_fstat_acc(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -210,7 +206,6 @@ err_out:
 
 static int
 afs_fstat_root(struct afs_fh *afs_fh,
-	       struct elasto_conn *conn,
 	       struct elasto_fstat *fstat)
 {
 	/*
@@ -237,16 +232,16 @@ afs_fstat(void *mod_priv,
 
 	if (afs_fh->path.fs_ent != NULL) {
 		if (afs_fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
-			ret = afs_fstat_dir(afs_fh, conn, fstat);
+			ret = afs_fstat_dir(afs_fh, fstat);
 		} else {
-			ret = afs_fstat_file(afs_fh, conn, fstat);
+			ret = afs_fstat_file(afs_fh, fstat);
 		}
 	} else if (afs_fh->path.share != NULL) {
-		ret = afs_fstat_share(afs_fh, conn, fstat);
+		ret = afs_fstat_share(afs_fh, fstat);
 	} else if (afs_fh->path.acc != NULL) {
-		ret = afs_fstat_acc(afs_fh, conn, fstat);
+		ret = afs_fstat_acc(afs_fh, fstat);
 	} else {
-		ret = afs_fstat_root(afs_fh, conn, fstat);
+		ret = afs_fstat_root(afs_fh, fstat);
 	}
 	if (ret < 0) {
 		goto err_out;

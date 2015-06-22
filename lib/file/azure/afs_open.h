@@ -22,11 +22,6 @@ void
 afs_fpath_free(struct elasto_fh_afs_path *afs_path);
 
 int
-afs_fsign_conn_setup(struct elasto_conn *conn,
-		     const char *sub_id,
-		     const char *acc);
-
-int
 afs_fopen(void *mod_priv,
 	  struct elasto_conn *conn,
 	  const char *path,
