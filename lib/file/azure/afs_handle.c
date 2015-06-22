@@ -118,8 +118,6 @@ elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 		.lease_break = NULL,
 		.lease_release = NULL,
 		.lease_free = NULL,
-		.mkdir = afs_fmkdir,
-		.rmdir = afs_frmdir,
 		.readdir = afs_freaddir,
 		.unlink = afs_funlink,
 	};

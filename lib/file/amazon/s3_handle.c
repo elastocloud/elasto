@@ -93,8 +93,6 @@ s3_fh_init(const struct elasto_fauth *auth,
 		.lease_break = NULL,
 		.lease_release = NULL,
 		.lease_free = NULL,
-		.mkdir = s3_fmkdir,
-		.rmdir = s3_frmdir,
 		.readdir = s3_freaddir,
 		.unlink = s3_funlink,
 	};

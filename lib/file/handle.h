@@ -68,12 +68,6 @@ struct elasto_fh_mod_ops {
 			     void **_flease_h);
 	void (*lease_free)(void *mod_priv,
 			   void **_flease_h);
-	int (*mkdir)(void *mod_priv,
-		     struct elasto_conn *conn,
-		     const char *path);
-	int (*rmdir)(void *mod_priv,
-		     struct elasto_conn *conn,
-		     const char *path);
 	int (*readdir)(void *mod_priv,
 		       struct elasto_conn *conn,
 		       void *cli_priv,
