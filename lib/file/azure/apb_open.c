@@ -593,7 +593,6 @@ err_out:
 
 static int
 apb_abb_fopen(void *mod_priv,
-	      struct elasto_conn *conn,
 	      const char *path,
 	      uint64_t flags,
 	      struct elasto_ftoken_list *open_toks,
@@ -680,17 +679,15 @@ err_out:
 
 int
 apb_fopen(void *mod_priv,
-	  struct elasto_conn *conn,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
-	return apb_abb_fopen(mod_priv, conn, path, flags, open_toks, true);
+	return apb_abb_fopen(mod_priv, path, flags, open_toks, true);
 }
 
 int
-apb_fclose(void *mod_priv,
-	   struct elasto_conn *conn)
+apb_fclose(void *mod_priv)
 {
 	struct apb_fh *apb_fh = mod_priv;
 
@@ -704,10 +701,9 @@ apb_fclose(void *mod_priv,
 
 int
 abb_fopen(void *mod_priv,
-	  struct elasto_conn *conn,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
-	return apb_abb_fopen(mod_priv, conn, path, flags, open_toks, false);
+	return apb_abb_fopen(mod_priv, path, flags, open_toks, false);
 }

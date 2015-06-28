@@ -74,7 +74,7 @@ elasto_fopen(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	ret = fh->ops.open(fh->mod_priv, fh->conn, path, flags, open_toks);
+	ret = fh->ops.open(fh->mod_priv, path, flags, open_toks);
 	if (ret < 0) {
 		goto err_fh_free;
 	}
@@ -110,7 +110,7 @@ elasto_fclose(struct elasto_fh *fh)
 		}
 	}
 
-	ret = fh->ops.close(fh->mod_priv, fh->conn);
+	ret = fh->ops.close(fh->mod_priv);
 	if (ret < 0) {
 		return ret;
 	}
@@ -130,12 +130,12 @@ elasto_funlink_close(struct elasto_fh *fh)
 		return ret;
 	}
 
-	ret = fh->ops.unlink(fh->mod_priv, fh->conn);
+	ret = fh->ops.unlink(fh->mod_priv);
 	if (ret < 0) {
 		return ret;
 	}
 
-	ret = fh->ops.close(fh->mod_priv, fh->conn);
+	ret = fh->ops.close(fh->mod_priv);
 	if (ret < 0) {
 		return ret;
 	}

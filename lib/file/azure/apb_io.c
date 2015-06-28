@@ -43,7 +43,6 @@
 
 int
 apb_fwrite(void *mod_priv,
-	   struct elasto_conn *conn,
 	   uint64_t dest_off,
 	   uint64_t dest_len,
 	   struct elasto_data *src_data)
@@ -78,7 +77,6 @@ err_out:
 
 int
 apb_fread(void *mod_priv,
-	  struct elasto_conn *conn,
 	  uint64_t src_off,
 	  uint64_t src_len,
 	  struct elasto_data *dest_data)
@@ -114,7 +112,6 @@ err_out:
 
 int
 apb_ftruncate(void *mod_priv,
-	      struct elasto_conn *conn,
 	      uint64_t len)
 {
 	int ret;
@@ -145,7 +142,6 @@ err_out:
 
 int
 apb_fallocate(void *mod_priv,
-	      struct elasto_conn *conn,
 	      uint32_t mode,
 	      uint64_t dest_off,
 	      uint64_t dest_len)
@@ -210,7 +206,7 @@ apb_fsplice(struct elasto_conn *conn,
 	}
 
 	/* check source length matches the copy length */
-	ret = apb_fstat(src_mod_priv, src_apb_fh->io_conn, &fstat);
+	ret = apb_fstat(src_mod_priv, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -230,7 +226,7 @@ apb_fsplice(struct elasto_conn *conn,
 	 * check dest file's current length <= copy len, otherwise overwrite
 	 * truncates.
 	 */
-	ret = apb_fstat(dest_mod_priv, dest_apb_fh->io_conn, &fstat);
+	ret = apb_fstat(dest_mod_priv, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -587,7 +583,6 @@ err_out:
 
 int
 abb_fwrite(void *mod_priv,
-	   struct elasto_conn *conn,
 	   uint64_t dest_off,
 	   uint64_t dest_len,
 	   struct elasto_data *src_data)
@@ -611,7 +606,7 @@ abb_fwrite(void *mod_priv,
 	}
 
 	/* check current length <= dest_len, otherwise overwrite truncates */
-	ret = abb_fstat(mod_priv, apb_fh->io_conn, &fstat);
+	ret = abb_fstat(mod_priv, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -663,7 +658,6 @@ err_out:
 
 int
 abb_fread(void *mod_priv,
-	  struct elasto_conn *conn,
 	  uint64_t src_off,
 	  uint64_t src_len,
 	  struct elasto_data *dest_data)
@@ -724,7 +718,7 @@ abb_fsplice(struct elasto_conn *conn,
 	}
 
 	/* check source length matches the copy length */
-	ret = abb_fstat(src_mod_priv, src_apb_fh->io_conn, &fstat);
+	ret = abb_fstat(src_mod_priv, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -744,7 +738,7 @@ abb_fsplice(struct elasto_conn *conn,
 	 * check dest file's current length <= copy len, otherwise overwrite
 	 * truncates.
 	 */
-	ret = abb_fstat(dest_mod_priv, dest_apb_fh->io_conn, &fstat);
+	ret = abb_fstat(dest_mod_priv, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {

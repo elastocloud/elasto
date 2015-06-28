@@ -45,8 +45,7 @@
 
 static int
 afs_fh_init(const struct elasto_fauth *auth,
-	    void **_fh_priv,
-	    struct elasto_conn **_conn)
+	    void **_fh_priv)
 {
 	int ret;
 	struct afs_fh *afs_fh;
@@ -70,7 +69,6 @@ afs_fh_init(const struct elasto_fauth *auth,
 	/* connect on open */
 
 	*_fh_priv = afs_fh;
-	*_conn = NULL;
 
 	return 0;
 
@@ -87,7 +85,6 @@ uint64_t elasto_file_mod_version = ELASTO_FILE_MOD_VERS_VAL;
 int
 elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			void **_fh_priv,
-			struct elasto_conn **_conn,
 			struct elasto_fh_mod_ops *_ops)
 {
 	int ret;
@@ -113,7 +110,7 @@ elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 		.readdir = afs_freaddir,
 		.unlink = afs_funlink,
 	};
-	ret = afs_fh_init(auth, _fh_priv, _conn);
+	ret = afs_fh_init(auth, _fh_priv);
 	if (ret < 0) {
 		return ret;
 	}

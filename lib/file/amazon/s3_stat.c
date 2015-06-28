@@ -136,7 +136,6 @@ s3_fstat_root(struct s3_fh *s3_fh,
 
 int
 s3_fstat(void *mod_priv,
-	 struct elasto_conn *conn,
 	 struct elasto_fstat *fstat)
 {
 	int ret;
@@ -179,7 +178,6 @@ const struct elasto_fstatfs_region s3_regions[] = {
 
 int
 s3_fstatvfs(void *mod_priv,
-	    struct elasto_conn *conn,
 	    struct elasto_fstatfs *fstatfs)
 {
 	fstatfs->iosize_min = 1;

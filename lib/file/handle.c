@@ -48,7 +48,6 @@ elasto_fh_init(const struct elasto_fauth *auth,
 	uint64_t *_mod_vers;
 	int (*mod_fh_init)(const struct elasto_fauth *auth,
 			   void **_fh_priv,
-			   struct elasto_conn **_conn,
 			   struct elasto_fh_mod_ops *_ops);
 
 	if (auth == NULL) {
@@ -115,7 +114,7 @@ elasto_fh_init(const struct elasto_fauth *auth,
 	}
 
 	/* initialise back-end module */
-	ret = mod_fh_init(auth, &fh->mod_priv, &fh->conn, &fh->ops);
+	ret = mod_fh_init(auth, &fh->mod_priv, &fh->ops);
 	if (ret < 0) {
 		goto err_dl_close;
 	}
@@ -143,9 +142,6 @@ elasto_fh_free(struct elasto_fh *fh)
 	int ret;
 
 	fh->ops.fh_free(fh->mod_priv);
-	if (fh->conn != NULL) {
-		elasto_conn_free(fh->conn);
-	}
 	ret = dlclose(fh->mod_dl_h);
 	if (ret != 0) {
 		dbg(0, "failed to unload module (%d): %s\n",

@@ -55,7 +55,6 @@ struct afs_fh {
 int
 elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			void **_fh_priv,
-			struct elasto_conn **_conn,
 			struct elasto_fh_mod_ops *mod_ops);
 
 void

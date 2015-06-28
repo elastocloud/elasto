@@ -16,13 +16,11 @@
 
 int
 s3_fopen(void *mod_priv,
-	 struct elasto_conn *conn,
 	 const char *path,
 	 uint64_t flags,
 	 struct elasto_ftoken_list *toks);
 
 int
-s3_fclose(void *mod_priv,
-	  struct elasto_conn *conn);
+s3_fclose(void *mod_priv);
 
 #endif /* _S3_OPEN_H_ */

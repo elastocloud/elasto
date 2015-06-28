@@ -254,7 +254,6 @@ err_out:
 
 int
 afs_fwrite(void *mod_priv,
-	   struct elasto_conn *conn,
 	   uint64_t dest_off,
 	   uint64_t dest_len,
 	   struct elasto_data *src_data)
@@ -272,7 +271,7 @@ afs_fwrite(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = afs_fstat(mod_priv, conn, &fstat);
+	ret = afs_fstat(mod_priv, &fstat);
 	if (ret < 0) {
 		dbg(0, "failed to stat dest file: %s\n", strerror(-ret));
 		goto err_out;
@@ -285,7 +284,7 @@ afs_fwrite(void *mod_priv,
 		 */
 		dbg(0, "truncating file to %" PRIu64 " prior to write\n",
 		    dest_off + dest_len);
-		ret = afs_ftruncate(mod_priv, conn, dest_off + dest_len);
+		ret = afs_ftruncate(mod_priv, dest_off + dest_len);
 		if (ret < 0) {
 			dbg(0, "failed to truncate dest file: %s\n",
 			    strerror(-ret));
@@ -331,7 +330,6 @@ err_out:
 
 int
 afs_fread(void *mod_priv,
-	  struct elasto_conn *conn,
 	  uint64_t src_off,
 	  uint64_t src_len,
 	  struct elasto_data *dest_data)
@@ -367,7 +365,6 @@ err_out:
 
 int
 afs_ftruncate(void *mod_priv,
-	      struct elasto_conn *conn,
 	      uint64_t len)
 {
 	int ret;
@@ -400,7 +397,6 @@ err_out:
 
 int
 afs_fallocate(void *mod_priv,
-	      struct elasto_conn *conn,
 	      uint32_t mode,
 	      uint64_t dest_off,
 	      uint64_t dest_len)

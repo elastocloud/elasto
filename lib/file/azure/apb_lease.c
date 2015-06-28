@@ -173,7 +173,6 @@ err_out:
  */
 int
 apb_flease_acquire(void *mod_priv,
-		   struct elasto_conn *conn,
 		   int32_t duration,
 		   void **_flease_h)
 {
@@ -288,7 +287,6 @@ err_out:
 /* @_flease_h is optional */
 int
 apb_flease_break(void *mod_priv,
-		 struct elasto_conn *conn,
 		 void **_flease_h)
 {
 	int ret;
@@ -401,7 +399,6 @@ err_out:
 
 int
 apb_flease_release(void *mod_priv,
-		   struct elasto_conn *conn,
 		   void **_flease_h)
 {
 	int ret;

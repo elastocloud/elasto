@@ -224,7 +224,6 @@ afs_fstat_root(struct afs_fh *afs_fh,
 
 int
 afs_fstat(void *mod_priv,
-	  struct elasto_conn *conn,
 	  struct elasto_fstat *fstat)
 {
 	int ret;
@@ -276,7 +275,6 @@ const struct elasto_fstatfs_region afs_regions[] = {
 
 int
 afs_fstatvfs(void *mod_priv,
-	     struct elasto_conn *conn,
 	     struct elasto_fstatfs *fstatfs)
 {
 	/* fstatfs checked by caller */

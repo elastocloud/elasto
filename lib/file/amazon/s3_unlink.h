@@ -15,7 +15,6 @@
 #define _S3_UNLINK_H_
 
 int
-s3_funlink(void *mod_priv,
-	   struct elasto_conn *conn);
+s3_funlink(void *mod_priv);
 
 #endif /* _S3_UNLINK_H_ */

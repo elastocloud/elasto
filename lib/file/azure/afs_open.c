@@ -595,7 +595,6 @@ err_out:
 
 int
 afs_fopen(void *mod_priv,
-	  struct elasto_conn *conn,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
@@ -681,8 +680,7 @@ err_out:
 }
 
 int
-afs_fclose(void *mod_priv,
-	   struct elasto_conn *conn)
+afs_fclose(void *mod_priv)
 {
 	struct afs_fh *afs_fh = mod_priv;
 

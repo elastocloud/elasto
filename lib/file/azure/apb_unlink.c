@@ -112,8 +112,7 @@ err_out:
 }
 
 int
-apb_funlink(void *mod_priv,
-	    struct elasto_conn *conn)
+apb_funlink(void *mod_priv)
 {
 	int ret;
 	struct apb_fh *apb_fh = mod_priv;

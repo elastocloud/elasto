@@ -136,8 +136,7 @@ err_out:
 }
 
 int
-afs_funlink(void *mod_priv,
-	    struct elasto_conn *conn)
+afs_funlink(void *mod_priv)
 {
 	int ret;
 	struct afs_fh *afs_fh = mod_priv;

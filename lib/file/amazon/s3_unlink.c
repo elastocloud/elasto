@@ -87,8 +87,7 @@ err_out:
 }
 
 int
-s3_funlink(void *mod_priv,
-	   struct elasto_conn *conn)
+s3_funlink(void *mod_priv)
 {
 	int ret;
 	struct s3_fh *s3_fh = mod_priv;

@@ -146,7 +146,6 @@ err_out:
 
 int
 s3_freaddir(void *mod_priv,
-	    struct elasto_conn *conn,
 	    void *cli_priv,
 	    int (*dent_cb)(struct elasto_dent *,
 			    void *))

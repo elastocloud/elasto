@@ -426,7 +426,6 @@ err_out:
 
 int
 s3_fwrite(void *mod_priv,
-	  struct elasto_conn *conn,
 	  uint64_t dest_off,
 	  uint64_t dest_len,
 	  struct elasto_data *src_data)
@@ -450,7 +449,7 @@ s3_fwrite(void *mod_priv,
 	}
 
 	/* check current length <= dest_len, otherwise overwrite truncates */
-	ret = s3_fstat(mod_priv, s3_fh->conn, &fstat);
+	ret = s3_fstat(mod_priv, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -500,7 +499,6 @@ err_out:
 
 int
 s3_fread(void *mod_priv,
-	 struct elasto_conn *conn,
 	 uint64_t src_off,
 	 uint64_t src_len,
 	 struct elasto_data *dest_data)
@@ -533,8 +531,7 @@ err_out:
 }
 
 int
-s3_fsplice(struct elasto_conn *conn,
-	   void *src_mod_priv,
+s3_fsplice(void *src_mod_priv,
 	   uint64_t src_off,
 	   void *dest_mod_priv,
 	   uint64_t dest_off,
@@ -559,7 +556,7 @@ s3_fsplice(struct elasto_conn *conn,
 	}
 
 	/* check source length matches the copy length */
-	ret = s3_fstat(src_mod_priv, src_s3_fh->conn, &fstat);
+	ret = s3_fstat(src_mod_priv, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -579,7 +576,7 @@ s3_fsplice(struct elasto_conn *conn,
 	 * check dest file's current length <= copy len, otherwise overwrite
 	 * truncates.
 	 */
-	ret = s3_fstat(dest_mod_priv, dest_s3_fh->conn, &fstat);
+	ret = s3_fstat(dest_mod_priv, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {

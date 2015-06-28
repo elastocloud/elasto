@@ -97,7 +97,7 @@ elasto_freaddir(struct elasto_fh *fh,
 		goto err_out;
 	}
 
-	ret = fh->ops.readdir(fh->mod_priv, fh->conn, priv, dent_cb);
+	ret = fh->ops.readdir(fh->mod_priv, priv, dent_cb);
 	if (ret < 0) {
 		goto err_out;
 	}

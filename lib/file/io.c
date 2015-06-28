@@ -63,7 +63,7 @@ elasto_fwrite(struct elasto_fh *fh,
 	dbg(3, "writing range at %" PRIu64 ", len %" PRIu64 "\n",
 	    dest_off, dest_len);
 
-	ret = fh->ops.write(fh->mod_priv, fh->conn, dest_off, dest_len,
+	ret = fh->ops.write(fh->mod_priv, dest_off, dest_len,
 			    src_data);
 	if (ret < 0) {
 		goto err_out;
@@ -96,7 +96,7 @@ elasto_fread(struct elasto_fh *fh,
 	dbg(3, "reading range at %" PRIu64 ", len %" PRIu64 "\n",
 	    src_off, src_len);
 
-	ret = fh->ops.read(fh->mod_priv, fh->conn, src_off, src_len, dest_data);
+	ret = fh->ops.read(fh->mod_priv, src_off, src_len, dest_data);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -138,9 +138,7 @@ elasto_fallocate(struct elasto_fh *fh,
 	dbg(3, "hole-punching range at %" PRIu64 ", len %" PRIu64 "\n",
 	    dest_off, dest_len);
 
-	ret = fh->ops.allocate(fh->mod_priv, fh->conn,
-			       mode,
-			       dest_off, dest_len);
+	ret = fh->ops.allocate(fh->mod_priv, mode, dest_off, dest_len);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -174,7 +172,7 @@ elasto_ftruncate(struct elasto_fh *fh,
 
 	dbg(3, "truncating to len %" PRIu64 "\n", len);
 
-	ret = fh->ops.truncate(fh->mod_priv, fh->conn, len);
+	ret = fh->ops.truncate(fh->mod_priv, len);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -225,7 +223,7 @@ elasto_fsplice(struct elasto_fh *src_fh,
 	dbg(3, "splicing %" PRIu64 " bytes from %s to %s\n",
 	    len, src_fh->open_path, dest_fh->open_path);
 
-	ret = src_fh->ops.splice(src_fh->conn, src_fh->mod_priv, src_off,
+	ret = src_fh->ops.splice(src_fh->mod_priv, src_off,
 				 dest_fh->mod_priv, dest_off, len);
 	if (ret < 0) {
 		goto err_out;

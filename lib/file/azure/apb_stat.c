@@ -200,7 +200,6 @@ apb_fstat_root(struct apb_fh *apb_fh,
 
 int
 apb_fstat(void *mod_priv,
-	  struct elasto_conn *conn,
 	  struct elasto_fstat *fstat)
 {
 	int ret;
@@ -256,7 +255,6 @@ const struct elasto_fstatfs_region apb_regions[] = {
 
 int
 apb_fstatvfs(void *mod_priv,
-	     struct elasto_conn *conn,
 	     struct elasto_fstatfs *fstatfs)
 {
 	/* fstatfs checked by caller */
@@ -331,7 +329,6 @@ err_out:
 
 int
 abb_fstat(void *mod_priv,
-	  struct elasto_conn *conn,
 	  struct elasto_fstat *fstat)
 {
 	int ret;
@@ -367,7 +364,6 @@ err_out:
 
 int
 abb_fstatvfs(void *mod_priv,
-	     struct elasto_conn *conn,
 	     struct elasto_fstatfs *fstatfs)
 {
 	fstatfs->iosize_min = 1;

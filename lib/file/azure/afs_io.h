@@ -17,26 +17,22 @@
 /* page blob operations */
 int
 afs_fwrite(void *mod_priv,
-	   struct elasto_conn *conn,
 	   uint64_t dest_off,
 	   uint64_t dest_len,
 	   struct elasto_data *src_data);
 
 int
 afs_fread(void *mod_priv,
-	  struct elasto_conn *conn,
 	  uint64_t src_off,
 	  uint64_t src_len,
 	  struct elasto_data *dest_data);
 
 int
 afs_ftruncate(void *mod_priv,
-	      struct elasto_conn *conn,
 	      uint64_t len);
 
 int
 afs_fallocate(void *mod_priv,
-	      struct elasto_conn *conn,
 	      uint32_t mode,
 	      uint64_t dest_off,
 	      uint64_t dest_len);

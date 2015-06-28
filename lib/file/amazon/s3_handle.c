@@ -46,7 +46,6 @@
 static int
 s3_fh_init(const struct elasto_fauth *auth,
 	   void **_fh_priv,
-	   struct elasto_conn **_conn,
 	   struct elasto_fh_mod_ops *_ops)
 {
 	int ret;
@@ -73,7 +72,6 @@ s3_fh_init(const struct elasto_fauth *auth,
 	/* connect on open */
 
 	*_fh_priv = s3_fh;
-	*_conn = NULL;
 	*_ops = (struct elasto_fh_mod_ops){
 		.fh_free = s3_fh_free,
 		.open = s3_fopen,
@@ -108,10 +106,9 @@ uint64_t elasto_file_mod_version = ELASTO_FILE_MOD_VERS_VAL;
 int
 elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			void **_fh_priv,
-			struct elasto_conn **_conn,
 			struct elasto_fh_mod_ops *_ops)
 {
-	return s3_fh_init(auth, _fh_priv, _conn, _ops);
+	return s3_fh_init(auth, _fh_priv, _ops);
 }
 
 void
