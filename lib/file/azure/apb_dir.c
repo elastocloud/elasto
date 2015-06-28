@@ -43,7 +43,6 @@
 
 static int
 apb_freaddir_ctnr(struct apb_fh *apb_fh,
-		  struct elasto_conn *conn,
 		  void *cli_priv,
 		  int (*dent_cb)(struct elasto_dent *,
 				 void *))
@@ -60,7 +59,7 @@ apb_freaddir_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -107,7 +106,6 @@ err_out:
 
 static int
 apb_freaddir_acc(struct apb_fh *apb_fh,
-		 struct elasto_conn *conn,
 		 void *cli_priv,
 		 int (*dent_cb)(struct elasto_dent *,
 				void *))
@@ -123,7 +121,7 @@ apb_freaddir_acc(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -167,7 +165,6 @@ err_out:
 
 static int
 apb_freaddir_root(struct apb_fh *apb_fh,
-		  struct elasto_conn *conn,
 		  void *cli_priv,
 		  int (*dent_cb)(struct elasto_dent *,
 				 void *))
@@ -183,7 +180,7 @@ apb_freaddir_root(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -236,17 +233,17 @@ apb_freaddir(void *mod_priv,
 		ret = -EINVAL;
 		goto err_out;
 	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_freaddir_ctnr(apb_fh, conn, cli_priv, dent_cb);
+		ret = apb_freaddir_ctnr(apb_fh, cli_priv, dent_cb);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (apb_fh->path.acc != NULL) {
-		ret = apb_freaddir_acc(apb_fh, conn, cli_priv, dent_cb);
+		ret = apb_freaddir_acc(apb_fh, cli_priv, dent_cb);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else {
-		ret = apb_freaddir_root(apb_fh, conn, cli_priv, dent_cb);
+		ret = apb_freaddir_root(apb_fh, cli_priv, dent_cb);
 		if (ret < 0) {
 			goto err_out;
 		}

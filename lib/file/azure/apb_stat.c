@@ -42,7 +42,6 @@
 
 static int
 apb_fstat_blob(struct apb_fh *apb_fh,
-	       struct elasto_conn *conn,
 	       struct elasto_fstat *fstat)
 {
 	int ret;
@@ -57,7 +56,7 @@ apb_fstat_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -98,7 +97,6 @@ err_out:
 
 static int
 apb_fstat_ctnr(struct apb_fh *apb_fh,
-	       struct elasto_conn *conn,
 	       struct elasto_fstat *fstat)
 {
 	int ret;
@@ -112,7 +110,7 @@ apb_fstat_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -143,7 +141,6 @@ err_out:
 
 static int
 apb_fstat_acc(struct apb_fh *apb_fh,
-	      struct elasto_conn *conn,
 	      struct elasto_fstat *fstat)
 {
 	int ret;
@@ -157,7 +154,7 @@ apb_fstat_acc(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -184,7 +181,6 @@ err_out:
 
 static int
 apb_fstat_root(struct apb_fh *apb_fh,
-	       struct elasto_conn *conn,
 	       struct elasto_fstat *fstat)
 {
 	/*
@@ -211,22 +207,22 @@ apb_fstat(void *mod_priv,
 	struct apb_fh *apb_fh = mod_priv;
 
 	if (apb_fh->path.blob != NULL) {
-		ret = apb_fstat_blob(apb_fh, conn, fstat);
+		ret = apb_fstat_blob(apb_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_fstat_ctnr(apb_fh, conn, fstat);
+		ret = apb_fstat_ctnr(apb_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (apb_fh->path.acc != NULL) {
-		ret = apb_fstat_acc(apb_fh, conn, fstat);
+		ret = apb_fstat_acc(apb_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else {
-		ret = apb_fstat_root(apb_fh, conn, fstat);
+		ret = apb_fstat_root(apb_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -281,7 +277,6 @@ apb_fstatvfs(void *mod_priv,
 
 static int
 abb_fstat_blob(struct apb_fh *apb_fh,
-	       struct elasto_conn *conn,
 	       struct elasto_fstat *fstat)
 {
 	int ret;
@@ -296,7 +291,7 @@ abb_fstat_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -343,22 +338,22 @@ abb_fstat(void *mod_priv,
 	struct apb_fh *apb_fh = mod_priv;
 
 	if (apb_fh->path.blob != NULL) {
-		ret = abb_fstat_blob(apb_fh, conn, fstat);
+		ret = abb_fstat_blob(apb_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_fstat_ctnr(apb_fh, conn, fstat);
+		ret = apb_fstat_ctnr(apb_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (apb_fh->path.acc != NULL) {
-		ret = apb_fstat_acc(apb_fh, conn, fstat);
+		ret = apb_fstat_acc(apb_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else {
-		ret = apb_fstat_root(apb_fh, conn, fstat);
+		ret = apb_fstat_root(apb_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}

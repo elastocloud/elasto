@@ -63,7 +63,7 @@ apb_fwrite(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -99,7 +99,7 @@ apb_fread(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -131,7 +131,7 @@ apb_ftruncate(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -170,7 +170,7 @@ apb_fallocate(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -210,7 +210,7 @@ apb_fsplice(struct elasto_conn *conn,
 	}
 
 	/* check source length matches the copy length */
-	ret = apb_fstat(src_mod_priv, conn, &fstat);
+	ret = apb_fstat(src_mod_priv, src_apb_fh->io_conn, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -230,7 +230,7 @@ apb_fsplice(struct elasto_conn *conn,
 	 * check dest file's current length <= copy len, otherwise overwrite
 	 * truncates.
 	 */
-	ret = apb_fstat(dest_mod_priv, conn, &fstat);
+	ret = apb_fstat(dest_mod_priv, dest_apb_fh->io_conn, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -257,7 +257,7 @@ apb_fsplice(struct elasto_conn *conn,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(dest_apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -413,7 +413,6 @@ abb_fwrite_multi_data_free(struct elasto_data *this_data)
 
 static int
 abb_fwrite_multi_handle(struct apb_fh *apb_fh,
-			struct elasto_conn *conn,
 			int blk_num,
 			struct elasto_data *this_data,
 			struct azure_block **_blk)
@@ -450,7 +449,7 @@ abb_fwrite_multi_handle(struct apb_fh *apb_fh,
 		goto err_id_free;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		dbg(0, "part put failed: %s\n", strerror(-ret));
 		goto err_op_free;
@@ -476,7 +475,6 @@ err_out:
 
 static int
 abb_fwrite_multi_finish(struct apb_fh *apb_fh,
-			struct elasto_conn *conn,
 			uint64_t num_blks,
 			struct list_head *blks)
 {
@@ -492,7 +490,7 @@ abb_fwrite_multi_finish(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		dbg(0, "multi-part done req failed: %s\n", strerror(-ret));
 		goto err_op_free;
@@ -520,7 +518,6 @@ abb_fwrite_blks_free(struct list_head *blks)
 
 static int
 abb_fwrite_multi(struct apb_fh *apb_fh,
-		 struct elasto_conn *conn,
 		 uint64_t dest_off,
 		 uint64_t dest_len,
 		 struct elasto_data *src_data,
@@ -559,8 +556,7 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 			goto err_mp_abort;
 		}
 
-		ret = abb_fwrite_multi_handle(apb_fh, conn, blk_num,
-					      this_data, &blk);
+		ret = abb_fwrite_multi_handle(apb_fh, blk_num, this_data, &blk);
 		if (ret < 0) {
 			goto err_data_free;
 		}
@@ -572,7 +568,7 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 		blk_num++;
 	}
 
-	ret = abb_fwrite_multi_finish(apb_fh, conn, blk_num, &blks);
+	ret = abb_fwrite_multi_finish(apb_fh, blk_num, &blks);
 	if (ret < 0) {
 		goto err_mp_abort;
 	}
@@ -615,7 +611,7 @@ abb_fwrite(void *mod_priv,
 	}
 
 	/* check current length <= dest_len, otherwise overwrite truncates */
-	ret = abb_fstat(mod_priv, conn, &fstat);
+	ret = abb_fstat(mod_priv, apb_fh->io_conn, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -631,11 +627,15 @@ abb_fwrite(void *mod_priv,
 		goto err_out;
 	}
 
-	max_io = (conn->insecure_http ? ABB_IO_SIZE_HTTP : ABB_IO_SIZE_HTTPS);
+	if (apb_fh->io_conn->insecure_http) {
+		max_io = ABB_IO_SIZE_HTTP;
+	} else {
+		max_io = ABB_IO_SIZE_HTTPS;
+	}
 	if (dest_len > max_io) {
 		/* split large IOs into multi-part uploads */
-		ret = abb_fwrite_multi(apb_fh, conn, dest_off, dest_len,
-				       src_data, max_io);
+		ret = abb_fwrite_multi(apb_fh, dest_off, dest_len, src_data,
+				       max_io);
 		return ret;
 	}
 
@@ -648,7 +648,7 @@ abb_fwrite(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -684,7 +684,7 @@ abb_fread(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -724,7 +724,7 @@ abb_fsplice(struct elasto_conn *conn,
 	}
 
 	/* check source length matches the copy length */
-	ret = abb_fstat(src_mod_priv, conn, &fstat);
+	ret = abb_fstat(src_mod_priv, src_apb_fh->io_conn, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -744,7 +744,7 @@ abb_fsplice(struct elasto_conn *conn,
 	 * check dest file's current length <= copy len, otherwise overwrite
 	 * truncates.
 	 */
-	ret = abb_fstat(dest_mod_priv, conn, &fstat);
+	ret = abb_fstat(dest_mod_priv, dest_apb_fh->io_conn, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -771,7 +771,7 @@ abb_fsplice(struct elasto_conn *conn,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(dest_apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}

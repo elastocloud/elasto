@@ -66,7 +66,6 @@ apb_flease_free(void *mod_priv,
 
 static int
 apb_flease_acquire_blob(struct apb_fh *apb_fh,
-			struct elasto_conn *conn,
 			int32_t duration,
 			char **_lid)
 {
@@ -87,7 +86,7 @@ apb_flease_acquire_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -118,7 +117,6 @@ err_out:
 
 static int
 apb_flease_acquire_ctnr(struct apb_fh *apb_fh,
-			struct elasto_conn *conn,
 			int32_t duration,
 			char **_lid)
 {
@@ -138,7 +136,7 @@ apb_flease_acquire_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -202,14 +200,12 @@ apb_flease_acquire(void *mod_priv,
 	memset(lease, 0, sizeof(*lease));
 
 	if (apb_fh->path.blob != NULL) {
-		ret = apb_flease_acquire_blob(apb_fh, conn, duration,
-					      &lease->lid);
+		ret = apb_flease_acquire_blob(apb_fh, duration, &lease->lid);
 		if (ret < 0) {
 			goto err_lease_free;
 		}
 	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_flease_acquire_ctnr(apb_fh, conn, duration,
-					      &lease->lid);
+		ret = apb_flease_acquire_ctnr(apb_fh, duration, &lease->lid);
 		if (ret < 0) {
 			goto err_lease_free;
 		}
@@ -226,7 +222,6 @@ err_out:
 
 static int
 apb_flease_break_blob(struct apb_fh *apb_fh,
-		      struct elasto_conn *conn,
 		      const char *lid)
 {
 	int ret;
@@ -244,7 +239,7 @@ apb_flease_break_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -260,7 +255,6 @@ err_out:
 
 static int
 apb_flease_break_ctnr(struct apb_fh *apb_fh,
-		      struct elasto_conn *conn,
 		      const char *lid)
 {
 	int ret;
@@ -277,7 +271,7 @@ apb_flease_break_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -318,12 +312,12 @@ apb_flease_break(void *mod_priv,
 	}
 
 	if (apb_fh->path.blob != NULL) {
-		ret = apb_flease_break_blob(apb_fh, conn, lid);
+		ret = apb_flease_break_blob(apb_fh, lid);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_flease_break_ctnr(apb_fh, conn, lid);
+		ret = apb_flease_break_ctnr(apb_fh, lid);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -336,7 +330,6 @@ err_out:
 
 static int
 apb_flease_release_blob(struct apb_fh *apb_fh,
-			struct elasto_conn *conn,
 			const char *lid)
 {
 	int ret;
@@ -355,7 +348,7 @@ apb_flease_release_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -373,7 +366,6 @@ err_out:
 
 static int
 apb_flease_release_ctnr(struct apb_fh *apb_fh,
-			struct elasto_conn *conn,
 			const char *lid)
 {
 	int ret;
@@ -391,7 +383,7 @@ apb_flease_release_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -434,12 +426,12 @@ apb_flease_release(void *mod_priv,
 	}
 
 	if (apb_fh->path.blob != NULL) {
-		ret = apb_flease_release_blob(apb_fh, conn, lease->lid);
+		ret = apb_flease_release_blob(apb_fh, lease->lid);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_flease_release_ctnr(apb_fh, conn, lease->lid);
+		ret = apb_flease_release_ctnr(apb_fh, lease->lid);
 		if (ret < 0) {
 			goto err_out;
 		}
