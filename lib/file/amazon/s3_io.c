@@ -185,7 +185,6 @@ s3_fwrite_multi_data_free(struct elasto_data *this_data)
 
 static int
 s3_fwrite_multi_start(struct s3_fh *s3_fh,
-		      struct elasto_conn *conn,
 		      char **_upload_id)
 {
 	int ret;
@@ -200,7 +199,7 @@ s3_fwrite_multi_start(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		dbg(0, "multi-part start req failed: %s\n", strerror(-ret));
 		goto err_op_free;
@@ -225,7 +224,6 @@ err_out:
 
 static int
 s3_fwrite_multi_handle(struct s3_fh *s3_fh,
-		       struct elasto_conn *conn,
 		       const char *upload_id,
 		       int part_num,
 		       struct elasto_data *this_data,
@@ -252,7 +250,7 @@ s3_fwrite_multi_handle(struct s3_fh *s3_fh,
 		goto err_part_free;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		dbg(0, "part put failed: %s\n", strerror(-ret));
 		goto err_op_free;
@@ -287,7 +285,6 @@ err_out:
 
 static int
 s3_fwrite_multi_finish(struct s3_fh *s3_fh,
-		       struct elasto_conn *conn,
 		       char *upload_id,
 		       uint64_t num_parts,
 		       struct list_head *parts)
@@ -302,7 +299,7 @@ s3_fwrite_multi_finish(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		dbg(0, "multi-part done req failed: %s\n", strerror(-ret));
 		goto err_op_free;
@@ -318,7 +315,6 @@ err_out:
 
 static int
 s3_fwrite_multi_abort(struct s3_fh *s3_fh,
-		      struct elasto_conn *conn,
 		      char *upload_id)
 {
 	int ret;
@@ -332,7 +328,7 @@ s3_fwrite_multi_abort(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		dbg(0, "multi-part abort req failed: %s\n", strerror(-ret));
 		goto err_op_free;
@@ -360,7 +356,6 @@ s3_fwrite_parts_free(struct list_head *parts)
 
 static int
 s3_fwrite_multi(struct s3_fh *s3_fh,
-		struct elasto_conn *conn,
 		uint64_t dest_off,
 		uint64_t dest_len,
 		struct elasto_data *src_data,
@@ -374,7 +369,7 @@ s3_fwrite_multi(struct s3_fh *s3_fh,
 	struct list_head parts;
 	uint64_t part_num = 1;	/* must be > 0 */
 
-	ret = s3_fwrite_multi_start(s3_fh, conn, &upload_id);
+	ret = s3_fwrite_multi_start(s3_fh, &upload_id);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -395,7 +390,7 @@ s3_fwrite_multi(struct s3_fh *s3_fh,
 			goto err_mp_abort;
 		}
 
-		ret = s3_fwrite_multi_handle(s3_fh, conn, upload_id, part_num,
+		ret = s3_fwrite_multi_handle(s3_fh, upload_id, part_num,
 					     this_data, &part);
 		if (ret < 0) {
 			goto err_data_free;
@@ -409,7 +404,7 @@ s3_fwrite_multi(struct s3_fh *s3_fh,
 	}
 
 	/* -1, as @part_num starts at 1 */
-	ret = s3_fwrite_multi_finish(s3_fh, conn, upload_id, part_num - 1,
+	ret = s3_fwrite_multi_finish(s3_fh, upload_id, part_num - 1,
 				     &parts);
 	if (ret < 0) {
 		goto err_mp_abort;
@@ -422,7 +417,7 @@ s3_fwrite_multi(struct s3_fh *s3_fh,
 err_data_free:
 	s3_fwrite_multi_data_free(this_data);
 err_mp_abort:
-	s3_fwrite_multi_abort(s3_fh, conn, upload_id);
+	s3_fwrite_multi_abort(s3_fh, upload_id);
 	free(upload_id);
 	s3_fwrite_parts_free(&parts);
 err_out:
@@ -455,7 +450,7 @@ s3_fwrite(void *mod_priv,
 	}
 
 	/* check current length <= dest_len, otherwise overwrite truncates */
-	ret = s3_fstat(mod_priv, conn, &fstat);
+	ret = s3_fstat(mod_priv, s3_fh->conn, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -471,10 +466,14 @@ s3_fwrite(void *mod_priv,
 		goto err_out;
 	}
 
-	max_io = (conn->insecure_http ? S3_IO_SIZE_HTTP : S3_IO_SIZE_HTTPS);
+	if (s3_fh->conn->insecure_http) {
+		max_io = S3_IO_SIZE_HTTP;
+	} else {
+		max_io = S3_IO_SIZE_HTTPS;
+	}
 	if (dest_len > max_io) {
 		/* split large IOs into multi-part uploads */
-		ret = s3_fwrite_multi(s3_fh, conn, dest_off, dest_len,
+		ret = s3_fwrite_multi(s3_fh, dest_off, dest_len,
 				      src_data, max_io);
 		return ret;
 	}
@@ -486,7 +485,7 @@ s3_fwrite(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -520,7 +519,7 @@ s3_fread(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -560,7 +559,7 @@ s3_fsplice(struct elasto_conn *conn,
 	}
 
 	/* check source length matches the copy length */
-	ret = s3_fstat(src_mod_priv, conn, &fstat);
+	ret = s3_fstat(src_mod_priv, src_s3_fh->conn, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -580,7 +579,7 @@ s3_fsplice(struct elasto_conn *conn,
 	 * check dest file's current length <= copy len, otherwise overwrite
 	 * truncates.
 	 */
-	ret = s3_fstat(dest_mod_priv, conn, &fstat);
+	ret = s3_fstat(dest_mod_priv, dest_s3_fh->conn, &fstat);
 	if (ret < 0) {
 		goto err_out;
 	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
@@ -605,7 +604,7 @@ s3_fsplice(struct elasto_conn *conn,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(dest_s3_fh->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}

@@ -19,6 +19,8 @@ struct s3_fh {
 	char *iam_user;
 	char *key_id;
 	char *secret;
+	bool insecure_http;
+	struct elasto_conn *conn;
 };
 
 /* module entry point */

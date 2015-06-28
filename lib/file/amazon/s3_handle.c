@@ -51,7 +51,6 @@ s3_fh_init(const struct elasto_fauth *auth,
 {
 	int ret;
 	struct s3_fh *s3_fh;
-	struct elasto_conn *conn;
 
 	assert(auth->type == ELASTO_FILE_S3);
 
@@ -70,14 +69,11 @@ s3_fh_init(const struct elasto_fauth *auth,
 		goto err_priv_free;
 	}
 
-	ret = elasto_conn_init_s3(s3_fh->key_id, s3_fh->secret,
-				  auth->insecure_http, &conn);
-	if (ret < 0) {
-		goto err_creds_free;
-	}
+	s3_fh->insecure_http = auth->insecure_http;
+	/* connect on open */
 
 	*_fh_priv = s3_fh;
-	*_conn = conn;
+	*_conn = NULL;
 	*_ops = (struct elasto_fh_mod_ops){
 		.fh_free = s3_fh_free,
 		.open = s3_fopen,
@@ -99,10 +95,6 @@ s3_fh_init(const struct elasto_fauth *auth,
 
 	return 0;
 
-err_creds_free:
-	free(s3_fh->iam_user);
-	free(s3_fh->key_id);
-	free(s3_fh->secret);
 err_priv_free:
 	free(s3_fh);
 err_out:

@@ -41,7 +41,6 @@
 
 static int
 s3_freaddir_bkt(struct s3_fh *s3_fh,
-		struct elasto_conn *conn,
 		void *cli_priv,
 		int (*dent_cb)(struct elasto_dent *,
 			       void *))
@@ -56,7 +55,7 @@ s3_freaddir_bkt(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -95,10 +94,9 @@ err_out:
 
 static int
 s3_freaddir_root(struct s3_fh *s3_fh,
-		  struct elasto_conn *conn,
-		  void *cli_priv,
-		  int (*dent_cb)(struct elasto_dent *,
-				 void *))
+		 void *cli_priv,
+		 int (*dent_cb)(struct elasto_dent *,
+				void *))
 {
 	int ret;
 	struct op *op;
@@ -110,7 +108,7 @@ s3_freaddir_root(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -161,12 +159,12 @@ s3_freaddir(void *mod_priv,
 		ret = -EINVAL;
 		goto err_out;
 	} else if (s3_fh->path.bkt != NULL) {
-		ret = s3_freaddir_bkt(s3_fh, conn, cli_priv, dent_cb);
+		ret = s3_freaddir_bkt(s3_fh, cli_priv, dent_cb);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else {
-		ret = s3_freaddir_root(s3_fh, conn, cli_priv, dent_cb);
+		ret = s3_freaddir_root(s3_fh, cli_priv, dent_cb);
 		if (ret < 0) {
 			goto err_out;
 		}

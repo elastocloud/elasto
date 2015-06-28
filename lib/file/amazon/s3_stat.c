@@ -40,7 +40,6 @@
 
 static int
 s3_fstat_obj(struct s3_fh *s3_fh,
-	     struct elasto_conn *conn,
 	     struct elasto_fstat *fstat)
 {
 	int ret;
@@ -54,7 +53,7 @@ s3_fstat_obj(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -82,7 +81,6 @@ err_out:
 
 static int
 s3_fstat_bkt(struct s3_fh *s3_fh,
-	     struct elasto_conn *conn,
 	     struct elasto_fstat *fstat)
 {
 	int ret;
@@ -94,7 +92,7 @@ s3_fstat_bkt(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -121,8 +119,7 @@ err_out:
 
 static int
 s3_fstat_root(struct s3_fh *s3_fh,
-	       struct elasto_conn *conn,
-	       struct elasto_fstat *fstat)
+	      struct elasto_fstat *fstat)
 {
 	/*
 	 * Could issue a GET Service request here, to check subscription
@@ -146,17 +143,17 @@ s3_fstat(void *mod_priv,
 	struct s3_fh *s3_fh = mod_priv;
 
 	if (s3_fh->path.obj != NULL) {
-		ret = s3_fstat_obj(s3_fh, conn, fstat);
+		ret = s3_fstat_obj(s3_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (s3_fh->path.bkt != NULL) {
-		ret = s3_fstat_bkt(s3_fh, conn, fstat);
+		ret = s3_fstat_bkt(s3_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else {
-		ret = s3_fstat_root(s3_fh, conn, fstat);
+		ret = s3_fstat_root(s3_fh, fstat);
 		if (ret < 0) {
 			goto err_out;
 		}

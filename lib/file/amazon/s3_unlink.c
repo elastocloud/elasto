@@ -39,8 +39,7 @@
 #include "s3_unlink.h"
 
 static int
-s3_funlink_obj(struct s3_fh *s3_fh,
-	       struct elasto_conn *conn)
+s3_funlink_obj(struct s3_fh *s3_fh)
 {
 	int ret;
 	struct op *op;
@@ -52,7 +51,7 @@ s3_funlink_obj(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -65,8 +64,7 @@ err_out:
 }
 
 static int
-s3_funlink_bkt(struct s3_fh *s3_fh,
-	       struct elasto_conn *conn)
+s3_funlink_bkt(struct s3_fh *s3_fh)
 {
 	int ret;
 	struct op *op;
@@ -76,7 +74,7 @@ s3_funlink_bkt(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -96,12 +94,12 @@ s3_funlink(void *mod_priv,
 	struct s3_fh *s3_fh = mod_priv;
 
 	if (s3_fh->path.obj != NULL) {
-		ret = s3_funlink_obj(s3_fh, conn);
+		ret = s3_funlink_obj(s3_fh);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (s3_fh->path.bkt != NULL) {
-		ret = s3_funlink_bkt(s3_fh, conn);
+		ret = s3_funlink_bkt(s3_fh);
 		if (ret < 0) {
 			goto err_out;
 		}
