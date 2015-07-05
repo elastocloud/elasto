@@ -41,10 +41,12 @@ struct elasto_fauth {
 	bool insecure_http;
 };
 
+/* wrapper for fopen(CREATE|EXCL|DIR) + fclose() */
 int
 elasto_fmkdir(const struct elasto_fauth *auth,
 	      const char *path);
 
+/* wrapper for fopen(DIR) + funlink_close() */
 int
 elasto_frmdir(const struct elasto_fauth *auth,
 	      const char *path);

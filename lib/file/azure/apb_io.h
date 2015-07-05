@@ -17,26 +17,22 @@
 /* page blob operations */
 int
 apb_fwrite(void *mod_priv,
-	   struct elasto_conn *conn,
 	   uint64_t dest_off,
 	   uint64_t dest_len,
 	   struct elasto_data *src_data);
 
 int
 apb_fread(void *mod_priv,
-	  struct elasto_conn *conn,
 	  uint64_t src_off,
 	  uint64_t src_len,
 	  struct elasto_data *dest_data);
 
 int
 apb_ftruncate(void *mod_priv,
-	      struct elasto_conn *conn,
 	      uint64_t len);
 
 int
 apb_fallocate(void *mod_priv,
-	      struct elasto_conn *conn,
 	      uint32_t mode,
 	      uint64_t dest_off,
 	      uint64_t dest_len);
@@ -52,14 +48,12 @@ apb_fsplice(struct elasto_conn *conn,
 /* block blob operations */
 int
 abb_fwrite(void *mod_priv,
-	   struct elasto_conn *conn,
 	   uint64_t dest_off,
 	   uint64_t dest_len,
 	   struct elasto_data *src_data);
 
 int
 abb_fread(void *mod_priv,
-	  struct elasto_conn *conn,
 	  uint64_t src_off,
 	  uint64_t src_len,
 	  struct elasto_data *dest_data);

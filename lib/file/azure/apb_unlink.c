@@ -43,8 +43,7 @@
 #include "apb_unlink.h"
 
 static int
-apb_funlink_blob(struct apb_fh *apb_fh,
-		 struct elasto_conn *conn)
+apb_funlink_blob(struct apb_fh *apb_fh)
 {
 	int ret;
 	struct op *op;
@@ -55,7 +54,7 @@ apb_funlink_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -67,8 +66,7 @@ err_out:
 }
 
 static int
-apb_funlink_ctnr(struct apb_fh *apb_fh,
-		 struct elasto_conn *conn)
+apb_funlink_ctnr(struct apb_fh *apb_fh)
 {
 	int ret;
 	struct op *op;
@@ -78,7 +76,7 @@ apb_funlink_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -91,8 +89,7 @@ err_out:
 }
 
 static int
-apb_funlink_acc(struct apb_fh *apb_fh,
-		struct elasto_conn *conn)
+apb_funlink_acc(struct apb_fh *apb_fh)
 {
 	int ret;
 	struct op *op;
@@ -102,7 +99,7 @@ apb_funlink_acc(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -115,24 +112,23 @@ err_out:
 }
 
 int
-apb_funlink(void *mod_priv,
-	    struct elasto_conn *conn)
+apb_funlink(void *mod_priv)
 {
 	int ret;
 	struct apb_fh *apb_fh = mod_priv;
 
 	if (apb_fh->path.blob != NULL) {
-		ret = apb_funlink_blob(apb_fh, conn);
+		ret = apb_funlink_blob(apb_fh);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_funlink_ctnr(apb_fh, conn);
+		ret = apb_funlink_ctnr(apb_fh);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (apb_fh->path.acc != NULL) {
-		ret = apb_funlink_acc(apb_fh, conn);
+		ret = apb_funlink_acc(apb_fh);
 		if (ret < 0) {
 			goto err_out;
 		}

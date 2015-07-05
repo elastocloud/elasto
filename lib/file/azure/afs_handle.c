@@ -45,12 +45,10 @@
 
 static int
 afs_fh_init(const struct elasto_fauth *auth,
-	    void **_fh_priv,
-	    struct elasto_conn **_conn)
+	    void **_fh_priv)
 {
 	int ret;
 	struct afs_fh *afs_fh;
-	struct elasto_conn *conn;
 
 	afs_fh = malloc(sizeof(*afs_fh));
 	if (afs_fh == NULL) {
@@ -67,21 +65,13 @@ afs_fh_init(const struct elasto_fauth *auth,
 		goto err_priv_free;
 	}
 
-	ret = elasto_conn_init_az(afs_fh->pem_path, NULL, auth->insecure_http,
-				  &conn);
-	if (ret < 0) {
-		goto err_ssl_free;
-	}
+	afs_fh->insecure_http = auth->insecure_http;
+	/* connect on open */
 
 	*_fh_priv = afs_fh;
-	*_conn = conn;
 
 	return 0;
 
-err_ssl_free:
-	free(afs_fh->pem_path);
-	free(afs_fh->sub_id);
-	free(afs_fh->sub_name);
 err_priv_free:
 	free(afs_fh);
 err_out:
@@ -95,7 +85,6 @@ uint64_t elasto_file_mod_version = ELASTO_FILE_MOD_VERS_VAL;
 int
 elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			void **_fh_priv,
-			struct elasto_conn **_conn,
 			struct elasto_fh_mod_ops *_ops)
 {
 	int ret;
@@ -118,12 +107,10 @@ elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 		.lease_break = NULL,
 		.lease_release = NULL,
 		.lease_free = NULL,
-		.mkdir = afs_fmkdir,
-		.rmdir = afs_frmdir,
 		.readdir = afs_freaddir,
 		.unlink = afs_funlink,
 	};
-	ret = afs_fh_init(auth, _fh_priv, _conn);
+	ret = afs_fh_init(auth, _fh_priv);
 	if (ret < 0) {
 		return ret;
 	}

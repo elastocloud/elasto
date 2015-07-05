@@ -42,28 +42,16 @@ elasto_fmkdir(const struct elasto_fauth *auth,
 	int ret;
 	struct elasto_fh *fh;
 
-	if ((auth->type != ELASTO_FILE_AZURE)
-	 && (auth->type != ELASTO_FILE_S3)
-	 && (auth->type != ELASTO_FILE_ABB)
-	 && (auth->type != ELASTO_FILE_AFS)) {
-		ret = -ENOTSUP;
-		goto err_out;
-	}
-
-	ret = elasto_conn_subsys_init();
+	/* default location */
+	ret = elasto_fopen(auth, path,
+			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
+			    | ELASTO_FOPEN_EXCL),
+			   NULL, &fh);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fh_init(auth, path, ELASTO_FOPEN_DIRECTORY, &fh);
-	if (ret < 0) {
-		/* don't deinit subsystem on error */
-		goto err_out;
-	}
-
-	ret = fh->ops.mkdir(fh->mod_priv, fh->conn, path);
-
-	elasto_fh_free(fh);
+	ret = elasto_fclose(fh);
 err_out:
 	return ret;
 }
@@ -75,28 +63,12 @@ elasto_frmdir(const struct elasto_fauth *auth,
 	int ret;
 	struct elasto_fh *fh;
 
-	if ((auth->type != ELASTO_FILE_AZURE)
-	 && (auth->type != ELASTO_FILE_S3)
-	 && (auth->type != ELASTO_FILE_ABB)
-	 && (auth->type != ELASTO_FILE_AFS)) {
-		ret = -ENOTSUP;
-		goto err_out;
-	}
-
-	ret = elasto_conn_subsys_init();
+	ret = elasto_fopen(auth, path, ELASTO_FOPEN_DIRECTORY, NULL, &fh);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fh_init(auth, path, ELASTO_FOPEN_DIRECTORY, &fh);
-	if (ret < 0) {
-		/* don't deinit subsystem on error */
-		goto err_out;
-	}
-
-	ret = fh->ops.rmdir(fh->mod_priv, fh->conn, path);
-
-	elasto_fh_free(fh);
+	ret = elasto_funlink_close(fh);
 err_out:
 	return ret;
 }
@@ -125,7 +97,7 @@ elasto_freaddir(struct elasto_fh *fh,
 		goto err_out;
 	}
 
-	ret = fh->ops.readdir(fh->mod_priv, fh->conn, priv, dent_cb);
+	ret = fh->ops.readdir(fh->mod_priv, priv, dent_cb);
 	if (ret < 0) {
 		goto err_out;
 	}

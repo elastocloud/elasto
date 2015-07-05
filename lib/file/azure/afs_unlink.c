@@ -43,8 +43,7 @@
 #include "afs_unlink.h"
 
 static int
-afs_funlink_file(struct afs_fh *afs_fh,
-		 struct elasto_conn *conn)
+afs_funlink_file(struct afs_fh *afs_fh)
 {
 	int ret;
 	struct op *op;
@@ -56,7 +55,7 @@ afs_funlink_file(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -68,8 +67,7 @@ err_out:
 }
 
 static int
-afs_funlink_dir(struct afs_fh *afs_fh,
-		struct elasto_conn *conn)
+afs_funlink_dir(struct afs_fh *afs_fh)
 {
 	int ret;
 	struct op *op;
@@ -80,7 +78,7 @@ afs_funlink_dir(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -92,8 +90,7 @@ err_out:
 }
 
 static int
-afs_funlink_share(struct afs_fh *afs_fh,
-		  struct elasto_conn *conn)
+afs_funlink_share(struct afs_fh *afs_fh)
 {
 	int ret;
 	struct op *op;
@@ -103,7 +100,7 @@ afs_funlink_share(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -116,8 +113,7 @@ err_out:
 }
 
 static int
-afs_funlink_acc(struct afs_fh *afs_fh,
-		struct elasto_conn *conn)
+afs_funlink_acc(struct afs_fh *afs_fh)
 {
 	int ret;
 	struct op *op;
@@ -127,7 +123,7 @@ afs_funlink_acc(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -140,25 +136,24 @@ err_out:
 }
 
 int
-afs_funlink(void *mod_priv,
-	    struct elasto_conn *conn)
+afs_funlink(void *mod_priv)
 {
 	int ret;
 	struct afs_fh *afs_fh = mod_priv;
 
 	if (afs_fh->path.fs_ent != NULL) {
 		if (afs_fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
-			ret = afs_funlink_dir(afs_fh, conn);
+			ret = afs_funlink_dir(afs_fh);
 		} else {
-			ret = afs_funlink_file(afs_fh, conn);
+			ret = afs_funlink_file(afs_fh);
 		}
 	} else if (afs_fh->path.share != NULL) {
-		ret = afs_funlink_share(afs_fh, conn);
+		ret = afs_funlink_share(afs_fh);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (afs_fh->path.acc != NULL) {
-		ret = afs_funlink_acc(afs_fh, conn);
+		ret = afs_funlink_acc(afs_fh);
 		if (ret < 0) {
 			goto err_out;
 		}

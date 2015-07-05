@@ -41,103 +41,8 @@
 #include "afs_open.h"
 #include "afs_dir.h"
 
-int
-afs_fmkdir(void *mod_priv,
-	   struct elasto_conn *conn,
-	   const char *path)
-{
-	int ret;
-	struct op *op;
-	struct afs_fh *afs_fh = mod_priv;
-
-	ret = afs_fpath_parse(path, &afs_fh->path);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	if ((afs_fh->path.acc == NULL)
-	 || (afs_fh->path.share == NULL)
-	 || (afs_fh->path.dir == NULL)) {
-		dbg(0, "invalid mkdir path: must include account, share and "
-		       "dir components\n");
-		goto err_path_free;
-	}
-
-	ret = afs_fsign_conn_setup(conn, afs_fh->sub_id, afs_fh->path.acc);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = az_fs_req_dir_create(afs_fh->path.acc, afs_fh->path.share,
-				   afs_fh->path.parent_dir, afs_fh->path.dir,
-				   &op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = elasto_fop_send_recv(conn, op);
-	op_free(op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = 0;
-err_path_free:
-	afs_fpath_free(&afs_fh->path);
-err_out:
-	return ret;
-}
-
-int
-afs_frmdir(void *mod_priv,
-	   struct elasto_conn *conn,
-	   const char *path)
-{
-	int ret;
-	struct op *op;
-	struct afs_fh *afs_fh = mod_priv;
-
-	ret = afs_fpath_parse(path, &afs_fh->path);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	if ((afs_fh->path.acc == NULL)
-	 || (afs_fh->path.share == NULL)
-	 || (afs_fh->path.dir == NULL)) {
-		dbg(0, "invalid rmdir path: must include account, share and "
-		       "dir components\n");
-		goto err_path_free;
-	}
-
-	ret = afs_fsign_conn_setup(conn, afs_fh->sub_id, afs_fh->path.acc);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = az_fs_req_dir_del(afs_fh->path.acc, afs_fh->path.share,
-				afs_fh->path.parent_dir, afs_fh->path.dir,
-				&op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = elasto_fop_send_recv(conn, op);
-	op_free(op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = 0;
-err_path_free:
-	afs_fpath_free(&afs_fh->path);
-err_out:
-	return ret;
-}
-
 static int
 afs_freaddir_share(struct afs_fh *afs_fh,
-		   struct elasto_conn *conn,
 		   void *cli_priv,
 		   int (*dent_cb)(struct elasto_dent *,
 				  void *))
@@ -168,7 +73,7 @@ afs_freaddir_share(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -216,7 +121,6 @@ err_out:
 
 static int
 afs_freaddir_acc(struct afs_fh *afs_fh,
-		 struct elasto_conn *conn,
 		 void *cli_priv,
 		 int (*dent_cb)(struct elasto_dent *,
 				void *))
@@ -231,7 +135,7 @@ afs_freaddir_acc(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -266,7 +170,6 @@ err_out:
 
 static int
 afs_freaddir_root(struct afs_fh *afs_fh,
-		  struct elasto_conn *conn,
 		  void *cli_priv,
 		  int (*dent_cb)(struct elasto_dent *,
 				 void *))
@@ -282,7 +185,7 @@ afs_freaddir_root(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -317,7 +220,6 @@ err_out:
 
 int
 afs_freaddir(void *mod_priv,
-	     struct elasto_conn *conn,
 	     void *cli_priv,
 	     int (*dent_cb)(struct elasto_dent *,
 			      void *))
@@ -329,11 +231,11 @@ afs_freaddir(void *mod_priv,
 	if ((afs_fh->path.dir != NULL)
 	 || (afs_fh->path.share != NULL)) {
 		/* fn capable of listing dirs, or directly beneath shares */
-		ret = afs_freaddir_share(afs_fh, conn, cli_priv, dent_cb);
+		ret = afs_freaddir_share(afs_fh, cli_priv, dent_cb);
 	} else if (afs_fh->path.acc != NULL) {
-		ret = afs_freaddir_acc(afs_fh, conn, cli_priv, dent_cb);
+		ret = afs_freaddir_acc(afs_fh, cli_priv, dent_cb);
 	} else {
-		ret = afs_freaddir_root(afs_fh, conn, cli_priv, dent_cb);
+		ret = afs_freaddir_root(afs_fh, cli_priv, dent_cb);
 	}
 	if (ret < 0) {
 		goto err_out;

@@ -16,21 +16,18 @@
 
 int
 s3_fwrite(void *mod_priv,
-	   struct elasto_conn *conn,
-	   uint64_t dest_off,
-	   uint64_t dest_len,
-	   struct elasto_data *src_data);
+	  uint64_t dest_off,
+	  uint64_t dest_len,
+	  struct elasto_data *src_data);
 
 int
 s3_fread(void *mod_priv,
-	  struct elasto_conn *conn,
-	  uint64_t src_off,
-	  uint64_t src_len,
-	  struct elasto_data *dest_data);
+	 uint64_t src_off,
+	 uint64_t src_len,
+	 struct elasto_data *dest_data);
 
 int
-s3_fsplice(struct elasto_conn *conn,
-	   void *src_mod_priv,
+s3_fsplice(void *src_mod_priv,
 	   uint64_t src_off,
 	   void *dest_mod_priv,
 	   uint64_t dest_off,

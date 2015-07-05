@@ -15,18 +15,7 @@
 #define _APB_DIR_H_
 
 int
-apb_fmkdir(void *mod_priv,
-	   struct elasto_conn *conn,
-	   const char *path);
-
-int
-apb_frmdir(void *mod_priv,
-	   struct elasto_conn *conn,
-	   const char *path);
-
-int
 apb_freaddir(void *mod_priv,
-	     struct elasto_conn *conn,
 	     void *cli_priv,
 	     int (*dent_cb)(struct elasto_dent *,
 			      void *));

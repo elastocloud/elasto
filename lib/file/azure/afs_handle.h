@@ -46,13 +46,15 @@ struct afs_fh {
 	char *pem_path;
 	char *sub_id;
 	char *sub_name;
+	bool insecure_http;
+	struct elasto_conn *mgmt_conn;
+	struct elasto_conn *io_conn;
 };
 
 /* module entry point */
 int
 elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			void **_fh_priv,
-			struct elasto_conn **_conn,
 			struct elasto_fh_mod_ops *mod_ops);
 
 void

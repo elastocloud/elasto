@@ -60,7 +60,7 @@ struct az_mgmt_req_acc_create {
 
 struct az_mgmt_req_acc_del {
 	char *sub_id;
-	char *account;
+	char *acc;
 };
 
 struct az_mgmt_req_acc_prop_get {
@@ -142,7 +142,7 @@ az_mgmt_req_acc_create(const char *sub_id,
 
 int
 az_mgmt_req_acc_del(const char *sub_id,
-		    const char *account,
+		    const char *acc,
 		    struct op **_op);
 
 int

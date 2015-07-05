@@ -44,7 +44,6 @@
 
 static int
 s3_fopen_obj(struct s3_fh *s3_fh,
-	     struct elasto_conn *conn,
 	     uint64_t flags)
 {
 	int ret;
@@ -63,7 +62,7 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
 					&& (flags & ELASTO_FOPEN_EXCL)) {
 		dbg(1, "path already exists, but exclusive create specified\n");
@@ -85,7 +84,7 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 			goto err_out;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(s3_fh->conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -102,7 +101,6 @@ err_out:
 
 static int
 s3_fopen_bkt(struct s3_fh *s3_fh,
-	     struct elasto_conn *conn,
 	     uint64_t flags,
 	     struct elasto_ftoken_list *open_toks)
 {
@@ -120,7 +118,7 @@ s3_fopen_bkt(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
 					&& (flags & ELASTO_FOPEN_EXCL)) {
 		dbg(1, "path already exists, but exclusive create specified\n");
@@ -148,7 +146,7 @@ s3_fopen_bkt(struct s3_fh *s3_fh,
 			goto err_out;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(s3_fh->conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -165,7 +163,6 @@ err_out:
 
 static int
 s3_fopen_root(struct s3_fh *s3_fh,
-	      struct elasto_conn *conn,
 	      uint64_t flags)
 {
 	int ret;
@@ -192,7 +189,7 @@ s3_fopen_root(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(s3_fh->conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -206,7 +203,6 @@ err_out:
 
 int
 s3_fopen(void *mod_priv,
-	 struct elasto_conn *conn,
 	 const char *path,
 	 uint64_t flags,
 	 struct elasto_ftoken_list *open_toks)
@@ -219,25 +215,33 @@ s3_fopen(void *mod_priv,
 		goto err_out;
 	}
 
+	ret = elasto_conn_init_s3(s3_fh->key_id, s3_fh->secret,
+				  s3_fh->insecure_http, &s3_fh->conn);
+	if (ret < 0) {
+		goto err_path_free;
+	}
+
 	if (s3_fh->path.obj != NULL) {
-		ret = s3_fopen_obj(s3_fh, conn, flags);
+		ret = s3_fopen_obj(s3_fh, flags);
 		if (ret < 0) {
-			goto err_path_free;
+			goto err_conn_free;
 		}
 	} else if (s3_fh->path.bkt != NULL) {
-		ret = s3_fopen_bkt(s3_fh, conn, flags, open_toks);
+		ret = s3_fopen_bkt(s3_fh, flags, open_toks);
 		if (ret < 0) {
-			goto err_path_free;
+			goto err_conn_free;
 		}
 	} else {
-		ret = s3_fopen_root(s3_fh, conn, flags);
+		ret = s3_fopen_root(s3_fh, flags);
 		if (ret < 0) {
-			goto err_path_free;
+			goto err_conn_free;
 		}
 	}
 
 	return 0;
 
+err_conn_free:
+	elasto_conn_free(s3_fh->conn);
 err_path_free:
 	elasto_s3_path_free(&s3_fh->path);
 err_out:
@@ -245,11 +249,11 @@ err_out:
 }
 
 int
-s3_fclose(void *mod_priv,
-	  struct elasto_conn *conn)
+s3_fclose(void *mod_priv)
 {
 	struct s3_fh *s3_fh = mod_priv;
 
+	elasto_conn_free(s3_fh->conn);
 	elasto_s3_path_free(&s3_fh->path);
 
 	return 0;

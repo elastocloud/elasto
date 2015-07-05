@@ -15,7 +15,6 @@
 #define _AFS_UNLINK_H_
 
 int
-afs_funlink(void *mod_priv,
-	    struct elasto_conn *conn);
+afs_funlink(void *mod_priv);
 
 #endif /* _AFS_UNLINK_H_ */

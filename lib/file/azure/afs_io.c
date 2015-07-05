@@ -190,7 +190,6 @@ afs_fwrite_multi_data_free(struct elasto_data *this_data)
 
 static int
 afs_fwrite_multi(struct afs_fh *afs_fh,
-		 struct elasto_conn *conn,
 		 uint64_t dest_off,
 		 uint64_t dest_len,
 		 struct elasto_data *src_data,
@@ -228,7 +227,7 @@ afs_fwrite_multi(struct afs_fh *afs_fh,
 			goto err_data_free;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 		if (ret < 0) {
 			dbg(0, "multi-write failed at data_off %" PRIu64 "\n",
 			    data_off);
@@ -255,7 +254,6 @@ err_out:
 
 int
 afs_fwrite(void *mod_priv,
-	   struct elasto_conn *conn,
 	   uint64_t dest_off,
 	   uint64_t dest_len,
 	   struct elasto_data *src_data)
@@ -273,7 +271,7 @@ afs_fwrite(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = afs_fstat(mod_priv, conn, &fstat);
+	ret = afs_fstat(mod_priv, &fstat);
 	if (ret < 0) {
 		dbg(0, "failed to stat dest file: %s\n", strerror(-ret));
 		goto err_out;
@@ -286,7 +284,7 @@ afs_fwrite(void *mod_priv,
 		 */
 		dbg(0, "truncating file to %" PRIu64 " prior to write\n",
 		    dest_off + dest_len);
-		ret = afs_ftruncate(mod_priv, conn, dest_off + dest_len);
+		ret = afs_ftruncate(mod_priv, dest_off + dest_len);
 		if (ret < 0) {
 			dbg(0, "failed to truncate dest file: %s\n",
 			    strerror(-ret));
@@ -294,9 +292,13 @@ afs_fwrite(void *mod_priv,
 		}
 	}
 
-	max_io = (conn->insecure_http ? AFS_IO_SIZE_HTTP : AFS_IO_SIZE_HTTPS);
+	if (afs_fh->io_conn->insecure_http) {
+		max_io = AFS_IO_SIZE_HTTP;
+	} else {
+		max_io = AFS_IO_SIZE_HTTPS;
+	}
 	if (dest_len > max_io) {
-		ret = afs_fwrite_multi(afs_fh, conn, dest_off, dest_len,
+		ret = afs_fwrite_multi(afs_fh, dest_off, dest_len,
 				       src_data, max_io);
 		return ret;
 	}
@@ -313,7 +315,7 @@ afs_fwrite(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -328,7 +330,6 @@ err_out:
 
 int
 afs_fread(void *mod_priv,
-	  struct elasto_conn *conn,
 	  uint64_t src_off,
 	  uint64_t src_len,
 	  struct elasto_data *dest_data)
@@ -349,7 +350,7 @@ afs_fread(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -364,7 +365,6 @@ err_out:
 
 int
 afs_ftruncate(void *mod_priv,
-	      struct elasto_conn *conn,
 	      uint64_t len)
 {
 	int ret;
@@ -383,7 +383,7 @@ afs_ftruncate(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -397,7 +397,6 @@ err_out:
 
 int
 afs_fallocate(void *mod_priv,
-	      struct elasto_conn *conn,
 	      uint32_t mode,
 	      uint64_t dest_off,
 	      uint64_t dest_len)
@@ -423,7 +422,7 @@ afs_fallocate(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}

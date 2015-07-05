@@ -15,7 +15,6 @@
 #define _APB_UNLINK_H_
 
 int
-apb_funlink(void *mod_priv,
-	    struct elasto_conn *conn);
+apb_funlink(void *mod_priv);
 
 #endif /* _APB_UNLINK_H_ */

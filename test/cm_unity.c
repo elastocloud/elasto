@@ -63,6 +63,8 @@ cm_unity_state_init(void)
 	cm_ustate->ctnr = strdup("testctnr");
 	srand(seedy);
 	cm_ustate->ctnr_suffix = rand();
+	cm_ustate->share = strdup("testshare");
+	cm_ustate->share_suffix = rand();
 
 	ret = 0;
 err_out:

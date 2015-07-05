@@ -185,22 +185,27 @@ afs_fpath_free(struct elasto_fh_afs_path *afs_path)
 	afs_path->fs_ent = NULL;
 }
 
-/* XXX dup of apb_fsign_conn_setup */
-int
-afs_fsign_conn_setup(struct elasto_conn *conn,
-		     const char *sub_id,
-		     const char *acc)
+static int
+afs_io_conn_init(struct afs_fh *afs_fh,
+		 struct elasto_conn **_io_conn)
 {
 	int ret;
 	struct op *op;
 	struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp;
+	struct elasto_conn *io_conn;
 
-	ret = az_mgmt_req_acc_keys_get(sub_id, acc, &op);
+	if (afs_fh->mgmt_conn == NULL) {
+		dbg(0, "mgmt connection required for Azure IO conn\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_mgmt_req_acc_keys_get(afs_fh->sub_id, afs_fh->path.acc, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -210,12 +215,25 @@ afs_fsign_conn_setup(struct elasto_conn *conn,
 		goto err_op_free;
 	}
 
-	ret = elasto_conn_sign_setkey(conn, acc, acc_keys_get_rsp->primary);
+	ret = elasto_conn_init_az(afs_fh->pem_path, NULL, afs_fh->insecure_http,
+				  &io_conn);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = elasto_conn_sign_setkey(io_conn, afs_fh->path.acc,
+				      acc_keys_get_rsp->primary);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+
+	op_free(op);
+	*_io_conn = io_conn;
+
+	return 0;
+
+err_conn_free:
+	elasto_conn_free(io_conn);
 err_op_free:
 	op_free(op);
 err_out:
@@ -224,7 +242,6 @@ err_out:
 
 static int
 afs_fopen_file(struct afs_fh *afs_fh,
-	       struct elasto_conn *conn,
 	       uint64_t flags)
 {
 	int ret;
@@ -233,11 +250,6 @@ afs_fopen_file(struct afs_fh *afs_fh,
 	if (flags & ELASTO_FOPEN_DIRECTORY) {
 		dbg(1, "attempt to open file with directory flag set\n");
 		ret = -EINVAL;
-		goto err_out;
-	}
-
-	ret = afs_fsign_conn_setup(conn, afs_fh->sub_id, afs_fh->path.acc);
-	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -250,7 +262,7 @@ afs_fopen_file(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
 					&& (flags & ELASTO_FOPEN_EXCL)) {
 		dbg(1, "file already exists, but exclusive create specified\n");
@@ -269,7 +281,7 @@ afs_fopen_file(struct afs_fh *afs_fh,
 			goto err_out;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -288,7 +300,6 @@ err_out:
 
 static int
 afs_fopen_dir(struct afs_fh *afs_fh,
-	      struct elasto_conn *conn,
 	      uint64_t flags)
 {
 	int ret;
@@ -297,11 +308,6 @@ afs_fopen_dir(struct afs_fh *afs_fh,
 	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
 		dbg(1, "attempt to open dir without directory flag\n");
 		ret = -EINVAL;
-		goto err_out;
-	}
-
-	ret = afs_fsign_conn_setup(conn, afs_fh->sub_id, afs_fh->path.acc);
-	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -314,7 +320,7 @@ afs_fopen_dir(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
 					&& (flags & ELASTO_FOPEN_EXCL)) {
 		dbg(1, "path already exists, but exclusive create specified\n");
@@ -332,7 +338,7 @@ afs_fopen_dir(struct afs_fh *afs_fh,
 			goto err_out;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -352,7 +358,6 @@ err_out:
 
 static int
 afs_fopen_share(struct afs_fh *afs_fh,
-		struct elasto_conn *conn,
 		uint64_t flags)
 {
 	int ret;
@@ -364,11 +369,6 @@ afs_fopen_share(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = afs_fsign_conn_setup(conn, afs_fh->sub_id, afs_fh->path.acc);
-	if (ret < 0) {
-		goto err_out;
-	}
-
 	ret = az_fs_req_share_prop_get(afs_fh->path.acc,
 				       afs_fh->path.share,
 				       &op);
@@ -376,7 +376,7 @@ afs_fopen_share(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
 					&& (flags & ELASTO_FOPEN_EXCL)) {
 		dbg(1, "path already exists, but exclusive create specified\n");
@@ -392,7 +392,7 @@ afs_fopen_share(struct afs_fh *afs_fh,
 			goto err_out;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(afs_fh->io_conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -412,7 +412,6 @@ err_out:
 
 static int
 afs_fopen_acc_create_wait(struct afs_fh *afs_fh,
-			  struct elasto_conn *conn,
 			  const char *req_id)
 {
 	struct op *op;
@@ -429,7 +428,7 @@ afs_fopen_acc_create_wait(struct afs_fh *afs_fh,
 			goto err_out;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(afs_fh->mgmt_conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -477,7 +476,6 @@ err_out:
 /* FIXME duplicate of apb_fopen_acc */
 static int
 afs_fopen_acc(struct afs_fh *afs_fh,
-	      struct elasto_conn *conn,
 	      uint64_t flags,
 	      struct elasto_ftoken_list *open_toks)
 {
@@ -496,7 +494,7 @@ afs_fopen_acc(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->mgmt_conn, op);
 	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
 					&& (flags & ELASTO_FOPEN_EXCL)) {
 		dbg(1, "path already exists, but exclusive create specified\n");
@@ -529,13 +527,13 @@ afs_fopen_acc(struct afs_fh *afs_fh,
 			goto err_out;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(afs_fh->mgmt_conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
 
 		if (op->rsp.err_code == 202) {
-			ret = afs_fopen_acc_create_wait(afs_fh, conn,
+			ret = afs_fopen_acc_create_wait(afs_fh,
 							op->rsp.req_id);
 			if (ret < 0) {
 				goto err_op_free;
@@ -545,15 +543,6 @@ afs_fopen_acc(struct afs_fh *afs_fh,
 		dbg(4, "failed to retrieve account properties: %s\n",
 		    strerror(-ret));
 		goto err_op_free;
-	}
-
-	/*
-	 * signing setup not needed for mgmt reqs, but in case of readdir
-	 * (List Containers)
-	 */
-	ret = afs_fsign_conn_setup(conn, afs_fh->sub_id, afs_fh->path.acc);
-	if (ret < 0) {
-		goto err_out;
 	}
 
 
@@ -566,7 +555,6 @@ err_out:
 
 static int
 afs_fopen_root(struct afs_fh *afs_fh,
-	       struct elasto_conn *conn,
 	       uint64_t flags)
 {
 	int ret;
@@ -593,7 +581,7 @@ afs_fopen_root(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(afs_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -607,7 +595,6 @@ err_out:
 
 int
 afs_fopen(void *mod_priv,
-	  struct elasto_conn *conn,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
@@ -620,26 +607,72 @@ afs_fopen(void *mod_priv,
 		goto err_out;
 	}
 
-	if (afs_fh->path.fs_ent != NULL) {
-		if (flags & ELASTO_FOPEN_DIRECTORY) {
-			ret = afs_fopen_dir(afs_fh, conn, flags);
-		} else {
-			ret = afs_fopen_file(afs_fh, conn, flags);
-		}
-	} else if (afs_fh->path.share != NULL) {
-		ret = afs_fopen_share(afs_fh, conn, flags);
-	} else if (afs_fh->path.acc != NULL) {
-		ret = afs_fopen_acc(afs_fh, conn, flags, open_toks);
-	} else {
-		ret = afs_fopen_root(afs_fh, conn, flags);
-	}
+	/*
+	 * Open a HTTPS connection to the management service.
+	 * A connection to the account host for share / file IO is opened
+	 * later if needed (non-root).
+	 * TODO: specify the server hostname here for connection
+	 */
+	ret = elasto_conn_init_az(afs_fh->pem_path, NULL, false,
+				  &afs_fh->mgmt_conn);
 	if (ret < 0) {
 		goto err_path_free;
+	}
+
+	if (afs_fh->path.fs_ent != NULL) {
+		ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
+		if (ret < 0) {
+			goto err_mgmt_conn_free;
+		}
+
+		if (flags & ELASTO_FOPEN_DIRECTORY) {
+			ret = afs_fopen_dir(afs_fh, flags);
+		} else {
+			ret = afs_fopen_file(afs_fh, flags);
+		}
+		if (ret < 0) {
+			goto err_io_conn_free;
+		}
+	} else if (afs_fh->path.share != NULL) {
+		ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
+		if (ret < 0) {
+			goto err_mgmt_conn_free;
+		}
+
+		ret = afs_fopen_share(afs_fh, flags);
+		if (ret < 0) {
+			goto err_io_conn_free;
+		}
+	} else if (afs_fh->path.acc != NULL) {
+		ret = afs_fopen_acc(afs_fh, flags, open_toks);
+		if (ret < 0) {
+			goto err_mgmt_conn_free;
+		}
+
+		/*
+		 * IO conn not needed for mgmt reqs, but in case of readdir
+		 * (List Shares).
+		 */
+		ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
+		if (ret < 0) {
+			goto err_mgmt_conn_free;
+		}
+	} else {
+		ret = afs_fopen_root(afs_fh, flags);
+		if (ret < 0) {
+			goto err_mgmt_conn_free;
+		}
+
+		/* IO conn not needed */
 	}
 	afs_fh->open_flags = flags;
 
 	return 0;
 
+err_io_conn_free:
+	elasto_conn_free(afs_fh->io_conn);
+err_mgmt_conn_free:
+	elasto_conn_free(afs_fh->mgmt_conn);
 err_path_free:
 	afs_fpath_free(&afs_fh->path);
 err_out:
@@ -647,11 +680,13 @@ err_out:
 }
 
 int
-afs_fclose(void *mod_priv,
-	   struct elasto_conn *conn)
+afs_fclose(void *mod_priv)
 {
 	struct afs_fh *afs_fh = mod_priv;
 
+	/* @io_conn may be null (root opens) */
+	elasto_conn_free(afs_fh->io_conn);
+	elasto_conn_free(afs_fh->mgmt_conn);
 	afs_fpath_free(&afs_fh->path);
 
 	return 0;

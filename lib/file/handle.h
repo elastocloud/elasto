@@ -20,78 +20,57 @@
 struct elasto_fh_mod_ops {
 	void (*fh_free)(void *mod_priv);
 	int (*open)(void *mod_priv,
-		    struct elasto_conn *conn,
 		    const char *path,
 		    uint64_t flags,
 		    struct elasto_ftoken_list *open_toks);
-	int (*close)(void *mod_priv,
-		     struct elasto_conn *conn);
+	int (*close)(void *mod_priv);
 	int (*write)(void *mod_priv,
-		     struct elasto_conn *conn,
 		     uint64_t dest_off,
 		     uint64_t dest_len,
 		     struct elasto_data *src_data);
 	int (*read)(void *mod_priv,
-		    struct elasto_conn *conn,
 		    uint64_t src_off,
 		    uint64_t src_len,
 		    struct elasto_data *dest_data);
 	int (*allocate)(void *mod_priv,
-			struct elasto_conn *conn,
 			uint32_t mode,
 			uint64_t dest_off,
 			uint64_t dest_len);
 	int (*truncate)(void *mod_priv,
-			struct elasto_conn *conn,
 			uint64_t len);
-	int (*splice)(struct elasto_conn *conn,
-		      void *src_mod_priv,
+	int (*splice)(void *src_mod_priv,
 		      uint64_t src_off,
 		      void *dest_mod_priv,
 		      uint64_t dest_off,
 		      uint64_t len);
 	int (*stat)(void *mod_priv,
-		    struct elasto_conn *conn,
 		    struct elasto_fstat *fstat);
 	int (*statfs)(void *mod_priv,
-		      struct elasto_conn *conn,
 		      struct elasto_fstatfs *fstatfs);
 	int (*lease_acquire)(void *mod_priv,
-			     struct elasto_conn *conn,
 			     int32_t duration,
 			     void **_flease_h);
 	int (*lease_break)(void *mod_priv,
-			   struct elasto_conn *conn,
 			   void **_flease_h);
 	int (*lease_release)(void *mod_priv,
-			     struct elasto_conn *conn,
 			     void **_flease_h);
 	void (*lease_free)(void *mod_priv,
 			   void **_flease_h);
-	int (*mkdir)(void *mod_priv,
-		     struct elasto_conn *conn,
-		     const char *path);
-	int (*rmdir)(void *mod_priv,
-		     struct elasto_conn *conn,
-		     const char *path);
 	int (*readdir)(void *mod_priv,
-		       struct elasto_conn *conn,
 		       void *cli_priv,
 		       int (*dent_cb)(struct elasto_dent *,
 				      void *));
-	int (*unlink)(void *mod_priv,
-		      struct elasto_conn *conn);
+	int (*unlink)(void *mod_priv);
 };
 
 /* fh init calls this entry point for the corresponding module */
 #define ELASTO_FILE_MOD_INIT_FN "elasto_file_mod_fh_init"
 /* Elasto file module internal API version */
 #define ELASTO_FILE_MOD_VERS_SYM "elasto_file_mod_version"
-#define ELASTO_FILE_MOD_VERS_VAL 1ULL
+#define ELASTO_FILE_MOD_VERS_VAL 2ULL
 
 /*
  * @magic: magic to verify handle on use
- * @conn: Elasto connection initialised by open op
  * @type: module identifier
  * @mod_dl_h: module dlopen handle
  * @mod_priv: private module data returned on module init
@@ -101,7 +80,6 @@ struct elasto_fh_mod_ops {
  */
 struct elasto_fh {
 	char magic[8];
-	struct elasto_conn *conn;
 	enum elasto_ftype type;
 	char *open_path;
 	uint64_t open_flags;

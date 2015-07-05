@@ -15,20 +15,9 @@
 #define _S3_DIR_H_
 
 int
-s3_fmkdir(void *mod_priv,
-	   struct elasto_conn *conn,
-	   const char *path);
-
-int
-s3_frmdir(void *mod_priv,
-	   struct elasto_conn *conn,
-	   const char *path);
-
-int
 s3_freaddir(void *mod_priv,
-	     struct elasto_conn *conn,
-	     void *cli_priv,
-	     int (*dent_cb)(struct elasto_dent *,
-			      void *));
+	    void *cli_priv,
+	    int (*dent_cb)(struct elasto_dent *,
+			   void *));
 
 #endif /* _S3_DIR_H_ */

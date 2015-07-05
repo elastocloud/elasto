@@ -46,12 +46,10 @@
 
 static int
 apb_fh_init(const struct elasto_fauth *auth,
-	    void **_fh_priv,
-	    struct elasto_conn **_conn)
+	    void **_fh_priv)
 {
 	int ret;
 	struct apb_fh *apb_fh;
-	struct elasto_conn *conn;
 
 	apb_fh = malloc(sizeof(*apb_fh));
 	if (apb_fh == NULL) {
@@ -68,21 +66,13 @@ apb_fh_init(const struct elasto_fauth *auth,
 		goto err_priv_free;
 	}
 
-	ret = elasto_conn_init_az(apb_fh->pem_path, NULL, auth->insecure_http,
-				  &conn);
-	if (ret < 0) {
-		goto err_ssl_free;
-	}
+	apb_fh->insecure_http = auth->insecure_http;
+	/* connect on open */
 
 	*_fh_priv = apb_fh;
-	*_conn = conn;
 
 	return 0;
 
-err_ssl_free:
-	free(apb_fh->pem_path);
-	free(apb_fh->sub_id);
-	free(apb_fh->sub_name);
 err_priv_free:
 	free(apb_fh);
 err_out:
@@ -96,7 +86,6 @@ uint64_t elasto_file_mod_version = ELASTO_FILE_MOD_VERS_VAL;
 int
 elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			void **_fh_priv,
-			struct elasto_conn **_conn,
 			struct elasto_fh_mod_ops *_ops)
 {
 	int ret;
@@ -117,8 +106,6 @@ elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			.lease_break = apb_flease_break,
 			.lease_release = apb_flease_release,
 			.lease_free = apb_flease_free,
-			.mkdir = apb_fmkdir,
-			.rmdir = apb_frmdir,
 			.readdir = apb_freaddir,
 			.unlink = apb_funlink,
 		};
@@ -142,15 +129,13 @@ elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			.lease_break = apb_flease_break,
 			.lease_release = apb_flease_release,
 			.lease_free = apb_flease_free,
-			.mkdir = apb_fmkdir,
-			.rmdir = apb_frmdir,
 			.readdir = apb_freaddir,
 			.unlink = apb_funlink,
 		};
 	} else {
 		return -EINVAL;
 	}
-	ret = apb_fh_init(auth, _fh_priv, _conn);
+	ret = apb_fh_init(auth, _fh_priv);
 	if (ret < 0) {
 		return ret;
 	}

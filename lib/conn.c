@@ -1106,6 +1106,9 @@ err_out:
 void
 elasto_conn_free(struct elasto_conn *econn)
 {
+	if (econn == NULL) {
+		return;
+	}
 	event_base_free(econn->ev_base);
 	if (econn->sign.key_len > 0) {
 		free(econn->sign.key);

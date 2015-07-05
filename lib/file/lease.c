@@ -63,8 +63,7 @@ elasto_flease_acquire(struct elasto_fh *fh,
 		goto err_out;
 	}
 
-	ret = fh->ops.lease_acquire(fh->mod_priv, fh->conn,
-				    duration, &fh->flease_h);
+	ret = fh->ops.lease_acquire(fh->mod_priv, duration, &fh->flease_h);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -93,8 +92,7 @@ elasto_flease_break(struct elasto_fh *fh)
 	}
 
 	/* fh->flease_h may be NULL */
-	ret = fh->ops.lease_break(fh->mod_priv, fh->conn,
-				  &fh->flease_h);
+	ret = fh->ops.lease_break(fh->mod_priv, &fh->flease_h);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -134,7 +132,7 @@ elasto_flease_release(struct elasto_fh *fh)
 		goto err_out;
 	}
 
-	ret = fh->ops.lease_release(fh->mod_priv, fh->conn, &fh->flease_h);
+	ret = fh->ops.lease_release(fh->mod_priv, &fh->flease_h);
 	if (ret < 0) {
 		goto err_out;
 	}

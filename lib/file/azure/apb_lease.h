@@ -16,18 +16,15 @@
 
 int
 apb_flease_acquire(void *mod_priv,
-		   struct elasto_conn *conn,
 		   int32_t duration,
 		   void **_flease_h);
 
 int
 apb_flease_break(void *mod_priv,
-		 struct elasto_conn *conn,
 		 void **_flease_h);
 
 int
 apb_flease_release(void *mod_priv,
-		   struct elasto_conn *conn,
 		   void **_flease_h);
 
 void

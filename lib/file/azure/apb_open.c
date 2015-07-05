@@ -154,21 +154,27 @@ apb_fpath_free(struct elasto_fh_az_path *az_path)
 	az_path->blob = NULL;
 }
 
-int
-apb_fsign_conn_setup(struct elasto_conn *conn,
-		     const char *sub_id,
-		     const char *acc)
+static int
+apb_io_conn_init(struct apb_fh *apb_fh,
+		 struct elasto_conn **_io_conn)
 {
 	int ret;
 	struct op *op;
 	struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp;
+	struct elasto_conn *io_conn;
 
-	ret = az_mgmt_req_acc_keys_get(sub_id, acc, &op);
+	if (apb_fh->mgmt_conn == NULL) {
+		dbg(0, "mgmt connection required for Azure IO conn\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_mgmt_req_acc_keys_get(apb_fh->sub_id, apb_fh->path.acc, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -178,12 +184,25 @@ apb_fsign_conn_setup(struct elasto_conn *conn,
 		goto err_op_free;
 	}
 
-	ret = elasto_conn_sign_setkey(conn, acc, acc_keys_get_rsp->primary);
+	ret = elasto_conn_init_az(apb_fh->pem_path, NULL, apb_fh->insecure_http,
+				  &io_conn);
 	if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = elasto_conn_sign_setkey(io_conn, apb_fh->path.acc,
+				      acc_keys_get_rsp->primary);
+	if (ret < 0) {
+		goto err_conn_free;
+	}
+
+	op_free(op);
+	*_io_conn = io_conn;
+
+	return 0;
+
+err_conn_free:
+	elasto_conn_free(io_conn);
 err_op_free:
 	op_free(op);
 err_out:
@@ -192,7 +211,6 @@ err_out:
 
 static int
 apb_fopen_blob(struct apb_fh *apb_fh,
-	       struct elasto_conn *conn,
 	       uint64_t flags)
 {
 	int ret;
@@ -205,11 +223,6 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
-	if (ret < 0) {
-		goto err_out;
-	}
-
 	ret = az_req_blob_prop_get(apb_fh->path.acc,
 				   apb_fh->path.ctnr,
 				   apb_fh->path.blob,
@@ -218,7 +231,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
 					&& (flags & ELASTO_FOPEN_EXCL)) {
 		dbg(1, "path already exists, but exclusive create specified\n");
@@ -234,7 +247,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 			goto err_out;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -264,8 +277,80 @@ err_out:
 }
 
 static int
+abb_fopen_blob(struct apb_fh *apb_fh,
+	       uint64_t flags)
+{
+	int ret;
+	struct op *op;
+	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
+
+	if (flags & ELASTO_FOPEN_DIRECTORY) {
+		dbg(1, "attempt to open blob with directory flag set\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_req_blob_prop_get(apb_fh->path.acc,
+				   apb_fh->path.ctnr,
+				   apb_fh->path.blob,
+				   &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
+	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
+					&& (flags & ELASTO_FOPEN_EXCL)) {
+		dbg(1, "path already exists, but exclusive create specified\n");
+		ret = -EEXIST;
+		goto err_op_free;
+	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
+		struct elasto_data *data;
+		/* put a zero length block blob */
+		dbg(4, "path not found, creating\n");
+		op_free(op);
+		ret = elasto_data_iov_new(NULL, 0, false, &data);
+		if (ret < 0) {
+			goto err_out;
+		}
+		ret = az_req_blob_put(apb_fh->path.acc, apb_fh->path.ctnr,
+				      apb_fh->path.blob, data, 0,
+				      &op);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		ret = elasto_fop_send_recv(apb_fh->io_conn, op);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+		goto done;
+	} else if (ret < 0) {
+		goto err_op_free;
+	}
+
+	blob_prop_get_rsp = az_rsp_blob_prop_get(op);
+	if (blob_prop_get_rsp == NULL) {
+		goto err_op_free;
+	}
+
+	if (blob_prop_get_rsp->is_page) {
+		dbg(0, "invalid request to open page blob via block blob "
+		    "backend\n");
+		ret = -EINVAL;
+		goto err_op_free;
+	}
+
+done:
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
 apb_fopen_ctnr(struct apb_fh *apb_fh,
-	       struct elasto_conn *conn,
 	       uint64_t flags)
 {
 	int ret;
@@ -277,11 +362,6 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
-	if (ret < 0) {
-		goto err_out;
-	}
-
 	ret = az_req_ctnr_prop_get(apb_fh->path.acc,
 				   apb_fh->path.ctnr,
 				   &op);
@@ -289,7 +369,7 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
 					&& (flags & ELASTO_FOPEN_EXCL)) {
 		dbg(1, "path already exists, but exclusive create specified\n");
@@ -304,7 +384,7 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 			goto err_out;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -325,7 +405,6 @@ err_out:
 /* FIXME duplicate of cli_op_wait() */
 static int
 apb_fopen_acc_create_wait(struct apb_fh *apb_fh,
-			  struct elasto_conn *conn,
 			  const char *req_id)
 {
 	struct op *op;
@@ -342,7 +421,7 @@ apb_fopen_acc_create_wait(struct apb_fh *apb_fh,
 			goto err_out;
 		}
 
-		ret = elasto_conn_op_txrx(conn, op);
+		ret = elasto_conn_op_txrx(apb_fh->mgmt_conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
@@ -396,7 +475,6 @@ err_out:
 
 static int
 apb_fopen_acc(struct apb_fh *apb_fh,
-	      struct elasto_conn *conn,
 	      uint64_t flags,
 	      struct elasto_ftoken_list *open_toks)
 {
@@ -415,7 +493,7 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->mgmt_conn, op);
 	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
 					&& (flags & ELASTO_FOPEN_EXCL)) {
 		dbg(1, "path already exists, but exclusive create specified\n");
@@ -448,13 +526,13 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 			goto err_out;
 		}
 
-		ret = elasto_fop_send_recv(conn, op);
+		ret = elasto_fop_send_recv(apb_fh->mgmt_conn, op);
 		if (ret < 0) {
 			goto err_op_free;
 		}
 
 		if (op->rsp.err_code == 202) {
-			ret = apb_fopen_acc_create_wait(apb_fh, conn,
+			ret = apb_fopen_acc_create_wait(apb_fh,
 							op->rsp.req_id);
 			if (ret < 0) {
 				goto err_op_free;
@@ -466,16 +544,6 @@ apb_fopen_acc(struct apb_fh *apb_fh,
 		goto err_op_free;
 	}
 
-	/*
-	 * signing setup not needed for mgmt reqs, but in case of readdir
-	 * (List Containers)
-	 */
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-
 	ret = 0;
 err_op_free:
 	op_free(op);
@@ -485,7 +553,6 @@ err_out:
 
 static int
 apb_fopen_root(struct apb_fh *apb_fh,
-	       struct elasto_conn *conn,
 	       uint64_t flags)
 {
 	int ret;
@@ -512,7 +579,7 @@ apb_fopen_root(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -520,186 +587,123 @@ apb_fopen_root(struct apb_fh *apb_fh,
 	ret = 0;
 err_op_free:
 	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
+apb_abb_fopen(void *mod_priv,
+	      const char *path,
+	      uint64_t flags,
+	      struct elasto_ftoken_list *open_toks,
+	      bool page_blob)
+{
+	int ret;
+	struct apb_fh *apb_fh = mod_priv;
+
+	ret = apb_fpath_parse(path, &apb_fh->path);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	/*
+	 * Open a HTTPS connection to the management service.
+	 * A connection to the account host for share / file IO is opened
+	 * later if needed (non-root).
+	 * TODO: specify the server hostname here for connection
+	 */
+	ret = elasto_conn_init_az(apb_fh->pem_path, NULL, false,
+				  &apb_fh->mgmt_conn);
+	if (ret < 0) {
+		goto err_path_free;
+	}
+
+	if (apb_fh->path.blob != NULL) {
+		ret = apb_io_conn_init(apb_fh, &apb_fh->io_conn);
+		if (ret < 0) {
+			goto err_mgmt_conn_free;
+		}
+
+		if (page_blob) {
+			ret = apb_fopen_blob(apb_fh, flags);
+		} else {
+			ret = abb_fopen_blob(apb_fh, flags);
+		}
+		if (ret < 0) {
+			goto err_io_conn_free;
+		}
+	} else if (apb_fh->path.ctnr != NULL) {
+		ret = apb_io_conn_init(apb_fh, &apb_fh->io_conn);
+		if (ret < 0) {
+			goto err_mgmt_conn_free;
+		}
+
+		ret = apb_fopen_ctnr(apb_fh, flags);
+		if (ret < 0) {
+			goto err_io_conn_free;
+		}
+	} else if (apb_fh->path.acc != NULL) {
+		ret = apb_fopen_acc(apb_fh, flags, open_toks);
+		if (ret < 0) {
+			goto err_mgmt_conn_free;
+		}
+
+		/*
+		 * IO conn not needed for mgmt reqs, but in case of readdir
+		 * (List Containers).
+		 */
+		ret = apb_io_conn_init(apb_fh, &apb_fh->io_conn);
+		if (ret < 0) {
+			goto err_mgmt_conn_free;
+		}
+	} else {
+		ret = apb_fopen_root(apb_fh, flags);
+		if (ret < 0) {
+			goto err_mgmt_conn_free;
+		}
+
+		/* IO conn not needed */
+	}
+
+	return 0;
+
+err_io_conn_free:
+	elasto_conn_free(apb_fh->io_conn);
+err_mgmt_conn_free:
+	elasto_conn_free(apb_fh->mgmt_conn);
+err_path_free:
+	apb_fpath_free(&apb_fh->path);
 err_out:
 	return ret;
 }
 
 int
 apb_fopen(void *mod_priv,
-	  struct elasto_conn *conn,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
-	int ret;
-	struct apb_fh *apb_fh = mod_priv;
-
-	ret = apb_fpath_parse(path, &apb_fh->path);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	if (apb_fh->path.blob != NULL) {
-		ret = apb_fopen_blob(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_fopen_ctnr(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	} else if (apb_fh->path.acc != NULL) {
-		ret = apb_fopen_acc(apb_fh, conn, flags, open_toks);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	} else {
-		ret = apb_fopen_root(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	}
-
-	return 0;
-
-err_path_free:
-	apb_fpath_free(&apb_fh->path);
-err_out:
-	return ret;
+	return apb_abb_fopen(mod_priv, path, flags, open_toks, true);
 }
 
 int
-apb_fclose(void *mod_priv,
-	   struct elasto_conn *conn)
+apb_fclose(void *mod_priv)
 {
 	struct apb_fh *apb_fh = mod_priv;
 
+	/* @io_conn may be null (root opens) */
+	elasto_conn_free(apb_fh->io_conn);
+	elasto_conn_free(apb_fh->mgmt_conn);
 	apb_fpath_free(&apb_fh->path);
 
 	return 0;
-}
-
-static int
-abb_fopen_blob(struct apb_fh *apb_fh,
-	       struct elasto_conn *conn,
-	       uint64_t flags)
-{
-	int ret;
-	struct op *op;
-	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
-
-	if (flags & ELASTO_FOPEN_DIRECTORY) {
-		dbg(1, "attempt to open blob with directory flag set\n");
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	ret = az_req_blob_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   apb_fh->path.blob,
-				   &op);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	ret = elasto_fop_send_recv(conn, op);
-	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
-					&& (flags & ELASTO_FOPEN_EXCL)) {
-		dbg(1, "path already exists, but exclusive create specified\n");
-		ret = -EEXIST;
-		goto err_op_free;
-	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
-		struct elasto_data *data;
-		/* put a zero length block blob */
-		dbg(4, "path not found, creating\n");
-		op_free(op);
-		ret = elasto_data_iov_new(NULL, 0, false, &data);
-		if (ret < 0) {
-			goto err_out;
-		}
-		ret = az_req_blob_put(apb_fh->path.acc, apb_fh->path.ctnr,
-				      apb_fh->path.blob, data, 0,
-				      &op);
-		if (ret < 0) {
-			goto err_out;
-		}
-
-		ret = elasto_fop_send_recv(conn, op);
-		if (ret < 0) {
-			goto err_op_free;
-		}
-		goto done;
-	} else if (ret < 0) {
-		goto err_op_free;
-	}
-
-	blob_prop_get_rsp = az_rsp_blob_prop_get(op);
-	if (blob_prop_get_rsp == NULL) {
-		goto err_op_free;
-	}
-
-	if (blob_prop_get_rsp->is_page) {
-		dbg(0, "invalid request to open page blob via block blob "
-		    "backend\n");
-		ret = -EINVAL;
-		goto err_op_free;
-	}
-
-done:
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_out:
-	return ret;
 }
 
 int
 abb_fopen(void *mod_priv,
-	  struct elasto_conn *conn,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
-	int ret;
-	struct apb_fh *apb_fh = mod_priv;
-
-	ret = apb_fpath_parse(path, &apb_fh->path);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	if (apb_fh->path.blob != NULL) {
-		ret = abb_fopen_blob(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_fopen_ctnr(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	} else if (apb_fh->path.acc != NULL) {
-		ret = apb_fopen_acc(apb_fh, conn, flags, open_toks);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	} else {
-		ret = apb_fopen_root(apb_fh, conn, flags);
-		if (ret < 0) {
-			goto err_path_free;
-		}
-	}
-
-	return 0;
-
-err_path_free:
-	apb_fpath_free(&apb_fh->path);
-err_out:
-	return ret;
+	return apb_abb_fopen(mod_priv, path, flags, open_toks, false);
 }

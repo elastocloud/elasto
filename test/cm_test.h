@@ -27,6 +27,8 @@ struct cm_unity_state {
 	char *acc;
 	char *ctnr;
 	int ctnr_suffix;
+	char *share;
+	int share_suffix;
 };
 
 struct cm_unity_state *

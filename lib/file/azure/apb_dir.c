@@ -41,109 +41,8 @@
 #include "apb_open.h"
 #include "apb_dir.h"
 
-int
-apb_fmkdir(void *mod_priv,
-	   struct elasto_conn *conn,
-	   const char *path)
-{
-	int ret;
-	struct op *op;
-	struct apb_fh *apb_fh = mod_priv;
-
-	ret = apb_fpath_parse(path, &apb_fh->path);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	if ((apb_fh->path.acc == NULL)
-	 || (apb_fh->path.ctnr == NULL)) {
-		dbg(0, "invalid mkdir path: must include account and container "
-		       "components\n");
-		goto err_path_free;
-	}
-	if (apb_fh->path.blob != NULL) {
-		dbg(0, "invalid mkdir path: blob component must not be "
-		       "present\n");
-		goto err_path_free;
-	}
-
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = az_req_ctnr_create(apb_fh->path.acc, apb_fh->path.ctnr,
-				 &op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = elasto_fop_send_recv(conn, op);
-	op_free(op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = 0;
-err_path_free:
-	apb_fpath_free(&apb_fh->path);
-err_out:
-	return ret;
-}
-
-int
-apb_frmdir(void *mod_priv,
-	   struct elasto_conn *conn,
-	   const char *path)
-{
-	int ret;
-	struct op *op;
-	struct apb_fh *apb_fh = mod_priv;
-
-	ret = apb_fpath_parse(path, &apb_fh->path);
-	if (ret < 0) {
-		goto err_out;
-	}
-
-	if ((apb_fh->path.acc == NULL)
-	 || (apb_fh->path.ctnr == NULL)) {
-		dbg(0, "invalid rmdir path: must include account and container "
-		       "components\n");
-		goto err_path_free;
-	}
-	if (apb_fh->path.blob != NULL) {
-		dbg(0, "invalid rmdir path: blob component must not be "
-		       "present\n");
-		goto err_path_free;
-	}
-
-	ret = apb_fsign_conn_setup(conn, apb_fh->sub_id, apb_fh->path.acc);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = az_req_ctnr_del(apb_fh->path.acc, apb_fh->path.ctnr,
-			      &op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = elasto_fop_send_recv(conn, op);
-	op_free(op);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	ret = 0;
-err_path_free:
-	apb_fpath_free(&apb_fh->path);
-err_out:
-	return ret;
-}
-
 static int
 apb_freaddir_ctnr(struct apb_fh *apb_fh,
-		  struct elasto_conn *conn,
 		  void *cli_priv,
 		  int (*dent_cb)(struct elasto_dent *,
 				 void *))
@@ -160,7 +59,7 @@ apb_freaddir_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -207,7 +106,6 @@ err_out:
 
 static int
 apb_freaddir_acc(struct apb_fh *apb_fh,
-		 struct elasto_conn *conn,
 		 void *cli_priv,
 		 int (*dent_cb)(struct elasto_dent *,
 				void *))
@@ -223,7 +121,7 @@ apb_freaddir_acc(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -267,7 +165,6 @@ err_out:
 
 static int
 apb_freaddir_root(struct apb_fh *apb_fh,
-		  struct elasto_conn *conn,
 		  void *cli_priv,
 		  int (*dent_cb)(struct elasto_dent *,
 				 void *))
@@ -283,7 +180,7 @@ apb_freaddir_root(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_fop_send_recv(conn, op);
+	ret = elasto_fop_send_recv(apb_fh->mgmt_conn, op);
 	if (ret < 0) {
 		goto err_op_free;
 	}
@@ -323,7 +220,6 @@ err_out:
 
 int
 apb_freaddir(void *mod_priv,
-	     struct elasto_conn *conn,
 	     void *cli_priv,
 	     int (*dent_cb)(struct elasto_dent *,
 			      void *))
@@ -336,17 +232,17 @@ apb_freaddir(void *mod_priv,
 		ret = -EINVAL;
 		goto err_out;
 	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_freaddir_ctnr(apb_fh, conn, cli_priv, dent_cb);
+		ret = apb_freaddir_ctnr(apb_fh, cli_priv, dent_cb);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else if (apb_fh->path.acc != NULL) {
-		ret = apb_freaddir_acc(apb_fh, conn, cli_priv, dent_cb);
+		ret = apb_freaddir_acc(apb_fh, cli_priv, dent_cb);
 		if (ret < 0) {
 			goto err_out;
 		}
 	} else {
-		ret = apb_freaddir_root(apb_fh, conn, cli_priv, dent_cb);
+		ret = apb_freaddir_root(apb_fh, cli_priv, dent_cb);
 		if (ret < 0) {
 			goto err_out;
 		}

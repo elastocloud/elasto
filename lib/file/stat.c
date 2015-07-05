@@ -51,7 +51,7 @@ elasto_fstat(struct elasto_fh *fh,
 		goto err_out;
 	}
 
-	ret = fh->ops.stat(fh->mod_priv, fh->conn, fstat);
+	ret = fh->ops.stat(fh->mod_priv, fstat);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -77,7 +77,7 @@ elasto_fstatfs(struct elasto_fh *fh,
 		goto err_out;
 	}
 
-	ret = fh->ops.statfs(fh->mod_priv, fh->conn, fstatfs);
+	ret = fh->ops.statfs(fh->mod_priv, fstatfs);
 	if (ret < 0) {
 		goto err_out;
 	}

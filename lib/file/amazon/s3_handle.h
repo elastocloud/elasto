@@ -19,13 +19,14 @@ struct s3_fh {
 	char *iam_user;
 	char *key_id;
 	char *secret;
+	bool insecure_http;
+	struct elasto_conn *conn;
 };
 
 /* module entry point */
 int
 elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			void **_fh_priv,
-			struct elasto_conn **_conn,
 			struct elasto_fh_mod_ops *mod_ops);
 
 void
