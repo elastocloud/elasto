@@ -77,6 +77,58 @@ cm_file_rmdir(void **state)
 }
 
 static void
+cm_file_share_create(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct elasto_fh *fh = NULL;
+
+	auth.type = ELASTO_FILE_AFS;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d",
+		       cm_us->acc, cm_us->share, cm_us->share_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth, path, ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL
+				        | ELASTO_FOPEN_DIRECTORY, NULL, &fh);
+	assert_false(ret < 0);
+
+	ret = elasto_fclose(fh);
+	assert_false(ret < 0);
+	free(path);
+}
+
+static void
+cm_file_share_del(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct elasto_fh *fh = NULL;
+
+	auth.type = ELASTO_FILE_AFS;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d",
+		       cm_us->acc, cm_us->share, cm_us->share_suffix);
+	assert_false(ret < 0);
+	cm_us->share_suffix++; /* ensure future creations don't conflict */
+
+	ret = elasto_fopen(&auth, path, ELASTO_FOPEN_DIRECTORY, NULL, &fh);
+	assert_false(ret < 0);
+
+	ret = elasto_funlink_close(fh);
+	assert_false(ret < 0);
+	free(path);
+}
+
+static void
 cm_file_create(void **state)
 {
 	int ret;
