@@ -1159,6 +1159,187 @@ cm_file_data_cb(void **state)
 	free(path);
 }
 
+static void
+cm_file_afs_io(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct elasto_fh *fh;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct elasto_data *data;
+	uint8_t buf[1024];
+
+	auth.type = ELASTO_FILE_AFS;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d/afs_io_test",
+		       cm_us->acc, cm_us->share, cm_us->share_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_CREATE,
+			   NULL, &fh);
+	assert_false(ret < 0);
+
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_false(ret < 0);
+
+	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
+	assert_false(ret < 0);
+
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	/* leave a 1k hole between first and second write */
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), ARRAY_SIZE(buf));
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_false(ret < 0);
+
+	ret = elasto_fwrite(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), data);
+	assert_false(ret < 0);
+
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	memset(buf, 0, ARRAY_SIZE(buf));
+
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_false(ret < 0);
+
+	/* check first, hole zeros, then last chunk */
+	ret = elasto_fread(fh, 0, ARRAY_SIZE(buf), data);
+	assert_false(ret < 0);
+
+	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_false(ret < 0);
+
+	ret = elasto_fread(fh, ARRAY_SIZE(buf), ARRAY_SIZE(buf), data);
+	assert_false(ret < 0);
+
+	cm_file_buf_check_zero(buf, ARRAY_SIZE(buf));
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_false(ret < 0);
+
+	ret = elasto_fread(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), data);
+	assert_false(ret < 0);
+
+	cm_file_buf_check(buf, ARRAY_SIZE(buf), ARRAY_SIZE(buf));
+	data->iov.buf = NULL;
+	elasto_data_free(data);
+
+	ret = elasto_funlink_close(fh);
+	assert_false(ret < 0);
+	free(path);
+}
+
+static int
+cm_file_afs_path_encoding_dent_cb(struct elasto_dent *dent,
+				  void *priv)
+{
+	int *cb_called = priv;
+
+	(*cb_called)++;
+	if ((strcmp(dent->name, "afs$") == 0)
+			&& (dent->fstat.ent_type == ELASTO_FSTAT_ENT_DIR)) {
+		return 0;
+	} else if ((strcmp(dent->name, "afs encoding test") == 0)
+			&& (dent->fstat.ent_type == ELASTO_FSTAT_ENT_FILE)) {
+		return 0;
+	}
+	printf("unexpected dent: %s\n", dent->name);
+	return -1;
+}
+
+static void
+cm_file_afs_path_encoding(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct elasto_fh *fh;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	int cb_called;
+
+	auth.type = ELASTO_FILE_AFS;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d/afs encoding test",
+		       cm_us->acc, cm_us->share, cm_us->share_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_CREATE,
+			   NULL, &fh);
+	assert_false(ret < 0);
+
+	ret = elasto_fclose(fh);
+	assert_false(ret < 0);
+	free(path);
+
+	ret = asprintf(&path, "%s/%s%d/afs$",
+		       cm_us->acc, cm_us->share, cm_us->share_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL
+			   | ELASTO_FOPEN_DIRECTORY,
+			   NULL, &fh);
+	assert_false(ret < 0);
+
+	ret = elasto_fclose(fh);
+	assert_false(ret < 0);
+	free(path);
+
+	/* Azure FS supports '/' and '\' as directory path separators */
+	ret = asprintf(&path, "%s/%s%d/afs$\\both path separators",
+		       cm_us->acc, cm_us->share, cm_us->share_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL
+			   | ELASTO_FOPEN_DIRECTORY,
+			   NULL, &fh);
+	assert_false(ret < 0);
+
+	ret = elasto_funlink_close(fh);
+	assert_false(ret < 0);
+	free(path);
+
+	ret = asprintf(&path, "%s/%s%d",
+		       cm_us->acc, cm_us->share, cm_us->share_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_DIRECTORY,
+			   NULL, &fh);
+	assert_false(ret < 0);
+
+	cb_called = 0;
+	ret = elasto_freaddir(fh, &cb_called, cm_file_afs_path_encoding_dent_cb);
+	assert_false(ret < 0);
+	assert_int_equal(cb_called, 2);
+
+	ret = elasto_fclose(fh);
+	assert_false(ret < 0);
+	free(path);
+}
+
 static const UnitTest cm_file_tests[] = {
 	unit_test_setup_teardown(cm_file_create,
 				 cm_file_mkdir, cm_file_rmdir),
@@ -1188,6 +1369,10 @@ static const UnitTest cm_file_tests[] = {
 				 cm_file_mkdir, cm_file_rmdir),
 	unit_test_setup_teardown(cm_file_data_cb,
 				 cm_file_mkdir, cm_file_rmdir),
+	unit_test_setup_teardown(cm_file_afs_io,
+				 cm_file_share_create, cm_file_share_del),
+	unit_test_setup_teardown(cm_file_afs_path_encoding,
+				 cm_file_share_create, cm_file_share_del),
 };
 
 int
