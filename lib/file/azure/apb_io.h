@@ -38,8 +38,7 @@ apb_fallocate(void *mod_priv,
 	      uint64_t dest_len);
 
 int
-apb_fsplice(struct elasto_conn *conn,
-	    void *src_mod_priv,
+apb_fsplice(void *src_mod_priv,
 	    uint64_t src_off,
 	    void *dest_mod_priv,
 	    uint64_t dest_off,
@@ -59,8 +58,7 @@ abb_fread(void *mod_priv,
 	  struct elasto_data *dest_data);
 
 int
-abb_fsplice(struct elasto_conn *conn,
-	    void *src_mod_priv,
+abb_fsplice(void *src_mod_priv,
 	    uint64_t src_off,
 	    void *dest_mod_priv,
 	    uint64_t dest_off,
