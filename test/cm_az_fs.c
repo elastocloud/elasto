@@ -30,6 +30,7 @@
 #include "ccan/list/list.h"
 #include "lib/exml.h"
 #include "lib/op.h"
+#include "lib/azure_req.h"
 #include "lib/azure_mgmt_req.h"
 #include "lib/azure_blob_req.h"
 #include "lib/azure_fs_req.h"

@@ -2564,31 +2564,6 @@ err_out:
 	return ret;
 }
 
-static const struct {
-	const char *status_str;
-	enum az_cp_status status;
-} az_rsp_blob_prop_cp_status_map[] = {
-	{"pending", AOP_CP_STATUS_PENDING},
-	{"success", AOP_CP_STATUS_SUCCESS},
-	{"aborted", AOP_CP_STATUS_ABORTED},
-	{"failed", AOP_CP_STATUS_FAILED},
-};
-int
-az_rsp_blob_prop_cp_status(const char *status_str,
-			   enum az_cp_status *_status)
-{
-	int i;
-	for (i = 0; i < ARRAY_SIZE(az_rsp_blob_prop_cp_status_map); i++) {
-		if (!strcmp(status_str,
-			    az_rsp_blob_prop_cp_status_map[i].status_str)) {
-			*_status = az_rsp_blob_prop_cp_status_map[i].status;
-			return 0;
-		}
-	}
-	dbg(1, "invalid copy status string: %s\n", status_str);
-	return -EINVAL;
-}
-
 static int
 az_rsp_blob_prop_get_process(struct op *op,
 			     struct az_rsp_blob_prop_get *blob_prop_get_rsp)
@@ -2679,8 +2654,8 @@ az_rsp_blob_prop_get_process(struct op *op,
 	if ((ret < 0) && (ret != -ENOENT)) {
 		goto err_cid_free;
 	} else if (ret == 0) {
-		ret = az_rsp_blob_prop_cp_status(hdr_val,
-						 &blob_prop_get_rsp->cp_status);
+		ret = az_rsp_cp_status_map(hdr_val,
+					   &blob_prop_get_rsp->cp_status);
 		free(hdr_val);
 		if (ret < 0) {
 			goto err_cid_free;

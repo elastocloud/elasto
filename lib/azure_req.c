@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -130,4 +130,30 @@ err_hdrs_free:
 	op_hdrs_free(&op->req.hdrs);
 err_out:
 	return ret;
+}
+
+static const struct {
+	const char *status_str;
+	enum az_cp_status status;
+} az_rsp_cp_status[] = {
+	{"pending", AOP_CP_STATUS_PENDING},
+	{"success", AOP_CP_STATUS_SUCCESS},
+	{"aborted", AOP_CP_STATUS_ABORTED},
+	{"failed", AOP_CP_STATUS_FAILED},
+};
+
+int
+az_rsp_cp_status_map(const char *status_str,
+		     enum az_cp_status *_status)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(az_rsp_cp_status); i++) {
+		if (!strcmp(status_str, az_rsp_cp_status[i].status_str)) {
+			*_status = az_rsp_cp_status[i].status;
+			return 0;
+		}
+	}
+	dbg(1, "invalid copy status string: %s\n", status_str);
+	return -EINVAL;
 }
