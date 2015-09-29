@@ -157,9 +157,31 @@ struct az_fs_req_file_put {
 	bool clear_data;
 };
 
+struct az_fs_req_file_cp {
+	struct {
+		char *acc;
+		char *share;
+		char *parent_dir_path;
+		char *file;
+	} src;
+	struct {
+		char *acc;
+		char *share;
+		char *parent_dir_path;
+		char *file;
+	} dst;
+};
+
+struct az_fs_rsp_file_cp {
+	char *cp_id;
+	enum az_cp_status cp_status;
+};
+
 enum az_fs_file_prop {
-	AZ_FS_FILE_PROP_LEN = 0x01,
-	AZ_FS_FILE_PROP_CTYPE = 0x02,
+	AZ_FS_FILE_PROP_LEN		= 0x01,
+	AZ_FS_FILE_PROP_CTYPE		= 0x02,
+	AZ_FS_FILE_PROP_CP_ID		= 0x04,
+	AZ_FS_FILE_PROP_CP_STATUS	= 0x08,
 };
 
 struct az_fs_req_file_prop_get {
@@ -174,6 +196,8 @@ struct az_fs_rsp_file_prop_get {
 	uint64_t relevant;
 	uint64_t len;
 	char *content_type;
+	char *cp_id;
+	enum az_cp_status cp_status;
 };
 
 /* @relevant reflects which values should be supplied in the request */

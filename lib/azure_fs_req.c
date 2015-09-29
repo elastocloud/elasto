@@ -1991,6 +1991,7 @@ static void
 az_fs_rsp_file_prop_get_free(struct az_fs_rsp_file_prop_get *file_prop_get_rsp)
 {
 	free(file_prop_get_rsp->content_type);
+	free(file_prop_get_rsp->cp_id);
 }
 
 static int
@@ -1998,6 +1999,7 @@ az_fs_rsp_file_prop_get_process(struct op *op,
 			struct az_fs_rsp_file_prop_get *file_prop_get_rsp)
 {
 	int ret;
+	char *hdr_val;
 
 	assert(op->opcode == AOP_FS_FILE_PROP_GET);
 
@@ -2020,8 +2022,36 @@ az_fs_rsp_file_prop_get_process(struct op *op,
 		file_prop_get_rsp->relevant |= AZ_FS_FILE_PROP_CTYPE;
 	}
 
+	ret = op_hdr_val_lookup(&op->rsp.hdrs,
+				"x-ms-copy-id",
+				&file_prop_get_rsp->cp_id);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_ctype_free;
+	} else if (ret == 0) {
+		file_prop_get_rsp->relevant |= AZ_FS_FILE_PROP_CP_ID;
+	}
+
+	ret = op_hdr_val_lookup(&op->rsp.hdrs,
+				"x-ms-copy-status",
+				&hdr_val);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_cid_free;
+	} else if (ret == 0) {
+		ret = az_rsp_cp_status_map(hdr_val,
+					   &file_prop_get_rsp->cp_status);
+		free(hdr_val);
+		if (ret < 0) {
+			goto err_cid_free;
+		}
+		file_prop_get_rsp->relevant |= AZ_FS_FILE_PROP_CP_STATUS;
+	}
+
 	return 0;
 
+err_cid_free:
+	free(file_prop_get_rsp->cp_id);
+err_ctype_free:
+	free(file_prop_get_rsp->content_type);
 err_out:
 	return ret;
 }
