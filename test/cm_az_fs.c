@@ -693,6 +693,7 @@ static const UnitTest cm_az_fs_tests[] = {
 	unit_test_setup_teardown(cm_az_fs_file_create, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_file_io, cm_az_fs_init, cm_az_fs_deinit),
 	unit_test_setup_teardown(cm_az_fs_file_props, cm_az_fs_init, cm_az_fs_deinit),
+	unit_test_setup_teardown(cm_az_fs_file_cp, cm_az_fs_init, cm_az_fs_deinit),
 };
 
 int
