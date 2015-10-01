@@ -434,3 +434,108 @@ err_op_free:
 err_out:
 	return ret;
 }
+
+int
+afs_fsplice(void *src_mod_priv,
+	    uint64_t src_off,
+	    void *dest_mod_priv,
+	    uint64_t dest_off,
+	    uint64_t len)
+{
+	struct afs_fh *src_afs_fh = src_mod_priv;
+	struct afs_fh *dest_afs_fh = dest_mod_priv;
+	struct op *op;
+	struct elasto_fstat fstat;
+	struct az_fs_rsp_file_cp *file_cp_rsp;
+	int ret;
+
+	if (len == 0) {
+		ret = 0;
+		goto err_out;
+	}
+
+	if ((src_off != 0) || (dest_off != 0)) {
+		dbg(0, "Azure FS backend doesn't support copies at arbitrary "
+		       "offsets\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/* check source length matches the copy length */
+	ret = afs_fstat(src_mod_priv, &fstat);
+	if (ret < 0) {
+		goto err_out;
+	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	if (fstat.size != len) {
+		dbg(0, "Azure FS backend doesn't allow partial copies: "
+		       "src_len=%" PRIu64 ", copy_len=%" PRIu64 "\n",
+		       fstat.size, len);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	/*
+	 * check dest file's current length <= copy len, otherwise overwrite
+	 * truncates.
+	 */
+	ret = afs_fstat(dest_mod_priv, &fstat);
+	if (ret < 0) {
+		goto err_out;
+	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	if (fstat.size > len) {
+		dbg(0, "Azure FS backend doesn't allow splice overwrites when "
+		       "IO len (%" PRIu64 ") < current len (%" PRIu64 ")\n",
+		       len, fstat.size);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_req_file_cp(src_afs_fh->path.acc,
+				src_afs_fh->path.share,
+				src_afs_fh->path.parent_dir,
+				src_afs_fh->path.file,
+				dest_afs_fh->path.acc,
+				dest_afs_fh->path.share,
+				dest_afs_fh->path.parent_dir,
+				dest_afs_fh->path.file,
+				&op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(dest_afs_fh->io_conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	file_cp_rsp = az_fs_rsp_file_cp(op);
+	if (file_cp_rsp == NULL) {
+		ret = -ENOMEM;
+		goto err_op_free;
+	}
+
+	if (file_cp_rsp->cp_status == AOP_CP_STATUS_SUCCESS) {
+		dbg(2, "Azure FS file copy completed immediately\n");
+	} else if (file_cp_rsp->cp_status == AOP_CP_STATUS_PENDING) {
+		dbg(0, "Azure FS file copy pending: %s\n", file_cp_rsp->cp_id);
+		/* TODO block until copy completes */
+	} else {
+		dbg(0, "Azure FS file copy failed\n");
+		ret = -EIO;
+		goto err_op_free;
+	}
+
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}

@@ -37,4 +37,11 @@ afs_fallocate(void *mod_priv,
 	      uint64_t dest_off,
 	      uint64_t dest_len);
 
+int
+afs_fsplice(void *src_mod_priv,
+	    uint64_t src_off,
+	    void *dest_mod_priv,
+	    uint64_t dest_off,
+	    uint64_t len);
+
 #endif /* _AFS_IO_H_ */
