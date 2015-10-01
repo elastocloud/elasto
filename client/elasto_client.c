@@ -201,6 +201,7 @@ cli_args_usage(const char *progname,
 "Usage: %s [options] <cmd> <cmd args>\n\n"
 "Options:\n"
 "-s publish_settings:	Azure PublishSettings file\n"
+"-K access_key:		Azure storage account access key\n"
 "-k iam_creds:		Amazon IAM credentials file\n"
 "-d log_level:		Log debug messages (default: 0)\n"
 "-i			Insecure, use HTTP where possible "
@@ -348,6 +349,46 @@ cli_uri_parse(const char *uri,
 	return 0;
 }
 
+static int
+cli_auth_args_validate(enum cli_type type,
+		       char *az_ps_file,
+		       char *az_access_key,
+		       char *s3_creds_file)
+{
+	switch (type) {
+	case CLI_TYPE_AZURE:
+	case CLI_TYPE_AFS:
+		if (((az_ps_file == NULL) && (az_access_key == NULL))
+		 || ((az_ps_file != NULL) && (az_access_key != NULL))) {
+			dbg(0, "either a PublishSettings file or an access key "
+			       "is required for Azure access\n");
+			return -EINVAL;
+		}
+		if (s3_creds_file != NULL) {
+			dbg(0, "S3 credentials incorrectly provided for "
+			       "Azure access\n");
+			return -EINVAL;
+		}
+		break;
+	case CLI_TYPE_S3:
+		if (s3_creds_file == NULL) {
+			dbg(0, "S3 credentials required for Amazon access\n");
+			return -EINVAL;
+		}
+		if ((az_ps_file != NULL) || (az_access_key != NULL)) {
+			dbg(0, "Azure credentials incorrectly provided for "
+			    "Amazon S3 access\n");
+			return -EINVAL;
+		}
+		break;
+	default:
+		dbg(0, "invalid cli type: %d\n", type);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static void
 cli_args_free(const struct cli_cmd_spec *cmd,
 	      struct cli_args *cli_args)
@@ -372,7 +413,8 @@ cli_args_parse(int argc,
 	int ret;
 	extern char *optarg;
 	extern int optind;
-	char *pub_settings = NULL;
+	char *az_ps_file = NULL;
+	char *az_access_key = NULL;
 	char *s3_creds_file = NULL;
 	char *history_file = NULL;
 	char *uri = NULL;
@@ -385,12 +427,19 @@ cli_args_parse(int argc,
 	/* show help for all backends by default */
 	cli_args->flags = CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3;
 
-	while ((opt = getopt(argc, argv, "s:k:d:?ih:u:")) != -1) {
+	while ((opt = getopt(argc, argv, "s:K:k:d:?ih:u:")) != -1) {
 		uint32_t debug_level;
 		switch (opt) {
 		case 's':
-			pub_settings = strdup(optarg);
-			if (pub_settings == NULL) {
+			az_ps_file = strdup(optarg);
+			if (az_ps_file == NULL) {
+				ret = -ENOMEM;
+				goto err_out;
+			}
+			break;
+		case 'K':
+			az_access_key = strdup(optarg);
+			if (az_access_key == NULL) {
 				ret = -ENOMEM;
 				goto err_out;
 			}
@@ -433,15 +482,6 @@ cli_args_parse(int argc,
 			break;
 		}
 	}
-	if (((pub_settings == NULL) && (s3_creds_file == NULL))
-	 || ((pub_settings != NULL) && (s3_creds_file != NULL))) {
-		cli_args_usage(argv[0], CLI_FL_BIN_ARG
-					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
-			       "Either an Azure PublishSettings file, or "
-			       "Amazon S3 key file is required");
-		ret = -EINVAL;
-		goto err_out;
-	}
 
 	if (uri != NULL) {
 		/* parse only provider portion of the URI. TODO parse host */
@@ -449,43 +489,41 @@ cli_args_parse(int argc,
 		if (ret < 0) {
 			goto err_out;
 		}
-	} else if (pub_settings != NULL) {
+	} else if ((az_ps_file != NULL) || (az_access_key != NULL)) {
 		/* publish settings argument - assume Azure Bock Blob service */
 		cli_args->type = CLI_TYPE_AZURE;
 	} else if (s3_creds_file != NULL) {
 		/* iam creds argument - assume Amazon S3 service */
 		cli_args->type = CLI_TYPE_S3;
 	} else {
-		assert(false);
+		cli_args_usage(argv[0], CLI_FL_BIN_ARG
+					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+			       "Either an Azure PublishSettings file, access "
+			       "key, or Amazon S3 key file is required");
+		ret = -EINVAL;
+		goto err_out;
 	}
 
+	ret = cli_auth_args_validate(cli_args->type, az_ps_file,
+				     az_access_key, s3_creds_file);
+	if (ret < 0) {
+		goto err_out;
+	}
+	cli_args->az.ps_file = az_ps_file;
+	cli_args->az.access_key = az_access_key;
+	cli_args->s3.creds_file = s3_creds_file;
+
 	if (cli_args->type == CLI_TYPE_AZURE) {
-		if (pub_settings == NULL) {
-			dbg(0, "PublishSettings file required for Azure URI\n");
-			ret = -EINVAL;
-			goto err_out;
-		}
 		/* don't show S3 usage strings */
 		cli_args->flags &= ~(CLI_FL_S3 | CLI_FL_AFS);
-		cli_args->az.ps_file = pub_settings;
 	} else if (cli_args->type == CLI_TYPE_AFS) {
-		if (pub_settings == NULL) {
-			dbg(0, "PublishSettings file required for Azure URI\n");
-			ret = -EINVAL;
-			goto err_out;
-		}
 		/* don't show S3 or ABB usage strings */
 		cli_args->flags &= ~(CLI_FL_S3 | CLI_FL_AZ);
-		cli_args->az.ps_file = pub_settings;
 	} else if (cli_args->type == CLI_TYPE_S3) {
-		if (s3_creds_file == NULL) {
-			dbg(0, "S3 creds required for Amazon URI\n");
-			ret = -EINVAL;
-			goto err_out;
-		}
 		/* don't show Azure usage strings */
-		cli_args->flags &= ~CLI_FL_AZ;
-		cli_args->s3.creds_file = s3_creds_file;
+		cli_args->flags &= ~(CLI_FL_AZ | CLI_FL_AFS);
+	} else {
+		assert(false);
 	}
 
 	if (history_file == NULL) {
@@ -522,7 +560,8 @@ cli_args_parse(int argc,
 
 	return 0;
 err_out:
-	free(pub_settings);
+	free(az_ps_file);
+	free(az_access_key);
 	free(s3_creds_file);
 	free(history_file);
 	free(progname);

@@ -64,6 +64,7 @@ struct cli_args {
 	union {
 		struct {
 			char *ps_file;
+			char *access_key;
 		} az;
 		struct {
 			char *creds_file;
