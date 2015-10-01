@@ -232,13 +232,6 @@ struct az_req_blob_cp {
 	} dst;
 };
 
-enum az_cp_status {
-	AOP_CP_STATUS_PENDING,
-	AOP_CP_STATUS_SUCCESS,
-	AOP_CP_STATUS_ABORTED,
-	AOP_CP_STATUS_FAILED,
-};
-
 struct az_req_blob_prop_get {
 	char *acc;
 	char *ctnr;

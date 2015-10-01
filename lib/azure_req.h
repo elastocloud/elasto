@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2014, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -25,5 +25,17 @@ az_req_sign(const char *acc,
 int
 az_req_common_hdr_fill(struct op *op,
 		       bool mgmt);
+
+/* copy status is common across blob and AFS */
+enum az_cp_status {
+	AOP_CP_STATUS_PENDING,
+	AOP_CP_STATUS_SUCCESS,
+	AOP_CP_STATUS_ABORTED,
+	AOP_CP_STATUS_FAILED,
+};
+
+int
+az_rsp_cp_status_map(const char *status_str,
+		     enum az_cp_status *_status);
 
 #endif /* ifdef _AZURE_REQ_H_ */

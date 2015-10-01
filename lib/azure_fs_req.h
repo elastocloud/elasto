@@ -27,6 +27,7 @@ enum az_fs_opcode {
 	AOP_FS_FILE_DEL,
 	AOP_FS_FILE_GET,
 	AOP_FS_FILE_PUT,
+	AOP_FS_FILE_CP,
 	AOP_FS_FILE_PROP_GET,
 	AOP_FS_FILE_PROP_SET,
 };
@@ -157,9 +158,31 @@ struct az_fs_req_file_put {
 	bool clear_data;
 };
 
+struct az_fs_req_file_cp {
+	struct {
+		char *acc;
+		char *share;
+		char *parent_dir_path;
+		char *file;
+	} src;
+	struct {
+		char *acc;
+		char *share;
+		char *parent_dir_path;
+		char *file;
+	} dst;
+};
+
+struct az_fs_rsp_file_cp {
+	char *cp_id;
+	enum az_cp_status cp_status;
+};
+
 enum az_fs_file_prop {
-	AZ_FS_FILE_PROP_LEN = 0x01,
-	AZ_FS_FILE_PROP_CTYPE = 0x02,
+	AZ_FS_FILE_PROP_LEN		= 0x01,
+	AZ_FS_FILE_PROP_CTYPE		= 0x02,
+	AZ_FS_FILE_PROP_CP_ID		= 0x04,
+	AZ_FS_FILE_PROP_CP_STATUS	= 0x08,
 };
 
 struct az_fs_req_file_prop_get {
@@ -174,6 +197,8 @@ struct az_fs_rsp_file_prop_get {
 	uint64_t relevant;
 	uint64_t len;
 	char *content_type;
+	char *cp_id;
+	enum az_cp_status cp_status;
 };
 
 /* @relevant reflects which values should be supplied in the request */
@@ -201,6 +226,7 @@ struct az_fs_req {
 		struct az_fs_req_file_del file_del;
 		struct az_fs_req_file_get file_get;
 		struct az_fs_req_file_put file_put;
+		struct az_fs_req_file_cp file_cp;
 		struct az_fs_req_file_prop_get file_prop_get;
 		struct az_fs_req_file_prop_set file_prop_set;
 	};
@@ -212,6 +238,7 @@ struct az_fs_rsp {
 		struct az_fs_rsp_share_prop_get share_prop_get;
 		struct az_fs_rsp_dirs_files_list dirs_files_list;
 		struct az_fs_rsp_dir_prop_get dir_prop_get;
+		struct az_fs_rsp_file_cp file_cp;
 		struct az_fs_rsp_file_prop_get file_prop_get;
 		/*
 		 * No response specific data handled yet:
@@ -321,6 +348,20 @@ az_fs_req_file_put(const char *acc,
 		   uint64_t len,
 		   struct elasto_data *src_data,
 		   struct op **_op);
+
+int
+az_fs_req_file_cp(const char *src_acc,
+		  const char *src_share,
+		  const char *src_parent_dir_path,
+		  const char *src_file,
+		  const char *dst_acc,
+		  const char *dst_share,
+		  const char *dst_parent_dir_path,
+		  const char *dst_file,
+		  struct op **_op);
+
+struct az_fs_rsp_file_cp *
+az_fs_rsp_file_cp(struct op *op);
 
 int
 az_fs_req_file_prop_get(const char *acc,

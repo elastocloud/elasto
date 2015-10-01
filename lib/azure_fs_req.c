@@ -1865,6 +1865,271 @@ err_out:
 }
 
 static void
+az_fs_req_file_cp_free(struct az_fs_req_file_cp *file_cp_req)
+{
+	free(file_cp_req->src.acc);
+	free(file_cp_req->src.share);
+	free(file_cp_req->src.parent_dir_path);
+	free(file_cp_req->src.file);
+	free(file_cp_req->dst.acc);
+	free(file_cp_req->dst.share);
+	free(file_cp_req->dst.parent_dir_path);
+	free(file_cp_req->dst.file);
+}
+
+static int
+az_fs_req_file_cp_hdr_fill(struct az_fs_req_file_cp *file_cp_req,
+			   struct op *op)
+{
+	int ret;
+	char *hdr_str;
+	char *src_parent_encoded = NULL;
+	char *src_file_encoded = NULL;
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (file_cp_req->src.parent_dir_path != NULL) {
+		src_parent_encoded
+			= evhttp_encode_uri(file_cp_req->src.parent_dir_path);
+		if (src_parent_encoded == NULL) {
+			goto err_hdrs_free;
+		}
+	}
+	src_file_encoded = evhttp_encode_uri(file_cp_req->src.file);
+	if (src_file_encoded == NULL) {
+		free(src_parent_encoded);
+		goto err_hdrs_free;
+	}
+	/*
+	 * tell server to always use https when dealing with the src file
+	 * TODO: support copying from the blob service
+	 */
+	ret = asprintf(&hdr_str,
+		       "https://%s.file.core.windows.net/%s/%s%s%s",
+		       file_cp_req->src.acc,
+		       file_cp_req->src.share,
+		       (src_parent_encoded ? src_parent_encoded : ""),
+		       (src_parent_encoded ? "/" : ""),
+		       src_file_encoded);
+	free(src_file_encoded);
+	free(src_parent_encoded);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_hdrs_free;
+	}
+	ret = op_req_hdr_add(op, "x-ms-copy-source", hdr_str);
+	free(hdr_str);
+	if (ret < 0) {
+		goto err_hdrs_free;
+	}
+	/* common headers and signature added later */
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
+int
+az_fs_req_file_cp(const char *src_acc,
+		  const char *src_share,
+		  const char *src_parent_dir_path,
+		  const char *src_file,
+		  const char *dst_acc,
+		  const char *dst_share,
+		  const char *dst_parent_dir_path,
+		  const char *dst_file,
+		  struct op **_op)
+{
+	int ret;
+	struct az_fs_ebo *ebo;
+	struct op *op;
+	struct az_fs_req_file_cp *file_cp_req;
+	char *dst_parent_encoded = NULL;
+	char *dst_file_encoded = NULL;
+
+	if ((src_acc == NULL) || (src_share == NULL) || (src_file == NULL)
+	 || (dst_acc == NULL) || (dst_share == NULL) || (dst_file == NULL)
+	 || (_op == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_ebo_init(AOP_FS_FILE_CP, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	file_cp_req = &ebo->req.file_cp;
+
+	file_cp_req->src.acc = strdup(src_acc);
+	if (file_cp_req->src.acc == NULL) {
+		ret = -ENOMEM;
+		goto err_ebo_free;
+	}
+
+	file_cp_req->src.share = strdup(src_share);
+	if (file_cp_req->src.share == NULL) {
+		ret = -ENOMEM;
+		goto err_src_acc_free;
+	}
+
+	if (src_parent_dir_path != NULL) {
+		file_cp_req->src.parent_dir_path = strdup(src_parent_dir_path);
+		if (file_cp_req->src.parent_dir_path == NULL) {
+			ret = -ENOMEM;
+			goto err_src_share_free;
+		}
+	}
+
+	file_cp_req->src.file = strdup(src_file);
+	if (file_cp_req->src.file == NULL) {
+		ret = -ENOMEM;
+		goto err_src_path_free;
+	}
+
+	file_cp_req->dst.acc = strdup(dst_acc);
+	if (file_cp_req->dst.acc == NULL) {
+		ret = -ENOMEM;
+		goto err_src_file_free;
+	}
+
+	file_cp_req->dst.share = strdup(dst_share);
+	if (file_cp_req->dst.share == NULL) {
+		ret = -ENOMEM;
+		goto err_dst_acc_free;
+	}
+
+	if (dst_parent_dir_path != NULL) {
+		file_cp_req->dst.parent_dir_path = strdup(dst_parent_dir_path);
+		if (file_cp_req->dst.parent_dir_path == NULL) {
+			ret = -ENOMEM;
+			goto err_dst_share_free;
+		}
+	}
+
+	file_cp_req->dst.file = strdup(dst_file);
+	if (file_cp_req->dst.file == NULL) {
+		ret = -ENOMEM;
+		goto err_dst_path_free;
+	}
+
+	op->method = REQ_METHOD_PUT;
+	op->url_https_only = false;
+	ret = asprintf(&op->url_host, "%s.file.core.windows.net", dst_acc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_dst_file_free;
+	}
+
+	if (dst_parent_dir_path != NULL) {
+		dst_parent_encoded = evhttp_encode_uri(dst_parent_dir_path);
+		if (dst_parent_encoded == NULL) {
+			ret = -ENOMEM;
+			goto err_dst_share_free;
+		}
+	}
+
+	dst_file_encoded = evhttp_encode_uri(dst_file);
+	if (dst_file_encoded == NULL) {
+		free(dst_parent_encoded);
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+	ret = asprintf(&op->url_path, "/%s/%s%s%s",
+		       dst_share,
+		       (dst_parent_encoded ? dst_parent_encoded : ""),
+		       (dst_parent_encoded ? "/" : ""), dst_file_encoded);
+	free(dst_file_encoded);
+	free(dst_parent_encoded);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_uhost_free;
+	}
+
+	ret = az_fs_req_file_cp_hdr_fill(file_cp_req, op);
+	if (ret < 0) {
+		goto err_upath_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_upath_free:
+	free(op->url_path);
+err_uhost_free:
+	free(op->url_host);
+err_dst_file_free:
+	free(file_cp_req->dst.file);
+err_dst_path_free:
+	free(file_cp_req->dst.parent_dir_path);
+err_dst_share_free:
+	free(file_cp_req->dst.share);
+err_dst_acc_free:
+	free(file_cp_req->dst.acc);
+err_src_file_free:
+	free(file_cp_req->src.file);
+err_src_path_free:
+	free(file_cp_req->src.parent_dir_path);
+err_src_share_free:
+	free(file_cp_req->src.share);
+err_src_acc_free:
+	free(file_cp_req->src.acc);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
+az_fs_rsp_file_cp_free(struct az_fs_rsp_file_cp *file_cp_rsp)
+{
+	free(file_cp_rsp->cp_id);
+}
+
+static int
+az_fs_rsp_file_cp_process(struct op *op,
+			  struct az_fs_rsp_file_cp *file_cp_rsp)
+{
+	int ret;
+	char *hdr_val;
+
+	assert(op->opcode == AOP_FS_FILE_CP);
+
+	ret = op_hdr_val_lookup(&op->rsp.hdrs, "x-ms-copy-id",
+				&file_cp_rsp->cp_id);
+	if (ret < 0) {
+		/* mandatory header, error if not present */
+		goto err_out;
+	}
+
+	ret = op_hdr_val_lookup(&op->rsp.hdrs, "x-ms-copy-status",
+				&hdr_val);
+	if (ret < 0) {
+		goto err_cid_free;
+	}
+
+	ret = az_rsp_cp_status_map(hdr_val, &file_cp_rsp->cp_status);
+	free(hdr_val);
+	if (ret < 0) {
+		goto err_cid_free;
+	}
+
+	return 0;
+
+err_cid_free:
+	free(file_cp_rsp->cp_id);
+err_out:
+	return ret;
+}
+
+static void
 az_fs_req_file_prop_get_free(struct az_fs_req_file_prop_get *file_prop_get_req)
 {
 	free(file_prop_get_req->acc);
@@ -1991,6 +2256,7 @@ static void
 az_fs_rsp_file_prop_get_free(struct az_fs_rsp_file_prop_get *file_prop_get_rsp)
 {
 	free(file_prop_get_rsp->content_type);
+	free(file_prop_get_rsp->cp_id);
 }
 
 static int
@@ -1998,6 +2264,7 @@ az_fs_rsp_file_prop_get_process(struct op *op,
 			struct az_fs_rsp_file_prop_get *file_prop_get_rsp)
 {
 	int ret;
+	char *hdr_val;
 
 	assert(op->opcode == AOP_FS_FILE_PROP_GET);
 
@@ -2020,8 +2287,36 @@ az_fs_rsp_file_prop_get_process(struct op *op,
 		file_prop_get_rsp->relevant |= AZ_FS_FILE_PROP_CTYPE;
 	}
 
+	ret = op_hdr_val_lookup(&op->rsp.hdrs,
+				"x-ms-copy-id",
+				&file_prop_get_rsp->cp_id);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_ctype_free;
+	} else if (ret == 0) {
+		file_prop_get_rsp->relevant |= AZ_FS_FILE_PROP_CP_ID;
+	}
+
+	ret = op_hdr_val_lookup(&op->rsp.hdrs,
+				"x-ms-copy-status",
+				&hdr_val);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_cid_free;
+	} else if (ret == 0) {
+		ret = az_rsp_cp_status_map(hdr_val,
+					   &file_prop_get_rsp->cp_status);
+		free(hdr_val);
+		if (ret < 0) {
+			goto err_cid_free;
+		}
+		file_prop_get_rsp->relevant |= AZ_FS_FILE_PROP_CP_STATUS;
+	}
+
 	return 0;
 
+err_cid_free:
+	free(file_prop_get_rsp->cp_id);
+err_ctype_free:
+	free(file_prop_get_rsp->content_type);
 err_out:
 	return ret;
 }
@@ -2262,6 +2557,9 @@ az_fs_req_free(struct op *op)
 	case AOP_FS_FILE_PUT:
 		az_fs_req_file_put_free(&ebo->req.file_put);
 		break;
+	case AOP_FS_FILE_CP:
+		az_fs_req_file_cp_free(&ebo->req.file_cp);
+		break;
 	case AOP_FS_FILE_PROP_GET:
 		az_fs_req_file_prop_get_free(&ebo->req.file_prop_get);
 		break;
@@ -2285,6 +2583,9 @@ az_fs_rsp_free(struct op *op)
 		break;
 	case AOP_FS_DIRS_FILES_LIST:
 		az_fs_rsp_dirs_files_list_free(&ebo->rsp.dirs_files_list);
+		break;
+	case AOP_FS_FILE_CP:
+		az_fs_rsp_file_cp_free(&ebo->rsp.file_cp);
 		break;
 	case AOP_FS_FILE_PROP_GET:
 		az_fs_rsp_file_prop_get_free(&ebo->rsp.file_prop_get);
@@ -2343,6 +2644,9 @@ az_fs_rsp_process(struct op *op)
 		ret = az_fs_rsp_dir_prop_get_process(op,
 						     &ebo->rsp.dir_prop_get);
 		break;
+	case AOP_FS_FILE_CP:
+		ret = az_fs_rsp_file_cp_process(op, &ebo->rsp.file_cp);
+		break;
 	case AOP_FS_FILE_PROP_GET:
 		ret = az_fs_rsp_file_prop_get_process(op,
 						      &ebo->rsp.file_prop_get);
@@ -2393,6 +2697,13 @@ az_fs_rsp_dir_prop_get(struct op *op)
 {
 	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
 	return &ebo->rsp.dir_prop_get;
+}
+
+struct az_fs_rsp_file_cp *
+az_fs_rsp_file_cp(struct op *op)
+{
+	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
+	return &ebo->rsp.file_cp;
 }
 
 struct az_fs_rsp_file_prop_get *
