@@ -82,6 +82,9 @@ cli_cp_handle(struct cli_args *cli_args)
 	} else if (cli_args->type == CLI_TYPE_S3) {
 		auth.type = ELASTO_FILE_S3;
 		auth.s3.creds_path = cli_args->s3.creds_file;
+	} else if (cli_args->type == CLI_TYPE_AFS) {
+		auth.type = ELASTO_FILE_AFS;
+		auth.az.ps_path = cli_args->az.ps_file;
 	} else {
 		ret = -ENOTSUP;
 		goto err_out;
