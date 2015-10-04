@@ -33,6 +33,7 @@ struct elasto_fauth {
 	union {
 		struct {
 			char *ps_path;
+			char *access_key;
 		} az;
 		struct {
 			char *creds_path;
