@@ -57,11 +57,23 @@ afs_fh_init(const struct elasto_fauth *auth,
 	}
 	memset(afs_fh, 0, sizeof(*afs_fh));
 
-	ret = azure_ssl_pubset_process(auth->az.ps_path,
-				       &afs_fh->pem_path,
-				       &afs_fh->sub_id,
-				       &afs_fh->sub_name);
-	if (ret < 0) {
+	if (auth->az.ps_path != NULL) {
+		ret = azure_ssl_pubset_process(auth->az.ps_path,
+					       &afs_fh->pem_path,
+					       &afs_fh->sub_id,
+					       &afs_fh->sub_name);
+		if (ret < 0) {
+			goto err_priv_free;
+		}
+	} else if (auth->az.access_key != NULL) {
+		afs_fh->acc_access_key = strdup(auth->az.access_key);
+		if (afs_fh->acc_access_key == NULL) {
+			ret = -ENOMEM;
+			goto err_priv_free;
+		}
+	} else {
+		dbg(0, "init called without auth credentials\n");
+		ret = -EINVAL;
 		goto err_priv_free;
 	}
 
@@ -124,9 +136,12 @@ afs_fh_free(void *mod_priv)
 {
 	struct afs_fh *afs_fh = mod_priv;
 
-	azure_ssl_pubset_cleanup(afs_fh->pem_path);
-	free(afs_fh->pem_path);
-	free(afs_fh->sub_id);
-	free(afs_fh->sub_name);
+	if (afs_fh->pem_path != NULL) {
+		azure_ssl_pubset_cleanup(afs_fh->pem_path);
+		free(afs_fh->pem_path);
+		free(afs_fh->sub_id);
+		free(afs_fh->sub_name);
+	}
+	free(afs_fh->acc_access_key);
 	free(afs_fh);
 }

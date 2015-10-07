@@ -39,13 +39,27 @@ struct elasto_fh_afs_path {
 	};
 };
 
-/* FIXME open_flags are also stored with vfs fh */
+/**
+ * Azure File Service private handle
+ *
+ * @open_flags: FIXME open_flags are also stored with vfs fh.
+ * @path: AFS path, split into components.
+ * @pem_path: local path to PEM Publish Settings credentials file. May be NULL
+ *	      if access key was provided instead of publish settings file.
+ * @sub_id: Subscription ID. NULL if access key auth.
+ * @sub_name: Subscription name. NULL if access key auth.
+ * @acc_access_key: Account access key.
+ * @insecure_http: Use HTTP instead of HTTPS where applicable.
+ * @mgmt_conn: Connection to Management service. NULL if access key auth.
+ * @io_conn: Connection to Azure File Service.
+ */
 struct afs_fh {
 	uint64_t open_flags;
 	struct elasto_fh_afs_path path;
 	char *pem_path;
 	char *sub_id;
 	char *sub_name;
+	char *acc_access_key;
 	bool insecure_http;
 	struct elasto_conn *mgmt_conn;
 	struct elasto_conn *io_conn;
