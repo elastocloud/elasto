@@ -45,6 +45,13 @@ cli_put_args_parse(int argc,
 {
 	int ret;
 
+	if ((cli_args->auth.type != ELASTO_FILE_ABB)
+	 && (cli_args->auth.type != ELASTO_FILE_AFS)
+	 && (cli_args->auth.type != ELASTO_FILE_S3)) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
 	cli_args->put.local_path = strdup(argv[1]);
 	if (cli_args->put.local_path == NULL) {
 		ret = -ENOMEM;
@@ -178,8 +185,8 @@ cli_put_data_free(struct elasto_data *data)
 	elasto_data_free(data);
 }
 
-static int
-cli_put_file_handle(struct cli_args *cli_args)
+int
+cli_put_handle(struct cli_args *cli_args)
 {
 	struct elasto_fh *fh;
 	struct elasto_data *src_data;
@@ -226,16 +233,4 @@ err_fclose:
 	}
 err_out:
 	return ret;
-}
-
-int
-cli_put_handle(struct cli_args *cli_args)
-{
-	if ((cli_args->auth.type == ELASTO_FILE_ABB)
-					|| (cli_args->auth.type == ELASTO_FILE_AFS)
-					|| (cli_args->auth.type == ELASTO_FILE_S3)) {
-		return cli_put_file_handle(cli_args);
-	}
-
-	return -ENOTSUP;
 }
