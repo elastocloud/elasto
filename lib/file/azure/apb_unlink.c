@@ -94,6 +94,13 @@ apb_funlink_acc(struct apb_fh *apb_fh)
 	int ret;
 	struct op *op;
 
+	if (apb_fh->mgmt_conn == NULL) {
+		dbg(0, "Account deletion requires Publish Settings "
+		       "credentials\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = az_mgmt_req_acc_del(apb_fh->sub_id, apb_fh->path.acc, &op);
 	if (ret < 0) {
 		goto err_out;

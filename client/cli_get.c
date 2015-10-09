@@ -174,26 +174,10 @@ int
 cli_get_handle(struct cli_args *cli_args)
 {
 	struct elasto_fh *fh;
-	struct elasto_fauth auth;
 	struct stat st;
 	struct elasto_fstat fstat;
 	struct elasto_data *dest_data;
 	int ret;
-
-	if (cli_args->type == CLI_TYPE_AZURE) {
-		auth.type = ELASTO_FILE_ABB;
-		auth.az.ps_path = cli_args->az.ps_file;
-	} else if (cli_args->type == CLI_TYPE_S3) {
-		auth.type = ELASTO_FILE_S3;
-		auth.s3.creds_path = cli_args->s3.creds_file;
-	} else if (cli_args->type == CLI_TYPE_AFS) {
-		auth.type = ELASTO_FILE_AFS;
-		auth.az.ps_path = cli_args->az.ps_file;
-	} else {
-		ret = -ENOTSUP;
-		goto err_out;
-	}
-	auth.insecure_http = cli_args->insecure_http;
 
 	ret = stat(cli_args->get.local_path, &st);
 	if (ret == 0) {
@@ -204,7 +188,7 @@ cli_get_handle(struct cli_args *cli_args)
 	}
 
 	/* open without create or dir flags */
-	ret = elasto_fopen(&auth, cli_args->path, 0, NULL, &fh);
+	ret = elasto_fopen(&cli_args->auth, cli_args->path, 0, NULL, &fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",
 		       cli_args->path, strerror(-ret));

@@ -27,17 +27,6 @@ enum cli_cmd {
 };
 
 /**
- * @CLI_TYPE_AZURE:	Azure Block Blob service
- * @CLI_TYPE_S3:	Amazon S3 service
- * @CLI_TYPE_AFS:	Azure File Service
- */
-enum cli_type {
-	CLI_TYPE_AZURE = 1,
-	CLI_TYPE_S3,
-	CLI_TYPE_AFS,
-};
-
-/**
  * @CLI_FL_BIN_ARG:	run as argument to binary
  * @CLI_FL_PROMPT:	run from elasto> prompt
  * @CLI_FL_AZ:		command can be run against Azure Blob Service
@@ -57,19 +46,10 @@ enum cli_fl {
  */
 struct cli_args {
 	char *progname;
-	enum cli_type type;
 	enum cli_fl flags;
 	/* unparsed path for libfile */
 	char *path;
-	union {
-		struct {
-			char *ps_file;
-		} az;
-		struct {
-			char *creds_file;
-		} s3;
-	};
-	bool insecure_http;
+	struct elasto_fauth auth;
 	char *history_file;
 	enum cli_cmd cmd;
 	union {

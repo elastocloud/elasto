@@ -1049,10 +1049,13 @@ elasto_conn_init_az(const char *pem_file,
 		goto err_out;
 	}
 	econn->type = CONN_TYPE_AZURE;
-	econn->pem_file = strdup(pem_file);
-	if (econn->pem_file == NULL) {
-		ret = -ENOMEM;
-		goto err_conn_free;
+	if (pem_file != NULL) {
+		/* no pem_file with Access Key credentials */
+		econn->pem_file = strdup(pem_file);
+		if (econn->pem_file == NULL) {
+			ret = -ENOMEM;
+			goto err_conn_free;
+		}
 	}
 
 	*econn_out = econn;

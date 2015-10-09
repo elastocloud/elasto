@@ -174,6 +174,8 @@ apb_freaddir_root(struct apb_fh *apb_fh,
 	struct az_mgmt_rsp_acc_list *acc_list_rsp;
 	struct azure_account *acc;
 
+	/* root open guarantees that mgmt conn is established */
+
 	ret = az_mgmt_req_acc_list(apb_fh->sub_id,
 				   &op);
 	if (ret < 0) {

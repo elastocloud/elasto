@@ -179,6 +179,8 @@ afs_freaddir_root(struct afs_fh *afs_fh,
 	struct az_mgmt_rsp_acc_list *acc_list_rsp;
 	struct azure_account *acc;
 
+	/* root open guarantees that mgmt conn is established */
+
 	ret = az_mgmt_req_acc_list(afs_fh->sub_id,
 				   &op);
 	if (ret < 0) {

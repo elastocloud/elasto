@@ -186,13 +186,13 @@ afs_fpath_free(struct elasto_fh_afs_path *afs_path)
 }
 
 static int
-afs_io_conn_init(struct afs_fh *afs_fh,
-		 struct elasto_conn **_io_conn)
+afs_acc_key_get(struct afs_fh *afs_fh,
+		char **_acc_key)
 {
 	int ret;
 	struct op *op;
 	struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp;
-	struct elasto_conn *io_conn;
+	char *acc_key;
 
 	if (afs_fh->mgmt_conn == NULL) {
 		dbg(0, "mgmt connection required for Azure IO conn\n");
@@ -211,31 +211,59 @@ afs_io_conn_init(struct afs_fh *afs_fh,
 	}
 
 	acc_keys_get_rsp = az_mgmt_rsp_acc_keys_get(op);
-	if (acc_keys_get_rsp == NULL) {
+
+	acc_key = strdup(acc_keys_get_rsp->primary);
+	if (acc_key == NULL) {
+		ret = -ENOMEM;
 		goto err_op_free;
+	}
+
+	*_acc_key = acc_key;
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
+afs_io_conn_init(struct afs_fh *afs_fh,
+		 struct elasto_conn **_io_conn)
+{
+	int ret;
+	struct elasto_conn *io_conn;
+
+	if ((afs_fh->acc_access_key == NULL) && (afs_fh->mgmt_conn != NULL)) {
+		ret = afs_acc_key_get(afs_fh, &afs_fh->acc_access_key);
+		if (ret < 0) {
+			dbg(0, "failed to get account access key\n");
+			goto err_out;
+		}
+		/* access key freed with afs_fh */
+	} else if (afs_fh->acc_access_key == NULL) {
+		dbg(0, "no account access key available for AFS IO conn\n");
+		ret = -EINVAL;
+		goto err_out;
 	}
 
 	ret = elasto_conn_init_az(afs_fh->pem_path, NULL, afs_fh->insecure_http,
 				  &io_conn);
 	if (ret < 0) {
-		goto err_op_free;
+		goto err_out;
 	}
 
 	ret = elasto_conn_sign_setkey(io_conn, afs_fh->path.acc,
-				      acc_keys_get_rsp->primary);
+				      afs_fh->acc_access_key);
 	if (ret < 0) {
 		goto err_conn_free;
 	}
 
-	op_free(op);
 	*_io_conn = io_conn;
 
 	return 0;
 
 err_conn_free:
 	elasto_conn_free(io_conn);
-err_op_free:
-	op_free(op);
 err_out:
 	return ret;
 }
@@ -475,12 +503,21 @@ err_out:
 
 /* FIXME duplicate of apb_fopen_acc */
 static int
-afs_fopen_acc(struct afs_fh *afs_fh,
-	      uint64_t flags,
-	      struct elasto_ftoken_list *open_toks)
+afs_fopen_acc_create(struct afs_fh *afs_fh,
+		     uint64_t flags,
+		     struct elasto_ftoken_list *open_toks)
 {
 	int ret;
 	struct op *op;
+
+	assert(flags & ELASTO_FOPEN_CREATE);
+
+	if (afs_fh->mgmt_conn == NULL) {
+		dbg(0, "Account creation requires Publish Settings "
+		       "credentials\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
 		dbg(1, "attempt to open account without dir flag set\n");
@@ -495,12 +532,11 @@ afs_fopen_acc(struct afs_fh *afs_fh,
 	}
 
 	ret = elasto_fop_send_recv(afs_fh->mgmt_conn, op);
-	if ((ret == 0) && (flags & ELASTO_FOPEN_CREATE)
-					&& (flags & ELASTO_FOPEN_EXCL)) {
+	if ((ret == 0) && (flags & ELASTO_FOPEN_EXCL)) {
 		dbg(1, "path already exists, but exclusive create specified\n");
 		ret = -EEXIST;
 		goto err_op_free;
-	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
+	} else if (ret == -ENOENT) {
 		const char *location;
 
 		dbg(4, "path not found, creating\n");
@@ -545,6 +581,39 @@ afs_fopen_acc(struct afs_fh *afs_fh,
 		goto err_op_free;
 	}
 
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
+afs_fopen_acc_existing(struct afs_fh *afs_fh,
+		       uint64_t flags,
+		       struct elasto_ftoken_list *open_toks)
+{
+	int ret;
+	struct op *op;
+
+	assert((flags & ELASTO_FOPEN_CREATE) == 0);
+
+	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
+		dbg(1, "attempt to open account without dir flag set\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_req_shares_list(afs_fh->path.acc, &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
+	if (ret < 0) {
+		dbg(4, "failed to list account on open: %s\n", strerror(-ret));
+		goto err_op_free;
+	}
 
 	ret = 0;
 err_op_free:
@@ -559,6 +628,12 @@ afs_fopen_root(struct afs_fh *afs_fh,
 {
 	int ret;
 	struct op *op;
+
+	if (afs_fh->mgmt_conn == NULL) {
+		dbg(0, "Root open requires Publish Settings credentials\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
 		dbg(1, "attempt to open account without dir flag set\n");
@@ -607,16 +682,23 @@ afs_fopen(void *mod_priv,
 		goto err_out;
 	}
 
-	/*
-	 * Open a HTTPS connection to the management service.
-	 * A connection to the account host for share / file IO is opened
-	 * later if needed (non-root).
-	 * TODO: specify the server hostname here for connection
-	 */
-	ret = elasto_conn_init_az(afs_fh->pem_path, NULL, false,
-				  &afs_fh->mgmt_conn);
-	if (ret < 0) {
-		goto err_path_free;
+	if (afs_fh->pem_path != NULL) {
+		/*
+		 * for Publish Settings credentials, a mgmt connection is
+		 * required to obtain account keys, or perform root / account
+		 * manipulation.
+		 * A connection to the account host for share / file IO is
+		 * opened later if needed (non-root).
+		 * TODO: specify the server hostname here for connection
+		 */
+		ret = elasto_conn_init_az(afs_fh->pem_path, NULL, false,
+					  &afs_fh->mgmt_conn);
+		if (ret < 0) {
+			goto err_path_free;
+		}
+	} else {
+		/* checked in afs_fh_init() */
+		assert(afs_fh->acc_access_key != NULL);
 	}
 
 	if (afs_fh->path.fs_ent != NULL) {
@@ -644,18 +726,30 @@ afs_fopen(void *mod_priv,
 			goto err_io_conn_free;
 		}
 	} else if (afs_fh->path.acc != NULL) {
-		ret = afs_fopen_acc(afs_fh, flags, open_toks);
-		if (ret < 0) {
-			goto err_mgmt_conn_free;
-		}
+		if (flags & ELASTO_FOPEN_CREATE) {
+			ret = afs_fopen_acc_create(afs_fh, flags, open_toks);
+			if (ret < 0) {
+				goto err_mgmt_conn_free;
+			}
 
-		/*
-		 * IO conn not needed for mgmt reqs, but in case of readdir
-		 * (List Shares).
-		 */
-		ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
-		if (ret < 0) {
-			goto err_mgmt_conn_free;
+			/*
+			 * IO conn not needed for mgmt reqs, but in case of readdir
+			 * (List Shares).
+			 */
+			ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
+			if (ret < 0) {
+				goto err_mgmt_conn_free;
+			}
+		} else {
+			ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
+			if (ret < 0) {
+				goto err_mgmt_conn_free;
+			}
+
+			ret = afs_fopen_acc_existing(afs_fh, flags, open_toks);
+			if (ret < 0) {
+				goto err_io_conn_free;
+			}
 		}
 	} else {
 		ret = afs_fopen_root(afs_fh, flags);

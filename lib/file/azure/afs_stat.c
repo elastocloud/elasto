@@ -173,6 +173,13 @@ afs_fstat_acc(struct afs_fh *afs_fh,
 	struct op *op;
 	struct az_mgmt_rsp_acc_prop_get *acc_prop_get_rsp;
 
+	if (afs_fh->mgmt_conn == NULL) {
+		dbg(0, "Account stat requires Publish Settings "
+		       "credentials\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = az_mgmt_req_acc_prop_get(afs_fh->sub_id,
 				       afs_fh->path.acc,
 				       &op);
