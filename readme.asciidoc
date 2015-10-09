@@ -1,0 +1,165 @@
+Elasto
+======
+
+Summary
+-------
+
+Elasto is a lightweight library and client utility for managing and
+manipulating cloud storage objects via REST protocols.
+Microsoft Azure and Amazon S3 cloud storage protocols are supported.
+
+
+Building
+--------
+
+Elasto uses the Waf build framework.
+
+libevent, libexpat and openssl (libcrypto) development libraries are
+required for building.
+
+To compile the library and client, run the following from the top of the
+Elasto source tree:
+
+-----------------------------------------------------
+> ./waf configure
+> ./waf build
+-----------------------------------------------------
+
+
+Installing
+----------
+
+After building, Elasto can be installed by running:
+
+-----------------------------------------------------
+> ./waf install
+-----------------------------------------------------
+
+Prebuilt packages for GNU/Linux distributions are available via the
+Elasto project website.
+
+
+Running (short version)
+-----------------------
+
+Azure
+~~~~~
+1. Create an Azure account
+
+2. Download the PublishSettings file for the account: +
+   https://manage.windowsazure.com/publishsettings/index
+
+3. Start the Elasto client, connecting to the *Azure Blob Service*:
+
+-----------------------------------------------------
+> elasto_cli -s Azure_PublishSettings_File
+-----------------------------------------------------
+
+
+Amazon S3
+~~~~~~~~~
+1. Create Amazon S3 account
+
+2. Create an IAM group with S3 access, assign a new user to the group: +
+   https://console.aws.amazon.com/iam/home#home
+
+3. Download the user's access key (credentials.csv) file
+
+4. Start the Elasto client:
+
+-----------------------------------------------------
+> elasto_cli -k iam_creds_file
+-----------------------------------------------------
+
+
+Running (not so short version)
+------------------------------
+
+Azure
+~~~~~
+First step is to create an Azure account at https://azure.microsoft.com.
+
+Authentication
+^^^^^^^^^^^^^^
+The Elasto client can authenticate with Azure using one of two
+credentials parameters:
+
+*Access Key*::
+  An Access Key is associated with a specific storage
+  account, and only allows access to Blob and File Service
+  objects nested within the corresponding account. E.g.
+
+-----------------------------------------------------
+> elasto_cli -K access_key
+-----------------------------------------------------
+
+*PublishSettings*::
+  A PublishSettings file can be used to create and manipulate
+  storage accounts, as well as underlying Blob and File Service
+  objects. It can be downloaded at
+  https://manage.windowsazure.com/publishsettings/index. +
+  The file contains security sensitive information, so should be
+  kept private.
+
+-----------------------------------------------------
+> elasto_cli -s PublishSettings_path
+-----------------------------------------------------
+
+Service URI
+^^^^^^^^^^^
+Two storage services can be used with Azure:
+
+*Azure Blob Service* (default)::
+-----------------------------------------------------
+> elasto_cli -u abb:// ...
+-----------------------------------------------------
+
+*Azure File Service*::
+-----------------------------------------------------
+> elasto_cli -u afs:// ...
+-----------------------------------------------------
+
+
+Amazon S3
+~~~~~~~~~
+Create an Amazon S3 account at https://aws.amazon.com/s3/.
+
+Authentication
+^^^^^^^^^^^^^^
+Create an IAM group with S3 access, assign a new user to the group: +
+https://console.aws.amazon.com/iam/home#home
+-> Create a New Group of Users
+
+The IAM user creation wizard allows for the download of access
+credentials. Select "Generate an access key for each User", and
+subsequently "Download Credentials".
+
+Commands can then be issued by running the elasto_cli client binary
+with the -k argument. E.g.
+
+-----------------------------------------------------
+> elasto_cli -k iam_creds_file <command>
+-----------------------------------------------------
+
+
+Alternatives
+------------
+
+[horizontal]
+Deltacloud::	An API that abstracts differences between clouds.
+		http://deltacloud.apache.org/
+
+libs3::		A C Library API for Amazon S3.
+		https://github.com/bji/libs3
+
+fog::		Ruby cloud services library.
+		http://fog.io/
+
+rest-client-c::	Object-oriented REST client in C.
+		https://github.com/emcvipr/rest-client-c
+
+atmos-c::	C library for EMC Atmos cloud storage.
+		https://github.com/emcvipr/atmos-client-c
+
+Droplet::	Cloud storage client library
+		https://github.com/scality/Droplet
