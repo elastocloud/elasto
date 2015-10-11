@@ -1031,18 +1031,11 @@ err_out:
 
 int
 elasto_conn_init_az(const char *pem_file,
-		    const char *pem_pw,
 		    bool insecure_http,
 		    struct elasto_conn **econn_out)
 {
 	struct elasto_conn *econn;
 	int ret;
-
-	if (pem_pw != NULL) {
-		dbg(0, "PEM file password not supported with libevent\n");
-		ret = -EINVAL;
-		goto err_out;
-	}
 
 	ret = elasto_conn_init_common(insecure_http, &econn);
 	if (ret < 0) {

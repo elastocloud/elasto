@@ -246,7 +246,7 @@ afs_io_conn_init(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_conn_init_az(afs_fh->pem_path, NULL, afs_fh->insecure_http,
+	ret = elasto_conn_init_az(afs_fh->pem_path, afs_fh->insecure_http,
 				  &io_conn);
 	if (ret < 0) {
 		goto err_out;
@@ -691,7 +691,7 @@ afs_fopen(void *mod_priv,
 		 * opened later if needed (non-root).
 		 * TODO: specify the server hostname here for connection
 		 */
-		ret = elasto_conn_init_az(afs_fh->pem_path, NULL, false,
+		ret = elasto_conn_init_az(afs_fh->pem_path, false,
 					  &afs_fh->mgmt_conn);
 		if (ret < 0) {
 			goto err_path_free;

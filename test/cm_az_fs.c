@@ -71,7 +71,7 @@ cm_az_fs_init(void **state)
 				       &cm_op_az_fs_state.sub_name);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_init_az(cm_op_az_fs_state.pem_file, NULL,
+	ret = elasto_conn_init_az(cm_op_az_fs_state.pem_file,
 				  cm_us->insecure_http,
 				  &cm_op_az_fs_state.econn);
 	assert_true(ret >= 0);

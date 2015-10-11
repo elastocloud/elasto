@@ -50,7 +50,6 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 
 int
 elasto_conn_init_az(const char *pem_file,
-		    const char *pem_pw,
 		    bool insecure_http,
 		    struct elasto_conn **econn);
 

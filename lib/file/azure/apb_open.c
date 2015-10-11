@@ -215,7 +215,7 @@ apb_io_conn_init(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_conn_init_az(apb_fh->pem_path, NULL, apb_fh->insecure_http,
+	ret = elasto_conn_init_az(apb_fh->pem_path, apb_fh->insecure_http,
 				  &io_conn);
 	if (ret < 0) {
 		goto err_out;
@@ -691,7 +691,7 @@ apb_abb_fopen(void *mod_priv,
 		 * opened later if needed (non-root).
 		 * TODO: specify the server hostname here for connection
 		 */
-		ret = elasto_conn_init_az(apb_fh->pem_path, NULL, false,
+		ret = elasto_conn_init_az(apb_fh->pem_path, false,
 					  &apb_fh->mgmt_conn);
 		if (ret < 0) {
 			goto err_path_free;
