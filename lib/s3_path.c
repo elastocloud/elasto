@@ -33,9 +33,9 @@
 
 /* _very_ basic URI host component parser. Doesn't come close to RFC 3986 */
 static int
-elasto_s3_path_uri_pull(const char *path,
-			char **_host,
-			char **_after_host)
+s3_path_uri_pull(const char *path,
+		 char **_host,
+		 char **_after_host)
 {
 	int ret;
 	char *host;
@@ -82,8 +82,8 @@ err_out:
 }
 
 int
-elasto_s3_path_parse(const char *path,
-		     struct elasto_s3_path *s3_path)
+s3_path_parse(const char *path,
+		     struct s3_path *s3_path)
 {
 	int ret;
 	char *s;
@@ -98,7 +98,7 @@ elasto_s3_path_parse(const char *path,
 
 	if (strstr(path, "://")) {
 		char *after_host;
-		ret = elasto_s3_path_uri_pull(path, &host, &after_host);
+		ret = s3_path_uri_pull(path, &host, &after_host);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -175,7 +175,7 @@ err_out:
 }
 
 void
-elasto_s3_path_free(struct elasto_s3_path *s3_path)
+s3_path_free(struct s3_path *s3_path)
 {
 	free(s3_path->host);
 	s3_path->host = NULL;

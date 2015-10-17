@@ -14,17 +14,17 @@
 #ifndef _S3_PATH_H_
 #define _S3_PATH_H_
 
-struct elasto_s3_path {
+struct s3_path {
 	char *host;
 	char *bkt;
 	char *obj;
 };
 
 int
-elasto_s3_path_parse(const char *path,
-		     struct elasto_s3_path *s3_path);
+s3_path_parse(const char *path,
+		     struct s3_path *s3_path);
 
 void
-elasto_s3_path_free(struct elasto_s3_path *s3_path);
+s3_path_free(struct s3_path *s3_path);
 
 #endif /* _S3_PATH_H_ */

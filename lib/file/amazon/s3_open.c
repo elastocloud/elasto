@@ -211,7 +211,7 @@ s3_fopen(void *mod_priv,
 	char *url_host;
 	struct s3_fh *s3_fh = mod_priv;
 
-	ret = elasto_s3_path_parse(path, &s3_fh->path);
+	ret = s3_path_parse(path, &s3_fh->path);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -251,7 +251,7 @@ s3_fopen(void *mod_priv,
 err_conn_free:
 	elasto_conn_free(s3_fh->conn);
 err_path_free:
-	elasto_s3_path_free(&s3_fh->path);
+	s3_path_free(&s3_fh->path);
 err_out:
 	return ret;
 }
@@ -262,7 +262,7 @@ s3_fclose(void *mod_priv)
 	struct s3_fh *s3_fh = mod_priv;
 
 	elasto_conn_free(s3_fh->conn);
-	elasto_s3_path_free(&s3_fh->path);
+	s3_path_free(&s3_fh->path);
 
 	return 0;
 }
