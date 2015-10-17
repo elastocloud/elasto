@@ -200,6 +200,7 @@ apb_io_conn_init(struct apb_fh *apb_fh,
 		 struct elasto_conn **_io_conn)
 {
 	int ret;
+	char *url_host;
 	struct elasto_conn *io_conn;
 
 	if ((apb_fh->acc_access_key == NULL) && (apb_fh->mgmt_conn != NULL)) {
@@ -215,8 +216,15 @@ apb_io_conn_init(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_conn_init_az(apb_fh->pem_path, apb_fh->insecure_http,
-				  &io_conn);
+	ret = az_blob_req_hostname_get(apb_fh->path.acc, &url_host);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	/* pem_file not needed for IO conn */
+	ret = elasto_conn_init_az(NULL, apb_fh->insecure_http,
+				  url_host, &io_conn);
+	free(url_host);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -683,16 +691,22 @@ apb_abb_fopen(void *mod_priv,
 	}
 
 	if (apb_fh->pem_path != NULL) {
+		char *mgmt_host;
 		/*
 		 * for Publish Settings credentials, a mgmt connection is
 		 * required to obtain account keys, or perform root / account
 		 * manipulation.
 		 * A connection to the account host for ctnr / blob IO is
 		 * opened later if needed (non-root).
-		 * TODO: specify the server hostname here for connection
 		 */
-		ret = elasto_conn_init_az(apb_fh->pem_path, false,
+		ret = az_mgmt_req_hostname_get(&mgmt_host);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		ret = elasto_conn_init_az(apb_fh->pem_path, false, mgmt_host,
 					  &apb_fh->mgmt_conn);
+		free(mgmt_host);
 		if (ret < 0) {
 			goto err_path_free;
 		}

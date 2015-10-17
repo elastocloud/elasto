@@ -32,7 +32,7 @@
 #include "lib/op.h"
 #include "lib/azure_req.h"
 #include "lib/azure_mgmt_req.h"
-#include "lib/azure_blob_req.h"
+#include "lib/azure_fs_path.h"
 #include "lib/azure_fs_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -43,13 +43,13 @@ static struct {
 	char *pem_file;
 	char *sub_id;
 	char *sub_name;
-	struct elasto_conn *econn;
+	struct elasto_conn *io_conn;
 	char *share;
 } cm_op_az_fs_state = {
 	.pem_file = NULL,
 	.sub_id = NULL,
 	.sub_name = NULL,
-	.econn = NULL,
+	.io_conn = NULL,
 	.share = NULL,
 };
 
@@ -60,6 +60,9 @@ cm_az_fs_init(void **state)
 	int ret;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp;
+	char *mgmt_host;
+	char *url_host;
+	struct elasto_conn *mgmt_conn;
 	struct op *op;
 
 	ret = elasto_conn_subsys_init();
@@ -71,24 +74,39 @@ cm_az_fs_init(void **state)
 				       &cm_op_az_fs_state.sub_name);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_init_az(cm_op_az_fs_state.pem_file,
-				  cm_us->insecure_http,
-				  &cm_op_az_fs_state.econn);
+	ret = az_mgmt_req_hostname_get(&mgmt_host);
 	assert_true(ret >= 0);
 
-	/* TODO split cli_sign_conn_setup(); into a non-client helper for... */
+	ret = elasto_conn_init_az(cm_op_az_fs_state.pem_file,
+				  cm_us->insecure_http,
+				  mgmt_host,
+				  &mgmt_conn);
+	assert_true(ret >= 0);
+
 	ret = az_mgmt_req_acc_keys_get(cm_op_az_fs_state.sub_id, cm_us->acc,
 				       &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(mgmt_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
+
+	/* mgmt_conn is no longer needed for AFS IO */
+	elasto_conn_free(mgmt_conn);
 
 	acc_keys_get_rsp = az_mgmt_rsp_acc_keys_get(op);
 	assert_true(acc_keys_get_rsp != NULL);
 
-	ret = elasto_conn_sign_setkey(cm_op_az_fs_state.econn, cm_us->acc,
+	ret = az_fs_req_hostname_get(cm_us->acc, &url_host);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_init_az(NULL,
+				  cm_us->insecure_http, url_host,
+				  &cm_op_az_fs_state.io_conn);
+	assert_true(ret >= 0);
+	free(url_host);
+
+	ret = elasto_conn_sign_setkey(cm_op_az_fs_state.io_conn, cm_us->acc,
 				      acc_keys_get_rsp->primary);
 	assert_true(ret >= 0);
 	op_free(op);
@@ -100,7 +118,7 @@ cm_az_fs_init(void **state)
 	ret = az_fs_req_share_create(cm_us->acc, cm_op_az_fs_state.share, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -120,15 +138,15 @@ cm_az_fs_deinit(void **state)
 	ret = az_fs_req_share_del(cm_us->acc, cm_op_az_fs_state.share, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
 	op_free(op);
 	free(cm_op_az_fs_state.share);
 
-	elasto_conn_free(cm_op_az_fs_state.econn);
-	elasto_conn_subsys_init();
+	elasto_conn_free(cm_op_az_fs_state.io_conn);
+	elasto_conn_subsys_deinit();
 	azure_ssl_pubset_cleanup(cm_op_az_fs_state.pem_file);
 	free(cm_op_az_fs_state.pem_file);
 	free(cm_op_az_fs_state.sub_id);
@@ -148,7 +166,7 @@ cm_az_fs_shares_list(void **state)
 	ret = az_fs_req_shares_list(cm_us->acc, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -179,7 +197,7 @@ cm_az_fs_share_props(void **state)
 				       &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -202,7 +220,7 @@ cm_az_fs_dir_create(void **state)
 				   "truth", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -212,7 +230,7 @@ cm_az_fs_dir_create(void **state)
 					"", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -229,7 +247,7 @@ cm_az_fs_dir_create(void **state)
 				   "is", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -239,7 +257,7 @@ cm_az_fs_dir_create(void **state)
 					"truth", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -256,7 +274,7 @@ cm_az_fs_dir_create(void **state)
 					"truth/is", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -270,7 +288,7 @@ cm_az_fs_dir_create(void **state)
 				"is", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -280,7 +298,7 @@ cm_az_fs_dir_create(void **state)
 				"truth", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -290,7 +308,7 @@ cm_az_fs_dir_create(void **state)
 					NULL, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -312,7 +330,7 @@ cm_az_fs_dir_props(void **state)
 				   "dir1", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -321,7 +339,7 @@ cm_az_fs_dir_props(void **state)
 				     "dir1", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -345,7 +363,7 @@ cm_az_fs_file_create(void **state)
 				    "file1", BYTES_IN_TB, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -354,7 +372,7 @@ cm_az_fs_file_create(void **state)
 				   "dir1", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -364,7 +382,7 @@ cm_az_fs_file_create(void **state)
 				    "file2", BYTES_IN_MB, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -374,7 +392,7 @@ cm_az_fs_file_create(void **state)
 					"", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -397,7 +415,7 @@ cm_az_fs_file_create(void **state)
 				"dir1", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(op->rsp.is_error);
 	assert_int_equal(op->rsp.err_code, 409);
@@ -408,7 +426,7 @@ cm_az_fs_file_create(void **state)
 				 "file2", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -418,7 +436,7 @@ cm_az_fs_file_create(void **state)
 				"dir1", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -428,7 +446,7 @@ cm_az_fs_file_create(void **state)
 				 "file1", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -448,7 +466,7 @@ cm_az_fs_file_io(void **state)
 				    "file1", BYTES_IN_TB, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -461,7 +479,7 @@ cm_az_fs_file_io(void **state)
 				 "file1", 0, ARRAY_SIZE(buf), data, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -480,7 +498,7 @@ cm_az_fs_file_io(void **state)
 				 "file1", 0, ARRAY_SIZE(buf), data, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -499,7 +517,7 @@ cm_az_fs_file_io(void **state)
 				 data, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -514,7 +532,7 @@ cm_az_fs_file_io(void **state)
 				 "file1", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -533,7 +551,7 @@ cm_az_fs_file_props(void **state)
 				    "file1", BYTES_IN_TB, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -542,7 +560,7 @@ cm_az_fs_file_props(void **state)
 				       "file1", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -559,7 +577,7 @@ cm_az_fs_file_props(void **state)
 				      &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -568,7 +586,7 @@ cm_az_fs_file_props(void **state)
 				       "file1", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -596,7 +614,7 @@ cm_az_fs_file_cp(void **state)
 				    "file1", BYTES_IN_TB, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -609,7 +627,7 @@ cm_az_fs_file_cp(void **state)
 				 "file1", 0, ARRAY_SIZE(buf), data, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -624,7 +642,7 @@ cm_az_fs_file_cp(void **state)
 				    "file2", BYTES_IN_TB, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -636,7 +654,7 @@ cm_az_fs_file_cp(void **state)
 				"file2", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -654,7 +672,7 @@ cm_az_fs_file_cp(void **state)
 				 "file2", 0, ARRAY_SIZE(buf), data, &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
@@ -669,7 +687,7 @@ cm_az_fs_file_cp(void **state)
 				 "file1", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);
@@ -679,7 +697,7 @@ cm_az_fs_file_cp(void **state)
 				 "file2", &op);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(cm_op_az_fs_state.econn, op);
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 	op_free(op);

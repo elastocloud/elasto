@@ -231,6 +231,7 @@ afs_io_conn_init(struct afs_fh *afs_fh,
 		 struct elasto_conn **_io_conn)
 {
 	int ret;
+	char *url_host;
 	struct elasto_conn *io_conn;
 
 	if ((afs_fh->acc_access_key == NULL) && (afs_fh->mgmt_conn != NULL)) {
@@ -246,8 +247,14 @@ afs_io_conn_init(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_conn_init_az(afs_fh->pem_path, afs_fh->insecure_http,
-				  &io_conn);
+	ret = az_fs_req_hostname_get(afs_fh->path.acc, &url_host);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_conn_init_az(NULL, afs_fh->insecure_http,
+				  url_host, &io_conn);
+	free(url_host);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -683,16 +690,22 @@ afs_fopen(void *mod_priv,
 	}
 
 	if (afs_fh->pem_path != NULL) {
+		char *mgmt_host;
 		/*
 		 * for Publish Settings credentials, a mgmt connection is
 		 * required to obtain account keys, or perform root / account
 		 * manipulation.
 		 * A connection to the account host for share / file IO is
 		 * opened later if needed (non-root).
-		 * TODO: specify the server hostname here for connection
 		 */
-		ret = elasto_conn_init_az(afs_fh->pem_path, false,
+		ret = az_mgmt_req_hostname_get(&mgmt_host);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		ret = elasto_conn_init_az(afs_fh->pem_path, false, mgmt_host,
 					  &afs_fh->mgmt_conn);
+		free(mgmt_host);
 		if (ret < 0) {
 			goto err_path_free;
 		}
