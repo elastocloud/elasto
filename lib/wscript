@@ -30,7 +30,7 @@ def build(bld):
 		  use=['elasto_core'],
 		  includes = '. ..',
 		  defines = ['_GNU_SOURCE'])
-	bld.stlib(source='''azure_fs_req.c''',
+	bld.stlib(source='''azure_fs_req.c azure_fs_path.c''',
 		  target='elasto_req_azure_fs',
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
