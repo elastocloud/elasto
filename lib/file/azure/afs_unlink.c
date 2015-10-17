@@ -28,6 +28,7 @@
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/azure_fs_path.h"
 #include "lib/azure_fs_req.h"
 #include "lib/azure_mgmt_req.h"
 #include "lib/conn.h"
@@ -48,9 +49,7 @@ afs_funlink_file(struct afs_fh *afs_fh)
 	int ret;
 	struct op *op;
 
-	ret = az_fs_req_file_del(afs_fh->path.acc, afs_fh->path.share,
-				 afs_fh->path.parent_dir, afs_fh->path.file,
-				 &op);
+	ret = az_fs_req_file_del(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -72,8 +71,7 @@ afs_funlink_dir(struct afs_fh *afs_fh)
 	int ret;
 	struct op *op;
 
-	ret = az_fs_req_dir_del(afs_fh->path.acc, afs_fh->path.share,
-				afs_fh->path.parent_dir, afs_fh->path.dir, &op);
+	ret = az_fs_req_dir_del(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -95,7 +93,7 @@ afs_funlink_share(struct afs_fh *afs_fh)
 	int ret;
 	struct op *op;
 
-	ret = az_fs_req_share_del(afs_fh->path.acc, afs_fh->path.share, &op);
+	ret = az_fs_req_share_del(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

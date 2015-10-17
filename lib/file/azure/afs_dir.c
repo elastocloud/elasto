@@ -28,6 +28,7 @@
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/azure_fs_path.h"
 #include "lib/azure_fs_req.h"
 #include "lib/azure_mgmt_req.h"
 #include "lib/conn.h"
@@ -50,25 +51,9 @@ afs_freaddir_share(struct afs_fh *afs_fh,
 	int ret;
 	struct op *op;
 	struct az_fs_rsp_dirs_files_list *dirs_files_list_rsp;
-	char *dir_path = NULL;
 	struct az_fs_ent *fs_ent;
 
-	if (afs_fh->path.dir != NULL) {
-		/* listing under a subdir, rather than the share itself */
-		const char *pd = afs_fh->path.parent_dir;
-		ret = asprintf(&dir_path, "%s%s%s",
-			       (pd ? pd : ""), (pd ? "/" : ""),
-			       afs_fh->path.dir);
-		if (ret < 0) {
-			ret = -ENOMEM;
-			goto err_out;
-		}
-	}
-
-	ret = az_fs_req_dirs_files_list(afs_fh->path.acc,
-					afs_fh->path.share,
-					dir_path, &op);
-	free(dir_path);
+	ret = az_fs_req_dirs_files_list(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -130,7 +115,7 @@ afs_freaddir_acc(struct afs_fh *afs_fh,
 	struct az_fs_rsp_shares_list *shares_list_rsp;
 	struct az_fs_share *share;
 
-	ret = az_fs_req_shares_list(afs_fh->path.acc, &op);
+	ret = az_fs_req_shares_list(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
