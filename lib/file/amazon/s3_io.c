@@ -40,9 +40,9 @@
 #include "s3_stat.h"
 #include "s3_io.h"
 
+/*  S3 requires 5MB part uploads, except for the last part */
 #define S3_MAX_PART (5 * BYTES_IN_MB)
 #define S3_IO_SIZE_HTTP S3_MAX_PART
-/* FIXME: https writes over 16KB timeout, but S3 requires 5MB part uploads! */
 #define S3_IO_SIZE_HTTPS S3_MAX_PART
 
 /* FIXME data_ctx is a dup of afx_io. combine in vfs */

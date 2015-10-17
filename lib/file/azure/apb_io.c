@@ -265,9 +265,8 @@ err_out:
 }
 
 #define ABB_MAX_PART (4 * BYTES_IN_MB)
-#define ABB_IO_SIZE_HTTP ABB_MAX_PART
-/* FIXME: https writes over 16KB timeout. */
-#define ABB_IO_SIZE_HTTPS (16 * BYTES_IN_KB)
+#define ABB_IO_SIZE_HTTP (2 * BYTES_IN_MB)
+#define ABB_IO_SIZE_HTTPS (2 * BYTES_IN_MB)
 
 /* FIXME data_ctx is a dup of afx_io. combine in vfs */
 struct abb_fwrite_multi_data_ctx {

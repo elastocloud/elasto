@@ -47,9 +47,8 @@
  * service returns status code 413 (Request Entity Too Large).
  */
 #define AFS_MAX_WRITE (4 * BYTES_IN_MB)
-#define AFS_IO_SIZE_HTTP AFS_MAX_WRITE
-/* FIXME: https writes over 16KB timeout. */
-#define AFS_IO_SIZE_HTTPS (16 * BYTES_IN_KB)
+#define AFS_IO_SIZE_HTTP (2 * BYTES_IN_MB)
+#define AFS_IO_SIZE_HTTPS (2 * BYTES_IN_MB)
 
 struct afs_fwrite_multi_data_ctx {
 	uint64_t this_off;
