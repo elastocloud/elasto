@@ -145,6 +145,33 @@ s3_req_fill_hdr_common(struct op *op)
 	return 0;
 }
 
+int
+s3_req_hostname_get(char *bkt,
+		    char **_hostname)
+{
+	int ret;
+	char *hostname;
+
+	if (_hostname== NULL) {
+		return -EINVAL;
+	}
+
+	if (bkt == NULL) {
+		hostname = strdup("s3.amazonaws.com");
+		if (hostname == NULL) {
+			return -ENOMEM;
+		}
+	} else {
+		ret = asprintf(&hostname, "%s.s3.amazonaws.com", bkt);
+		if (ret < 0) {
+			return -ENOMEM;
+		}
+	}
+
+	*_hostname = hostname;
+	return 0;
+}
+
 static void
 s3_req_svc_list_free(struct s3_req_svc_list *svc_list)
 {
