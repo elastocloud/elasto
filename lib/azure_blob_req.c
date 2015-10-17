@@ -88,6 +88,26 @@ az_blob_ebo_init(enum az_blob_opcode opcode,
 	return 0;
 }
 
+int
+az_blob_req_hostname_get(char *acc,
+			 char **_hostname)
+{
+	int ret;
+	char *hostname;
+
+	if ((acc == NULL) || (_hostname== NULL)) {
+		return -EINVAL;
+	}
+
+	ret = asprintf(&hostname, "%s.blob.core.windows.net", acc);
+	if (ret < 0) {
+		return -ENOMEM;
+	}
+
+	*_hostname = hostname;
+	return 0;
+}
+
 static const struct {
 	const char *state_str;
 	enum az_lease_state state;
@@ -98,7 +118,8 @@ static const struct {
 	{"breaking", AOP_LEASE_STATE_BREAKING},
 	{"broken", AOP_LEASE_STATE_BROKEN},
 };
-int
+
+static int
 az_rsp_lease_state(const char *state_str,
 		   enum az_lease_state *_state)
 {
@@ -120,7 +141,8 @@ static const struct {
 	{"locked", AOP_LEASE_STATUS_LOCKED},
 	{"unlocked", AOP_LEASE_STATUS_UNLOCKED},
 };
-int
+
+static int
 az_rsp_lease_status(const char *status_str,
 		    enum az_lease_status *_status)
 {
