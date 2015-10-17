@@ -88,6 +88,26 @@ az_fs_ebo_init(enum az_fs_opcode opcode,
 	return 0;
 }
 
+int
+az_fs_req_hostname_get(char *acc,
+		       char **_hostname)
+{
+	int ret;
+	char *hostname;
+
+	if ((acc == NULL) || (_hostname== NULL)) {
+		return -EINVAL;
+	}
+
+	ret = asprintf(&hostname, "%s.file.core.windows.net", acc);
+	if (ret < 0) {
+		return -ENOMEM;
+	}
+
+	*_hostname = hostname;
+	return 0;
+}
+
 static void
 az_fs_req_shares_list_free(struct az_fs_req_shares_list *shares_list_req)
 {

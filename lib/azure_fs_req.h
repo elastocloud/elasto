@@ -257,6 +257,10 @@ struct az_fs_rsp {
 };
 
 int
+az_fs_req_hostname_get(char *acc,
+		       char **_hostname);
+
+int
 az_fs_req_shares_list(const char *acc,
 		      struct op **_op);
 
