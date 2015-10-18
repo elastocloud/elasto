@@ -184,3 +184,47 @@ s3_path_free(struct s3_path *s3_path)
 	free(s3_path->obj);
 	s3_path->obj = NULL;
 }
+
+int
+s3_path_dup(const struct s3_path *path_orig,
+	    struct s3_path *path_dup)
+{
+	int ret;
+	struct s3_path dup = { 0 };
+
+	if (path_orig->host != NULL) {
+		dup.host = strdup(path_orig->host);
+		if (dup.host == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+	}
+
+	if (path_orig->bkt != NULL) {
+		dup.bkt = strdup(path_orig->bkt);
+		if (dup.bkt == NULL) {
+			ret = -ENOMEM;
+			goto err_path_free;
+		}
+	} else {
+		/* obj must also be NULL */
+		goto done;
+	}
+
+	if (path_orig->obj != NULL) {
+		dup.obj = strdup(path_orig->obj);
+		if (dup.obj == NULL) {
+			ret = -ENOMEM;
+			goto err_path_free;
+		}
+	}
+
+done:
+	*path_dup = dup;
+	return 0;
+
+err_path_free:
+	s3_path_free(&dup);
+err_out:
+	return ret;
+}
