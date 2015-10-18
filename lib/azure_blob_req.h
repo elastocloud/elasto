@@ -61,28 +61,10 @@ struct azure_ctnr {
 	enum az_lease_status lease_status;
 };
 
-struct az_req_ctnr_list {
-	char *acc;
-};
 /* @ctnrs: struct azure_ctnr list */
 struct az_rsp_ctnr_list {
 	int num_ctnrs;
 	struct list_head ctnrs;
-};
-
-struct az_req_ctnr_create {
-	char *acc;
-	char *ctnr;
-};
-
-struct az_req_ctnr_del {
-	char *acc;
-	char *ctnr;
-};
-
-struct az_req_ctnr_prop_get {
-	char *acc;
-	char *ctnr;
 };
 
 struct az_rsp_ctnr_prop_get {
@@ -91,8 +73,6 @@ struct az_rsp_ctnr_prop_get {
 };
 
 struct az_req_ctnr_lease {
-	char *acc;
-	char *ctnr;
 	char *lid;
 	char *lid_proposed;
 	enum az_lease_action action;
@@ -115,10 +95,6 @@ struct azure_blob {
 	enum az_lease_status lease_status;
 };
 
-struct az_req_blob_list {
-	char *acc;
-	char *ctnr;
-};
 /* @blobs: struct azure_blob list */
 struct az_rsp_blob_list {
 	int num_blobs;
@@ -134,38 +110,32 @@ struct az_rsp_blob_list {
 #define BLOB_TYPE_PAGE	"PageBlob"
 #define PBLOB_SECTOR_SZ 512
 struct az_req_blob_put {
-	char *acc;
-	char *ctnr;
-	char *blob;
 	char *type;
 	uint64_t pg_len;
 };
+
 struct az_rsp_blob_put {
 	time_t last_mod;
 	char *content_md5;
 };
 
 struct az_req_blob_get {
-	char *acc;
-	char *ctnr;
-	char *blob;
 	char *type;
 	uint64_t off;
 	uint64_t len;
 };
+
 struct az_rsp_blob_get {
 	time_t last_mod;
 	char *content_md5;
 };
 
 struct az_req_page_put {
-	char *acc;
-	char *ctnr;
-	char *blob;
 	uint64_t off;
 	uint64_t len;
 	bool clear_data;
 };
+
 struct az_rsp_page_put {
 	time_t last_mod;
 	char *content_md5;
@@ -175,11 +145,9 @@ struct az_rsp_page_put {
 /* The block must be less than or equal to 4 MB in size. */
 #define BLOB_BLOCK_MAX (4 * 1024 * 1024)
 struct az_req_block_put {
-	char *acc;
-	char *ctnr;
-	char *blob;
 	char *blk_id;
 };
+
 struct az_rsp_block_put {
 	char *content_md5;
 };
@@ -197,45 +165,14 @@ struct azure_block {
 	char *id;
 	uint64_t len;
 };
-struct az_req_block_list_put {
-	char *acc;
-	char *ctnr;
-	char *blob;
-};
 
-struct az_req_block_list_get {
-	char *acc;
-	char *ctnr;
-	char *blob;
-};
 struct az_rsp_block_list_get {
 	int num_blks;
 	struct list_head blks;
 };
 
-struct az_req_blob_del {
-	char *acc;
-	char *ctnr;
-	char *blob;
-};
-
 struct az_req_blob_cp {
-	struct {
-		char *acc;
-		char *ctnr;
-		char *blob;
-	} src;
-	struct {
-		char *acc;
-		char *ctnr;
-		char *blob;
-	} dst;
-};
-
-struct az_req_blob_prop_get {
-	char *acc;
-	char *ctnr;
-	char *blob;
+	struct az_blob_path src_path;
 };
 
 struct az_rsp_blob_prop_get {
@@ -250,17 +187,11 @@ struct az_rsp_blob_prop_get {
 };
 
 struct az_req_blob_prop_set {
-	char *acc;
-	char *ctnr;
-	char *blob;
 	bool is_page;
 	uint64_t len;
 };
 
 struct az_req_blob_lease {
-	char *acc;
-	char *ctnr;
-	char *blob;
 	char *lid;
 	char *lid_proposed;
 	enum az_lease_action action;
@@ -276,24 +207,29 @@ struct az_rsp_blob_lease {
 };
 
 struct az_blob_req {
+	struct az_blob_path path;
+
 	union {
-		struct az_req_ctnr_list ctnr_list;
-		struct az_req_ctnr_create ctnr_create;
-		struct az_req_ctnr_del ctnr_del;
-		struct az_req_ctnr_prop_get ctnr_prop_get;
 		struct az_req_ctnr_lease ctnr_lease;
-		struct az_req_blob_list blob_list;
 		struct az_req_blob_put blob_put;
 		struct az_req_blob_get blob_get;
 		struct az_req_page_put page_put;
 		struct az_req_block_put block_put;
+		struct az_req_blob_cp blob_cp;
+		struct az_req_blob_prop_set blob_prop_set;
+		struct az_req_blob_lease blob_lease;
+		/*
+		 * No request specific data aside from @path:
+		struct az_req_ctnr_list ctnr_list;
+		struct az_req_ctnr_create ctnr_create;
+		struct az_req_ctnr_del ctnr_del;
+		struct az_req_ctnr_prop_get ctnr_prop_get;
+		struct az_req_blob_list blob_list;
 		struct az_req_block_list_put block_list_put;
 		struct az_req_block_list_get block_list_get;
 		struct az_req_blob_del blob_del;
-		struct az_req_blob_cp blob_cp;
 		struct az_req_blob_prop_get blob_prop_get;
-		struct az_req_blob_prop_set blob_prop_set;
-		struct az_req_blob_lease blob_lease;
+		 */
 	};
 };
 
@@ -325,27 +261,23 @@ az_blob_req_hostname_get(char *acc,
 			 char **_hostname);
 
 int
-az_req_ctnr_list(const char *acc,
+az_req_ctnr_list(const struct az_blob_path *path,
 		 struct op **_op);
 
 int
-az_req_ctnr_create(const char *acc,
-		   const char *ctnr,
+az_req_ctnr_create(const struct az_blob_path *path,
 		   struct op **_op);
 
 int
-az_req_ctnr_del(const char *acc,
-		const char *ctnr,
+az_req_ctnr_del(const struct az_blob_path *path,
 		struct op **_op);
 
 int
-az_req_ctnr_prop_get(const char *acc,
-		     const char *ctnr,
+az_req_ctnr_prop_get(const struct az_blob_path *path,
 		     struct op **_op);
 
 int
-az_req_ctnr_lease(const char *acc,
-		  const char *ctnr,
+az_req_ctnr_lease(const struct az_blob_path *path,
 		  const char *lid,
 		  const char *lid_proposed,
 		  enum az_lease_action action,
@@ -353,22 +285,17 @@ az_req_ctnr_lease(const char *acc,
 		  struct op **_op);
 
 int
-az_req_blob_list(const char *acc,
-		 const char *ctnr,
+az_req_blob_list(const struct az_blob_path *path,
 		 struct op **_op);
 
 int
-az_req_blob_put(const char *acc,
-		const char *ctnr,
-		const char *blob,
+az_req_blob_put(const struct az_blob_path *path,
 		struct elasto_data *data,
 		uint64_t page_len,
 		struct op **_op);
 
 int
-az_req_blob_get(const char *acc,
-		const char *ctnr,
-		const char *blob,
+az_req_blob_get(const struct az_blob_path *path,
 		bool is_page,
 		struct elasto_data *data,
 		uint64_t req_off,
@@ -376,69 +303,49 @@ az_req_blob_get(const char *acc,
 		struct op **_op);
 
 int
-az_req_page_put(const char *acc,
-		const char *ctnr,
-		const char *blob,
+az_req_page_put(const struct az_blob_path *path,
 		struct elasto_data *src_data,
 		uint64_t dest_off,
 		uint64_t dest_len,
 		struct op **_op);
 
 int
-az_req_block_put(const char *acc,
-		 const char *ctnr,
-		 const char *blob,
+az_req_block_put(const struct az_blob_path *path,
 		 const char *blk_id,
 		 struct elasto_data *data,
 		 struct op **_op);
 
 int
-az_req_block_list_put(const char *acc,
-		      const char *ctnr,
-		      const char *blob,
+az_req_block_list_put(const struct az_blob_path *path,
 		      uint64_t num_blks,
 		      struct list_head *blks,
 		      struct op **_op);
 
 int
-az_req_block_list_get(const char *acc,
-		      const char *ctnr,
-		      const char *blob,
+az_req_block_list_get(const struct az_blob_path *path,
 		      struct op **_op);
 
 int
-az_req_blob_del(const char *acc,
-		const char *ctnr,
-		const char *blob,
+az_req_blob_del(const struct az_blob_path *path,
 		struct op **_op);
 
 int
-az_req_blob_cp(const char *src_acc,
-	       const char *src_ctnr,
-	       const char *src_blob,
-	       const char *dst_acc,
-	       const char *dst_ctnr,
-	       const char *dst_blob,
+az_req_blob_cp(const struct az_blob_path *src_path,
+	       const struct az_blob_path *dst_path,
 	       struct op **_op);
 
 int
-az_req_blob_prop_get(const char *acc,
-		     const char *ctnr,
-		     const char *blob,
+az_req_blob_prop_get(const struct az_blob_path *path,
 		     struct op **_op);
 
 int
-az_req_blob_prop_set(const char *acc,
-		     const char *ctnr,
-		     const char *blob,
+az_req_blob_prop_set(const struct az_blob_path *path,
 		     bool is_page,
 		     uint64_t len,
 		     struct op **_op);
 
 int
-az_req_blob_lease(const char *acc,
-		  const char *ctnr,
-		  const char *blob,
+az_req_blob_lease(const struct az_blob_path *path,
 		  const char *lid,
 		  const char *lid_proposed,
 		  enum az_lease_action action,

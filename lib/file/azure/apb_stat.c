@@ -49,10 +49,7 @@ apb_fstat_blob(struct apb_fh *apb_fh,
 	struct op *op;
 	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
 
-	ret = az_req_blob_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   apb_fh->path.blob,
-				   &op);
+	ret = az_req_blob_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -104,9 +101,7 @@ apb_fstat_ctnr(struct apb_fh *apb_fh,
 	struct op *op;
 	struct az_rsp_ctnr_prop_get *ctnr_prop_get_rsp;
 
-	ret = az_req_ctnr_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   &op);
+	ret = az_req_ctnr_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -289,10 +284,7 @@ abb_fstat_blob(struct apb_fh *apb_fh,
 	struct op *op;
 	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
 
-	ret = az_req_blob_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   apb_fh->path.blob,
-				   &op);
+	ret = az_req_blob_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

@@ -75,9 +75,7 @@ apb_flease_acquire_blob(struct apb_fh *apb_fh,
 	struct az_rsp_blob_lease *blob_lease_rsp;
 	char *lid;
 
-	ret = az_req_blob_lease(apb_fh->path.acc,
-				apb_fh->path.ctnr,
-				apb_fh->path.blob,
+	ret = az_req_blob_lease(&apb_fh->path,
 				NULL,
 				NULL,
 				AOP_LEASE_ACTION_ACQUIRE,
@@ -126,8 +124,7 @@ apb_flease_acquire_ctnr(struct apb_fh *apb_fh,
 	struct az_rsp_ctnr_lease *ctnr_lease_rsp;
 	char *lid;
 
-	ret = az_req_ctnr_lease(apb_fh->path.acc,
-				apb_fh->path.ctnr,
+	ret = az_req_ctnr_lease(&apb_fh->path,
 				NULL,
 				NULL,
 				AOP_LEASE_ACTION_ACQUIRE,
@@ -227,9 +224,7 @@ apb_flease_break_blob(struct apb_fh *apb_fh,
 	int ret;
 	struct op *op;
 
-	ret = az_req_blob_lease(apb_fh->path.acc,
-				apb_fh->path.ctnr,
-				apb_fh->path.blob,
+	ret = az_req_blob_lease(&apb_fh->path,
 				lid,
 				NULL,
 				AOP_LEASE_ACTION_BREAK,
@@ -260,8 +255,7 @@ apb_flease_break_ctnr(struct apb_fh *apb_fh,
 	int ret;
 	struct op *op;
 
-	ret = az_req_ctnr_lease(apb_fh->path.acc,
-				apb_fh->path.ctnr,
+	ret = az_req_ctnr_lease(&apb_fh->path,
 				lid,
 				NULL,
 				AOP_LEASE_ACTION_BREAK,
@@ -335,9 +329,7 @@ apb_flease_release_blob(struct apb_fh *apb_fh,
 	struct op *op;
 	struct az_rsp_blob_lease *blob_lease_rsp;
 
-	ret = az_req_blob_lease(apb_fh->path.acc,
-				apb_fh->path.ctnr,
-				apb_fh->path.blob,
+	ret = az_req_blob_lease(&apb_fh->path,
 				lid,
 				NULL,
 				AOP_LEASE_ACTION_RELEASE,
@@ -371,8 +363,7 @@ apb_flease_release_ctnr(struct apb_fh *apb_fh,
 	struct op *op;
 	struct az_rsp_ctnr_lease *ctnr_lease_rsp;
 
-	ret = az_req_ctnr_lease(apb_fh->path.acc,
-				apb_fh->path.ctnr,
+	ret = az_req_ctnr_lease(&apb_fh->path,
 				lid,
 				NULL,
 				AOP_LEASE_ACTION_RELEASE,

@@ -53,9 +53,7 @@ apb_freaddir_ctnr(struct apb_fh *apb_fh,
 	struct az_rsp_blob_list *blob_list_rsp;
 	struct azure_blob *blob;
 
-	ret = az_req_blob_list(apb_fh->path.acc,
-			       apb_fh->path.ctnr,
-			       &op);
+	ret = az_req_blob_list(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -116,8 +114,7 @@ apb_freaddir_acc(struct apb_fh *apb_fh,
 	struct az_rsp_ctnr_list *ctnr_list_rsp;
 	struct azure_ctnr *ctnr;
 
-	ret = az_req_ctnr_list(apb_fh->path.acc,
-			       &op);
+	ret = az_req_ctnr_list(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -177,8 +174,7 @@ apb_freaddir_root(struct apb_fh *apb_fh,
 
 	/* root open guarantees that mgmt conn is established */
 
-	ret = az_mgmt_req_acc_list(apb_fh->sub_id,
-				   &op);
+	ret = az_mgmt_req_acc_list(apb_fh->sub_id, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

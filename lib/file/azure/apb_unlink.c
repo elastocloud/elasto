@@ -49,8 +49,7 @@ apb_funlink_blob(struct apb_fh *apb_fh)
 	int ret;
 	struct op *op;
 
-	ret = az_req_blob_del(apb_fh->path.acc, apb_fh->path.ctnr,
-			      apb_fh->path.blob, &op);
+	ret = az_req_blob_del(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -72,7 +71,7 @@ apb_funlink_ctnr(struct apb_fh *apb_fh)
 	int ret;
 	struct op *op;
 
-	ret = az_req_ctnr_del(apb_fh->path.acc, apb_fh->path.ctnr, &op);
+	ret = az_req_ctnr_del(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

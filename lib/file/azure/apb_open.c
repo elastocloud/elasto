@@ -150,10 +150,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = az_req_blob_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   apb_fh->path.blob,
-				   &op);
+	ret = az_req_blob_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -167,9 +164,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = az_req_blob_put(apb_fh->path.acc, apb_fh->path.ctnr,
-				      apb_fh->path.blob, NULL, 0,
-				      &op);
+		ret = az_req_blob_put(&apb_fh->path, NULL, 0, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -217,10 +212,7 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = az_req_blob_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   apb_fh->path.blob,
-				   &op);
+	ret = az_req_blob_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -240,9 +232,7 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 		if (ret < 0) {
 			goto err_out;
 		}
-		ret = az_req_blob_put(apb_fh->path.acc, apb_fh->path.ctnr,
-				      apb_fh->path.blob, data, 0,
-				      &op);
+		ret = az_req_blob_put(&apb_fh->path, data, 0, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -289,9 +279,7 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = az_req_ctnr_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   &op);
+	ret = az_req_ctnr_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -305,8 +293,7 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = az_req_ctnr_create(apb_fh->path.acc, apb_fh->path.ctnr,
-					 &op);
+		ret = az_req_ctnr_create(&apb_fh->path, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -502,7 +489,7 @@ apb_fopen_acc_existing(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = az_req_ctnr_list(apb_fh->path.acc, &op);
+	ret = az_req_ctnr_list(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
