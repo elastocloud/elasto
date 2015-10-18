@@ -46,9 +46,7 @@ s3_fstat_obj(struct s3_fh *s3_fh,
 	struct op *op;
 	struct s3_rsp_obj_head *obj_head_rsp;
 
-	ret = s3_req_obj_head(s3_fh->path.bkt,
-			      s3_fh->path.obj,
-			      &op);
+	ret = s3_req_obj_head(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -87,7 +85,7 @@ s3_fstat_bkt(struct s3_fh *s3_fh,
 	struct op *op;
 	struct s3_rsp_bkt_loc_get *bkt_loc_get_rsp;
 
-	ret = s3_req_bkt_loc_get(s3_fh->path.bkt, &op);
+	ret = s3_req_bkt_loc_get(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

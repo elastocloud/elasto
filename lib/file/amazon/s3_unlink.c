@@ -44,9 +44,7 @@ s3_funlink_obj(struct s3_fh *s3_fh)
 	int ret;
 	struct op *op;
 
-	ret = s3_req_obj_del(s3_fh->path.bkt,
-			     s3_fh->path.obj,
-			     &op);
+	ret = s3_req_obj_del(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -69,7 +67,7 @@ s3_funlink_bkt(struct s3_fh *s3_fh)
 	int ret;
 	struct op *op;
 
-	ret = s3_req_bkt_del(s3_fh->path.bkt, &op);
+	ret = s3_req_bkt_del(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

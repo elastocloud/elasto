@@ -32,6 +32,7 @@
 #include "lib/azure_req.h"
 #include "lib/azure_mgmt_req.h"
 #include "lib/azure_blob_req.h"
+#include "lib/s3_path.h"
 #include "lib/s3_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"

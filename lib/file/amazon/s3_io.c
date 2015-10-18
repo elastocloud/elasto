@@ -192,9 +192,7 @@ s3_fwrite_multi_start(struct s3_fh *s3_fh,
 	struct s3_rsp_mp_start *mp_start_rsp;
 	char *upload_id;
 
-	ret = s3_req_mp_start(s3_fh->path.bkt,
-			      s3_fh->path.obj,
-			     &op);
+	ret = s3_req_mp_start(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -240,11 +238,7 @@ s3_fwrite_multi_handle(struct s3_fh *s3_fh,
 	}
 	memset(part, 0, sizeof(*part));
 
-	ret = s3_req_part_put(s3_fh->path.bkt,
-			      s3_fh->path.obj,
-			      upload_id,
-			      part_num,
-			      this_data,
+	ret = s3_req_part_put(&s3_fh->path, upload_id, part_num, this_data,
 			      &op);
 	if (ret < 0) {
 		goto err_part_free;
@@ -292,9 +286,7 @@ s3_fwrite_multi_finish(struct s3_fh *s3_fh,
 	int ret;
 	struct op *op;
 
-	ret = s3_req_mp_done(s3_fh->path.bkt,
-			     s3_fh->path.obj,
-			     upload_id, num_parts, parts, &op);
+	ret = s3_req_mp_done(&s3_fh->path, upload_id, num_parts, parts, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -320,10 +312,7 @@ s3_fwrite_multi_abort(struct s3_fh *s3_fh,
 	int ret;
 	struct op *op;
 
-	ret = s3_req_mp_abort(s3_fh->path.bkt,
-			      s3_fh->path.obj,
-			      upload_id,
-			      &op);
+	ret = s3_req_mp_abort(&s3_fh->path, upload_id, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -477,9 +466,7 @@ s3_fwrite(void *mod_priv,
 		return ret;
 	}
 
-	ret = s3_req_obj_put(s3_fh->path.bkt,
-			     s3_fh->path.obj,
-			     src_data, &op);
+	ret = s3_req_obj_put(&s3_fh->path, src_data, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -507,12 +494,7 @@ s3_fread(void *mod_priv,
 	struct op *op;
 	struct s3_fh *s3_fh = mod_priv;
 
-	ret = s3_req_obj_get(s3_fh->path.bkt,
-			      s3_fh->path.obj,
-			      src_off,
-			      src_len,
-			      dest_data,
-			      &op);
+	ret = s3_req_obj_get(&s3_fh->path, src_off, src_len, dest_data, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -592,11 +574,7 @@ s3_fsplice(void *src_mod_priv,
 		goto err_out;
 	}
 
-	ret = s3_req_obj_cp(src_s3_fh->path.bkt,
-			    src_s3_fh->path.obj,
-			    dest_s3_fh->path.bkt,
-			    dest_s3_fh->path.obj,
-			    &op);
+	ret = s3_req_obj_cp(&src_s3_fh->path, &dest_s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

@@ -55,9 +55,7 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = s3_req_obj_head(s3_fh->path.bkt,
-			      s3_fh->path.obj,
-			      &op);
+	ret = s3_req_obj_head(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -78,8 +76,7 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		if (ret < 0) {
 			goto err_out;
 		}
-		ret = s3_req_obj_put(s3_fh->path.bkt, s3_fh->path.obj,
-				     data, &op);
+		ret = s3_req_obj_put(&s3_fh->path, data, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -113,7 +110,7 @@ s3_fopen_bkt(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = s3_req_bkt_loc_get(s3_fh->path.bkt, &op);
+	ret = s3_req_bkt_loc_get(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -140,8 +137,7 @@ s3_fopen_bkt(struct s3_fh *s3_fh,
 			    s3_fh->path.bkt, location);
 		}
 
-		ret = s3_req_bkt_create(s3_fh->path.bkt,
-					location, &op);
+		ret = s3_req_bkt_create(&s3_fh->path, location, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -184,7 +180,7 @@ s3_fopen_root(struct s3_fh *s3_fh,
 	 * XXX use the heavy-weight GET Service request to check that
 	 * the subscription information is correct at open time.
 	 */
-	ret = s3_req_svc_list(&op);
+	ret = s3_req_svc_list(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

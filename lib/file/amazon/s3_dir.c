@@ -50,7 +50,7 @@ s3_freaddir_bkt(struct s3_fh *s3_fh,
 	struct s3_rsp_bkt_list *bkt_list_rsp;
 	struct s3_object *obj;
 
-	ret = s3_req_bkt_list(s3_fh->path.bkt, &op);
+	ret = s3_req_bkt_list(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -103,7 +103,7 @@ s3_freaddir_root(struct s3_fh *s3_fh,
 	struct s3_rsp_svc_list *svc_list_rsp;
 	struct s3_bucket *bkt;
 
-	ret = s3_req_svc_list(&op);
+	ret = s3_req_svc_list(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
