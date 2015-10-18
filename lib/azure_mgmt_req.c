@@ -85,6 +85,26 @@ az_mgmt_ebo_init(enum az_mgmt_opcode opcode,
 	return 0;
 }
 
+#define REQ_HOST_AZURE_MGMT "management.core.windows.net"
+
+int
+az_mgmt_req_hostname_get(char **_hostname)
+{
+	char *hostname;
+
+	if (_hostname== NULL) {
+		return -EINVAL;
+	}
+
+	hostname = strdup(REQ_HOST_AZURE_MGMT);
+	if (hostname == NULL) {
+		return -ENOMEM;
+	}
+
+	*_hostname = hostname;
+	return 0;
+}
+
 static void
 az_mgmt_req_acc_keys_get_free(struct az_mgmt_req_acc_keys_get *acc_keys_get_req)
 {

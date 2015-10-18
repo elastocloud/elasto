@@ -28,6 +28,7 @@
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/azure_blob_path.h"
 #include "lib/azure_blob_req.h"
 #include "lib/azure_mgmt_req.h"
 #include "lib/conn.h"
@@ -48,8 +49,7 @@ apb_funlink_blob(struct apb_fh *apb_fh)
 	int ret;
 	struct op *op;
 
-	ret = az_req_blob_del(apb_fh->path.acc, apb_fh->path.ctnr,
-			      apb_fh->path.blob, &op);
+	ret = az_req_blob_del(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -71,7 +71,7 @@ apb_funlink_ctnr(struct apb_fh *apb_fh)
 	int ret;
 	struct op *op;
 
-	ret = az_req_ctnr_del(apb_fh->path.acc, apb_fh->path.ctnr, &op);
+	ret = az_req_ctnr_del(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

@@ -28,6 +28,7 @@
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/azure_fs_path.h"
 #include "lib/azure_fs_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -47,9 +48,8 @@
  * service returns status code 413 (Request Entity Too Large).
  */
 #define AFS_MAX_WRITE (4 * BYTES_IN_MB)
-#define AFS_IO_SIZE_HTTP AFS_MAX_WRITE
-/* FIXME: https writes over 16KB timeout. */
-#define AFS_IO_SIZE_HTTPS (16 * BYTES_IN_KB)
+#define AFS_IO_SIZE_HTTP (2 * BYTES_IN_MB)
+#define AFS_IO_SIZE_HTTPS (2 * BYTES_IN_MB)
 
 struct afs_fwrite_multi_data_ctx {
 	uint64_t this_off;
@@ -215,10 +215,7 @@ afs_fwrite_multi(struct afs_fh *afs_fh,
 			goto err_out;
 		}
 
-		ret = az_fs_req_file_put(afs_fh->path.acc,
-					 afs_fh->path.share,
-					 afs_fh->path.parent_dir,
-					 afs_fh->path.file,
+		ret = az_fs_req_file_put(&afs_fh->path,
 					 this_off,
 					 this_len,
 					 this_data,
@@ -303,10 +300,7 @@ afs_fwrite(void *mod_priv,
 		return ret;
 	}
 
-	ret = az_fs_req_file_put(afs_fh->path.acc,
-				 afs_fh->path.share,
-				 afs_fh->path.parent_dir,
-				 afs_fh->path.file,
+	ret = az_fs_req_file_put(&afs_fh->path,
 				 dest_off,
 				 dest_len,
 				 src_data,
@@ -338,10 +332,7 @@ afs_fread(void *mod_priv,
 	struct op *op;
 	struct afs_fh *afs_fh = mod_priv;
 
-	ret = az_fs_req_file_get(afs_fh->path.acc,
-				 afs_fh->path.share,
-				 afs_fh->path.parent_dir,
-				 afs_fh->path.file,
+	ret = az_fs_req_file_get(&afs_fh->path,
 				 src_off,
 				 src_len,
 				 dest_data,
@@ -371,10 +362,7 @@ afs_ftruncate(void *mod_priv,
 	struct op *op;
 	struct afs_fh *afs_fh = mod_priv;
 
-	ret = az_fs_req_file_prop_set(afs_fh->path.acc,
-				      afs_fh->path.share,
-				      afs_fh->path.parent_dir,
-				      afs_fh->path.file,
+	ret = az_fs_req_file_prop_set(&afs_fh->path,
 				      AZ_FS_FILE_PROP_LEN,
 				      len,
 				      NULL,
@@ -410,10 +398,7 @@ afs_fallocate(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = az_fs_req_file_put(afs_fh->path.acc,
-				 afs_fh->path.share,
-				 afs_fh->path.parent_dir,
-				 afs_fh->path.file,
+	ret = az_fs_req_file_put(&afs_fh->path,
 				 dest_off,
 				 dest_len,
 				 NULL, /* clear range */
@@ -498,14 +483,8 @@ afs_fsplice(void *src_mod_priv,
 		goto err_out;
 	}
 
-	ret = az_fs_req_file_cp(src_afs_fh->path.acc,
-				src_afs_fh->path.share,
-				src_afs_fh->path.parent_dir,
-				src_afs_fh->path.file,
-				dest_afs_fh->path.acc,
-				dest_afs_fh->path.share,
-				dest_afs_fh->path.parent_dir,
-				dest_afs_fh->path.file,
+	ret = az_fs_req_file_cp(&src_afs_fh->path,
+				&dest_afs_fh->path,
 				&op);
 	if (ret < 0) {
 		goto err_out;

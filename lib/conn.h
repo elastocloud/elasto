@@ -31,7 +31,7 @@ struct elasto_conn {
 	struct evhttp_connection *ev_conn;
 	struct ssl_ctx_st *ssl_ctx;
 	struct ssl_st *ssl;
-	const char *hostname;
+	char *hostname;
 	struct {
 		char *account;
 		uint8_t *key;
@@ -50,14 +50,15 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 
 int
 elasto_conn_init_az(const char *pem_file,
-		    const char *pem_pw,
 		    bool insecure_http,
+		    const char *host,
 		    struct elasto_conn **econn);
 
 int
 elasto_conn_init_s3(const char *id,
 		    const char *secret,
 		    bool insecure_http,
+		    const char *host,
 		    struct elasto_conn **econn);
 
 void

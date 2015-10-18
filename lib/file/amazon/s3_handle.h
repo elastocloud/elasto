@@ -15,7 +15,7 @@
 #define _S3_HANDLE_H_
 
 struct s3_fh {
-	struct elasto_s3_path path;
+	struct s3_path path;
 	char *iam_user;
 	char *key_id;
 	char *secret;

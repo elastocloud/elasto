@@ -28,6 +28,7 @@
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/azure_fs_path.h"
 #include "lib/azure_fs_req.h"
 #include "lib/azure_mgmt_req.h"
 #include "lib/conn.h"
@@ -48,11 +49,7 @@ afs_fstat_file(struct afs_fh *afs_fh,
 	struct op *op;
 	struct az_fs_rsp_file_prop_get *file_prop_get_rsp;
 
-	ret = az_fs_req_file_prop_get(afs_fh->path.acc,
-				      afs_fh->path.share,
-				      afs_fh->path.parent_dir,
-				      afs_fh->path.file,
-				      &op);
+	ret = az_fs_req_file_prop_get(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -91,11 +88,7 @@ afs_fstat_dir(struct afs_fh *afs_fh,
 	struct op *op;
 	struct az_fs_rsp_dir_prop_get *dir_prop_get_rsp;
 
-	ret = az_fs_req_dir_prop_get(afs_fh->path.acc,
-				     afs_fh->path.share,
-				     afs_fh->path.parent_dir,
-				     afs_fh->path.dir,
-				     &op);
+	ret = az_fs_req_dir_prop_get(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -133,9 +126,7 @@ afs_fstat_share(struct afs_fh *afs_fh,
 	struct op *op;
 	struct az_fs_rsp_share_prop_get *share_prop_get_rsp;
 
-	ret = az_fs_req_share_prop_get(afs_fh->path.acc,
-				       afs_fh->path.share,
-				       &op);
+	ret = az_fs_req_share_prop_get(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

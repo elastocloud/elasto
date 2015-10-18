@@ -396,6 +396,7 @@ cli_args_free(const struct cli_cmd_spec *cmd,
 	} else if (cli_args->auth.type == ELASTO_FILE_S3) {
 		free(cli_args->auth.s3.creds_path);
 	}
+	free(cli_args->history_file);
 	free(cli_args->progname);
 }
 

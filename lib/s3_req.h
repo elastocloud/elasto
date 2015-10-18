@@ -32,10 +32,6 @@ enum s3_opcode {
 	S3OP_PART_PUT,
 };
 
-struct s3_req_svc_list {
-	/* no arguments */
-};
-
 struct s3_bucket {
 	struct list_node list;
 	char *name;
@@ -47,10 +43,6 @@ struct s3_rsp_svc_list {
 	char *disp_name;
 	int num_bkts;
 	struct list_head bkts;
-};
-
-struct s3_req_bkt_list {
-	char *bkt_name;
 };
 
 struct s3_object {
@@ -68,63 +60,25 @@ struct s3_rsp_bkt_list {
 };
 
 struct s3_req_bkt_create {
-	char *bkt_name;
 	char *location;
-};
-
-struct s3_req_bkt_del {
-	char *bkt_name;
-};
-
-struct s3_req_bkt_loc_get {
-	char *bkt_name;
 };
 
 struct s3_rsp_bkt_loc_get {
 	char *location;
 };
 
-struct s3_req_obj_put {
-	char *bkt_name;
-	char *obj_name;
-};
-
 struct s3_req_obj_get {
-	char *bkt_name;
-	char *obj_name;
 	uint64_t off;
 	uint64_t len;
 };
 
-struct s3_req_obj_del {
-	char *bkt_name;
-	char *obj_name;
-};
-
 struct s3_req_obj_cp {
-	struct {
-		char *bkt_name;
-		char *obj_name;
-	} dst;
-	struct {
-		char *bkt_name;
-		char *obj_name;
-	} src;
-};
-
-struct s3_req_obj_head {
-	char *bkt_name;
-	char *obj_name;
+	struct s3_path src_path;
 };
 
 struct s3_rsp_obj_head {
 	uint64_t len;
 	char *content_type;
-};
-
-struct s3_req_mp_start {
-	char *bkt_name;
-	char *obj_name;
 };
 
 struct s3_rsp_mp_start {
@@ -138,20 +92,14 @@ struct s3_part {
 };
 
 struct s3_req_mp_done {
-	char *bkt_name;
-	char *obj_name;
 	char *upload_id;
 };
 
 struct s3_req_mp_abort {
-	char *bkt_name;
-	char *obj_name;
 	char *upload_id;
 };
 
 struct s3_req_part_put {
-	char *bkt_name;
-	char *obj_name;
 	char *upload_id;
 	uint32_t pnum;
 	struct elasto_data *data;
@@ -162,25 +110,25 @@ struct s3_rsp_part_put {
 };
 
 struct s3_req {
+	struct s3_path path;
 	union {
-		struct {
-			/* first item is always the bucket name, if non-NULL */
-			char *bkt_name;
-		} generic;
-		struct s3_req_svc_list svc_list;
-		struct s3_req_bkt_list bkt_list;
 		struct s3_req_bkt_create bkt_create;
-		struct s3_req_bkt_del bkt_del;
-		struct s3_req_bkt_loc_get bkt_loc_get;
-		struct s3_req_obj_put obj_put;
 		struct s3_req_obj_get obj_get;
-		struct s3_req_obj_del obj_del;
 		struct s3_req_obj_cp obj_cp;
-		struct s3_req_obj_head obj_head;
-		struct s3_req_mp_start mp_start;
 		struct s3_req_mp_done mp_done;
 		struct s3_req_mp_abort mp_abort;
 		struct s3_req_part_put part_put;
+		/*
+		 * No request specific data aside from @path:
+		struct s3_req_svc_list svc_list;
+		struct s3_req_bkt_list bkt_list;
+		struct s3_req_bkt_del bkt_del;
+		struct s3_req_bkt_loc_get bkt_loc_get;
+		struct s3_req_obj_put obj_put;
+		struct s3_req_obj_del obj_del;
+		struct s3_req_obj_head obj_head;
+		struct s3_req_mp_start mp_start;
+		 */
 	};
 };
 
@@ -204,82 +152,77 @@ struct s3_rsp {
 };
 
 int
-s3_req_svc_list(struct op **_op);
+s3_req_hostname_get(char *bkt,
+		    char **_hostname);
 
 int
-s3_req_bkt_list(const char *bkt_name,
+s3_req_svc_list(struct s3_path *s3_path,
 		struct op **_op);
 
 int
-s3_req_bkt_create(const char *bkt_name,
+s3_req_bkt_list(const struct s3_path *path,
+		struct op **_op);
+
+int
+s3_req_bkt_create(const struct s3_path *path,
 		  const char *location,
 		  struct op **_op);
 
 int
-s3_req_bkt_del(const char *bkt_name,
+s3_req_bkt_del(const struct s3_path *path,
 	       struct op **_op);
 
 int
-s3_req_bkt_loc_get(const char *bkt_name,
+s3_req_bkt_loc_get(const struct s3_path *path,
 		   struct op **_op);
 
 int
-s3_req_obj_put(const char *bkt_name,
-	       const char *obj_name,
+s3_req_obj_put(const struct s3_path *path,
 	       struct elasto_data *data,
 	       struct op **_op);
 
 int
-s3_req_obj_get(const char *bkt_name,
-	       const char *obj_name,
+s3_req_obj_get(const struct s3_path *path,
 	       uint64_t src_off,
 	       uint64_t src_len,
 	       struct elasto_data *dest_data,
 	       struct op **_op);
 
 int
-s3_req_obj_del(const char *bkt_name,
-		  const char *obj_name,
+s3_req_obj_del(const struct s3_path *path,
 		  struct op **_op);
 
 int
-s3_req_obj_cp(const char *src_bkt,
-		 const char *src_obj,
-		 const char *dst_bkt,
-		 const char *dst_obj,
-		 struct op **_op);
+s3_req_obj_cp(const struct s3_path *src_path,
+	      const struct s3_path *dst_path,
+	      struct op **_op);
 
 int
-s3_req_obj_head(const char *bkt_name,
-		const char *obj_name,
+s3_req_obj_head(const struct s3_path *path,
 		struct op **_op);
 
 int
-s3_req_mp_start(const char *bkt,
-		   const char *obj,
+s3_req_mp_start(const struct s3_path *path,
 		   struct op **_op);
 
 int
-s3_req_mp_done(const char *bkt,
-	       const char *obj,
+s3_req_mp_done(const struct s3_path *path,
 	       const char *upload_id,
 	       uint64_t num_parts,
 	       struct list_head *parts,
 	       struct op **_op);
 
 int
-s3_req_mp_abort(const char *bkt,
-		   const char *obj,
-		   const char *upload_id,
-		   struct op **_op);
+s3_req_mp_abort(const struct s3_path *path,
+		const char *upload_id,
+		struct op **_op);
 
 int
-s3_req_part_put(const char *bkt,
-		   const char *obj,
-		   const char *upload_id,
-		   uint32_t pnum,
-		   struct elasto_data *data,
-		   struct op **_op);
+s3_req_part_put(const struct s3_path *path,
+		const char *upload_id,
+		uint32_t pnum,
+		struct elasto_data *data,
+		struct op **_op);
 
 struct s3_rsp_svc_list *
 s3_rsp_svc_list(struct op *op);

@@ -29,7 +29,6 @@
 #include "ccan/list/list.h"
 #include "base64.h"
 #include "op.h"
-#include "s3_req.h"
 #include "dbg.h"
 #include "sign.h"
 

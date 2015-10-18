@@ -14,8 +14,6 @@
 #ifndef _AZURE_REQ_H_
 #define _AZURE_REQ_H_
 
-#define REQ_HOST_AZURE_MGMT "management.core.windows.net"
-
 int
 az_req_sign(const char *acc,
 	    const uint8_t *key,

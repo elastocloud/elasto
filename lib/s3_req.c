@@ -33,6 +33,7 @@
 #include "data_api.h"
 #include "op.h"
 #include "sign.h"
+#include "s3_path.h"
 #include "s3_req.h"
 
 /*
@@ -60,7 +61,7 @@ s3_req_sign(const char *acc,
 		return -EINVAL;
 	}
 
-	ret = sign_gen_s3(ebo->req.generic.bkt_name, key, key_len,
+	ret = sign_gen_s3(ebo->req.path.bkt, key, key_len,
 			  op, &op->sig_src, &sig_str);
 	if (ret < 0) {
 		dbg(0, "S3 signing failed: %s\n",
@@ -145,11 +146,78 @@ s3_req_fill_hdr_common(struct op *op)
 	return 0;
 }
 
-static void
-s3_req_svc_list_free(struct s3_req_svc_list *svc_list)
+int
+s3_req_hostname_get(char *bkt,
+		    char **_hostname)
 {
-	/* nothing to do */
+	int ret;
+	char *hostname;
+
+	if (_hostname== NULL) {
+		return -EINVAL;
+	}
+
+	if (bkt == NULL) {
+		hostname = strdup("s3.amazonaws.com");
+		if (hostname == NULL) {
+			return -ENOMEM;
+		}
+	} else {
+		ret = asprintf(&hostname, "%s.s3.amazonaws.com", bkt);
+		if (ret < 0) {
+			return -ENOMEM;
+		}
+	}
+
+	*_hostname = hostname;
+	return 0;
 }
+
+static int
+s3_req_url_encode(const struct s3_path *path,
+		  const char *url_params,
+		  char **_url_host,
+		  char **_url_path)
+{
+	int ret;
+	char *url_host;
+	char *url_path;
+	const char *params_str = url_params ? url_params : "";
+
+	ret = s3_req_hostname_get(path->bkt, &url_host);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (S3_PATH_IS_SVC(path) || S3_PATH_IS_BKT(path)) {
+		/* svc and bkt requests use the same path, but host differs */
+		ret = asprintf(&url_path, "/%s", params_str);
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_uhost_free;
+		}
+	} else if (S3_PATH_IS_OBJ(path)) {
+		ret = asprintf(&url_path, "/%s%s", path->obj, params_str);
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_uhost_free;
+		}
+	} else {
+		dbg(0, "can't encode S3 path\n");
+		ret = -EINVAL;
+		goto err_uhost_free;
+	}
+
+	*_url_host = url_host;
+	*_url_path = url_path;
+	return 0;
+
+err_uhost_free:
+	free(url_host);
+err_out:
+	return ret;
+}
+
 
 static void
 s3_bkt_free(struct s3_bucket **pbkt)
@@ -178,42 +246,48 @@ s3_rsp_svc_list_free(struct s3_rsp_svc_list *svc_list_rsp)
 }
 
 int
-s3_req_svc_list(struct op **_op)
+s3_req_svc_list(struct s3_path *path,
+		struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
 
+	if (!S3_PATH_IS_SVC(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = s3_ebo_init(S3OP_SVC_LIST, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	/* no arguments */
 
-	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url_host, "s3.amazonaws.com");
+	ret = s3_path_dup(path, &ebo->req.path);
 	if (ret < 0) {
-		ret = -ENOMEM;
 		goto err_ebo_free;
 	}
-	ret = asprintf(&op->url_path, "/");
+
+	op = &ebo->op;
+	op->method = REQ_METHOD_GET;
+
+	ret = s3_req_url_encode(path, NULL, &op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_path_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -332,12 +406,6 @@ err_out:
 }
 
 static void
-s3_req_bkt_list_free(struct s3_req_bkt_list *bkt_list)
-{
-	free(bkt_list->bkt_name);
-}
-
-static void
 s3_obj_free(struct s3_object **pobj)
 {
 	struct s3_object *obj = *pobj;
@@ -362,53 +430,49 @@ s3_rsp_bkt_list_free(struct s3_rsp_bkt_list *bkt_list_rsp)
 }
 
 int
-s3_req_bkt_list(const char *bkt_name,
-		   struct op **_op)
+s3_req_bkt_list(const struct s3_path *path,
+		struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
-	struct s3_req_bkt_list *bkt_list_req;
+
+	if (!S3_PATH_IS_BKT(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = s3_ebo_init(S3OP_BKT_LIST, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	bkt_list_req = &ebo->req.bkt_list;
 
-	bkt_list_req->bkt_name = strdup(bkt_name);
-	if (bkt_list_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
+	op = &ebo->op;
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
+
+	ret = s3_req_url_encode(path, NULL, &op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_name_free;
-	}
-	ret = asprintf(&op->url_path, "/");
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_path_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
 
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
-err_name_free:
-	free(bkt_list_req->bkt_name);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -529,7 +593,6 @@ err_out:
 static void
 s3_req_bkt_create_free(struct s3_req_bkt_create *bkt_create)
 {
-	free(bkt_create->bkt_name);
 	free(bkt_create->location);
 }
 
@@ -589,52 +652,51 @@ err_out:
 }
 
 int
-s3_req_bkt_create(const char *bkt_name,
-		     const char *location,
-		     struct op **_op)
+s3_req_bkt_create(const struct s3_path *path,
+		  const char *location,
+		  struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
 	struct s3_req_bkt_create *bkt_create_req;
 
+	if (!S3_PATH_IS_BKT(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = s3_ebo_init(S3OP_BKT_CREATE, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	bkt_create_req = &ebo->req.bkt_create;
 
-	bkt_create_req->bkt_name = strdup(bkt_name);
-	if (bkt_create_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
+
+	op = &ebo->op;
+	bkt_create_req = &ebo->req.bkt_create;
 
 	if (location != NULL) {
 		bkt_create_req->location = strdup(location);
 		if (bkt_create_req->location == NULL) {
 			ret = -ENOMEM;
-			goto err_bkt_free;
+			goto err_path_free;
 		}
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_loc_free;
-	}
 
-	ret = asprintf(&op->url_path, "/");
+	ret = s3_req_url_encode(path, NULL, &op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_loc_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	ret = s3_op_bkt_create_fill_body(location, &op->req.data);
@@ -647,134 +709,114 @@ s3_req_bkt_create(const char *bkt_name,
 
 err_hdrs_free:
 	op_hdrs_free(&op->req.hdrs);
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
 err_loc_free:
 	free(bkt_create_req->location);
-err_bkt_free:
-	free(bkt_create_req->bkt_name);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
 	return ret;
 }
 
-static void
-s3_req_bkt_del_free(struct s3_req_bkt_del *bkt_del)
-{
-	free(bkt_del->bkt_name);
-}
-
 int
-s3_req_bkt_del(const char *bkt_name,
-		  struct op **_op)
+s3_req_bkt_del(const struct s3_path *path,
+	       struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
-	struct s3_req_bkt_del *bkt_del_req;
+
+	if (!S3_PATH_IS_BKT(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = s3_ebo_init(S3OP_BKT_DEL, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	bkt_del_req = &ebo->req.bkt_del;
 
-	bkt_del_req->bkt_name = strdup(bkt_name);
-	if (bkt_del_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
+	op = &ebo->op;
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
+
+	ret = s3_req_url_encode(path, NULL, &op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_name_free;
-	}
-	ret = asprintf(&op->url_path, "/");
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_path_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
 
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
-err_name_free:
-	free(bkt_del_req->bkt_name);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
 	return ret;
 }
 
-static void
-s3_req_bkt_loc_get_free(struct s3_req_bkt_loc_get *bkt_loc_get)
-{
-	free(bkt_loc_get->bkt_name);
-}
-
 int
-s3_req_bkt_loc_get(const char *bkt_name,
+s3_req_bkt_loc_get(const struct s3_path *path,
 		   struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
-	struct s3_req_bkt_loc_get *bkt_loc_get_req;
+
+	if (!S3_PATH_IS_BKT(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = s3_ebo_init(S3OP_BKT_LOCATION_GET, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	bkt_loc_get_req = &ebo->req.bkt_loc_get;
 
-	bkt_loc_get_req->bkt_name = strdup(bkt_name);
-	if (bkt_loc_get_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
+	op = &ebo->op;
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
+
+	ret = s3_req_url_encode(path, "?location",
+				&op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_name_free;
-	}
-	ret = asprintf(&op->url_path, "/?location");
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_path_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
 
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
-err_name_free:
-	free(bkt_loc_get_req->bkt_name);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -831,28 +873,20 @@ err_out:
 	return ret;
 }
 
-static void
-s3_req_obj_put_free(struct s3_req_obj_put *obj_put)
-{
-	free(obj_put->bkt_name);
-	free(obj_put->obj_name);
-}
-
 /*
  * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV.
  */
 int
-s3_req_obj_put(const char *bkt_name,
-		  const char *obj_name,
-		  struct elasto_data *data,
-		  struct op **_op)
+s3_req_obj_put(const struct s3_path *path,
+	       struct elasto_data *data,
+	       struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
-	struct s3_req_obj_put *obj_put_req;
 
-	if ((data == NULL) || (data->type == ELASTO_DATA_NONE)) {
+	if (!S3_PATH_IS_OBJ(path)
+	 || ((data == NULL) || (data->type == ELASTO_DATA_NONE))) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -861,63 +895,41 @@ s3_req_obj_put(const char *bkt_name,
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	obj_put_req = &ebo->req.obj_put;
 
-	obj_put_req->bkt_name = strdup(bkt_name);
-	if (obj_put_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
-	obj_put_req->obj_name = strdup(obj_name);
-	if (obj_put_req->obj_name == NULL) {
-		ret = -ENOMEM;
-		goto err_bkt_free;
-	}
-
+	op = &ebo->op;
 	op->req.data = data;
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
+
+	ret = s3_req_url_encode(path, NULL,
+				&op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
 		goto err_data_close;
-	}
-	ret = asprintf(&op->url_path, "/%s", obj_name);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
 err_data_close:
 	op->req.data = NULL;
-	free(obj_put_req->obj_name);
-err_bkt_free:
-	free(obj_put_req->bkt_name);
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
 	return ret;
-}
-
-static void
-s3_req_obj_get_free(struct s3_req_obj_get *obj_get)
-{
-	free(obj_get->bkt_name);
-	free(obj_get->obj_name);
 }
 
 static int
@@ -959,8 +971,7 @@ err_out:
  * If @src_len is zero then ignore @src_off and retrieve entire blob
  */
 int
-s3_req_obj_get(const char *bkt_name,
-	       const char *obj_name,
+s3_req_obj_get(const struct s3_path *path,
 	       uint64_t src_off,
 	       uint64_t src_len,
 	       struct elasto_data *dest_data,
@@ -971,7 +982,8 @@ s3_req_obj_get(const char *bkt_name,
 	struct op *op;
 	struct s3_req_obj_get *obj_get_req;
 
-	if ((dest_data == NULL) || (dest_data->type == ELASTO_DATA_NONE)) {
+	if (!S3_PATH_IS_OBJ(path)
+	 || ((dest_data == NULL) || (dest_data->type == ELASTO_DATA_NONE))) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -980,20 +992,14 @@ s3_req_obj_get(const char *bkt_name,
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	obj_get_req = &ebo->req.obj_get;
 
-	obj_get_req->bkt_name = strdup(bkt_name);
-	if (obj_get_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
-	obj_get_req->obj_name = strdup(obj_name);
-	if (obj_get_req->obj_name == NULL) {
-		ret = -ENOMEM;
-		goto err_bkt_free;
-	}
+	op = &ebo->op;
+	obj_get_req = &ebo->req.obj_get;
 
 	if (src_len > 0) {
 		/* retrieve a specific range */
@@ -1008,102 +1014,74 @@ s3_req_obj_get(const char *bkt_name,
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_GET;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
+
+	ret = s3_req_url_encode(path, NULL, &op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
 		goto err_data_close;
-	}
-	ret = asprintf(&op->url_path, "/%s", obj_name);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
 	}
 
 	ret = s3_req_obj_get_hdr_fill(obj_get_req, op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
 err_data_close:
 	op->req.data = NULL;
-	free(obj_get_req->obj_name);
-err_bkt_free:
-	free(obj_get_req->bkt_name);
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
 	return ret;
 }
 
-static void
-s3_req_obj_del_free(struct s3_req_obj_del *obj_del)
-{
-	free(obj_del->bkt_name);
-	free(obj_del->obj_name);
-}
-
 int
-s3_req_obj_del(const char *bkt_name,
-		  const char *obj_name,
-		  struct op **_op)
+s3_req_obj_del(const struct s3_path *path,
+	       struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
-	struct s3_req_obj_del *obj_del_req;
+
+	if (!S3_PATH_IS_OBJ(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = s3_ebo_init(S3OP_OBJ_DEL, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	obj_del_req = &ebo->req.obj_del;
 
-	obj_del_req->bkt_name = strdup(bkt_name);
-	if (obj_del_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
-	obj_del_req->obj_name = strdup(obj_name);
-	if (obj_del_req->obj_name == NULL) {
-		ret = -ENOMEM;
-		goto err_bkt_free;
-	}
-
+	op = &ebo->op;
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
+
+	ret = s3_req_url_encode(path, NULL, &op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_obj_free;
-	}
-	ret = asprintf(&op->url_path, "/%s", obj_name);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_path_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
-err_obj_free:
-	free(obj_del_req->obj_name);
-err_bkt_free:
-	free(obj_del_req->bkt_name);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1113,10 +1091,7 @@ err_out:
 static void
 s3_req_obj_cp_free(struct s3_req_obj_cp *obj_cp)
 {
-	free(obj_cp->src.bkt_name);
-	free(obj_cp->src.obj_name);
-	free(obj_cp->dst.bkt_name);
-	free(obj_cp->dst.obj_name);
+	s3_path_free(&obj_cp->src_path);
 }
 
 static int
@@ -1132,8 +1107,8 @@ s3_req_obj_cp_hdr_fill(struct s3_req_obj_cp *obj_cp_req,
 	}
 
 	ret = asprintf(&hdr_str, "/%s/%s",
-		       obj_cp_req->src.bkt_name,
-		       obj_cp_req->src.obj_name);
+		       obj_cp_req->src_path.bkt,
+		       obj_cp_req->src_path.obj);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_hdrs_free;
@@ -1153,148 +1128,108 @@ err_out:
 }
 
 int
-s3_req_obj_cp(const char *src_bkt,
-		 const char *src_obj,
-		 const char *dst_bkt,
-		 const char *dst_obj,
-		 struct op **_op)
+s3_req_obj_cp(const struct s3_path *src_path,
+	      const struct s3_path *dst_path,
+	      struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
 	struct s3_req_obj_cp *obj_cp_req;
 
+	if (!S3_PATH_IS_OBJ(src_path) || !S3_PATH_IS_OBJ(dst_path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	ret = s3_ebo_init(S3OP_OBJ_CP, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	obj_cp_req = &ebo->req.obj_cp;
 
-	obj_cp_req->src.bkt_name = strdup(src_bkt);
-	if (obj_cp_req->src.bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(dst_path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
-	obj_cp_req->src.obj_name = strdup(src_obj);
-	if (obj_cp_req->src.obj_name == NULL) {
-		ret = -ENOMEM;
-		goto err_src_bkt_free;
-	}
+	op = &ebo->op;
+	obj_cp_req = &ebo->req.obj_cp;
 
-	obj_cp_req->dst.bkt_name = strdup(dst_bkt);
-	if (obj_cp_req->dst.bkt_name == NULL) {
-		ret = -ENOMEM;
-		goto err_src_obj_free;
-	}
-
-	obj_cp_req->dst.obj_name = strdup(dst_obj);
-	if (obj_cp_req->dst.obj_name == NULL) {
-		ret = -ENOMEM;
-		goto err_dst_bkt_free;
+	ret = s3_path_dup(src_path, &obj_cp_req->src_path);
+	if (ret < 0) {
+		goto err_dst_path_free;
 	}
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", dst_bkt);
+
+	ret = s3_req_url_encode(dst_path, NULL, &op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_dst_obj_free;
-	}
-	ret = asprintf(&op->url_path, "/%s", dst_obj);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_src_path_free;
 	}
 
 	ret = s3_req_obj_cp_hdr_fill(obj_cp_req, op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
-err_dst_obj_free:
-	free(obj_cp_req->dst.obj_name);
-err_dst_bkt_free:
-	free(obj_cp_req->dst.bkt_name);
-err_src_obj_free:
-	free(obj_cp_req->src.obj_name);
-err_src_bkt_free:
-	free(obj_cp_req->src.bkt_name);
+err_src_path_free:
+	s3_path_free(&obj_cp_req->src_path);
+err_dst_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
 	return ret;
 }
 
-static void
-s3_req_obj_head_free(struct s3_req_obj_head *obj_head)
-{
-	free(obj_head->bkt_name);
-	free(obj_head->obj_name);
-}
-
 int
-s3_req_obj_head(const char *bkt_name,
-		const char *obj_name,
+s3_req_obj_head(const struct s3_path *path,
 		struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
-	struct s3_req_obj_head *obj_head_req;
+
+	if (!S3_PATH_IS_OBJ(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = s3_ebo_init(S3OP_OBJ_HEAD, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	obj_head_req = &ebo->req.obj_head;
 
-	obj_head_req->bkt_name = strdup(bkt_name);
-	if (obj_head_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
-	obj_head_req->obj_name = strdup(obj_name);
-	if (obj_head_req->obj_name == NULL) {
-		ret = -ENOMEM;
-		goto err_bkt_free;
-	}
-
+	op = &ebo->op;
 	op->method = REQ_METHOD_HEAD;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt_name);
+
+	ret = s3_req_url_encode(path, NULL, &op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_obj_free;
-	}
-	ret = asprintf(&op->url_path, "/%s", obj_name);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_path_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
-err_obj_free:
-	free(obj_head_req->obj_name);
-err_bkt_free:
-	free(obj_head_req->bkt_name);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1335,75 +1270,54 @@ err_out:
 }
 
 static void
-s3_req_mp_start_free(struct s3_req_mp_start *mp_start_req)
-{
-	free(mp_start_req->bkt_name);
-	free(mp_start_req->obj_name);
-}
-
-static void
 s3_rsp_mp_start_free(struct s3_rsp_mp_start *mp_start_rsp)
 {
 	free(mp_start_rsp->upload_id);
 }
 
 int
-s3_req_mp_start(const char *bkt,
-		   const char *obj,
-		   struct op **_op)
+s3_req_mp_start(const struct s3_path *path,
+		struct op **_op)
 {
 	int ret;
 	struct s3_ebo *ebo;
 	struct op *op;
-	struct s3_req_mp_start *mp_start_req;
+
+	if (!S3_PATH_IS_OBJ(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = s3_ebo_init(S3OP_MULTIPART_START, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	mp_start_req = &ebo->req.mp_start;
 
-	mp_start_req->bkt_name = strdup(bkt);
-	if (mp_start_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
-	mp_start_req->obj_name = strdup(obj);
-	if (mp_start_req->obj_name == NULL) {
-		ret = -ENOMEM;
-		goto err_bkt_free;
-	}
-
+	op = &ebo->op;
 	op->method = REQ_METHOD_POST;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt);
+
+	ret = s3_req_url_encode(path, "?uploads", &op->url_host, &op->url_path);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_obj_free;
-	}
-	ret = asprintf(&op->url_path, "/%s?uploads",
-		       obj);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_path_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
-err_obj_free:
-	free(mp_start_req->obj_name);
-err_bkt_free:
-	free(mp_start_req->bkt_name);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1457,8 +1371,6 @@ err_out:
 static void
 s3_req_mp_done_free(struct s3_req_mp_done *mp_done_req)
 {
-	free(mp_done_req->bkt_name);
-	free(mp_done_req->obj_name);
 	free(mp_done_req->upload_id);
 }
 
@@ -1549,8 +1461,7 @@ err_out:
  * @parts is not retained with the request.
  */
 int
-s3_req_mp_done(const char *bkt,
-	       const char *obj,
+s3_req_mp_done(const struct s3_path *path,
 	       const char *upload_id,
 	       uint64_t num_parts,
 	       struct list_head *parts,
@@ -1560,48 +1471,50 @@ s3_req_mp_done(const char *bkt,
 	struct s3_ebo *ebo;
 	struct op *op;
 	struct s3_req_mp_done *mp_done_req;
+	char *url_params = NULL;
+
+	if (!S3_PATH_IS_OBJ(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = s3_ebo_init(S3OP_MULTIPART_DONE, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	mp_done_req = &ebo->req.mp_done;
 
-	mp_done_req->bkt_name = strdup(bkt);
-	if (mp_done_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
-	mp_done_req->obj_name = strdup(obj);
-	if (mp_done_req->obj_name == NULL) {
-		ret = -ENOMEM;
-		goto err_bkt_free;
-	}
+	op = &ebo->op;
+	mp_done_req = &ebo->req.mp_done;
 
 	mp_done_req->upload_id = strdup(upload_id);
 	if (mp_done_req->upload_id == NULL) {
 		ret = -ENOMEM;
-		goto err_obj_free;
+		goto err_path_free;
 	}
 
 	op->method = REQ_METHOD_POST;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt);
+
+	ret = asprintf(&url_params, "?uploadId=%s", upload_id);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_upload_free;
+		goto err_path_free;
 	}
-	ret = asprintf(&op->url_path, "/%s?uploadId=%s",
-		       obj, upload_id);
+
+	ret = s3_req_url_encode(path, url_params,
+				&op->url_host, &op->url_path);
+	free(url_params);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_upload_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	ret = s3_op_mp_done_fill_body(num_parts, parts, &op->req.data);
@@ -1614,16 +1527,13 @@ s3_req_mp_done(const char *bkt,
 
 err_hdrs_free:
 	op_hdrs_free(&op->req.hdrs);
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
 err_upload_free:
 	free(mp_done_req->upload_id);
-err_obj_free:
-	free(mp_done_req->obj_name);
-err_bkt_free:
-	free(mp_done_req->bkt_name);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1633,14 +1543,11 @@ err_out:
 static void
 s3_req_mp_abort_free(struct s3_req_mp_abort *mp_abort_req)
 {
-	free(mp_abort_req->bkt_name);
-	free(mp_abort_req->obj_name);
 	free(mp_abort_req->upload_id);
 }
 
 int
-s3_req_mp_abort(const char *bkt,
-		const char *obj,
+s3_req_mp_abort(const struct s3_path *path,
 		const char *upload_id,
 		struct op **_op)
 {
@@ -1648,60 +1555,62 @@ s3_req_mp_abort(const char *bkt,
 	struct s3_ebo *ebo;
 	struct op *op;
 	struct s3_req_mp_abort *mp_abort_req;
+	char *url_params = NULL;
+
+	if (!S3_PATH_IS_OBJ(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = s3_ebo_init(S3OP_MULTIPART_ABORT, &ebo);
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	mp_abort_req = &ebo->req.mp_abort;
 
-	mp_abort_req->bkt_name = strdup(bkt);
-	if (mp_abort_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
-	mp_abort_req->obj_name = strdup(obj);
-	if (mp_abort_req->obj_name == NULL) {
-		ret = -ENOMEM;
-		goto err_bkt_free;
-	}
+	op = &ebo->op;
+	mp_abort_req = &ebo->req.mp_abort;
 
 	mp_abort_req->upload_id = strdup(upload_id);
 	if (mp_abort_req->upload_id == NULL) {
 		ret = -ENOMEM;
-		goto err_obj_free;
+		goto err_path_free;
 	}
 
 	op->method = REQ_METHOD_DELETE;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt);
+
+	ret = asprintf(&url_params, "?uploadId=%s", upload_id);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_obj_free;
+		goto err_uploadid_free;
 	}
-	ret = asprintf(&op->url_path, "/%s?uploadId=%s", obj, upload_id);
+
+	ret = s3_req_url_encode(path, url_params,
+				&op->url_host, &op->url_path);
+	free(url_params);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_uploadid_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
 
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
-err_obj_free:
-	free(mp_abort_req->obj_name);
-err_bkt_free:
-	free(mp_abort_req->bkt_name);
+err_uploadid_free:
+	free(mp_abort_req->upload_id);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1711,8 +1620,6 @@ err_out:
 static void
 s3_req_part_put_free(struct s3_req_part_put *part_put_req)
 {
-	free(part_put_req->bkt_name);
-	free(part_put_req->obj_name);
 	free(part_put_req->upload_id);
 }
 
@@ -1723,8 +1630,7 @@ s3_rsp_part_put_free(struct s3_rsp_part_put *part_put_rsp)
 }
 
 int
-s3_req_part_put(const char *bkt,
-		const char *obj,
+s3_req_part_put(const struct s3_path *path,
 		const char *upload_id,
 		uint32_t pnum,
 		struct elasto_data *data,
@@ -1734,8 +1640,9 @@ s3_req_part_put(const char *bkt,
 	struct s3_ebo *ebo;
 	struct op *op;
 	struct s3_req_part_put *part_put_req;
+	char *url_params = NULL;
 
-	if ((bkt == NULL) || (obj == NULL) || (upload_id == NULL)) {
+	if (!S3_PATH_IS_OBJ(path) || (upload_id == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -1750,25 +1657,19 @@ s3_req_part_put(const char *bkt,
 	if (ret < 0) {
 		goto err_out;
 	}
-	op = &ebo->op;
-	part_put_req = &ebo->req.part_put;
 
-	part_put_req->bkt_name = strdup(bkt);
-	if (part_put_req->bkt_name == NULL) {
-		ret = -ENOMEM;
+	ret = s3_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
 		goto err_ebo_free;
 	}
 
-	part_put_req->obj_name = strdup(obj);
-	if (part_put_req->obj_name == NULL) {
-		ret = -ENOMEM;
-		goto err_bkt_free;
-	}
+	op = &ebo->op;
+	part_put_req = &ebo->req.part_put;
 
 	part_put_req->upload_id = strdup(upload_id);
 	if (part_put_req->upload_id == NULL) {
 		ret = -ENOMEM;
-		goto err_obj_free;
+		goto err_path_free;
 	}
 
 	part_put_req->pnum = pnum;
@@ -1777,35 +1678,35 @@ s3_req_part_put(const char *bkt,
 	/* TODO add a foreign flag so @req.data is not freed with @op */
 
 	op->method = REQ_METHOD_PUT;
-	ret = asprintf(&op->url_host, "%s.s3.amazonaws.com", bkt);
+
+	ret = asprintf(&url_params, "?partNumber=%u&uploadId=%s",
+		       (unsigned int)pnum, upload_id);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_uploadid_free;
 	}
-	ret = asprintf(&op->url_path, "/%s?partNumber=%u&uploadId=%s",
-		       obj, (unsigned int)pnum, upload_id);
+
+	ret = s3_req_url_encode(path, url_params,
+				&op->url_host, &op->url_path);
+	free(url_params);
 	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_uhost_free;
+		goto err_uploadid_free;
 	}
 
 	ret = s3_req_fill_hdr_common(op);
 	if (ret < 0) {
-		goto err_upath_free;
+		goto err_url_free;
 	}
 
 	*_op = op;
 	return 0;
-err_upath_free:
+err_url_free:
 	free(op->url_path);
-err_uhost_free:
 	free(op->url_host);
 err_uploadid_free:
 	free(part_put_req->upload_id);
-err_obj_free:
-	free(part_put_req->obj_name);
-err_bkt_free:
-	free(part_put_req->bkt_name);
+err_path_free:
+	s3_path_free(&ebo->req.path);
 err_ebo_free:
 	free(ebo);
 err_out:
@@ -1836,39 +1737,14 @@ s3_req_free(struct op *op)
 {
 	struct s3_ebo *ebo = container_of(op, struct s3_ebo, op);
 
+	s3_path_free(&ebo->req.path);
+
 	switch (op->opcode) {
-	case S3OP_SVC_LIST:
-		s3_req_svc_list_free(&ebo->req.svc_list);
-		break;
-	case S3OP_BKT_LIST:
-		s3_req_bkt_list_free(&ebo->req.bkt_list);
-		break;
 	case S3OP_BKT_CREATE:
 		s3_req_bkt_create_free(&ebo->req.bkt_create);
 		break;
-	case S3OP_BKT_DEL:
-		s3_req_bkt_del_free(&ebo->req.bkt_del);
-		break;
-	case S3OP_BKT_LOCATION_GET:
-		s3_req_bkt_loc_get_free(&ebo->req.bkt_loc_get);
-		break;
-	case S3OP_OBJ_PUT:
-		s3_req_obj_put_free(&ebo->req.obj_put);
-		break;
-	case S3OP_OBJ_GET:
-		s3_req_obj_get_free(&ebo->req.obj_get);
-		break;
-	case S3OP_OBJ_DEL:
-		s3_req_obj_del_free(&ebo->req.obj_del);
-		break;
 	case S3OP_OBJ_CP:
 		s3_req_obj_cp_free(&ebo->req.obj_cp);
-		break;
-	case S3OP_OBJ_HEAD:
-		s3_req_obj_head_free(&ebo->req.obj_head);
-		break;
-	case S3OP_MULTIPART_START:
-		s3_req_mp_start_free(&ebo->req.mp_start);
 		break;
 	case S3OP_MULTIPART_DONE:
 		s3_req_mp_done_free(&ebo->req.mp_done);
@@ -1878,6 +1754,17 @@ s3_req_free(struct op *op)
 		break;
 	case S3OP_PART_PUT:
 		s3_req_part_put_free(&ebo->req.part_put);
+		break;
+	case S3OP_SVC_LIST:
+	case S3OP_BKT_LIST:
+	case S3OP_BKT_DEL:
+	case S3OP_BKT_LOCATION_GET:
+	case S3OP_OBJ_PUT:
+	case S3OP_OBJ_GET:
+	case S3OP_OBJ_DEL:
+	case S3OP_OBJ_HEAD:
+	case S3OP_MULTIPART_START:
+		/* nothing to do */
 		break;
 	default:
 		assert(false);

@@ -28,6 +28,7 @@
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/azure_blob_path.h"
 #include "lib/azure_blob_req.h"
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
@@ -51,9 +52,7 @@ apb_fwrite(void *mod_priv,
 	struct op *op;
 	struct apb_fh *apb_fh = mod_priv;
 
-	ret = az_req_page_put(apb_fh->path.acc,
-			      apb_fh->path.ctnr,
-			      apb_fh->path.blob,
+	ret = az_req_page_put(&apb_fh->path,
 			      src_data,
 			      dest_off,
 			      dest_len,
@@ -85,9 +84,7 @@ apb_fread(void *mod_priv,
 	struct op *op;
 	struct apb_fh *apb_fh = mod_priv;
 
-	ret = az_req_blob_get(apb_fh->path.acc,
-			      apb_fh->path.ctnr,
-			      apb_fh->path.blob,
+	ret = az_req_blob_get(&apb_fh->path,
 			      true,
 			      dest_data,
 			      src_off,
@@ -118,9 +115,7 @@ apb_ftruncate(void *mod_priv,
 	struct op *op;
 	struct apb_fh *apb_fh = mod_priv;
 
-	ret = az_req_blob_prop_set(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   apb_fh->path.blob,
+	ret = az_req_blob_prop_set(&apb_fh->path,
 				   true,	/* is_page */
 				   len,
 				   &op);
@@ -155,9 +150,7 @@ apb_fallocate(void *mod_priv,
 		goto err_out;
 	}
 
-	ret = az_req_page_put(apb_fh->path.acc,
-			      apb_fh->path.ctnr,
-			      apb_fh->path.blob,
+	ret = az_req_page_put(&apb_fh->path,
 			      NULL, /* clear range */
 			      dest_off,
 			      dest_len,
@@ -241,13 +234,7 @@ apb_fsplice(void *src_mod_priv,
 		goto err_out;
 	}
 
-	ret = az_req_blob_cp(src_apb_fh->path.acc,
-			     src_apb_fh->path.ctnr,
-			     src_apb_fh->path.blob,
-			     dest_apb_fh->path.acc,
-			     dest_apb_fh->path.ctnr,
-			     dest_apb_fh->path.blob,
-			     &op);
+	ret = az_req_blob_cp(&src_apb_fh->path, &dest_apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -265,9 +252,8 @@ err_out:
 }
 
 #define ABB_MAX_PART (4 * BYTES_IN_MB)
-#define ABB_IO_SIZE_HTTP ABB_MAX_PART
-/* FIXME: https writes over 16KB timeout. */
-#define ABB_IO_SIZE_HTTPS (16 * BYTES_IN_KB)
+#define ABB_IO_SIZE_HTTP (2 * BYTES_IN_MB)
+#define ABB_IO_SIZE_HTTPS (2 * BYTES_IN_MB)
 
 /* FIXME data_ctx is a dup of afx_io. combine in vfs */
 struct abb_fwrite_multi_data_ctx {
@@ -434,9 +420,7 @@ abb_fwrite_multi_handle(struct apb_fh *apb_fh,
 		goto err_blk_free;
 	}
 
-	ret = az_req_block_put(apb_fh->path.acc,
-			       apb_fh->path.ctnr,
-			       apb_fh->path.blob,
+	ret = az_req_block_put(&apb_fh->path,
 			       blk->id,
 			       this_data,
 			       &op);
@@ -476,9 +460,7 @@ abb_fwrite_multi_finish(struct apb_fh *apb_fh,
 	int ret;
 	struct op *op;
 
-	ret = az_req_block_list_put(apb_fh->path.acc,
-				    apb_fh->path.ctnr,
-				    apb_fh->path.blob,
+	ret = az_req_block_list_put(&apb_fh->path,
 				    num_blks, blks, &op);
 	if (ret < 0) {
 		dbg(0, "multi-part done req init failed: %s\n", strerror(-ret));
@@ -633,9 +615,7 @@ abb_fwrite(void *mod_priv,
 		return ret;
 	}
 
-	ret = az_req_blob_put(apb_fh->path.acc,
-			      apb_fh->path.ctnr,
-			      apb_fh->path.blob,
+	ret = az_req_blob_put(&apb_fh->path,
 			      src_data, 0,	/* non-page block blob */
 			      &op);
 	if (ret < 0) {
@@ -665,9 +645,7 @@ abb_fread(void *mod_priv,
 	struct op *op;
 	struct apb_fh *apb_fh = mod_priv;
 
-	ret = az_req_blob_get(apb_fh->path.acc,
-			      apb_fh->path.ctnr,
-			      apb_fh->path.blob,
+	ret = az_req_blob_get(&apb_fh->path,
 			      false,
 			      dest_data,
 			      src_off,
@@ -752,13 +730,7 @@ abb_fsplice(void *src_mod_priv,
 		goto err_out;
 	}
 
-	ret = az_req_blob_cp(src_apb_fh->path.acc,
-			     src_apb_fh->path.ctnr,
-			     src_apb_fh->path.blob,
-			     dest_apb_fh->path.acc,
-			     dest_apb_fh->path.ctnr,
-			     dest_apb_fh->path.blob,
-			     &op);
+	ret = az_req_blob_cp(&src_apb_fh->path, &dest_apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

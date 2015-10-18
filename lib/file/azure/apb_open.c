@@ -28,6 +28,7 @@
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/azure_blob_path.h"
 #include "lib/azure_blob_req.h"
 #include "lib/azure_mgmt_req.h"
 #include "lib/conn.h"
@@ -43,116 +44,6 @@
 #include "apb_open.h"
 
 #define APB_FOPEN_LOCATION_DEFAULT "West Europe"
-
-int
-apb_fpath_parse(const char *path,
-		struct elasto_fh_az_path *az_path)
-{
-	int ret;
-	char *s;
-	char *comp1 = NULL;
-	char *comp2 = NULL;
-	char *comp3 = NULL;
-
-	if ((path == NULL) || (az_path == NULL)) {
-		return -EINVAL;
-	}
-
-	s = (char *)path;
-	while (*s == '/')
-		s++;
-
-	if (*s == '\0') {
-		/* empty or leading slashes only */
-		goto done;
-	}
-
-	comp1 = strdup(s);
-	if (comp1 == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	s = strchr(comp1, '/');
-	if (s == NULL) {
-		/* account only */
-		goto done;
-	}
-
-	*(s++) = '\0';	/* null term for acc */
-	while (*s == '/')
-		s++;
-
-	if (*s == '\0') {
-		/* account + slashes only */
-		goto done;
-	}
-
-	comp2 = strdup(s);
-	if (comp2 == NULL) {
-		ret = -ENOMEM;
-		goto err_1_free;
-	}
-
-	s = strchr(comp2, '/');
-	if (s == NULL) {
-		/* ctnr only */
-		goto done;
-	}
-
-	*(s++) = '\0';	/* null term for ctnr */
-	while (*s == '/')
-		s++;
-
-	if (*s == '\0') {
-		/* container + slashes only */
-		goto done;
-	}
-
-	comp3 = strdup(s);
-	if (comp3 == NULL) {
-		ret = -ENOMEM;
-		goto err_2_free;
-	}
-
-	s = strchr(comp3, '/');
-	if (s != NULL) {
-		/* blob has a trailing slash */
-		dbg(0, "Invalid remote path: blob has trailing garbage");
-		ret = -EINVAL;
-		goto err_3_free;
-	}
-done:
-	az_path->acc = comp1;
-	az_path->ctnr = comp2;
-	az_path->blob = comp3;
-	dbg(2, "parsed %s as APB path: acc=%s, ctnr=%s, blob=%s\n",
-	    path, (az_path->acc ? az_path->acc : ""),
-	    (az_path->ctnr ? az_path->ctnr : ""),
-	    (az_path->blob ? az_path->blob : ""));
-
-	return 0;
-
-err_3_free:
-	free(comp3);
-err_2_free:
-	free(comp2);
-err_1_free:
-	free(comp1);
-err_out:
-	return ret;
-}
-
-void
-apb_fpath_free(struct elasto_fh_az_path *az_path)
-{
-	free(az_path->acc);
-	az_path->acc = NULL;
-	free(az_path->ctnr);
-	az_path->ctnr = NULL;
-	free(az_path->blob);
-	az_path->blob = NULL;
-}
 
 static int
 apb_acc_key_get(struct apb_fh *apb_fh,
@@ -200,6 +91,7 @@ apb_io_conn_init(struct apb_fh *apb_fh,
 		 struct elasto_conn **_io_conn)
 {
 	int ret;
+	char *url_host;
 	struct elasto_conn *io_conn;
 
 	if ((apb_fh->acc_access_key == NULL) && (apb_fh->mgmt_conn != NULL)) {
@@ -215,8 +107,15 @@ apb_io_conn_init(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = elasto_conn_init_az(apb_fh->pem_path, NULL, apb_fh->insecure_http,
-				  &io_conn);
+	ret = az_blob_req_hostname_get(apb_fh->path.acc, &url_host);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	/* pem_file not needed for IO conn */
+	ret = elasto_conn_init_az(NULL, apb_fh->insecure_http,
+				  url_host, &io_conn);
+	free(url_host);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -251,10 +150,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = az_req_blob_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   apb_fh->path.blob,
-				   &op);
+	ret = az_req_blob_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -268,9 +164,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = az_req_blob_put(apb_fh->path.acc, apb_fh->path.ctnr,
-				      apb_fh->path.blob, NULL, 0,
-				      &op);
+		ret = az_req_blob_put(&apb_fh->path, NULL, 0, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -318,10 +212,7 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = az_req_blob_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   apb_fh->path.blob,
-				   &op);
+	ret = az_req_blob_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -341,9 +232,7 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 		if (ret < 0) {
 			goto err_out;
 		}
-		ret = az_req_blob_put(apb_fh->path.acc, apb_fh->path.ctnr,
-				      apb_fh->path.blob, data, 0,
-				      &op);
+		ret = az_req_blob_put(&apb_fh->path, data, 0, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -390,9 +279,7 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = az_req_ctnr_prop_get(apb_fh->path.acc,
-				   apb_fh->path.ctnr,
-				   &op);
+	ret = az_req_ctnr_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -406,8 +293,7 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = az_req_ctnr_create(apb_fh->path.acc, apb_fh->path.ctnr,
-					 &op);
+		ret = az_req_ctnr_create(&apb_fh->path, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -603,7 +489,7 @@ apb_fopen_acc_existing(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	ret = az_req_ctnr_list(apb_fh->path.acc, &op);
+	ret = az_req_ctnr_list(&apb_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -677,22 +563,28 @@ apb_abb_fopen(void *mod_priv,
 	int ret;
 	struct apb_fh *apb_fh = mod_priv;
 
-	ret = apb_fpath_parse(path, &apb_fh->path);
+	ret = az_blob_path_parse(path, &apb_fh->path);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	if (apb_fh->pem_path != NULL) {
+		char *mgmt_host;
 		/*
 		 * for Publish Settings credentials, a mgmt connection is
 		 * required to obtain account keys, or perform root / account
 		 * manipulation.
 		 * A connection to the account host for ctnr / blob IO is
 		 * opened later if needed (non-root).
-		 * TODO: specify the server hostname here for connection
 		 */
-		ret = elasto_conn_init_az(apb_fh->pem_path, NULL, false,
+		ret = az_mgmt_req_hostname_get(&mgmt_host);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		ret = elasto_conn_init_az(apb_fh->pem_path, false, mgmt_host,
 					  &apb_fh->mgmt_conn);
+		free(mgmt_host);
 		if (ret < 0) {
 			goto err_path_free;
 		}
@@ -763,7 +655,7 @@ err_io_conn_free:
 err_mgmt_conn_free:
 	elasto_conn_free(apb_fh->mgmt_conn);
 err_path_free:
-	apb_fpath_free(&apb_fh->path);
+	az_blob_path_free(&apb_fh->path);
 err_out:
 	return ret;
 }
@@ -785,7 +677,7 @@ apb_fclose(void *mod_priv)
 	/* @io_conn may be null (root opens) */
 	elasto_conn_free(apb_fh->io_conn);
 	elasto_conn_free(apb_fh->mgmt_conn);
-	apb_fpath_free(&apb_fh->path);
+	az_blob_path_free(&apb_fh->path);
 
 	return 0;
 }

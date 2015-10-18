@@ -28,6 +28,7 @@
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/azure_req.h"
+#include "lib/azure_fs_path.h"
 #include "lib/azure_fs_req.h"
 #include "lib/azure_mgmt_req.h"
 #include "lib/conn.h"
@@ -43,147 +44,6 @@
 #include "afs_open.h"
 
 #define AFS_FOPEN_LOCATION_DEFAULT "West Europe"
-
-int
-afs_fpath_parse(const char *path,
-		struct elasto_fh_afs_path *afs_path)
-{
-	int ret;
-	char *s;
-	char *comp1 = NULL;
-	char *comp2 = NULL;
-	char *midpart = NULL;
-	char *trailer = NULL;
-
-	if ((path == NULL) || (afs_path == NULL)) {
-		return -EINVAL;
-	}
-
-	s = (char *)path;
-	while (*s == '/')
-		s++;
-
-	if (*s == '\0') {
-		/* empty or leading slashes only */
-		goto done;
-	}
-
-	comp1 = strdup(s);
-	if (comp1 == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	s = strchr(comp1, '/');
-	if (s == NULL) {
-		/* acc only */
-		goto done;
-	}
-
-	*(s++) = '\0';	/* null term for acc */
-	while (*s == '/')
-		s++;
-
-	if (*s == '\0') {
-		/* acc + slashes only */
-		goto done;
-	}
-
-	comp2 = strdup(s);
-	if (comp2 == NULL) {
-		ret = -ENOMEM;
-		goto err_1_free;
-	}
-
-	s = strchr(comp2, '/');
-	if (s == NULL) {
-		/* share only */
-		goto done;
-	}
-
-	*(s++) = '\0';	/* null term for share */
-	while (*s == '/')
-		s++;
-
-	if (*s == '\0') {
-		/* share + slashes only */
-		goto done;
-	}
-
-	midpart = strdup(s);
-	if (midpart == NULL) {
-		ret = -ENOMEM;
-		goto err_2_free;
-	}
-
-	/* need last component as dir or share */
-	s = strrchr(midpart, '/');
-	if (s == NULL) {
-		/* midpart is the last path component */
-		trailer = midpart;
-		midpart = NULL;
-		goto done;
-	}
-
-	if (strlen(s) <= 1) {
-		/* trailing slash - FIXME: should allow this for dir opens? */
-		dbg(0, "invalid path, trailing garbage: %s\n", midpart);
-		goto err_midpart_free;
-	}
-
-	s++;	/* move past last slash */
-	trailer = strdup(s);
-	if (trailer == NULL) {
-		ret = -ENOMEM;
-		goto err_midpart_free;
-	}
-
-	s--;	/* move back to last slash */
-	while (*s == '/') {
-		*s = '\0';	/* null term for midpart */
-		s--;
-	}
-
-	assert(s >= midpart);
-
-done:
-	afs_path->acc = comp1;
-	afs_path->share = comp2;
-	afs_path->parent_dir = midpart;
-	/* fs_ent, file or dir. all are members of the same union */
-	afs_path->fs_ent = trailer;
-	dbg(2, "parsed %s as AFS path: acc=%s, share=%s, parent_dir=%s, "
-	       "file or dir=%s\n",
-	    path, (afs_path->acc ? afs_path->acc : ""),
-	    (afs_path->share ? afs_path->share : ""),
-	    (afs_path->parent_dir ? afs_path->parent_dir : ""),
-	    (afs_path->fs_ent ? afs_path->fs_ent : ""));
-
-	return 0;
-
-err_midpart_free:
-	free(midpart);
-err_2_free:
-	free(comp2);
-err_1_free:
-	free(comp1);
-err_out:
-	return ret;
-}
-
-void
-afs_fpath_free(struct elasto_fh_afs_path *afs_path)
-{
-	free(afs_path->acc);
-	afs_path->acc = NULL;
-	free(afs_path->share);
-	afs_path->share = NULL;
-	free(afs_path->parent_dir);
-	afs_path->parent_dir = NULL;
-	/* file and dir are members of the same union */
-	free(afs_path->fs_ent);
-	afs_path->fs_ent = NULL;
-}
 
 static int
 afs_acc_key_get(struct afs_fh *afs_fh,
@@ -231,6 +91,7 @@ afs_io_conn_init(struct afs_fh *afs_fh,
 		 struct elasto_conn **_io_conn)
 {
 	int ret;
+	char *url_host;
 	struct elasto_conn *io_conn;
 
 	if ((afs_fh->acc_access_key == NULL) && (afs_fh->mgmt_conn != NULL)) {
@@ -246,8 +107,14 @@ afs_io_conn_init(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_conn_init_az(afs_fh->pem_path, NULL, afs_fh->insecure_http,
-				  &io_conn);
+	ret = az_fs_req_hostname_get(afs_fh->path.acc, &url_host);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_conn_init_az(NULL, afs_fh->insecure_http,
+				  url_host, &io_conn);
+	free(url_host);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -281,11 +148,7 @@ afs_fopen_file(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = az_fs_req_file_prop_get(afs_fh->path.acc,
-				   afs_fh->path.share,
-				   afs_fh->path.parent_dir,
-				   afs_fh->path.file,
-				   &op);
+	ret = az_fs_req_file_prop_get(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -299,10 +162,7 @@ afs_fopen_file(struct afs_fh *afs_fh,
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "file not found, creating\n");
 		op_free(op);
-		ret = az_fs_req_file_create(afs_fh->path.acc,
-					    afs_fh->path.share,
-					    afs_fh->path.parent_dir,
-					    afs_fh->path.file,
+		ret = az_fs_req_file_create(&afs_fh->path,
 					    0,	/* initial size */
 					    &op);
 		if (ret < 0) {
@@ -339,11 +199,7 @@ afs_fopen_dir(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = az_fs_req_dir_prop_get(afs_fh->path.acc,
-				     afs_fh->path.share,
-				     afs_fh->path.parent_dir,
-				     afs_fh->path.dir,
-				     &op);
+	ret = az_fs_req_dir_prop_get(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -357,11 +213,7 @@ afs_fopen_dir(struct afs_fh *afs_fh,
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = az_fs_req_dir_create(afs_fh->path.acc,
-					   afs_fh->path.share,
-					   afs_fh->path.parent_dir,
-					   afs_fh->path.dir,
-					   &op);
+		ret = az_fs_req_dir_create(&afs_fh->path, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -397,9 +249,7 @@ afs_fopen_share(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = az_fs_req_share_prop_get(afs_fh->path.acc,
-				       afs_fh->path.share,
-				       &op);
+	ret = az_fs_req_share_prop_get(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -413,9 +263,7 @@ afs_fopen_share(struct afs_fh *afs_fh,
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = az_fs_req_share_create(afs_fh->path.acc,
-					     afs_fh->path.share,
-					     &op);
+		ret = az_fs_req_share_create(&afs_fh->path, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -604,7 +452,7 @@ afs_fopen_acc_existing(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = az_fs_req_shares_list(afs_fh->path.acc, &op);
+	ret = az_fs_req_shares_list(&afs_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -677,22 +525,28 @@ afs_fopen(void *mod_priv,
 	int ret;
 	struct afs_fh *afs_fh = mod_priv;
 
-	ret = afs_fpath_parse(path, &afs_fh->path);
+	ret = az_fs_path_parse(path, &afs_fh->path);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	if (afs_fh->pem_path != NULL) {
+		char *mgmt_host;
 		/*
 		 * for Publish Settings credentials, a mgmt connection is
 		 * required to obtain account keys, or perform root / account
 		 * manipulation.
 		 * A connection to the account host for share / file IO is
 		 * opened later if needed (non-root).
-		 * TODO: specify the server hostname here for connection
 		 */
-		ret = elasto_conn_init_az(afs_fh->pem_path, NULL, false,
+		ret = az_mgmt_req_hostname_get(&mgmt_host);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		ret = elasto_conn_init_az(afs_fh->pem_path, false, mgmt_host,
 					  &afs_fh->mgmt_conn);
+		free(mgmt_host);
 		if (ret < 0) {
 			goto err_path_free;
 		}
@@ -768,7 +622,7 @@ err_io_conn_free:
 err_mgmt_conn_free:
 	elasto_conn_free(afs_fh->mgmt_conn);
 err_path_free:
-	afs_fpath_free(&afs_fh->path);
+	az_fs_path_free(&afs_fh->path);
 err_out:
 	return ret;
 }
@@ -781,7 +635,7 @@ afs_fclose(void *mod_priv)
 	/* @io_conn may be null (root opens) */
 	elasto_conn_free(afs_fh->io_conn);
 	elasto_conn_free(afs_fh->mgmt_conn);
-	afs_fpath_free(&afs_fh->path);
+	az_fs_path_free(&afs_fh->path);
 
 	return 0;
 }

@@ -15,31 +15,6 @@
 #define _AFS_HANDLE_H_
 
 /**
- * Azure File Service path representation
- *
- * The Azure File Service allows for files and folders at any depth under a
- * share.
- *
- * @acc: Azure account name
- * @share: Azure File Server share name
- * @parent_dir: Parent directory for @file or @dir. NULL if item is nested
- *		directly below @share.
- * @fs_ent: Last component of path (type obtained from open flags).
- * @file: Same as @fs_ent.
- * @dir: Same as @fs_ent.
- */
-struct elasto_fh_afs_path {
-	char *acc;
-	char *share;
-	char *parent_dir;
-	union {
-		char *fs_ent;		/* generic dir/file */
-		char *file;
-		char *dir;
-	};
-};
-
-/**
  * Azure File Service private handle
  *
  * @open_flags: FIXME open_flags are also stored with vfs fh.
@@ -55,7 +30,7 @@ struct elasto_fh_afs_path {
  */
 struct afs_fh {
 	uint64_t open_flags;
-	struct elasto_fh_afs_path path;
+	struct az_fs_path path;
 	char *pem_path;
 	char *sub_id;
 	char *sub_name;

@@ -55,9 +55,7 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = s3_req_obj_head(s3_fh->path.bkt,
-			      s3_fh->path.obj,
-			      &op);
+	ret = s3_req_obj_head(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -78,8 +76,7 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		if (ret < 0) {
 			goto err_out;
 		}
-		ret = s3_req_obj_put(s3_fh->path.bkt, s3_fh->path.obj,
-				     data, &op);
+		ret = s3_req_obj_put(&s3_fh->path, data, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -113,7 +110,7 @@ s3_fopen_bkt(struct s3_fh *s3_fh,
 		goto err_out;
 	}
 
-	ret = s3_req_bkt_loc_get(s3_fh->path.bkt, &op);
+	ret = s3_req_bkt_loc_get(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -140,8 +137,7 @@ s3_fopen_bkt(struct s3_fh *s3_fh,
 			    s3_fh->path.bkt, location);
 		}
 
-		ret = s3_req_bkt_create(s3_fh->path.bkt,
-					location, &op);
+		ret = s3_req_bkt_create(&s3_fh->path, location, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -184,7 +180,7 @@ s3_fopen_root(struct s3_fh *s3_fh,
 	 * XXX use the heavy-weight GET Service request to check that
 	 * the subscription information is correct at open time.
 	 */
-	ret = s3_req_svc_list(&op);
+	ret = s3_req_svc_list(&s3_fh->path, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -208,15 +204,23 @@ s3_fopen(void *mod_priv,
 	 struct elasto_ftoken_list *open_toks)
 {
 	int ret;
+	char *url_host;
 	struct s3_fh *s3_fh = mod_priv;
 
-	ret = elasto_s3_path_parse(path, &s3_fh->path);
+	ret = s3_path_parse(path, &s3_fh->path);
 	if (ret < 0) {
 		goto err_out;
 	}
 
+	/* TODO s3_fh->path.host is currently ignored */
+	ret = s3_req_hostname_get(s3_fh->path.bkt, &url_host);
+	if (ret < 0) {
+		goto err_path_free;
+	}
+
 	ret = elasto_conn_init_s3(s3_fh->key_id, s3_fh->secret,
-				  s3_fh->insecure_http, &s3_fh->conn);
+				  s3_fh->insecure_http, url_host, &s3_fh->conn);
+	free(url_host);
 	if (ret < 0) {
 		goto err_path_free;
 	}
@@ -243,7 +247,7 @@ s3_fopen(void *mod_priv,
 err_conn_free:
 	elasto_conn_free(s3_fh->conn);
 err_path_free:
-	elasto_s3_path_free(&s3_fh->path);
+	s3_path_free(&s3_fh->path);
 err_out:
 	return ret;
 }
@@ -254,7 +258,7 @@ s3_fclose(void *mod_priv)
 	struct s3_fh *s3_fh = mod_priv;
 
 	elasto_conn_free(s3_fh->conn);
-	elasto_s3_path_free(&s3_fh->path);
+	s3_path_free(&s3_fh->path);
 
 	return 0;
 }

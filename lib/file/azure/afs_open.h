@@ -15,13 +15,6 @@
 #define _AFS_OPEN_H_
 
 int
-afs_fpath_parse(const char *path,
-		struct elasto_fh_afs_path *afs_path);
-
-void
-afs_fpath_free(struct elasto_fh_afs_path *afs_path);
-
-int
 afs_fopen(void *mod_priv,
 	  const char *path,
 	  uint64_t flags,

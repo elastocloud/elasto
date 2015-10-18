@@ -33,9 +33,9 @@
 
 /* _very_ basic URI host component parser. Doesn't come close to RFC 3986 */
 static int
-elasto_s3_path_uri_pull(const char *path,
-			char **_host,
-			char **_after_host)
+s3_path_uri_pull(const char *path,
+		 char **_host,
+		 char **_after_host)
 {
 	int ret;
 	char *host;
@@ -82,8 +82,8 @@ err_out:
 }
 
 int
-elasto_s3_path_parse(const char *path,
-		     struct elasto_s3_path *s3_path)
+s3_path_parse(const char *path,
+		     struct s3_path *s3_path)
 {
 	int ret;
 	char *s;
@@ -98,7 +98,7 @@ elasto_s3_path_parse(const char *path,
 
 	if (strstr(path, "://")) {
 		char *after_host;
-		ret = elasto_s3_path_uri_pull(path, &host, &after_host);
+		ret = s3_path_uri_pull(path, &host, &after_host);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -175,7 +175,7 @@ err_out:
 }
 
 void
-elasto_s3_path_free(struct elasto_s3_path *s3_path)
+s3_path_free(struct s3_path *s3_path)
 {
 	free(s3_path->host);
 	s3_path->host = NULL;
@@ -183,4 +183,48 @@ elasto_s3_path_free(struct elasto_s3_path *s3_path)
 	s3_path->bkt = NULL;
 	free(s3_path->obj);
 	s3_path->obj = NULL;
+}
+
+int
+s3_path_dup(const struct s3_path *path_orig,
+	    struct s3_path *path_dup)
+{
+	int ret;
+	struct s3_path dup = { 0 };
+
+	if (path_orig->host != NULL) {
+		dup.host = strdup(path_orig->host);
+		if (dup.host == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+	}
+
+	if (path_orig->bkt != NULL) {
+		dup.bkt = strdup(path_orig->bkt);
+		if (dup.bkt == NULL) {
+			ret = -ENOMEM;
+			goto err_path_free;
+		}
+	} else {
+		/* obj must also be NULL */
+		goto done;
+	}
+
+	if (path_orig->obj != NULL) {
+		dup.obj = strdup(path_orig->obj);
+		if (dup.obj == NULL) {
+			ret = -ENOMEM;
+			goto err_path_free;
+		}
+	}
+
+done:
+	*path_dup = dup;
+	return 0;
+
+err_path_free:
+	s3_path_free(&dup);
+err_out:
+	return ret;
 }
