@@ -31,6 +31,7 @@
 #include "lib/sign.h"
 #include "lib/azure_req.h"
 #include "lib/azure_mgmt_req.h"
+#include "lib/azure_blob_path.h"
 #include "lib/azure_blob_req.h"
 #include "lib/s3_path.h"
 #include "lib/s3_req.h"

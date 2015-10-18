@@ -38,6 +38,7 @@
 #include "op.h"
 #include "sign.h"
 #include "azure_req.h"
+#include "azure_blob_path.h"
 #include "azure_blob_req.h"
 
 /*

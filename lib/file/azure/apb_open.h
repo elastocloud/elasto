@@ -15,13 +15,6 @@
 #define _APB_OPEN_H_
 
 int
-apb_fpath_parse(const char *path,
-		struct elasto_fh_az_path *az_path);
-
-void
-apb_fpath_free(struct elasto_fh_az_path *az_path);
-
-int
 apb_fsign_conn_setup(struct elasto_conn *conn,
 		     const char *sub_id,
 		     const char *acc);

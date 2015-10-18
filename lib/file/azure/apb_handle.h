@@ -14,12 +14,6 @@
 #ifndef _APB_HANDLE_H_
 #define _APB_HANDLE_H_
 
-struct elasto_fh_az_path {
-	char *acc;
-	char *ctnr;
-	char *blob;
-};
-
 /**
  * Azure Blob Service private handle
  *
@@ -34,7 +28,7 @@ struct elasto_fh_az_path {
  * @io_conn: Connection to Azure File Service.
  */
 struct apb_fh {
-	struct elasto_fh_az_path path;
+	struct az_blob_path path;
 	char *pem_path;
 	char *sub_id;
 	char *sub_name;
