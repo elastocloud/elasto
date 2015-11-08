@@ -361,15 +361,53 @@ err_out:
 	return ret;
 }
 
+static int
+az_fs_req_share_create_hdr_fill(struct az_fs_req_share_create *share_create_req,
+				struct op *op)
+{
+	int ret;
+	char *hdr_str;
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = asprintf(&hdr_str, "%" PRIu64, share_create_req->quota_gb);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_hdrs_free;
+	}
+	ret = op_req_hdr_add(op, "x-ms-share-quota", hdr_str);
+	free(hdr_str);
+	if (ret < 0) {
+		goto err_hdrs_free;
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
 int
 az_fs_req_share_create(const struct az_fs_path *path,
+		       uint64_t quota_gb,
 		       struct op **_op)
 {
 	int ret;
 	struct az_fs_ebo *ebo;
 	struct op *op;
+	struct az_fs_req_share_create *share_create_req;
 
 	if (!AZ_FS_PATH_IS_SHARE(path)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if ((quota_gb == 0) || (quota_gb > AZ_FS_SHARE_QUOTA_MAX_GB)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -385,6 +423,8 @@ az_fs_req_share_create(const struct az_fs_path *path,
 		goto err_ebo_free;
 	}
 
+	share_create_req = &ebo->req.share_create;
+	share_create_req->quota_gb = quota_gb;
 	op->method = REQ_METHOD_PUT;
 
 	ret = az_fs_req_url_encode(path, "?restype=share",
@@ -393,7 +433,7 @@ az_fs_req_share_create(const struct az_fs_path *path,
 		goto err_path_free;
 	}
 
-	ret = az_req_common_hdr_fill(op, false);
+	ret = az_fs_req_share_create_hdr_fill(share_create_req, op);
 	if (ret < 0) {
 		goto err_url_free;
 	}

@@ -118,7 +118,7 @@ cm_az_fs_init(void **state)
 
 	path.acc = cm_us->acc,
 	path.share = cm_op_az_fs_state.share,
-	ret = az_fs_req_share_create(&path, &op);
+	ret = az_fs_req_share_create(&path, AZ_FS_SHARE_QUOTA_MAX_GB, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);

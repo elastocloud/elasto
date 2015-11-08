@@ -74,6 +74,12 @@ struct az_fs_rsp_dir_prop_get {
 	time_t last_mod;
 };
 
+#define AZ_FS_SHARE_QUOTA_MAX_GB (5 * 1024)
+
+struct az_fs_req_share_create {
+	uint64_t quota_gb;
+};
+
 struct az_fs_req_file_create {
 	uint64_t max_size_bytes;
 };
@@ -124,6 +130,7 @@ struct az_fs_req_file_prop_set {
 struct az_fs_req {
 	struct az_fs_path path;
 	union {
+		struct az_fs_req_share_create share_create;
 		struct az_fs_req_file_create file_create;
 		struct az_fs_req_file_get file_get;
 		struct az_fs_req_file_put file_put;
@@ -132,7 +139,6 @@ struct az_fs_req {
 		/*
 		 * No request specific data aside from @path:
 		 * struct az_fs_req_shares_list shares_list;
-		 * struct az_fs_req_share_create share_create;
 		 * struct az_fs_req_share_del share_del;
 		 * struct az_fs_req_share_prop_get share_prop_get;
 		 * struct az_fs_req_dirs_files_list dirs_files_list;
@@ -182,6 +188,7 @@ az_fs_rsp_shares_list(struct op *op);
 
 int
 az_fs_req_share_create(const struct az_fs_path *path,
+		       uint64_t quota_gb,
 		       struct op **_op);
 
 int

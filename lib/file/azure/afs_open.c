@@ -263,7 +263,8 @@ afs_fopen_share(struct afs_fh *afs_fh,
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = az_fs_req_share_create(&afs_fh->path, &op);
+		ret = az_fs_req_share_create(&afs_fh->path,
+					     AZ_FS_SHARE_QUOTA_MAX_GB, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
