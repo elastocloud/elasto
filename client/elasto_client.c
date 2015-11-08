@@ -391,8 +391,10 @@ cli_args_free(const struct cli_cmd_spec *cmd,
 {
 	if ((cmd != NULL) && (cmd->args_free != NULL))
 		cmd->args_free(cli_args);
-	if (cli_args->auth.type == ELASTO_FILE_ABB) {
+	if ((cli_args->auth.type == ELASTO_FILE_ABB)
+	 || (cli_args->auth.type == ELASTO_FILE_AFS)) {
 		free(cli_args->auth.az.ps_path);
+		free(cli_args->auth.az.access_key);
 	} else if (cli_args->auth.type == ELASTO_FILE_S3) {
 		free(cli_args->auth.s3.creds_path);
 	}
