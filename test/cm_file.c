@@ -251,7 +251,6 @@ cm_file_io(void **state)
 	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
 	assert_false(ret < 0);
 
-	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
@@ -263,7 +262,6 @@ cm_file_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
-	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	ret = elasto_fclose(fh);
@@ -1046,7 +1044,6 @@ cm_file_abb_io(void **state)
 	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
 	assert_false(ret < 0);
 
-	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
@@ -1060,7 +1057,6 @@ cm_file_abb_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_check(buf, half, 0);
-	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
@@ -1071,7 +1067,6 @@ cm_file_abb_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_check(buf, half, half);
-	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	ret = elasto_fclose(fh);
@@ -1191,7 +1186,6 @@ cm_file_afs_io(void **state)
 	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
 	assert_false(ret < 0);
 
-	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	/* leave a 1k hole between first and second write */
@@ -1202,7 +1196,6 @@ cm_file_afs_io(void **state)
 	ret = elasto_fwrite(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), data);
 	assert_false(ret < 0);
 
-	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
@@ -1215,7 +1208,6 @@ cm_file_afs_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
-	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
@@ -1225,7 +1217,6 @@ cm_file_afs_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_check_zero(buf, ARRAY_SIZE(buf));
-	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
@@ -1235,7 +1226,6 @@ cm_file_afs_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), ARRAY_SIZE(buf));
-	data->iov.buf = NULL;
 	elasto_data_free(data);
 
 	ret = elasto_funlink_close(fh);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -36,7 +36,7 @@ elasto_data_free(struct elasto_data *data)
 {
 	if (data == NULL)
 		return;
-	if (data->type == ELASTO_DATA_IOV) {
+	if ((data->type == ELASTO_DATA_IOV) && (!data->iov.foreign_buf)) {
 		free(data->iov.buf);
 	}
 	free(data);
@@ -55,9 +55,11 @@ elasto_data_iov_new(uint8_t *buf,
 	struct elasto_data *data;
 
 	data = malloc(sizeof(*data));
-	if (data == NULL)
+	if (data == NULL) {
 		return -ENOMEM;
+	}
 
+	memset(data, 0, sizeof(*data));
 	data->type = ELASTO_DATA_IOV;
 	if (buf_alloc) {
 		assert(buf_len > 0);
@@ -68,6 +70,8 @@ elasto_data_iov_new(uint8_t *buf,
 		}
 	} else {
 		data->iov.buf = buf;
+		/* don't free foreign buffers with _data */
+		data->iov.foreign_buf = true;
 	}
 	data->len = buf_len;
 	data->off = 0;
@@ -83,6 +87,11 @@ elasto_data_iov_grow(struct elasto_data *data,
 	uint8_t *buf_old;
 	if (data->type != ELASTO_DATA_IOV) {
 		dbg(0, "invalid data type %d\n", data->type);
+		return -EINVAL;
+	}
+
+	if (data->iov.foreign_buf) {
+		dbg(0, "can't grow foreign iov buffer\n");
 		return -EINVAL;
 	}
 

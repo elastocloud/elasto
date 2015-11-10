@@ -30,8 +30,9 @@ struct elasto_data {
 	uint64_t off;
 	union {
 		struct {
-			/* @buf is allocated io buffer of size @len */
+			/* @buf is an io buffer of size @len */
 			uint8_t *buf;
+			bool foreign_buf;
 		} iov;
 		struct {
 			void *priv;
@@ -52,6 +53,15 @@ struct elasto_data {
 void
 elasto_data_free(struct elasto_data *data);
 
+/**
+ * elasto_data_iov_new - initialise an buffer based data struct
+ *
+ * @buf:	Foreign buffer, or NULL if @buf_alloc is set.
+ * @buf_len:	Length of foreign buffer, or allocation length.
+ * @buf_alloc:	Set if buffer should be allocated and freed with @_data.
+ * @_data:	Data struct allocated and returned on success.
+ * @return:	0 on success, -errno on failure.
+ */
 int
 elasto_data_iov_new(uint8_t *buf,
 		    uint64_t buf_len,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -50,7 +50,7 @@ cm_data_iovec(void **state)
 	assert_true(data->len == ARRAY_SIZE(buf));
 	assert_true(data->off == 0);
 	assert_true(data->iov.buf == buf);
-	data->iov.buf = NULL;	/* don't free stack */
+	/* data_free() doesn't free foreign buffers */
 	elasto_data_free(data);
 
 	ret = elasto_data_iov_new(buf_alloc, 100, true, &data);
@@ -63,6 +63,7 @@ cm_data_iovec(void **state)
 	ret = elasto_data_iov_grow(data, 100);
 	assert_int_equal(ret, 0);
 	assert_true(data->len == 200);
+	/* data_free() frees data_iov_new() allocted buffers */
 	elasto_data_free(data);
 }
 

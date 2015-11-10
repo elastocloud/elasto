@@ -551,11 +551,8 @@ cm_az_fs_file_io(void **state)
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
-	/* TODO the ugly data api should be improved here... */
-	op->req.data = NULL;
+	/* won't free the @buf, as we didn't allocate */
 	op_free(op);
-	data->iov.buf = NULL;
-	elasto_data_free(data);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
 
@@ -570,10 +567,7 @@ cm_az_fs_file_io(void **state)
 	assert_true(!op->rsp.is_error);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
-	op->rsp.data = NULL;
 	op_free(op);
-	data->iov.buf = NULL;
-	elasto_data_free(data);
 
 	/* read from offset after allocated range, should be zero */
 	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
@@ -588,10 +582,7 @@ cm_az_fs_file_io(void **state)
 	assert_true(!op->rsp.is_error);
 
 	cm_file_buf_check_zero(buf, ARRAY_SIZE(buf));
-	op->rsp.data = NULL;
 	op_free(op);
-	data->iov.buf = NULL;
-	elasto_data_free(data);
 
 	/* cleanup base file */
 	ret = az_fs_req_file_del(&path, &op);
