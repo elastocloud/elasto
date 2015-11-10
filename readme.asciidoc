@@ -9,34 +9,29 @@ manipulating cloud storage objects via REST protocols.
 Microsoft Azure and Amazon S3 cloud storage protocols are supported.
 
 
-Building
---------
+Installation
+------------
 
-Elasto uses the Waf build framework.
+Prebuilt packages for GNU/Linux distributions are available for download
+from the Elasto project website: http://elastocloud.org/. Alternatively,
+Elasto can be built from source using the Waf build framework.
 
 libevent, libexpat and openssl (libcrypto) development libraries are
 required for building.
 
 To compile the library and client, run the following from the top of the
-Elasto source tree:
+source tree:
 
 -----------------------------------------------------
 > ./waf configure
 > ./waf build
 -----------------------------------------------------
 
-
-Installing
-----------
-
 After building, Elasto can be installed by running:
 
 -----------------------------------------------------
 > ./waf install
 -----------------------------------------------------
-
-Prebuilt packages for GNU/Linux distributions are available via the
-Elasto project website.
 
 
 Running (short version)
