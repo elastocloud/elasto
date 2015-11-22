@@ -54,6 +54,14 @@ elasto_data_iov_new(uint8_t *buf,
 {
 	struct elasto_data *data;
 
+	if (buf_alloc && (buf != NULL)) {
+		return -EINVAL;
+	}
+
+	if (!buf_alloc && (buf_len > 0) && (buf == NULL)) {
+		return -EINVAL;
+	}
+
 	data = malloc(sizeof(*data));
 	if (data == NULL) {
 		return -ENOMEM;
@@ -61,17 +69,16 @@ elasto_data_iov_new(uint8_t *buf,
 
 	memset(data, 0, sizeof(*data));
 	data->type = ELASTO_DATA_IOV;
-	if (buf_alloc) {
-		assert(buf_len > 0);
+	if (!buf_alloc) {
+		data->iov.buf = buf;
+		/* don't free foreign buffers with _data */
+		data->iov.foreign_buf = true;
+	} else if (buf_len > 0) {
 		data->iov.buf = malloc(buf_len);
 		if (data->iov.buf == NULL) {
 			free(data);
 			return -ENOMEM;
 		}
-	} else {
-		data->iov.buf = buf;
-		/* don't free foreign buffers with _data */
-		data->iov.foreign_buf = true;
 	}
 	data->len = buf_len;
 	data->off = 0;
