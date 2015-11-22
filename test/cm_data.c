@@ -42,7 +42,6 @@ cm_data_iovec(void **state)
 	int ret;
 	struct elasto_data *data;
 	uint8_t buf[100];
-	uint8_t *buf_alloc = NULL;
 
 	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
 	assert_int_equal(ret, 0);
@@ -53,7 +52,7 @@ cm_data_iovec(void **state)
 	/* data_free() doesn't free foreign buffers */
 	elasto_data_free(data);
 
-	ret = elasto_data_iov_new(buf_alloc, 100, true, &data);
+	ret = elasto_data_iov_new(NULL, 100, true, &data);
 	assert_int_equal(ret, 0);
 	assert_true(data->type == ELASTO_DATA_IOV);
 	assert_true(data->len == 100);
@@ -64,6 +63,21 @@ cm_data_iovec(void **state)
 	assert_int_equal(ret, 0);
 	assert_true(data->len == 200);
 	/* data_free() frees data_iov_new() allocted buffers */
+	elasto_data_free(data);
+
+	/* allocate and grow a zero length buffer */
+	ret = elasto_data_iov_new(NULL, 0, true, &data);
+	assert_int_equal(ret, 0);
+	ret = elasto_data_iov_grow(data, 100);
+	assert_int_equal(ret, 0);
+	assert_true(data->len == 100);
+	elasto_data_free(data);
+
+	/* attempt to grow a foreign buffer */
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_int_equal(ret, 0);
+	ret = elasto_data_iov_grow(data, 100);
+	assert_int_not_equal(ret, 0);
 	elasto_data_free(data);
 }
 
