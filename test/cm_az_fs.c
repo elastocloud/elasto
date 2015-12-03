@@ -696,11 +696,7 @@ cm_az_fs_file_cp(void **state)
 	assert_true(ret >= 0);
 	assert_true(!op->rsp.is_error);
 
-	/* TODO the ugly data api should be improved here... */
-	op->req.data = NULL;
 	op_free(op);
-	data->iov.buf = NULL;
-	elasto_data_free(data);
 
 	/* create copy destination file */
 	ret = az_fs_req_file_create(&dst_path, BYTES_IN_TB, &op);
@@ -737,10 +733,7 @@ cm_az_fs_file_cp(void **state)
 	assert_true(!op->rsp.is_error);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
-	op->rsp.data = NULL;
 	op_free(op);
-	data->iov.buf = NULL;
-	elasto_data_free(data);
 
 	/* cleanup base file */
 	ret = az_fs_req_file_del(&src_path, &op);
