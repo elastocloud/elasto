@@ -4,15 +4,16 @@ def options(opt):
 def configure(conf):
 	conf.load('compiler_c')
 	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
-	conf.find_program('docbook-to-man', mandatory=False, var='D2M')
+	conf.find_program('a2x', mandatory=False, var='A2X')
 	conf.find_program('gzip', mandatory=True, var='GZIP')
 
 def build(bld):
-	if bld.env.D2M:
-		bld(rule='${D2M} ${SRC}', source='elasto_cli.xml')
+	if bld.env.A2X:
+		bld(rule='${A2X} --doctype manpage --format manpage ${SRC}',
+		    source='elasto_cli.asciidoc')
 	else:
 		print("Skipping documentation build: "
-		      "docbook-to-man binary required")
+		      "AsciiDoc a2x binary required")
 		# install pre-built man page
 	bld(rule='${GZIP} -c ${SRC} > ${TGT}',
 	    source='elasto_cli.1',

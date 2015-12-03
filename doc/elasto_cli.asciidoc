@@ -1,0 +1,131 @@
+ELASTO_CLI(1)
+=============
+:doctype: manpage
+
+
+NAME
+----
+elasto_cli - Cloud Storage Client Utility
+
+
+SYNOPSIS
+--------
+*elasto_cli* ['-?'] ['-s Azure publish settings file']
+	     ['-k Amazon IAM credentials file'] ['-d log level'] ['-i']
+	     ['-h CLI history file'] ['-u REST Server URI'] ['-- command']
+
+
+DESCRIPTION
+-----------
+elasto_cli is a command line utility for the manipulation of cloud storage
+objects.
+
+
+OPTIONS
+-------
+*-?*::
+	Print help message and exit.
+
+*-s* 'Azure publish settings file'::
+	Azure account credentials. Must be provided for Azure cloud access.
+
+*-k* 'Amazon IAM credentials file'::
+	Amazon IAM credentials.csv file, which includes the account key ID and secret access key. Must be provided for Amazon S3 cloud access.
+
+*-d* 'log level'::
+	Print debugging information.
+
+*-i*::
+	Use HTTP instead of HTTPS where possible, for improved performance.
+
+*-h* 'CLI history file'::
+	Specify a file to use as storage for Elasto CLI command history, rather than the default ~/.elasto_history path.
+
+*-u* 'REST server URI'::
+	Specify a protocol and server to use for the connection, instead of deriving it from the credentials file.  Currently only the protocol in the URI is processed.
+	Supported values are:
+
+	abb://: Azure Block Blob Service
+
+	afs://: Azure File Service
+
+	s3://: Amazon S3
+
+'command'::
+	Client command to execute, refer to list below. If no command is present, then the Elasto command line prompt will be entered.
+
+
+AZURE BLOB SERVICE COMMANDS
+---------------------------
+*ls* '[account[/container[/blob]]]'::
+	When run without arguments, lists all accounts associated with the given Azure subscription. Otherwise lists all entities under the provided account, container, or blob.
+
+*put* '<local path> <account/container/blob>'::
+	Uploads the file at 'local path' to 'blob' at the provided remote path.
+
+*get* '<account/container/blob>' '<local path>'::
+	Downloads 'blob', storing it as a file at 'local path'.
+
+*del* '<account>[/container[/blob]]'::
+	Deletes the given blob, container, or account.  The operation is recursive, e.g. on container deletion, any nested blobs are also removed.
+
+*cp* '<src account/src container/src blob>' '<dest account/dest container/dest blob>'::
+	Copies the given 'src blob' to 'dest blob'.  The copy is performed remotely, such that blob data does not travel between client and cloud.
+
+*create* '[-L location] <account>'::
+	Creates an Azure account with the provided attributes. The account name must be unique within Azures namespace. If specified, location must match one of Azure's datacenter location names.
+
+*create* '<account/container>'::
+	Creates the given container.
+
+
+AZURE FILE SERVICE COMMANDS
+---------------------------
+*ls* '[account[/share[/directory/path]]]'::
+	When run without arguments, lists all accounts associated with the given Azure subscription. Otherwise lists all entities under the provided 'account', 'share', or 'directory'.
+
+*put* '<local path>' '<account/share[/directory/path]/file>'::
+	Uploads the file at 'local path' to the provided remote path.
+
+*get* '<account/share/[/directory/path]/file>' '<local path>'::
+	Downloads 'blob', storing it as a file at 'local path'.
+
+*del* '<account>[/share[/directory/path/file]]'::
+	Deletes the given 'file', 'directory', 'share', or 'account'.  The operation is recursive, e.g. on share deletion, any nested files or directories are also removed.
+
+*create* '[-L location]' '<account>'::
+	Creates an Azure account with the provided attributes. The account name must be unique within Azures namespace. If specified, 'location' must match one of Azure's datacenter location names.
+
+*create* '<account/share[/directory/path]>'::
+	Creates the given 'share' or 'directory path'.
+
+
+AMAZON S3 COMMANDS
+------------------
+*ls* '[bucket]'::
+	When run without arguments, lists all buckets associated with the given S3 account. Otherwise lists all objects under the given 'bucket'.
+
+*put* '<local path>' '<bucket/object>'::
+	Uploads the file at 'local path' to 'object' at the provided remote path.
+
+*get* '<bucket/object>' '<local path>'::
+	Downloads 'object', storing it as a file at 'local path'.
+
+*del* '<bucket>[/object]'::
+	Deletes the given 'object' or 'bucket'. The operation is recursive.
+
+*cp* '<src bucket/src object>' '<dest bucket/dest object>'::
+	Copies the given 'src object' to 'dest object'. The copy is performed remotely, such that object-data does not travel between client and cloud.
+
+*create* '[-L location]' '<bucket>'::
+	Creates the given bucket.
+
+
+BUGS
+----
+Please report bugs via the issue tracker: https://github.com/elastocloud/elasto/issues
+
+
+AUTHOR
+------
+The Elasto cloud project was created by David Disseldorp.
