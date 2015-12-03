@@ -1,130 +1,250 @@
-.\" -*- coding: us-ascii -*-
-.if \n(.g .ds T< \\FC
-.if \n(.g .ds T> \\F[\n[.fam]]
-.de URL
-\\$2 \(la\\$1\(ra\\$3
-..
-.if \n(.g .mso www.tmac
-.TH elasto_cli 1 "May 23rd, 2015" "" ""
-.SH NAME
-elasto_cli \- Cloud Storage Client Utility
-.SH SYNOPSIS
-'nh
-.fi
+'\" t
+.\"     Title: elasto_cli
+.\"    Author: [see the "AUTHOR" section]
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 12/03/2015
+.\"    Manual: \ \&
+.\"    Source: \ \&
+.\"  Language: English
+.\"
+.TH "ELASTO_CLI" "1" "12/03/2015" "\ \&" "\ \&"
+.\" -----------------------------------------------------------------
+.\" * Define some portability stuff
+.\" -----------------------------------------------------------------
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.\" http://bugs.debian.org/507673
+.\" http://lists.gnu.org/archive/html/groff/2009-02/msg00013.html
+.\" ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.ie \n(.g .ds Aq \(aq
+.el       .ds Aq '
+.\" -----------------------------------------------------------------
+.\" * set default formatting
+.\" -----------------------------------------------------------------
+.\" disable hyphenation
+.nh
+.\" disable justification (adjust text to left margin only)
 .ad l
-\fBelasto_cli\fR \kx
-.if (\nx>(\n(.l/2)) .nr x (\n(.l/5)
-'in \n(.iu+\nxu
-[\fB-?\fR] [\fB-s\fR \fIAzure publish settings file\fR] [\fB-k\fR \fIAmazon IAM credentials file\fR] [\fB-d\fR \fIlog level\fR] [\fB-i\fR] [\fB-h\fR \fICLI history file\fR] [\fB-u\fR \fIREST Server URI\fR] [-- \fIcommand\fR]
-'in \n(.iu-\nxu
-.ad b
-'hy
-.SH DESCRIPTION
-elasto_cli is a command line utility for the manipulation of
-cloud storage objects.
-.SH OPTIONS
-.TP 
-\*(T<\fB\-?\fR\*(T>
-Print help message and exit.
-.TP 
-\*(T<\fB\-s\fR\*(T> \fIAzure publish settings file\fR
-Azure account credentials. Must be provided for Azure cloud access.
-.TP 
-\*(T<\fB\-k\fR\*(T> \fIAmazon IAM credentials file\fR
-Amazon IAM credentials.csv file, which includes the account key ID and secret access key. Must be provided for Amazon S3 cloud access.
-.TP 
-\*(T<\fB\-d\fR\*(T> \fIlog level\fR
-Print debugging information.
-.TP 
-\*(T<\fB\-i\fR\*(T>
-Use HTTP instead of HTTPS where possible, for improved
-performance.
-.TP 
-\*(T<\fB\-h\fR\*(T> \fICLI history file\fR
-Specify a file to use as storage for Elasto CLI command
-history, rather than the default \fI~/.elasto_history
-\fRpath.
-.TP 
-\*(T<\fB\-u\fR\*(T> \fIREST server URI\fR
-Specify a protocol and server to use for the connection, instead of deriving it from the credentials file.
-Currently only the protocol in the URI is processed. Supported values are:
-
-\fIabb://\fR: Azure Block Blob Service
-
-\fIafs://\fR: Azure File Service
-
-\fIs3://\fR: Amazon S3
-.TP 
+.\" -----------------------------------------------------------------
+.\" * MAIN CONTENT STARTS HERE *
+.\" -----------------------------------------------------------------
+.SH "NAME"
+elasto_cli \- Cloud Storage Client Utility
+.SH "SYNOPSIS"
+.sp
+\fBelasto_cli\fR [\fI\-?\fR] [\fI\-s Azure publish settings file\fR] [\fI\-k Amazon IAM credentials file\fR] [\fI\-d log level\fR] [\fI\-i\fR] [\fI\-h CLI history file\fR] [\fI\-u REST Server URI\fR] [\fI\-\- command\fR]
+.SH "DESCRIPTION"
+.sp
+elasto_cli is a command line utility for the manipulation of cloud storage objects\&.
+.SH "OPTIONS"
+.PP
+\fB\-?\fR
+.RS 4
+Print help message and exit\&.
+.RE
+.PP
+\fB\-s\fR \fIAzure publish settings file\fR
+.RS 4
+Azure account credentials\&. Must be provided for Azure cloud access\&.
+.RE
+.PP
+\fB\-k\fR \fIAmazon IAM credentials file\fR
+.RS 4
+Amazon IAM credentials\&.csv file, which includes the account key ID and secret access key\&. Must be provided for Amazon S3 cloud access\&.
+.RE
+.PP
+\fB\-d\fR \fIlog level\fR
+.RS 4
+Print debugging information\&.
+.RE
+.PP
+\fB\-i\fR
+.RS 4
+Use HTTP instead of HTTPS where possible, for improved performance\&.
+.RE
+.PP
+\fB\-h\fR \fICLI history file\fR
+.RS 4
+Specify a file to use as storage for Elasto CLI command history, rather than the default ~/\&.elasto_history path\&.
+.RE
+.PP
+\fB\-u\fR \fIREST server URI\fR
+.RS 4
+Specify a protocol and server to use for the connection, instead of deriving it from the credentials file\&. Currently only the protocol in the URI is processed\&. Supported values are:
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+abb://: Azure Block Blob Service
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+afs://: Azure File Service
+.fi
+.if n \{\
+.RE
+.\}
+.sp
+.if n \{\
+.RS 4
+.\}
+.nf
+s3://: Amazon S3
+.fi
+.if n \{\
+.RE
+.\}
+.RE
+.PP
 \fIcommand\fR
-Client command to execute, refer to list below. If no command is present, then the Elasto command line prompt will be entered.
+.RS 4
+Client command to execute, refer to list below\&. If no command is present, then the Elasto command line prompt will be entered\&.
+.RE
 .SH "AZURE BLOB SERVICE COMMANDS"
-.TP 
-ls \fI[account[/container[/blob]]]\fR
-When run without arguments, lists all accounts associated with the given Azure subscription. Otherwise lists all entities under the provided \fIaccount\fR, \fIcontainer\fR, or \fIblob\fR.
-.TP 
-put \fI<local path> <account/container/blob>\fR
-Uploads the file at \fIlocal path\fR to \fIblob\fR at the provided remote \fIpath\fR.
-.TP 
-get \fI<account/container/blob> <local path>\fR
-Downloads \fIblob\fR, storing it as a file at \fIlocal path\fR.
-.TP 
-del \fI<account>[/container[/blob]]\fR
-Deletes the given \fIblob\fR, \fIcontainer\fR, or \fIaccount\fR.
-The operation is recursive, e.g. on container deletion, any nested blobs are also removed.
-.TP 
-cp \fI<src account/src container/src blob>\fR \fI<dest account/dest container/dest blob>\fR
-Copies the given \fIsrc blob\fR to \fIdest blob\fR.
-The copy is performed remotely, such that blob-data does not travel between client and cloud.
-.TP 
-create \fI[-L location] <account>\fR
-Creates an Azure account with the provided attributes. The account name must be unique within Azures namespace. If specified, \fIlocation\fR must match one of Azure's datacenter location names.
-.TP 
-create \fI<account/container>\fR
-Creates the given \fIcontainer\fR.
+.PP
+\fBls\fR \fI[account[/container[/blob]]]\fR
+.RS 4
+When run without arguments, lists all accounts associated with the given Azure subscription\&. Otherwise lists all entities under the provided account, container, or blob\&.
+.RE
+.PP
+\fBput\fR \fI<local path> <account/container/blob>\fR
+.RS 4
+Uploads the file at
+\fIlocal path\fR
+to
+\fIblob\fR
+at the provided remote path\&.
+.RE
+.PP
+\fBget\fR \fI<account/container/blob>\fR \fI<local path>\fR
+.RS 4
+Downloads
+\fIblob\fR, storing it as a file at
+\fIlocal path\fR\&.
+.RE
+.PP
+\fBdel\fR \fI<account>[/container[/blob]]\fR
+.RS 4
+Deletes the given blob, container, or account\&. The operation is recursive, e\&.g\&. on container deletion, any nested blobs are also removed\&.
+.RE
+.PP
+\fBcp\fR \fI<src account/src container/src blob>\fR \fI<dest account/dest container/dest blob>\fR
+.RS 4
+Copies the given
+\fIsrc blob\fR
+to
+\fIdest blob\fR\&. The copy is performed remotely, such that blob data does not travel between client and cloud\&.
+.RE
+.PP
+\fBcreate\fR \fI[\-L location] <account>\fR
+.RS 4
+Creates an Azure account with the provided attributes\&. The account name must be unique within Azures namespace\&. If specified, location must match one of Azure\(cqs datacenter location names\&.
+.RE
+.PP
+\fBcreate\fR \fI<account/container>\fR
+.RS 4
+Creates the given container\&.
+.RE
 .SH "AZURE FILE SERVICE COMMANDS"
-.TP 
-ls \fI[account[/share[/directory/path]]]\fR
-When run without arguments, lists all accounts associated with the given Azure subscription. Otherwise lists all entities under the provided \fIaccount\fR, \fIshare\fR, or \fIdirectory\fR.
-.TP 
-put \fI<local path> <account/share[/directory/path]/file>\fR
-Uploads the file at \fIlocal path\fR to the provided remote \fIpath\fR.
-.TP 
-get \fI<account/share/[/directory/path]/file> <local path>\fR
-Downloads \fIblob\fR, storing it as a file at \fIlocal path\fR.
-.TP 
-del \fI<account>[/share[/directory/path/file]]\fR
-Deletes the given \fIfile\fR, \fIdirectory\fR, \fIshare\fR, or \fIaccount\fR.
-The operation is recursive, e.g. on share deletion, any nested files or directories are also removed.
-.TP 
-create \fI[-L location] <account>\fR
-Creates an Azure account with the provided attributes. The account name must be unique within Azures namespace. If specified, \fIlocation\fR must match one of Azure's datacenter location names.
-.TP 
-create \fI<account/share[/directory/path]>\fR
-Creates the given \fIshare\fR or directory \fIpath\fR.
+.PP
+\fBls\fR \fI[account[/share[/directory/path]]]\fR
+.RS 4
+When run without arguments, lists all accounts associated with the given Azure subscription\&. Otherwise lists all entities under the provided
+\fIaccount\fR,
+\fIshare\fR, or
+\fIdirectory\fR\&.
+.RE
+.PP
+\fBput\fR \fI<local path>\fR \fI<account/share[/directory/path]/file>\fR
+.RS 4
+Uploads the file at
+\fIlocal path\fR
+to the provided remote path\&.
+.RE
+.PP
+\fBget\fR \fI<account/share/[/directory/path]/file>\fR \fI<local path>\fR
+.RS 4
+Downloads
+\fIblob\fR, storing it as a file at
+\fIlocal path\fR\&.
+.RE
+.PP
+\fBdel\fR \fI<account>[/share[/directory/path/file]]\fR
+.RS 4
+Deletes the given
+\fIfile\fR,
+\fIdirectory\fR,
+\fIshare\fR, or
+\fIaccount\fR\&. The operation is recursive, e\&.g\&. on share deletion, any nested files or directories are also removed\&.
+.RE
+.PP
+\fBcreate\fR \fI[\-L location]\fR \fI<account>\fR
+.RS 4
+Creates an Azure account with the provided attributes\&. The account name must be unique within Azures namespace\&. If specified,
+\fIlocation\fR
+must match one of Azure\(cqs datacenter location names\&.
+.RE
+.PP
+\fBcreate\fR \fI<account/share[/directory/path]>\fR
+.RS 4
+Creates the given
+\fIshare\fR
+or
+\fIdirectory path\fR\&.
+.RE
 .SH "AMAZON S3 COMMANDS"
-.TP 
-ls \fI[bucket]\fR
-When run without arguments, lists all buckets associated with the given S3 account. Otherwise lists all objects under the given \fIbucket\fR.
-.TP 
-put \fI<local path> <bucket/object>\fR
-Uploads the file at \fIlocal path\fR to \fIobject\fR at the provided remote \fIpath\fR.
-.TP 
-get \fI<bucket/object> <local path>\fR
-Downloads \fIobject\fR, storing it as a file at \fIlocal path\fR.
-.TP 
-del \fI<bucket>[/object]\fR
-Deletes the given \fIobject\fR or \fIbucket\fR.
-The operation is recursive.
-.TP 
-cp \fI<src bucket/src object>\fR \fI<dest bucket/dest object>\fR
-Copies the given \fIsrc object\fR to \fIdest object\fR.
-The copy is performed remotely, such that object-data does not travel between client and cloud.
-.TP 
-create [-L location]\fI<bucket>\fR
-Creates the given \fIbucket\fR.
-.SH BUGS
-Please report bugs via the 
-.URL https://github.com/elastocloud/elasto/issues "issue tracker"
-\&.
-.SH AUTHORS
-The Elasto cloud project was created by David Disseldorp.
+.PP
+\fBls\fR \fI[bucket]\fR
+.RS 4
+When run without arguments, lists all buckets associated with the given S3 account\&. Otherwise lists all objects under the given
+\fIbucket\fR\&.
+.RE
+.PP
+\fBput\fR \fI<local path>\fR \fI<bucket/object>\fR
+.RS 4
+Uploads the file at
+\fIlocal path\fR
+to
+\fIobject\fR
+at the provided remote path\&.
+.RE
+.PP
+\fBget\fR \fI<bucket/object>\fR \fI<local path>\fR
+.RS 4
+Downloads
+\fIobject\fR, storing it as a file at
+\fIlocal path\fR\&.
+.RE
+.PP
+\fBdel\fR \fI<bucket>[/object]\fR
+.RS 4
+Deletes the given
+\fIobject\fR
+or
+\fIbucket\fR\&. The operation is recursive\&.
+.RE
+.PP
+\fBcp\fR \fI<src bucket/src object>\fR \fI<dest bucket/dest object>\fR
+.RS 4
+Copies the given
+\fIsrc object\fR
+to
+\fIdest object\fR\&. The copy is performed remotely, such that object\-data does not travel between client and cloud\&.
+.RE
+.PP
+\fBcreate\fR \fI[\-L location]\fR \fI<bucket>\fR
+.RS 4
+Creates the given bucket\&.
+.RE
+.SH "BUGS"
+.sp
+Please report bugs via the issue tracker: https://github\&.com/elastocloud/elasto/issues
+.SH "AUTHOR"
+.sp
+The Elasto cloud project was created by David Disseldorp\&.
