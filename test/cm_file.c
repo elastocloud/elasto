@@ -1092,7 +1092,6 @@ cm_file_data_out_cb(uint64_t stream_off,
 	*_out_buf = buf;
 	*buf_len = need;
 
-
 	return 0;
 }
 
@@ -1116,7 +1115,6 @@ cm_file_data_cb(void **state)
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
-	struct elasto_data *data;
 
 	auth.type = ELASTO_FILE_ABB;
 	auth.az.ps_path = cm_us->ps_file;
@@ -1132,21 +1130,10 @@ cm_file_data_cb(void **state)
 			   NULL, &fh);
 	assert_false(ret < 0);
 
-	ret = elasto_data_cb_new(1024, cm_file_data_out_cb, 0,
-				 NULL, NULL,
-				 &data);
+	ret = elasto_fwrite_cb(fh, 0, 1024, NULL, cm_file_data_out_cb);
 	assert_false(ret < 0);
 
-	ret = elasto_fwrite(fh, 0, 1024, data);
-	assert_false(ret < 0);
-	elasto_data_free(data);
-
-	ret = elasto_data_cb_new(0, NULL, 1024,
-				 cm_file_data_in_cb, NULL,
-				 &data);
-	assert_false(ret < 0);
-
-	ret = elasto_fread(fh, 0, 1024, data);
+	ret = elasto_fread_cb(fh, 0, 1024, NULL, cm_file_data_in_cb);
 	assert_false(ret < 0);
 
 	ret = elasto_fclose(fh);
