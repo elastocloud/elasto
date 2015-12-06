@@ -5,12 +5,12 @@ ELASTO_CLI(1)
 
 NAME
 ----
-elasto_cli - Cloud Storage Client Utility
+elasto_cli - Lightweight Cloud Storage Client Utility
 
 
 SYNOPSIS
 --------
-*elasto_cli* ['-?'] ['-s Azure publish settings file']
+*elasto_cli* ['-?'] ['-s Azure publish settings file'] ['-K Azure access key']
 	     ['-k Amazon IAM credentials file'] ['-d log level'] ['-i']
 	     ['-h CLI history file'] ['-u REST Server URI'] ['-- command']
 
@@ -18,7 +18,8 @@ SYNOPSIS
 DESCRIPTION
 -----------
 elasto_cli is a command line utility for the manipulation of cloud storage
-objects.
+objects. It supports the Amazon S3 and Azure Blob/File Service RESTful
+protocols.
 
 
 OPTIONS
@@ -27,7 +28,13 @@ OPTIONS
 	Print help message and exit.
 
 *-s* 'Azure publish settings file'::
-	Azure account credentials. Must be provided for Azure cloud access.
+	Azure subscription credentials. Either a 'publish settings file' or an
+	'account access key' must be provided for Azure cloud access.
+
+*-K* 'Azure account access key'::
+	Azure credentials tied to a specific account. Using an access key will
+	only permit access to Blob and File Service objects nested within the
+	corresponding account.
 
 *-k* 'Amazon IAM credentials file'::
 	Amazon IAM credentials.csv file, which includes the account key ID and
@@ -37,7 +44,8 @@ OPTIONS
 	Print debugging information.
 
 *-i*::
-	Use HTTP instead of HTTPS where possible, for improved performance.
+	Use *insecure* HTTP instead of HTTPS where possible, for improved
+	performance.
 
 *-h* 'CLI history file'::
 	Specify a file to use as storage for Elasto CLI command history, rather
@@ -108,6 +116,10 @@ AZURE FILE SERVICE COMMANDS
 	operation is recursive, e.g. on share deletion, any nested files or
 	directories are also removed.
 
+*cp* '<src account/src share[/directory]/src file>' '<dest account/dest share[/directory]/dest file>'::
+	Copies the given 'src file' to 'dest file'. The copy is performed
+	remotely.
+
 *create* '[-L location]' '<account>'::
 	Creates an Azure account with the provided attributes. The account name
 	must be unique within Azures namespace. If specified, 'location' must
@@ -135,19 +147,20 @@ AMAZON S3 COMMANDS
 
 *cp* '<src bucket/src object>' '<dest bucket/dest object>'::
 	Copies the given 'src object' to 'dest object'. The copy is performed
-	remotely, such that object-data does not travel between client and
+	remotely, such that object data does not travel between client and
 	cloud.
 
 *create* '[-L location]' '<bucket>'::
 	Creates the given bucket.
 
 
-BUGS
-----
-Please report bugs via the issue tracker:
-https://github.com/elastocloud/elasto/issues
+RESOURCES
+---------
+Main website: http://elastocloud.org/
+Bug/feature tracker: https://github.com/elastocloud/elasto/issues
+Source code: https://github.com/elastocloud/elasto
 
 
 AUTHOR
 ------
-The Elasto cloud project was created by David Disseldorp.
+The Elasto project was created by David Disseldorp.
