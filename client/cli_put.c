@@ -123,11 +123,10 @@ err_out:
 }
 
 static int
-cli_put_data_setup(const char *path,
-		   uint64_t len,
-		   struct elasto_data **_data)
+cli_put_data_ctx_setup(const char *path,
+		       uint64_t len,
+		       struct cli_put_data_ctx **_data_ctx)
 {
-	struct elasto_data *data;
 	struct cli_put_data_ctx *data_ctx;
 	int ret;
 
@@ -150,19 +149,10 @@ cli_put_data_setup(const char *path,
 	}
 	data_ctx->len = len;
 
-	ret = elasto_data_cb_new(len, cli_put_data_out_cb,
-				 0, NULL,
-				 data_ctx, &data);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	*_data = data;
+	*_data_ctx = data_ctx;
 
 	return 0;
 
-err_path_free:
-	free(data_ctx->path);
 err_fd_close:
 	close(data_ctx->fd);
 err_ctx_free:
@@ -172,24 +162,20 @@ err_out:
 }
 
 static void
-cli_put_data_free(struct elasto_data *data)
+cli_put_data_ctx_free(struct cli_put_data_ctx *data_ctx)
 {
-	/* TODO implement and use elasto_data_cbpriv_out */
-	struct cli_put_data_ctx *data_ctx = data->cb.priv;
-
 	free(data_ctx->path);
 	if (close(data_ctx->fd) == -1) {
 		printf("close failed: %s\n", strerror(errno));
 	}
 	free(data_ctx);
-	elasto_data_free(data);
 }
 
 int
 cli_put_handle(struct cli_args *cli_args)
 {
 	struct elasto_fh *fh;
-	struct elasto_data *src_data;
+	struct cli_put_data_ctx *data_ctx;
 	struct stat st;
 	int ret;
 
@@ -212,21 +198,22 @@ cli_put_handle(struct cli_args *cli_args)
 	printf("putting %ld bytes from %s to %s\n",
 	       (long int)st.st_size, cli_args->put.local_path, cli_args->path);
 
-	ret = cli_put_data_setup(cli_args->put.local_path, st.st_size,
-				 &src_data);
+	ret = cli_put_data_ctx_setup(cli_args->put.local_path, st.st_size,
+				     &data_ctx);
 	if (ret < 0) {
 		goto err_fclose;
 	}
 
-	ret = elasto_fwrite(fh, 0, st.st_size, src_data);
+	ret = elasto_fwrite_cb(fh, 0, st.st_size, data_ctx,
+			       cli_put_data_out_cb);
 	if (ret < 0) {
 		printf("write failed with: %s\n", strerror(-ret));
-		goto err_data_cleanup;
+		goto err_data_ctx_cleanup;
 	}
 
 	ret = 0;
-err_data_cleanup:
-	cli_put_data_free(src_data);
+err_data_ctx_cleanup:
+	cli_put_data_ctx_free(data_ctx);
 err_fclose:
 	if (elasto_fclose(fh) < 0) {
 		printf("close failed\n");

@@ -98,11 +98,10 @@ err_out:
 }
 
 static int
-cli_get_data_setup(const char *path,
-		   uint64_t len,
-		   struct elasto_data **_data)
+cli_get_data_ctx_setup(const char *path,
+		       uint64_t len,
+		       struct cli_get_data_ctx **_data_ctx)
 {
-	struct elasto_data *data;
 	struct cli_get_data_ctx *data_ctx;
 	int ret;
 
@@ -135,19 +134,10 @@ cli_get_data_setup(const char *path,
 	}
 	data_ctx->len = len;
 
-	ret = elasto_data_cb_new(0, NULL,
-				 len, cli_get_data_in_cb,
-				 data_ctx, &data);
-	if (ret < 0) {
-		goto err_path_free;
-	}
-
-	*_data = data;
+	*_data_ctx = data_ctx;
 
 	return 0;
 
-err_path_free:
-	free(data_ctx->path);
 err_fd_close:
 	close(data_ctx->fd);
 err_ctx_free:
@@ -157,17 +147,13 @@ err_out:
 }
 
 static void
-cli_get_data_free(struct elasto_data *data)
+cli_get_data_ctx_free(struct cli_get_data_ctx *data_ctx)
 {
-	/* TODO implement and use elasto_data_cbpriv_get */
-	struct cli_get_data_ctx *data_ctx = data->cb.priv;
-
 	free(data_ctx->path);
 	if (close(data_ctx->fd) == -1) {
 		printf("close failed: %s\n", strerror(errno));
 	}
 	free(data_ctx);
-	elasto_data_free(data);
 }
 
 int
@@ -176,7 +162,7 @@ cli_get_handle(struct cli_args *cli_args)
 	struct elasto_fh *fh;
 	struct stat st;
 	struct elasto_fstat fstat;
-	struct elasto_data *dest_data;
+	struct cli_get_data_ctx *data_ctx;
 	int ret;
 
 	ret = stat(cli_args->get.local_path, &st);
@@ -205,23 +191,23 @@ cli_get_handle(struct cli_args *cli_args)
 	printf("getting %" PRIu64 " bytes from %s for %s\n",
 	       fstat.size, cli_args->path, cli_args->get.local_path);
 
-	ret = cli_get_data_setup(cli_args->get.local_path, fstat.size,
-				 &dest_data);
+	ret = cli_get_data_ctx_setup(cli_args->get.local_path, fstat.size,
+				     &data_ctx);
 	if (ret < 0) {
 		goto err_fclose;
 	}
 
 	/* TODO implement and use seek(HOLE/DATA) here for efficiency */
 
-	ret = elasto_fread(fh, 0, fstat.size, dest_data);
+	ret = elasto_fread_cb(fh, 0, fstat.size, data_ctx, cli_get_data_in_cb);
 	if (ret < 0) {
 		printf("read failed with: %s\n", strerror(-ret));
-		goto err_data_cleanup;
+		goto err_data_ctx_cleanup;
 	}
 
 	ret = 0;
-err_data_cleanup:
-	cli_get_data_free(dest_data);
+err_data_ctx_cleanup:
+	cli_get_data_ctx_free(data_ctx);
 err_fclose:
 	if (elasto_fclose(fh) < 0) {
 		printf("close failed\n");
