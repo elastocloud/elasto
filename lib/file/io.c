@@ -31,6 +31,7 @@
 #include "lib/azure_ssl.h"
 #include "lib/util.h"
 #include "lib/dbg.h"
+#include "lib/data_api.h"
 #include "file_api.h"
 #include "handle.h"
 #include "xmit.h"
@@ -75,6 +76,56 @@ err_out:
 }
 
 int
+elasto_fwrite_cb(struct elasto_fh *fh,
+		 uint64_t dest_off,
+		 uint64_t dest_len,
+		 void *cb_priv,
+		 int (*out_cb)(uint64_t stream_off,
+			       uint64_t need,
+			       uint8_t **_out_buf,
+			       uint64_t *buf_len,
+			       void *priv))
+{
+	int ret;
+	struct elasto_data *src_data;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
+		dbg(1, "invalid IO request for directory handle\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (out_cb == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = elasto_data_cb_new(dest_len, out_cb, 0, NULL, cb_priv, &src_data);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	dbg(3, "writing range at %" PRIu64 ", len %" PRIu64 "\n",
+	    dest_off, dest_len);
+
+	ret = fh->ops.write(fh->mod_priv, dest_off, dest_len, src_data);
+	if (ret < 0) {
+		goto err_data_free;
+	}
+	ret = 0;
+
+err_data_free:
+	elasto_data_free(src_data);
+err_out:
+	return ret;
+}
+
+int
 elasto_fread(struct elasto_fh *fh,
 	     uint64_t src_off,
 	     uint64_t src_len,
@@ -102,6 +153,56 @@ elasto_fread(struct elasto_fh *fh,
 	}
 	ret = 0;
 
+err_out:
+	return ret;
+}
+
+int
+elasto_fread_cb(struct elasto_fh *fh,
+		uint64_t src_off,
+		uint64_t src_len,
+		void *cb_priv,
+		int (*in_cb)(uint64_t stream_off,
+			     uint64_t got,
+			     uint8_t *in_buf,
+			     uint64_t buf_len,
+			     void *priv))
+{
+	int ret;
+	struct elasto_data *dest_data;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
+		dbg(1, "invalid IO request for directory handle\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (in_cb == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = elasto_data_cb_new(0, NULL, src_len, in_cb, cb_priv, &dest_data);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	dbg(3, "reading range at %" PRIu64 ", len %" PRIu64 "\n",
+	    src_off, src_len);
+
+	ret = fh->ops.read(fh->mod_priv, src_off, src_len, dest_data);
+	if (ret < 0) {
+		goto err_data_free;
+	}
+	ret = 0;
+
+err_data_free:
+	elasto_data_free(dest_data);
 err_out:
 	return ret;
 }

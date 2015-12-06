@@ -94,10 +94,32 @@ elasto_fwrite(struct elasto_fh *fh,
 	      struct elasto_data *src);
 
 int
+elasto_fwrite_cb(struct elasto_fh *fh,
+		 uint64_t dest_off,
+		 uint64_t dest_len,
+		 void *cb_priv,
+		 int (*out_cb)(uint64_t stream_off,
+			       uint64_t need,
+			       uint8_t **_out_buf,
+			       uint64_t *buf_len,
+			       void *priv));
+
+int
 elasto_fread(struct elasto_fh *fh,
 	     uint64_t src_off,
 	     uint64_t src_len,
 	     struct elasto_data *dest);
+
+int
+elasto_fread_cb(struct elasto_fh *fh,
+		uint64_t src_off,
+		uint64_t src_len,
+		void *cb_priv,
+		int (*in_cb)(uint64_t stream_off,
+			     uint64_t got,
+			     uint8_t *in_buf,
+			     uint64_t buf_len,
+			     void *priv));
 
 enum elasto_falloc_flags {
 	ELASTO_FALLOC_PUNCH_HOLE	= 0x0001,
