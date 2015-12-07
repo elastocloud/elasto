@@ -223,7 +223,6 @@ cm_file_io(void **state)
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
-	struct elasto_data *data;
 	uint8_t buf[1024];
 
 	auth.type = ELASTO_FILE_AZURE;
@@ -245,24 +244,14 @@ cm_file_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), buf);
 	assert_false(ret < 0);
-
-	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
-	assert_false(ret < 0);
-
-	elasto_data_free(data);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
-
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
-	assert_false(ret < 0);
-
-	ret = elasto_fread(fh, 0, ARRAY_SIZE(buf), data);
+	ret = elasto_fread(fh, 0, ARRAY_SIZE(buf), buf);
 	assert_false(ret < 0);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
-	elasto_data_free(data);
 
 	ret = elasto_fclose(fh);
 	assert_false(ret < 0);
@@ -1019,7 +1008,6 @@ cm_file_abb_io(void **state)
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
-	struct elasto_data *data;
 	uint8_t buf[1024];
 	uint64_t half;
 
@@ -1038,36 +1026,22 @@ cm_file_abb_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), buf);
 	assert_false(ret < 0);
-
-	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
-	assert_false(ret < 0);
-
-	elasto_data_free(data);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
-
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
-	assert_false(ret < 0);
-
 	/* read at arbitrary offsets, first half then second */
 	half = ARRAY_SIZE(buf) / 2;
-	ret = elasto_fread(fh, 0, half, data);
+	ret = elasto_fread(fh, 0, half, buf);
 	assert_false(ret < 0);
 
 	cm_file_buf_check(buf, half, 0);
-	elasto_data_free(data);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
-	assert_false(ret < 0);
-
-	ret = elasto_fread(fh, half, half, data);
+	ret = elasto_fread(fh, half, half, buf);
 	assert_false(ret < 0);
 
 	cm_file_buf_check(buf, half, half);
-	elasto_data_free(data);
 
 	ret = elasto_fclose(fh);
 	assert_false(ret < 0);
@@ -1149,7 +1123,6 @@ cm_file_afs_io(void **state)
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
-	struct elasto_data *data;
 	uint8_t buf[1024];
 
 	auth.type = ELASTO_FILE_AFS;
@@ -1167,53 +1140,30 @@ cm_file_afs_io(void **state)
 	assert_false(ret < 0);
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), buf);
 	assert_false(ret < 0);
-
-	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), data);
-	assert_false(ret < 0);
-
-	elasto_data_free(data);
 
 	/* leave a 1k hole between first and second write */
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), ARRAY_SIZE(buf));
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	ret = elasto_fwrite(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), buf);
 	assert_false(ret < 0);
-
-	ret = elasto_fwrite(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), data);
-	assert_false(ret < 0);
-
-	elasto_data_free(data);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
-
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
-	assert_false(ret < 0);
-
 	/* check first, hole zeros, then last chunk */
-	ret = elasto_fread(fh, 0, ARRAY_SIZE(buf), data);
+	ret = elasto_fread(fh, 0, ARRAY_SIZE(buf), buf);
 	assert_false(ret < 0);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
-	elasto_data_free(data);
 
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
-	assert_false(ret < 0);
-
-	ret = elasto_fread(fh, ARRAY_SIZE(buf), ARRAY_SIZE(buf), data);
+	ret = elasto_fread(fh, ARRAY_SIZE(buf), ARRAY_SIZE(buf), buf);
 	assert_false(ret < 0);
 
 	cm_file_buf_check_zero(buf, ARRAY_SIZE(buf));
-	elasto_data_free(data);
 
-	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
-	assert_false(ret < 0);
-
-	ret = elasto_fread(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), data);
+	ret = elasto_fread(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), buf);
 	assert_false(ret < 0);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), ARRAY_SIZE(buf));
-	elasto_data_free(data);
 
 	ret = elasto_funlink_close(fh);
 	assert_false(ret < 0);

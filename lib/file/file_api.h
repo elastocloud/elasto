@@ -91,7 +91,7 @@ int
 elasto_fwrite(struct elasto_fh *fh,
 	      uint64_t dest_off,
 	      uint64_t dest_len,
-	      struct elasto_data *src);
+	      uint8_t *out_buf);
 
 int
 elasto_fwrite_cb(struct elasto_fh *fh,
@@ -108,7 +108,7 @@ int
 elasto_fread(struct elasto_fh *fh,
 	     uint64_t src_off,
 	     uint64_t src_len,
-	     struct elasto_data *dest);
+	     uint8_t *in_buf);
 
 int
 elasto_fread_cb(struct elasto_fh *fh,

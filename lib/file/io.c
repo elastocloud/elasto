@@ -40,9 +40,10 @@ int
 elasto_fwrite(struct elasto_fh *fh,
 	      uint64_t dest_off,
 	      uint64_t dest_len,
-	      struct elasto_data *src_data)
+	      uint8_t *out_buf)
 {
 	int ret;
+	struct elasto_data *src_data;
 
 	ret = elasto_fh_validate(fh);
 	if (ret < 0) {
@@ -55,9 +56,13 @@ elasto_fwrite(struct elasto_fh *fh,
 		goto err_out;
 	}
 
-	if (src_data == NULL) {
-		/* used to punch a hole here, now separate ftruncate fn */
+	if (out_buf == NULL) {
 		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = elasto_data_iov_new(out_buf, dest_len, false, &src_data);
+	if (ret < 0) {
 		goto err_out;
 	}
 
@@ -67,10 +72,12 @@ elasto_fwrite(struct elasto_fh *fh,
 	ret = fh->ops.write(fh->mod_priv, dest_off, dest_len,
 			    src_data);
 	if (ret < 0) {
-		goto err_out;
+		goto err_data_free;
 	}
 	ret = 0;
 
+err_data_free:
+	elasto_data_free(src_data);
 err_out:
 	return ret;
 }
@@ -129,9 +136,10 @@ int
 elasto_fread(struct elasto_fh *fh,
 	     uint64_t src_off,
 	     uint64_t src_len,
-	     struct elasto_data *dest_data)
+	     uint8_t *in_buf)
 {
 	int ret;
+	struct elasto_data *dest_data;
 
 	ret = elasto_fh_validate(fh);
 	if (ret < 0) {
@@ -144,15 +152,27 @@ elasto_fread(struct elasto_fh *fh,
 		goto err_out;
 	}
 
+	if (in_buf == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = elasto_data_iov_new(in_buf, src_len, false, &dest_data);
+	if (ret < 0) {
+		goto err_out;
+	}
+
 	dbg(3, "reading range at %" PRIu64 ", len %" PRIu64 "\n",
 	    src_off, src_len);
 
 	ret = fh->ops.read(fh->mod_priv, src_off, src_len, dest_data);
 	if (ret < 0) {
-		goto err_out;
+		goto err_data_free;
 	}
 	ret = 0;
 
+err_data_free:
+	elasto_data_free(dest_data);
 err_out:
 	return ret;
 }
