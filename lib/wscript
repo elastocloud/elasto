@@ -47,5 +47,4 @@ def build(bld):
 		  use=['elasto_req_azure_core'],
 		  includes = '. ..',
 		  defines = ['_GNU_SOURCE'])
-	bld.install_as('${INCLUDEDIR}/elasto/data.h', 'data_api.h')
 	bld.recurse(recurse_subdirs)

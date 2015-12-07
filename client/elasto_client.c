@@ -25,7 +25,6 @@
 #include <pwd.h>
 
 #include "ccan/list/list.h"
-#include "lib/data_api.h"
 #include "lib/file/file_api.h"
 #include "lib/op.h"
 #include "lib/conn.h"

@@ -38,7 +38,7 @@
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
-#include "data_api.h"
+#include "data.h"
 #include "op.h"
 #include "sign.h"
 #include "util.h"

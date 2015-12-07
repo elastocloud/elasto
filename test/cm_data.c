@@ -31,7 +31,7 @@
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "util.h"
-#include "data_api.h"
+#include "data.h"
 
 /*
  * CMocka unit tests for Elasto data structures

@@ -23,7 +23,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include "lib/data_api.h"
 #include "lib/file/file_api.h"
 #include "cli_common.h"
 #include "cli_put.h"

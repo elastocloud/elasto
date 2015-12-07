@@ -28,7 +28,6 @@
 
 #include "cm_test.h"
 #include "lib/util.h"
-#include "lib/data_api.h"
 #include "lib/file/file_api.h"
 
 static void

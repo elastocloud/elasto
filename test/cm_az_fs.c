@@ -37,7 +37,7 @@
 #include "lib/conn.h"
 #include "lib/azure_ssl.h"
 #include "lib/util.h"
-#include "lib/data_api.h"
+#include "lib/data.h"
 
 static struct {
 	char *pem_file;

@@ -29,7 +29,7 @@
 #include "dbg.h"
 #include "base64.h"
 #include "util.h"
-#include "data_api.h"
+#include "data.h"
 
 void
 elasto_data_free(struct elasto_data *data)

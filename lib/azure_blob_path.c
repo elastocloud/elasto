@@ -35,7 +35,7 @@
 #include "lib/azure_ssl.h"
 #include "lib/util.h"
 #include "lib/dbg.h"
-#include "lib/data_api.h"
+#include "lib/data.h"
 
 int
 az_blob_path_parse(const char *path,

@@ -22,7 +22,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#include "lib/data_api.h"
 #include "lib/file/file_api.h"
 #include "cli_common.h"
 #include "cli_create.h"
