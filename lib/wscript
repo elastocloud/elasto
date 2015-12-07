@@ -13,7 +13,7 @@ def build(bld):
 	bld.shlib(source='''op.c sign.c base64.c conn.c dbg.c data.c exml.c
 			    util.c''',
 		  target='elasto_core',
-		  vnum='0.0.3',
+		  vnum=bld.env.LIBELASTO_API_VERS,
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['ccan'],
