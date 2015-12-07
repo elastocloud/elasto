@@ -1,11 +1,13 @@
+recurse_subdirs = 'azure amazon'
+
 def options(opt):
 	opt.load('compiler_c')
+	opt.recurse(recurse_subdirs)
 
 def configure(conf):
 	conf.load('compiler_c')
 	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
-	conf.recurse('azure')
-	conf.recurse('amazon')
+	conf.recurse(recurse_subdirs)
 
 def call_ldconfig(bld):
 	bld.exec_command('/sbin/ldconfig')
@@ -24,5 +26,4 @@ def build(bld):
 	bld.install_as('${INCLUDEDIR}/elasto/file.h', 'file_api.h')
 	if bld.cmd == 'install':
 		bld.add_post_fun(call_ldconfig)
-	bld.recurse('azure')
-	bld.recurse('amazon')
+	bld.recurse(recurse_subdirs)

@@ -1,9 +1,11 @@
 top = '.'
 out = 'build'
+recurse_subdirs = 'ccan lib client test doc'
 
 def options(opt):
 	opt.load('compiler_c')
 	opt.load('gnu_dirs')
+	opt.recurse(recurse_subdirs)
 
 def configure(conf):
 	conf.load('compiler_c')
@@ -15,15 +17,7 @@ def configure(conf):
 	conf.check(header_name='event2/visibility.h')
 	conf.check(lib='crypto')
 	conf.check(lib='expat')
-	conf.recurse('ccan')
-	conf.recurse('lib')
-	conf.recurse('client')
-	conf.recurse('test')
-	conf.recurse('doc')
+	conf.recurse(recurse_subdirs)
 
 def build(bld):
-	bld.recurse('ccan')
-	bld.recurse('lib')
-	bld.recurse('client')
-	bld.recurse('test')
-	bld.recurse('doc')
+	bld.recurse(recurse_subdirs)

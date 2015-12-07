@@ -1,10 +1,13 @@
+recurse_subdirs = 'file'
+
 def options(opt):
 	opt.load('compiler_c')
+	opt.recurse(recurse_subdirs)
 
 def configure(conf):
 	conf.load('compiler_c')
 	conf.env.append_unique('CFLAGS', ['-Wall', '-g', '-fPIC'])
-	conf.recurse('file')
+	conf.recurse(recurse_subdirs)
 
 def build(bld):
 	bld.shlib(source='''op.c sign.c base64.c conn.c dbg.c data.c exml.c
@@ -45,4 +48,4 @@ def build(bld):
 		  includes = '. ..',
 		  defines = ['_GNU_SOURCE'])
 	bld.install_as('${INCLUDEDIR}/elasto/data.h', 'data_api.h')
-	bld.recurse('file')
+	bld.recurse(recurse_subdirs)
