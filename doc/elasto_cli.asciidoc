@@ -55,12 +55,12 @@ OPTIONS
 	Specify a protocol and server to use for the connection, instead of
 	deriving it from the credentials file. Currently only the protocol in
 	the URI is processed. Supported values are:
-
-	abb://: Azure Block Blob Service
-
-	afs://: Azure File Service
-
-	s3://: Amazon S3
+[width="15%"]
+|=================================
+|*abb://* | Azure Block Blob Service
+|*afs://* | Azure File Service
+|*s3://*  | Amazon S3
+|=================================
 
 'command'::
 	Client command to execute, refer to list below. If no command is
@@ -156,9 +156,9 @@ AMAZON S3 COMMANDS
 
 RESOURCES
 ---------
-Main website: http://elastocloud.org/
-Bug/feature tracker: https://github.com/elastocloud/elasto/issues
-Source code: https://github.com/elastocloud/elasto
+*Main website*:: http://elastocloud.org/
+*Bug/feature tracker*:: https://github.com/elastocloud/elasto/issues
+*Source code*:: https://github.com/elastocloud/elasto
 
 
 AUTHOR

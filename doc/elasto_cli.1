@@ -2,12 +2,12 @@
 .\"     Title: elasto_cli
 .\"    Author: [see the "AUTHOR" section]
 .\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
-.\"      Date: 12/06/2015
+.\"      Date: 01/05/2016
 .\"    Manual: \ \&
 .\"    Source: \ \&
 .\"  Language: English
 .\"
-.TH "ELASTO_CLI" "1" "12/06/2015" "\ \&" "\ \&"
+.TH "ELASTO_CLI" "1" "01/05/2016" "\ \&" "\ \&"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -81,37 +81,35 @@ Specify a file to use as storage for Elasto CLI command history, rather than the
 \fB\-u\fR \fIREST server URI\fR
 .RS 4
 Specify a protocol and server to use for the connection, instead of deriving it from the credentials file\&. Currently only the protocol in the URI is processed\&. Supported values are:
+.RE
+.TS
+allbox tab(:);
+lt lt
+lt lt
+lt lt.
+T{
 .sp
-.if n \{\
-.RS 4
-.\}
-.nf
-abb://: Azure Block Blob Service
-.fi
-.if n \{\
-.RE
-.\}
+\fBabb://\fR
+T}:T{
 .sp
-.if n \{\
-.RS 4
-.\}
-.nf
-afs://: Azure File Service
-.fi
-.if n \{\
-.RE
-.\}
+Azure Block Blob Service
+T}
+T{
 .sp
-.if n \{\
-.RS 4
-.\}
-.nf
-s3://: Amazon S3
-.fi
-.if n \{\
-.RE
-.\}
-.RE
+\fBafs://\fR
+T}:T{
+.sp
+Azure File Service
+T}
+T{
+.sp
+\fBs3://\fR
+T}:T{
+.sp
+Amazon S3
+T}
+.TE
+.sp 1
 .PP
 \fIcommand\fR
 .RS 4
@@ -262,8 +260,21 @@ to
 Creates the given bucket\&.
 .RE
 .SH "RESOURCES"
-.sp
-Main website: http://elastocloud\&.org/ Bug/feature tracker: https://github\&.com/elastocloud/elasto/issues Source code: https://github\&.com/elastocloud/elasto
+.PP
+\fBMain website\fR
+.RS 4
+http://elastocloud\&.org/
+.RE
+.PP
+\fBBug/feature tracker\fR
+.RS 4
+https://github\&.com/elastocloud/elasto/issues
+.RE
+.PP
+\fBSource code\fR
+.RS 4
+https://github\&.com/elastocloud/elasto
+.RE
 .SH "AUTHOR"
 .sp
 The Elasto project was created by David Disseldorp\&.
