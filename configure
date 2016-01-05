@@ -1,0 +1,3 @@
+#!/bin/bash
+
+./waf configure "$@" || exit 1
