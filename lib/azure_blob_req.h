@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -32,6 +32,7 @@ enum az_blob_opcode {
 	AOP_BLOB_PROP_GET,
 	AOP_BLOB_PROP_SET,
 	AOP_BLOB_LEASE,
+	AOP_PAGE_RANGES_GET,
 };
 
 enum az_lease_state {
@@ -206,6 +207,23 @@ struct az_rsp_blob_lease {
 	uint64_t time_remaining;
 };
 
+struct az_req_page_ranges_get {
+	uint64_t off;
+	uint64_t len;
+};
+
+struct az_page_range {
+	struct list_node list;
+	uint64_t start_byte;
+	uint64_t end_byte;
+};
+
+struct az_rsp_page_ranges_get {
+	uint64_t blob_len;
+	int num_ranges;
+	struct list_head ranges;
+};
+
 struct az_blob_req {
 	struct az_blob_path path;
 
@@ -218,6 +236,7 @@ struct az_blob_req {
 		struct az_req_blob_cp blob_cp;
 		struct az_req_blob_prop_set blob_prop_set;
 		struct az_req_blob_lease blob_lease;
+		struct az_req_page_ranges_get page_ranges_get;
 		/*
 		 * No request specific data aside from @path:
 		struct az_req_ctnr_list ctnr_list;
@@ -242,6 +261,7 @@ struct az_blob_rsp {
 		struct az_rsp_block_list_get block_list_get;
 		struct az_rsp_blob_prop_get blob_prop_get;
 		struct az_rsp_blob_lease blob_lease;
+		struct az_rsp_page_ranges_get page_ranges_get;
 		/*
 		 * No response specific data handled yet:
 		 * struct az_rsp_ctnr_create ctnr_create;
@@ -352,6 +372,12 @@ az_req_blob_lease(const struct az_blob_path *path,
 		  int32_t duration,
 		  struct op **_op);
 
+int
+az_req_page_ranges_get(const struct az_blob_path *path,
+		       uint64_t off,
+		       uint64_t len,
+		       struct op **_op);
+
 struct az_rsp_ctnr_list *
 az_rsp_ctnr_list(struct op *op);
 
@@ -372,4 +398,7 @@ az_rsp_blob_prop_get(struct op *op);
 
 struct az_rsp_blob_lease *
 az_rsp_blob_lease_get(struct op *op);
+
+struct az_rsp_page_ranges_get *
+az_rsp_page_ranges_get(struct op *op);
 #endif /* ifdef _AZURE_BLOB_REQ_H_ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -2570,6 +2570,212 @@ err_out:
 	return ret;
 }
 
+static int
+az_req_page_ranges_get_hdr_fill(
+			struct az_req_page_ranges_get *page_ranges_get_req,
+			struct op *op)
+{
+	int ret;
+	char *hdr_str;
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = asprintf(&hdr_str, "bytes=%" PRIu64 "-%" PRIu64,
+		       page_ranges_get_req->off,
+		(page_ranges_get_req->off + page_ranges_get_req->len - 1));
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_hdrs_free;
+	}
+	ret = op_req_hdr_add(op, "x-ms-range", hdr_str);
+	free(hdr_str);
+	if (ret < 0) {
+		goto err_hdrs_free;
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
+int
+az_req_page_ranges_get(const struct az_blob_path *path,
+		       uint64_t off,
+		       uint64_t len,
+		       struct op **_op)
+{
+	int ret;
+	struct az_blob_ebo *ebo;
+	struct az_req_page_ranges_get *page_ranges_get_req;
+	struct op *op;
+
+	if (!AZ_BLOB_PATH_IS_BLOB(path) || (_op == NULL) || (len == 0)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_blob_ebo_init(AOP_PAGE_RANGES_GET, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	page_ranges_get_req = &ebo->req.page_ranges_get;
+
+	ret = az_blob_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
+		goto err_ebo_free;
+	}
+
+	page_ranges_get_req->off = off;
+	page_ranges_get_req->len = len;
+
+	op->method = REQ_METHOD_GET;
+	ret = az_blob_req_url_encode(path, "?comp=pagelist",
+				     &op->url_host, &op->url_path);
+	if (ret < 0) {
+		goto err_path_free;
+	}
+
+	ret = az_req_page_ranges_get_hdr_fill(page_ranges_get_req, op);
+	if (ret < 0) {
+		goto err_buf_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_buf_free:
+	elasto_data_free(op->rsp.data);
+err_url_free:
+	free(op->url_path);
+	free(op->url_host);
+err_path_free:
+	az_blob_path_free(&ebo->req.path);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
+az_rsp_page_ranges_get_free(struct az_rsp_page_ranges_get *page_ranges_get_rsp)
+{
+	struct az_page_range *range;
+	struct az_page_range *range_n;
+
+	if (page_ranges_get_rsp->num_ranges == 0) {
+		return;
+	}
+
+	list_for_each_safe(&page_ranges_get_rsp->ranges, range, range_n, list) {
+		free(range);
+	}
+}
+
+static int
+az_rsp_range_iter_process(struct xml_doc *xdoc,
+			  const char *path,
+			  const char *val,
+			  void *cb_data)
+{
+	struct az_rsp_page_ranges_get *page_ranges_get_rsp
+			= (struct az_rsp_page_ranges_get *)cb_data;
+	int ret;
+	struct az_page_range *range;
+
+	/* request callback for subsequent PageRange entries */
+	ret = exml_path_cb_want(xdoc, "/PageList/PageRange", false,
+				az_rsp_range_iter_process, page_ranges_get_rsp,
+				NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	range = malloc(sizeof(*range));
+	if (range == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(range, 0, sizeof(*range));
+
+	ret = exml_uint64_want(xdoc, "./Start", true, &range->start_byte, NULL);
+	if (ret < 0) {
+		goto err_range_free;
+	}
+
+	ret = exml_uint64_want(xdoc, "./End", true, &range->end_byte, NULL);
+	if (ret < 0) {
+		goto err_range_free;
+	}
+
+	list_add_tail(&page_ranges_get_rsp->ranges, &range->list);
+	page_ranges_get_rsp->num_ranges++;
+
+	return 0;
+
+err_range_free:
+	free(range);
+err_out:
+	return ret;
+}
+
+static int
+az_rsp_page_ranges_get_process(struct op *op,
+			struct az_rsp_page_ranges_get *page_ranges_get_rsp)
+{
+	int ret;
+	struct xml_doc *xdoc;
+
+	assert(op->opcode == AOP_PAGE_RANGES_GET);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	ret = op_hdr_u64_val_lookup(&op->rsp.hdrs,
+				    "x-ms-blob-content-length",
+				    &page_ranges_get_rsp->blob_len);
+	if ((ret < 0) && (ret != -ENOENT)) {
+		goto err_out;
+	}
+
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	list_head_init(&page_ranges_get_rsp->ranges);
+
+	/* trigger path callback for first PageRange */
+	ret = exml_path_cb_want(xdoc, "/PageList/PageRange", false,
+				az_rsp_range_iter_process, page_ranges_get_rsp,
+				NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
+	}
+
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_ranges_free;
+	}
+
+	exml_free(xdoc);
+
+	return 0;
+
+err_ranges_free:
+	az_rsp_page_ranges_get_free(page_ranges_get_rsp);
+err_xdoc_free:
+	exml_free(xdoc);
+err_out:
+	return ret;
+}
+
 static void
 az_blob_req_free(struct op *op)
 {
@@ -2603,6 +2809,7 @@ az_blob_req_free(struct op *op)
 	case AOP_BLOB_DEL:
 	case AOP_BLOB_PROP_GET:
 	case AOP_BLOB_PROP_SET:
+	case AOP_PAGE_RANGES_GET:
 		/* nothing more to free */
 		break;
 	default:
@@ -2634,6 +2841,9 @@ az_blob_rsp_free(struct op *op)
 		break;
 	case AOP_BLOB_LEASE:
 		az_rsp_blob_lease_free(&ebo->rsp.blob_lease);
+		break;
+	case AOP_PAGE_RANGES_GET:
+		az_rsp_page_ranges_get_free(&ebo->rsp.page_ranges_get);
 		break;
 	case AOP_CONTAINER_CREATE:
 	case AOP_CONTAINER_DEL:
@@ -2686,13 +2896,18 @@ az_blob_rsp_process(struct op *op)
 		ret = az_rsp_blob_list_process(op, &ebo->rsp.blob_list);
 		break;
 	case AOP_BLOCK_LIST_GET:
-		ret = az_rsp_block_list_get_process(op, &ebo->rsp.block_list_get);
+		ret = az_rsp_block_list_get_process(op,
+						    &ebo->rsp.block_list_get);
 		break;
 	case AOP_BLOB_PROP_GET:
 		ret = az_rsp_blob_prop_get_process(op, &ebo->rsp.blob_prop_get);
 		break;
 	case AOP_BLOB_LEASE:
 		ret = az_rsp_blob_lease_process(op, &ebo->rsp.blob_lease);
+		break;
+	case AOP_PAGE_RANGES_GET:
+		ret = az_rsp_page_ranges_get_process(op,
+						     &ebo->rsp.page_ranges_get);
 		break;
 	case AOP_CONTAINER_CREATE:
 	case AOP_CONTAINER_DEL:
@@ -2762,4 +2977,11 @@ az_rsp_blob_lease_get(struct op *op)
 {
 	struct az_blob_ebo *ebo = container_of(op, struct az_blob_ebo, op);
 	return &ebo->rsp.blob_lease;
+}
+
+struct az_rsp_page_ranges_get *
+az_rsp_page_ranges_get(struct op *op)
+{
+	struct az_blob_ebo *ebo = container_of(op, struct az_blob_ebo, op);
+	return &ebo->rsp.page_ranges_get;
 }
