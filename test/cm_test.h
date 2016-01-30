@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -64,7 +64,7 @@ cm_file_buf_check_zero(uint8_t *buf,
 		       size_t len);
 
 int
-cm_az_fs_run(void);
+cm_az_fs_req_run(void);
 
 int
 cm_az_blob_req_run(void);
