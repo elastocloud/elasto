@@ -179,6 +179,7 @@ main(int argc,
 	} else {
 		cm_file_run();
 		cm_az_fs_run();
+		cm_az_blob_req_run();
 	}
 	sign_deinit();
 	ret = 0;

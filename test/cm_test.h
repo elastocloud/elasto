@@ -66,4 +66,7 @@ cm_file_buf_check_zero(uint8_t *buf,
 int
 cm_az_fs_run(void);
 
+int
+cm_az_blob_req_run(void);
+
 #endif /* _CM_TEST_H_ */
