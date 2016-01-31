@@ -2713,7 +2713,7 @@ az_rsp_page_ranges_get_process(struct op *op,
 	ret = op_hdr_u64_val_lookup(&op->rsp.hdrs,
 				    "x-ms-blob-content-length",
 				    &page_ranges_get_rsp->blob_len);
-	if ((ret < 0) && (ret != -ENOENT)) {
+	if (ret < 0) {
 		goto err_out;
 	}
 
