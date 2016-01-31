@@ -290,15 +290,9 @@ az_req_ctnr_list(const struct az_blob_path *path,
 		goto err_path_free;
 	}
 
-	/* Response does not include a content-length header, alloc buf here */
-	ret = elasto_data_iov_new(NULL, 1024 * 1024, true, &op->rsp.data);
-	if (ret < 0) {
-		goto err_url_free;
-	}
-
 	ret = az_req_common_hdr_fill(op, false);
 	if (ret < 0) {
-		goto err_buf_free;
+		goto err_url_free;
 	}
 	/* the connection layer must sign this request before sending */
 	op->req_sign = az_req_sign;
@@ -306,8 +300,6 @@ az_req_ctnr_list(const struct az_blob_path *path,
 	*_op = op;
 	return 0;
 
-err_buf_free:
-	elasto_data_free(op->rsp.data);
 err_url_free:
 	free(op->url_path);
 	free(op->url_host);
@@ -910,15 +902,9 @@ az_req_blob_list(const struct az_blob_path *path,
 		goto err_path_free;
 	}
 
-	/* Response does not include a content-length header, alloc buf here */
-	ret = elasto_data_iov_new(NULL, 1024 * 1024, true, &op->rsp.data);
-	if (ret < 0) {
-		goto err_url_free;
-	}
-
 	ret = az_req_common_hdr_fill(op, false);
 	if (ret < 0) {
-		goto err_buf_free;
+		goto err_url_free;
 	}
 	/* the connection layer must sign this request before sending */
 	op->req_sign = az_req_sign;
@@ -926,8 +912,6 @@ az_req_blob_list(const struct az_blob_path *path,
 	*_op = op;
 	return 0;
 
-err_buf_free:
-	elasto_data_free(op->rsp.data);
 err_url_free:
 	free(op->url_path);
 	free(op->url_host);
@@ -1771,15 +1755,9 @@ az_req_block_list_get(const struct az_blob_path *path,
 		goto err_path_free;
 	}
 
-	/* Response does not include a content-length header, alloc buf here */
-	ret = elasto_data_iov_new(NULL, 1024 * 1024, true, &op->rsp.data);
-	if (ret < 0) {
-		goto err_url_free;
-	}
-
 	ret = az_req_common_hdr_fill(op, false);
 	if (ret < 0) {
-		goto err_buf_free;
+		goto err_url_free;
 	}
 
 	/* the connection layer must sign this request before sending */
@@ -1787,8 +1765,6 @@ az_req_block_list_get(const struct az_blob_path *path,
 
 	*_op = op;
 	return 0;
-err_buf_free:
-	elasto_data_free(op->rsp.data);
 err_url_free:
 	free(op->url_path);
 	free(op->url_host);
@@ -2644,15 +2620,13 @@ az_req_page_ranges_get(const struct az_blob_path *path,
 
 	ret = az_req_page_ranges_get_hdr_fill(page_ranges_get_req, op);
 	if (ret < 0) {
-		goto err_buf_free;
+		goto err_url_free;
 	}
 
 	op->req_sign = az_req_sign;
 
 	*_op = op;
 	return 0;
-err_buf_free:
-	elasto_data_free(op->rsp.data);
 err_url_free:
 	free(op->url_path);
 	free(op->url_host);
