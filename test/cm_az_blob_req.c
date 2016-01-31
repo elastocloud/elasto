@@ -79,7 +79,7 @@ cm_az_blob_req_init(void **state)
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_init_az(cm_op_az_blob_req_state.pem_file,
-				  cm_us->insecure_http,
+				  false,	/* mgmt must use https */
 				  mgmt_host,
 				  &mgmt_conn);
 	assert_true(ret >= 0);
