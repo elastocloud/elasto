@@ -754,6 +754,252 @@ cm_az_fs_req_file_cp(void **state)
 	op_free(op);
 }
 
+static void
+cm_az_fs_req_file_ranges(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct az_fs_rsp_file_ranges_list *file_ranges_list_rsp;
+	struct az_file_range *file_range;
+	struct elasto_data *data;
+	uint8_t buf[1024];
+	struct az_fs_path path = {
+		.acc = cm_us->acc,
+		.share = cm_op_az_fs_state.share,
+		.file = "file1",
+	};
+
+	/* create base file */
+	ret = az_fs_req_file_create(&path, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* confirm that the file doesn't have any allocated ranges */
+	ret = az_fs_req_file_ranges_list(&path, 0, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	file_ranges_list_rsp = az_fs_rsp_file_ranges_list(op);
+	assert_int_equal(file_ranges_list_rsp->file_len, BYTES_IN_TB);
+	assert_int_equal(file_ranges_list_rsp->num_ranges, 0);
+	assert_true(list_empty(&file_ranges_list_rsp->ranges));
+	op_free(op);
+
+	/* write pattern at 1GB offset */
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_true(ret >= 0);
+
+	ret = az_fs_req_file_put(&path, BYTES_IN_GB, ARRAY_SIZE(buf), data,
+				 &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* confirm that pattern is now allocated */
+	ret = az_fs_req_file_ranges_list(&path, 0, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	file_ranges_list_rsp = az_fs_rsp_file_ranges_list(op);
+	assert_int_equal(file_ranges_list_rsp->file_len, BYTES_IN_TB);
+	assert_int_equal(file_ranges_list_rsp->num_ranges, 1);
+	file_range = list_tail(&file_ranges_list_rsp->ranges,
+			       struct az_file_range, list);
+	assert_int_equal(file_range->start_byte, BYTES_IN_GB);
+	assert_int_equal(file_range->end_byte,
+			 file_range->start_byte + 1024 - 1);
+	op_free(op);
+
+	/* check range that covers first half of the extent */
+	ret = az_fs_req_file_ranges_list(&path, 0, BYTES_IN_GB + 512, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	file_ranges_list_rsp = az_fs_rsp_file_ranges_list(op);
+	assert_int_equal(file_ranges_list_rsp->file_len, BYTES_IN_TB);
+	assert_int_equal(file_ranges_list_rsp->num_ranges, 1);
+	file_range = list_tail(&file_ranges_list_rsp->ranges,
+			       struct az_file_range, list);
+	assert_int_equal(file_range->start_byte, BYTES_IN_GB);
+	assert_int_equal(file_range->end_byte,
+			 file_range->start_byte + 512 - 1);
+	op_free(op);
+
+	/* punch hole covering previous extent */
+	ret = az_fs_req_file_put(&path, BYTES_IN_GB, ARRAY_SIZE(buf), NULL,
+				 &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* confirm that pattern is now allocated */
+	ret = az_fs_req_file_ranges_list(&path, 0, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	file_ranges_list_rsp = az_fs_rsp_file_ranges_list(op);
+	assert_int_equal(file_ranges_list_rsp->file_len, BYTES_IN_TB);
+	assert_int_equal(file_ranges_list_rsp->num_ranges, 0);
+	assert_true(list_empty(&file_ranges_list_rsp->ranges));
+	op_free(op);
+
+	/* cleanup base file */
+	ret = az_fs_req_file_del(&path, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+}
+
+/*
+ * XXX this test assumes specific 512 byte alignment behaviour from Azure, which
+ * is not part of the API specification, but interesting to observe.
+ */
+static void
+cm_az_fs_req_file_ranges_unaligned(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct az_fs_rsp_file_ranges_list *file_ranges_list_rsp;
+	struct az_file_range *file_range;
+	struct elasto_data *data;
+	uint8_t buf[1024];
+	uint8_t aligned_buf[1024 + 512];
+	struct az_fs_path path = {
+		.acc = cm_us->acc,
+		.share = cm_op_az_fs_state.share,
+		.file = "file1",
+	};
+	uint64_t unaligned_off_start = BYTES_IN_GB + 256;
+	uint64_t aligned_off_start = BYTES_IN_GB;
+	uint64_t aligned_off_end = BYTES_IN_GB + ARRAY_SIZE(buf) + 512 - 1;
+
+	/* create base file */
+	ret = az_fs_req_file_create(&path, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* write pattern at unaligned offset */
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_true(ret >= 0);
+
+	ret = az_fs_req_file_put(&path, unaligned_off_start, ARRAY_SIZE(buf),
+				 data, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* allocated extent should now be 512 byte aligned */
+	ret = az_fs_req_file_ranges_list(&path, 0, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	file_ranges_list_rsp = az_fs_rsp_file_ranges_list(op);
+	assert_int_equal(file_ranges_list_rsp->file_len, BYTES_IN_TB);
+	assert_int_equal(file_ranges_list_rsp->num_ranges, 1);
+	file_range = list_tail(&file_ranges_list_rsp->ranges,
+			       struct az_file_range, list);
+	assert_int_equal(file_range->start_byte, aligned_off_start);
+	assert_int_equal(file_range->end_byte, aligned_off_end);
+	op_free(op);
+
+	/* punch hole covering unaligned range */
+	ret = az_fs_req_file_put(&path, unaligned_off_start, ARRAY_SIZE(buf),
+				 NULL, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* Azure keeps the partially used blocks at start and end allocated */
+	ret = az_fs_req_file_ranges_list(&path, 0, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	file_ranges_list_rsp = az_fs_rsp_file_ranges_list(op);
+	assert_int_equal(file_ranges_list_rsp->file_len, BYTES_IN_TB);
+	assert_int_equal(file_ranges_list_rsp->num_ranges, 2);
+
+	file_range = list_top(&file_ranges_list_rsp->ranges,
+			       struct az_file_range, list);
+	assert_int_equal(file_range->start_byte, aligned_off_start);
+	assert_int_equal(file_range->end_byte, aligned_off_start + 512 - 1);
+
+	file_range = list_tail(&file_ranges_list_rsp->ranges,
+			       struct az_file_range, list);
+	assert_int_equal(file_range->start_byte, aligned_off_end - 512 + 1);
+	assert_int_equal(file_range->end_byte, aligned_off_end);
+	op_free(op);
+
+	/* read across allocated ranges to confirm all is zero */
+	ret = elasto_data_iov_new(aligned_buf, ARRAY_SIZE(aligned_buf),
+				  false, &data);
+	assert_true(ret >= 0);
+
+	ret = az_fs_req_file_get(&path, aligned_off_start,
+				 ARRAY_SIZE(aligned_buf), data, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	cm_file_buf_check_zero(aligned_buf, ARRAY_SIZE(aligned_buf));
+	op_free(op);
+
+	/* cleanup base file */
+	ret = az_fs_req_file_del(&path, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+}
+
 static const UnitTest cm_az_fs_req_tests[] = {
 	unit_test_setup_teardown(cm_az_fs_req_shares_list,
 				 cm_az_fs_req_init, cm_az_fs_req_deinit),
@@ -770,6 +1016,10 @@ static const UnitTest cm_az_fs_req_tests[] = {
 	unit_test_setup_teardown(cm_az_fs_req_file_props,
 				 cm_az_fs_req_init, cm_az_fs_req_deinit),
 	unit_test_setup_teardown(cm_az_fs_req_file_cp,
+				 cm_az_fs_req_init, cm_az_fs_req_deinit),
+	unit_test_setup_teardown(cm_az_fs_req_file_ranges,
+				 cm_az_fs_req_init, cm_az_fs_req_deinit),
+	unit_test_setup_teardown(cm_az_fs_req_file_ranges_unaligned,
 				 cm_az_fs_req_init, cm_az_fs_req_deinit),
 };
 
