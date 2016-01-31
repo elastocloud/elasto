@@ -487,6 +487,127 @@ cm_az_blob_req_blob_cp(void **state)
 	op_free(op);
 }
 
+static void
+cm_az_blob_req_page_ranges(void **state)
+{
+	int ret;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	struct op *op;
+	struct az_rsp_page_ranges_get *page_ranges_get_rsp;
+	struct az_page_range *page_range;
+	struct elasto_data *data;
+	uint8_t buf[1024];
+	struct az_blob_path path = {
+		.acc = cm_us->acc,
+		.ctnr = cm_op_az_blob_req_state.ctnr,
+		.blob = "blob1",
+	};
+
+	/* create base page blob */
+	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* confirm that the page doesn't have any allocated ranges */
+	ret = az_req_page_ranges_get(&path, 0, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	page_ranges_get_rsp = az_rsp_page_ranges_get(op);
+	assert_int_equal(page_ranges_get_rsp->blob_len, BYTES_IN_TB);
+	assert_int_equal(page_ranges_get_rsp->num_ranges, 0);
+	assert_true(list_empty(&page_ranges_get_rsp->ranges));
+	op_free(op);
+
+	/* write pattern at 1GB offset */
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
+	ret = elasto_data_iov_new(buf, ARRAY_SIZE(buf), false, &data);
+	assert_true(ret >= 0);
+
+	ret = az_req_page_put(&path, data, BYTES_IN_GB, ARRAY_SIZE(buf), &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* confirm that pattern is now allocated */
+	ret = az_req_page_ranges_get(&path, 0, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	page_ranges_get_rsp = az_rsp_page_ranges_get(op);
+	assert_int_equal(page_ranges_get_rsp->blob_len, BYTES_IN_TB);
+	assert_int_equal(page_ranges_get_rsp->num_ranges, 1);
+	page_range = list_tail(&page_ranges_get_rsp->ranges,
+			       struct az_page_range, list);
+	assert_int_equal(page_range->start_byte, BYTES_IN_GB);
+	assert_int_equal(page_range->end_byte,
+			 page_range->start_byte + 1024 - 1);
+	op_free(op);
+
+	/* check range that covers first half of the extent */
+	ret = az_req_page_ranges_get(&path, 0, BYTES_IN_GB + 512, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	page_ranges_get_rsp = az_rsp_page_ranges_get(op);
+	assert_int_equal(page_ranges_get_rsp->blob_len, BYTES_IN_TB);
+	assert_int_equal(page_ranges_get_rsp->num_ranges, 1);
+	page_range = list_tail(&page_ranges_get_rsp->ranges,
+			       struct az_page_range, list);
+	assert_int_equal(page_range->start_byte, BYTES_IN_GB);
+	assert_int_equal(page_range->end_byte,
+			 page_range->start_byte + 512 - 1);
+	op_free(op);
+
+	/* punch hole covering previous extent */
+	ret = az_req_page_put(&path, NULL, BYTES_IN_GB, ARRAY_SIZE(buf), &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+
+	/* confirm that pattern is now allocated */
+	ret = az_req_page_ranges_get(&path, 0, BYTES_IN_TB, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	page_ranges_get_rsp = az_rsp_page_ranges_get(op);
+	assert_int_equal(page_ranges_get_rsp->blob_len, BYTES_IN_TB);
+	assert_int_equal(page_ranges_get_rsp->num_ranges, 0);
+	assert_true(list_empty(&page_ranges_get_rsp->ranges));
+	op_free(op);
+
+	/* cleanup base blob */
+	ret = az_req_blob_del(&path, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+	op_free(op);
+}
+
 static const UnitTest cm_az_blob_req_tests[] = {
 	unit_test_setup_teardown(cm_az_blob_req_ctnrs_list,
 				 cm_az_blob_req_init, cm_az_blob_req_deinit),
@@ -499,6 +620,8 @@ static const UnitTest cm_az_blob_req_tests[] = {
 	unit_test_setup_teardown(cm_az_blob_req_blob_props,
 				 cm_az_blob_req_init, cm_az_blob_req_deinit),
 	unit_test_setup_teardown(cm_az_blob_req_blob_cp,
+				 cm_az_blob_req_init, cm_az_blob_req_deinit),
+	unit_test_setup_teardown(cm_az_blob_req_page_ranges,
 				 cm_az_blob_req_init, cm_az_blob_req_deinit),
 };
 
