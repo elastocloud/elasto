@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -30,6 +30,7 @@ enum az_fs_opcode {
 	AOP_FS_FILE_CP,
 	AOP_FS_FILE_PROP_GET,
 	AOP_FS_FILE_PROP_SET,
+	AOP_FS_FILE_RANGES_LIST,
 };
 
 struct az_fs_share {
@@ -127,6 +128,23 @@ struct az_fs_req_file_prop_set {
 	char *content_type;
 };
 
+struct az_fs_req_file_ranges_list {
+	uint64_t off;
+	uint64_t len;
+};
+
+struct az_file_range {
+	struct list_node list;
+	uint64_t start_byte;
+	uint64_t end_byte;
+};
+
+struct az_fs_rsp_file_ranges_list {
+	uint64_t file_len;
+	int num_ranges;
+	struct list_head ranges;
+};
+
 struct az_fs_req {
 	struct az_fs_path path;
 	union {
@@ -136,6 +154,7 @@ struct az_fs_req {
 		struct az_fs_req_file_put file_put;
 		struct az_fs_req_file_cp file_cp;
 		struct az_fs_req_file_prop_set file_prop_set;
+		struct az_fs_req_file_ranges_list file_ranges_list;
 		/*
 		 * No request specific data aside from @path:
 		 * struct az_fs_req_shares_list shares_list;
@@ -159,6 +178,7 @@ struct az_fs_rsp {
 		struct az_fs_rsp_dir_prop_get dir_prop_get;
 		struct az_fs_rsp_file_cp file_cp;
 		struct az_fs_rsp_file_prop_get file_prop_get;
+		struct az_fs_rsp_file_ranges_list file_ranges_list;
 		/*
 		 * No response specific data handled yet:
 		 * struct az_fs_rsp_share_create share_create;
@@ -269,4 +289,14 @@ az_fs_req_file_prop_set(const struct az_fs_path *path,
 			uint64_t len,
 			const char *content_type,
 			struct op **_op);
+
+int
+az_fs_req_file_ranges_list(const struct az_fs_path *path,
+			   uint64_t off,
+			   uint64_t len,
+			   struct op **_op);
+
+struct az_fs_rsp_file_ranges_list *
+az_fs_rsp_file_ranges_list(struct op *op);
+
 #endif /* ifdef _AZURE_FS_REQ_H_ */

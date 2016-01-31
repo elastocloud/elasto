@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -1785,6 +1785,212 @@ err_out:
 	return ret;
 }
 
+static int
+az_fs_req_file_ranges_list_hdr_fill(
+			struct az_fs_req_file_ranges_list *file_ranges_list_req,
+			struct op *op)
+{
+	int ret;
+	char *hdr_str;
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = asprintf(&hdr_str, "bytes=%" PRIu64 "-%" PRIu64,
+		       file_ranges_list_req->off,
+		(file_ranges_list_req->off + file_ranges_list_req->len - 1));
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_hdrs_free;
+	}
+	ret = op_req_hdr_add(op, "x-ms-range", hdr_str);
+	free(hdr_str);
+	if (ret < 0) {
+		goto err_hdrs_free;
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
+int
+az_fs_req_file_ranges_list(const struct az_fs_path *path,
+			   uint64_t off,
+			   uint64_t len,
+			   struct op **_op)
+{
+	int ret;
+	struct az_fs_ebo *ebo;
+	struct az_fs_req_file_ranges_list *file_ranges_list_req;
+	struct op *op;
+
+	if (!AZ_FS_PATH_IS_ENT(path) || (_op == NULL) || (len == 0)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = az_fs_ebo_init(AOP_FS_FILE_RANGES_LIST, &ebo);
+	if (ret < 0) {
+		goto err_out;
+	}
+	op = &ebo->op;
+	file_ranges_list_req = &ebo->req.file_ranges_list;
+
+	ret = az_fs_path_dup(path, &ebo->req.path);
+	if (ret < 0) {
+		goto err_ebo_free;
+	}
+
+	file_ranges_list_req->off = off;
+	file_ranges_list_req->len = len;
+
+	op->method = REQ_METHOD_GET;
+	ret = az_fs_req_url_encode(path, "?comp=rangelist",
+				     &op->url_host, &op->url_path);
+	if (ret < 0) {
+		goto err_path_free;
+	}
+
+	ret = az_fs_req_file_ranges_list_hdr_fill(file_ranges_list_req, op);
+	if (ret < 0) {
+		goto err_url_free;
+	}
+
+	op->req_sign = az_req_sign;
+
+	*_op = op;
+	return 0;
+err_url_free:
+	free(op->url_path);
+	free(op->url_host);
+err_path_free:
+	az_fs_path_free(&ebo->req.path);
+err_ebo_free:
+	free(ebo);
+err_out:
+	return ret;
+}
+
+static void
+az_fs_rsp_file_ranges_list_free(
+			struct az_fs_rsp_file_ranges_list *file_ranges_list_rsp)
+{
+	struct az_file_range *range;
+	struct az_file_range *range_n;
+
+	if (file_ranges_list_rsp->num_ranges == 0) {
+		return;
+	}
+
+	list_for_each_safe(&file_ranges_list_rsp->ranges,
+			   range, range_n, list) {
+		free(range);
+	}
+}
+
+static int
+az_rsp_range_iter_process(struct xml_doc *xdoc,
+			  const char *path,
+			  const char *val,
+			  void *cb_data)
+{
+	struct az_fs_rsp_file_ranges_list *file_ranges_list_rsp
+			= (struct az_fs_rsp_file_ranges_list *)cb_data;
+	int ret;
+	struct az_file_range *range;
+
+	/* request callback for subsequent Range entries */
+	ret = exml_path_cb_want(xdoc, "/Ranges/Range", false,
+				az_rsp_range_iter_process, file_ranges_list_rsp,
+				NULL);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	range = malloc(sizeof(*range));
+	if (range == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(range, 0, sizeof(*range));
+
+	ret = exml_uint64_want(xdoc, "./Start", true, &range->start_byte, NULL);
+	if (ret < 0) {
+		goto err_range_free;
+	}
+
+	ret = exml_uint64_want(xdoc, "./End", true, &range->end_byte, NULL);
+	if (ret < 0) {
+		goto err_range_free;
+	}
+
+	list_add_tail(&file_ranges_list_rsp->ranges, &range->list);
+	file_ranges_list_rsp->num_ranges++;
+
+	return 0;
+
+err_range_free:
+	free(range);
+err_out:
+	return ret;
+}
+
+static int
+az_fs_rsp_file_ranges_list_process(struct op *op,
+			struct az_fs_rsp_file_ranges_list *file_ranges_list_rsp)
+{
+	int ret;
+	struct xml_doc *xdoc;
+
+	assert(op->opcode == AOP_FS_FILE_RANGES_LIST);
+	assert(op->rsp.data->type == ELASTO_DATA_IOV);
+
+	ret = op_hdr_u64_val_lookup(&op->rsp.hdrs,
+				    "x-ms-content-length",
+				    &file_ranges_list_rsp->file_len);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = exml_slurp((const char *)op->rsp.data->iov.buf,
+			 op->rsp.data->off, &xdoc);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	list_head_init(&file_ranges_list_rsp->ranges);
+
+	/* trigger path callback for first Range */
+	ret = exml_path_cb_want(xdoc, "/Ranges/Range", false,
+				az_rsp_range_iter_process, file_ranges_list_rsp,
+				NULL);
+	if (ret < 0) {
+		goto err_xdoc_free;
+	}
+
+	ret = exml_parse(xdoc);
+	if (ret < 0) {
+		goto err_ranges_free;
+	}
+
+	exml_free(xdoc);
+
+	return 0;
+
+err_ranges_free:
+	az_fs_rsp_file_ranges_list_free(file_ranges_list_rsp);
+err_xdoc_free:
+	exml_free(xdoc);
+err_out:
+	return ret;
+}
+
 static void
 az_fs_req_free(struct op *op)
 {
@@ -1812,6 +2018,7 @@ az_fs_req_free(struct op *op)
 	case AOP_FS_FILE_GET:
 	case AOP_FS_FILE_PUT:
 	case AOP_FS_FILE_PROP_GET:
+	case AOP_FS_FILE_RANGES_LIST:
 		/* nothing more to free */
 		break;
 	default:
@@ -1837,6 +2044,9 @@ az_fs_rsp_free(struct op *op)
 		break;
 	case AOP_FS_FILE_PROP_GET:
 		az_fs_rsp_file_prop_get_free(&ebo->rsp.file_prop_get);
+		break;
+	case AOP_FS_FILE_RANGES_LIST:
+		az_fs_rsp_file_ranges_list_free(&ebo->rsp.file_ranges_list);
 		break;
 	case AOP_FS_SHARE_CREATE:
 	case AOP_FS_SHARE_DEL:
@@ -1899,6 +2109,10 @@ az_fs_rsp_process(struct op *op)
 		ret = az_fs_rsp_file_prop_get_process(op,
 						      &ebo->rsp.file_prop_get);
 		break;
+	case AOP_FS_FILE_RANGES_LIST:
+		ret = az_fs_rsp_file_ranges_list_process(op,
+						&ebo->rsp.file_ranges_list);
+		break;
 	case AOP_FS_SHARE_CREATE:
 	case AOP_FS_SHARE_DEL:
 	case AOP_FS_DIR_CREATE:
@@ -1959,4 +2173,11 @@ az_fs_rsp_file_prop_get(struct op *op)
 {
 	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
 	return &ebo->rsp.file_prop_get;
+}
+
+struct az_fs_rsp_file_ranges_list *
+az_fs_rsp_file_ranges_list(struct op *op)
+{
+	struct az_fs_ebo *ebo = container_of(op, struct az_fs_ebo, op);
+	return &ebo->rsp.file_ranges_list;
 }
