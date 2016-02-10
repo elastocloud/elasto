@@ -88,7 +88,6 @@ str_cmp_lexi(const void *p1, const void *p2)
 	return strcmp(*(char * const *)p1, *(char * const *)p2);
 }
 
-#define min(a, b) (((a) < (b)) ? (a) : (b))
 static int
 hdr_key_lexi_cmp(const void *p1, const void *p2)
 {
@@ -96,7 +95,7 @@ hdr_key_lexi_cmp(const void *p1, const void *p2)
 	const char *str2 = *(char * const *)p2;
 	size_t str1_key_len = strchr(str1, ':') - str1;
 	size_t str2_key_len = strchr(str2, ':') - str2;
-	return strncmp(str1, str2, min(str1_key_len, str2_key_len));
+	return strncmp(str1, str2, MIN(str1_key_len, str2_key_len));
 }
 
 /*
