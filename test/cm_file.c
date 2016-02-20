@@ -1266,6 +1266,71 @@ cm_file_afs_path_encoding(void **state)
 	free(path);
 }
 
+static int
+cm_file_afs_list_ranges_cb(struct elasto_frange *frange,
+			   void *priv)
+{
+	int *num_cbs = priv;
+
+	assert_int_equal(frange->file_size, BYTES_IN_GB);
+	if ((frange->off == 0) || (frange->off == 2 * BYTES_IN_KB)) {
+		assert_int_equal(frange->len, BYTES_IN_KB);
+	}
+	(*num_cbs)++;
+
+	return 0;
+}
+
+static void
+cm_file_afs_list_ranges(void **state)
+{
+	int ret;
+	struct elasto_fauth auth;
+	char *path = NULL;
+	struct elasto_fh *fh;
+	struct cm_unity_state *cm_us = cm_unity_state_get();
+	uint8_t buf[1024];
+	int num_cbs = 0;
+
+	auth.type = ELASTO_FILE_AFS;
+	auth.az.ps_path = cm_us->ps_file;
+	auth.insecure_http = cm_us->insecure_http;
+
+	ret = asprintf(&path, "%s/%s%d/afs_io_test",
+		       cm_us->acc, cm_us->share, cm_us->share_suffix);
+	assert_false(ret < 0);
+
+	ret = elasto_fopen(&auth,
+			   path,
+			   ELASTO_FOPEN_CREATE,
+			   NULL, &fh);
+	assert_false(ret < 0);
+
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
+	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), buf);
+	assert_false(ret < 0);
+
+	/* leave a 2k hole between start of file and write */
+	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 2 * ARRAY_SIZE(buf));
+	ret = elasto_fwrite(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), buf);
+	assert_false(ret < 0);
+
+	/* ftruncate file to 1GB (unallocated after write) */
+	ret = elasto_ftruncate(fh, BYTES_IN_GB);
+	assert_true(ret >= 0);
+
+	/* ensure written sections are the only allocated ranges */
+	ret = elasto_flist_ranges(fh, 0, BYTES_IN_GB, 0,
+				  cm_file_afs_list_ranges_cb, &num_cbs);
+	assert_true(ret >= 0);
+
+	assert_int_equal(num_cbs, 2);
+
+	ret = elasto_funlink_close(fh);
+	assert_false(ret < 0);
+	free(path);
+}
+
 static const UnitTest cm_file_tests[] = {
 	unit_test_setup_teardown(cm_file_create,
 				 cm_file_mkdir, cm_file_rmdir),
@@ -1298,6 +1363,8 @@ static const UnitTest cm_file_tests[] = {
 	unit_test_setup_teardown(cm_file_afs_io,
 				 cm_file_share_create, cm_file_share_del),
 	unit_test_setup_teardown(cm_file_afs_path_encoding,
+				 cm_file_share_create, cm_file_share_del),
+	unit_test_setup_teardown(cm_file_afs_list_ranges,
 				 cm_file_share_create, cm_file_share_del),
 };
 
