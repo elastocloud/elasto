@@ -279,8 +279,8 @@ afs_fwrite(void *mod_priv,
 		 * Need to truncate file out to new (larger) length, as AFS Put
 		 * Range doesn't allow writes past the current length.
 		 */
-		dbg(0, "truncating file to %" PRIu64 " prior to write\n",
-		    dest_off + dest_len);
+		dbg(0, "truncating file from %" PRIu64 " to %" PRIu64
+		    " prior to write\n", fstat.size, dest_off + dest_len);
 		ret = afs_ftruncate(mod_priv, dest_off + dest_len);
 		if (ret < 0) {
 			dbg(0, "failed to truncate dest file: %s\n",
