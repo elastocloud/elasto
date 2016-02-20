@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -61,6 +61,13 @@ struct elasto_fh_mod_ops {
 		       int (*dent_cb)(struct elasto_dent *,
 				      void *));
 	int (*unlink)(void *mod_priv);
+	int (*list_ranges)(void *mod_priv,
+			   uint64_t off,
+			   uint64_t len,
+			   uint64_t flags,
+			   void *cb_priv,
+			   int (*range_cb)(struct elasto_frange *,
+					   void *));
 };
 
 /* fh init calls this entry point for the corresponding module */

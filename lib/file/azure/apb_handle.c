@@ -121,6 +121,7 @@ elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			.lease_free = apb_flease_free,
 			.readdir = apb_freaddir,
 			.unlink = apb_funlink,
+			.list_ranges = apb_flist_ranges,
 		};
 	} else if (auth->type == ELASTO_FILE_ABB) {
 		/*
@@ -144,6 +145,7 @@ elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 			.lease_free = apb_flease_free,
 			.readdir = apb_freaddir,
 			.unlink = apb_funlink,
+			.list_ranges = NULL,
 		};
 	} else {
 		return -EINVAL;

@@ -122,6 +122,7 @@ elasto_file_mod_fh_init(const struct elasto_fauth *auth,
 		.lease_free = NULL,
 		.readdir = afs_freaddir,
 		.unlink = afs_funlink,
+		.list_ranges = afs_flist_ranges,
 	};
 	ret = afs_fh_init(auth, _fh_priv);
 	if (ret < 0) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -346,6 +346,53 @@ elasto_fsplice(struct elasto_fh *src_fh,
 
 	ret = src_fh->ops.splice(src_fh->mod_priv, src_off,
 				 dest_fh->mod_priv, dest_off, len);
+	if (ret < 0) {
+		goto err_out;
+	}
+	ret = 0;
+
+err_out:
+	return ret;
+}
+
+int
+elasto_flist_ranges(struct elasto_fh *fh,
+		    uint64_t off,
+		    uint64_t len,
+		    uint64_t flags,	/* reserved */
+		    void *cb_priv,
+		    int (*range_cb)(struct elasto_frange *range,
+				    void *priv))
+{
+	int ret;
+
+	ret = elasto_fh_validate(fh);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (fh->ops.list_ranges == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
+	if (fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
+		dbg(1, "invalid IO request for directory handle\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (flags != 0) {
+		 dbg(0, "invalid IO request for directory handle\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	dbg(3, "listing ranges %" PRIu64 " bytes at %" PRIu64 " from %s\n",
+	    len, off, fh->open_path);
+
+	ret = fh->ops.list_ranges(fh->mod_priv, off, len, flags,
+				  cb_priv, range_cb);
 	if (ret < 0) {
 		goto err_out;
 	}

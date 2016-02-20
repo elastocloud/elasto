@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -515,6 +515,89 @@ afs_fsplice(void *src_mod_priv,
 	ret = 0;
 err_op_free:
 	op_free(op);
+err_out:
+	return ret;
+}
+
+static int
+afs_flist_ranges_iter(struct afs_fh *afs_fh,
+		      uint64_t this_off,
+		      uint64_t this_len,
+		      void *priv,
+		      int (*range_cb)(struct elasto_frange *,
+				      void *))
+{
+	int ret;
+	struct op *op;
+	struct az_fs_rsp_file_ranges_list *file_ranges_list_rsp;
+	struct az_file_range *range;
+	struct elasto_frange frange;
+
+	ret = az_fs_req_file_ranges_list(&afs_fh->path, this_off, this_len,
+					 &op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = elasto_fop_send_recv(afs_fh->io_conn, op);
+	if (ret < 0) {
+		goto err_op_free;
+	}
+
+	file_ranges_list_rsp = az_fs_rsp_file_ranges_list(op);
+	frange.file_size = file_ranges_list_rsp->file_len;
+	list_for_each(&file_ranges_list_rsp->ranges, range, list) {
+		if (range->start_byte > range->end_byte) {
+			ret = -EIO;
+			goto err_op_free;
+		}
+		frange.off = range->start_byte;
+		frange.len = range->end_byte - range->start_byte + 1;
+		ret = range_cb(&frange, priv);
+		if (ret < 0) {
+			goto err_op_free;
+		}
+	}
+	ret = 0;
+err_op_free:
+	op_free(op);
+err_out:
+	return ret;
+}
+
+int
+afs_flist_ranges(void *mod_priv,
+		 uint64_t off,
+		 uint64_t len,
+		 uint64_t flags,	/* reserved */
+		 void *cb_priv,
+		 int (*range_cb)(struct elasto_frange *range,
+				 void *priv))
+{
+	int ret;
+	struct afs_fh *afs_fh = mod_priv;
+	uint64_t remain;
+	uint64_t this_off;
+
+	remain = len;
+	this_off = off;
+
+	/* split into 1GB chunks - fragmented files may timeout otherwise */
+	while (remain > 0) {
+		uint64_t this_len;
+
+		this_len = MIN(remain, BYTES_IN_GB);
+
+		ret = afs_flist_ranges_iter(afs_fh, this_off, this_len,
+					    cb_priv, range_cb);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		this_off += this_len;
+		remain -= this_len;
+	}
+	ret = 0;
 err_out:
 	return ret;
 }

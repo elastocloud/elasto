@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -245,6 +245,36 @@ elasto_freaddir(struct elasto_fh *fh,
 
 int
 elasto_funlink_close(struct elasto_fh *fh);
+
+/**
+ * @file_size: total size of the file in bytes
+ * @off: offset of this allocated range in bytes
+ * @len: length of this allocated range in bytes
+ */
+struct elasto_frange {
+	uint64_t file_size;
+	uint64_t off;
+	uint64_t len;
+};
+
+/**
+ * For a sparse file, check which regions are allocated
+ * @fh: a valid Elasto file handle
+ * @off: the first offset to start checking for allocated ranges
+ * @len: the amount of bytes to check for allocated ranges, from @off
+ * @flags: reserved for future use
+ * @cb_priv: private data available in @range_cb
+ * @range_cb: function to call for each range. May be invoked for adjacent
+ *	      ranges - multiple invocations don't imply the presence of holes.
+ */
+int
+elasto_flist_ranges(struct elasto_fh *fh,
+		    uint64_t off,
+		    uint64_t len,
+		    uint64_t flags,	/* reserved */
+		    void *cb_priv,
+		    int (*range_cb)(struct elasto_frange *range,
+				    void *priv));
 
 int
 elasto_fdebug(int level);

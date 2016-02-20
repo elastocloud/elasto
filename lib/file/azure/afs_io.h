@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -14,7 +14,6 @@
 #ifndef _AFS_IO_H_
 #define _AFS_IO_H_
 
-/* page blob operations */
 int
 afs_fwrite(void *mod_priv,
 	   uint64_t dest_off,
@@ -43,5 +42,14 @@ afs_fsplice(void *src_mod_priv,
 	    void *dest_mod_priv,
 	    uint64_t dest_off,
 	    uint64_t len);
+
+int
+afs_flist_ranges(void *mod_priv,
+		 uint64_t off,
+		 uint64_t len,
+		 uint64_t flags,	/* reserved */
+		 void *cb_priv,
+		 int (*range_cb)(struct elasto_frange *range,
+				 void *priv));
 
 #endif /* _AFS_IO_H_ */
