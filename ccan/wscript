@@ -3,7 +3,6 @@ def options(opt):
 
 def configure(conf):
 	conf.load('compiler_c')
-	conf.env.append_unique('CFLAGS', ['-Wall'])
 
 def build(bld):
 	bld.stlib(source='list/list.c', target='ccan')

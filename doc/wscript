@@ -3,7 +3,6 @@ def options(opt):
 
 def configure(conf):
 	conf.load('compiler_c')
-	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 	conf.find_program('a2x', mandatory=False, var='A2X')
 	conf.find_program('gzip', mandatory=True, var='GZIP')
 

@@ -3,7 +3,6 @@ def options(opt):
 
 def configure(conf):
 	conf.load('compiler_c')
-	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 
 def call_ldconfig(bld):
 	bld.exec_command('/sbin/ldconfig')

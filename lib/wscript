@@ -6,7 +6,7 @@ def options(opt):
 
 def configure(conf):
 	conf.load('compiler_c')
-	conf.env.append_unique('CFLAGS', ['-Wall', '-g', '-fPIC'])
+	conf.env.append_unique('CFLAGS', ['-fPIC'])
 	conf.recurse(recurse_subdirs)
 
 def build(bld):

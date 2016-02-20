@@ -3,7 +3,6 @@ def options(opt):
 
 def configure(conf):
 	conf.load('compiler_c')
-	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 	if not conf.check(lib='cmocka', mandatory=False):
 		conf.env.SKIP_TEST = "yes"
 	if not conf.check(lib='uuid', mandatory=False):

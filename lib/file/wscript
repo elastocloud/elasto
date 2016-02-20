@@ -6,7 +6,6 @@ def options(opt):
 
 def configure(conf):
 	conf.load('compiler_c')
-	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 	conf.recurse(recurse_subdirs)
 
 def call_ldconfig(bld):

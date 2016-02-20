@@ -3,7 +3,6 @@ def options(opt):
 
 def configure(conf):
 	conf.load('compiler_c')
-	conf.env.append_unique('CFLAGS', ['-Wall','-g'])
 
 def build(bld):
 	bld.program(source='elasto_client.c linenoise.c cli_ls.c cli_put.c '
