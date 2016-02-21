@@ -130,7 +130,8 @@ struct cli_cmd_spec {
 		.name = "cp",
 		.az_help = "<src_acc>/<src_ctnr>/<src_blob> "
 			   "<dst_acc>/<dst_ctnr>/<dst_blob>",
-		.afs_help = "",
+		.afs_help = "<src_acc>/<src_share>/<src_file_path> "
+			    "<dst_acc>/<dst_share>/<dst_file_path>",
 		.s3_help = "<bucket>/<object> <bucket>/<object>",
 		.arg_min = 2,
 		.arg_max = 2,
@@ -138,7 +139,7 @@ struct cli_cmd_spec {
 		.handle = &cli_cp_handle,
 		.args_free = &cli_cp_args_free,
 		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-				| CLI_FL_AZ | CLI_FL_S3,
+				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
 		.id = CLI_CMD_CREATE,
