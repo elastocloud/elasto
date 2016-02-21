@@ -311,6 +311,7 @@ struct cli_uri_mapping {
 	enum elasto_ftype type;
 } cli_uri_mapping[] = {
 	{"azure_bb://", "abb://", ELASTO_FILE_ABB},
+	{"azure_pb://", "apb://", ELASTO_FILE_APB},
 	{"azure_fs://", "afs://", ELASTO_FILE_AFS},
 	{"amazon_s3://", "s3://", ELASTO_FILE_S3},
 };
@@ -345,6 +346,7 @@ cli_auth_args_validate(enum elasto_ftype type,
 {
 	switch (type) {
 	case ELASTO_FILE_ABB:
+	case ELASTO_FILE_APB:
 	case ELASTO_FILE_AFS:
 		if (((az_ps_file == NULL) && (az_access_key == NULL))
 		 || ((az_ps_file != NULL) && (az_access_key != NULL))) {
@@ -384,6 +386,7 @@ cli_args_free(const struct cli_cmd_spec *cmd,
 	if ((cmd != NULL) && (cmd->args_free != NULL))
 		cmd->args_free(cli_args);
 	if ((cli_args->auth.type == ELASTO_FILE_ABB)
+	 || (cli_args->auth.type == ELASTO_FILE_APB)
 	 || (cli_args->auth.type == ELASTO_FILE_AFS)) {
 		free(cli_args->auth.az.ps_path);
 		free(cli_args->auth.az.access_key);
@@ -501,15 +504,16 @@ cli_args_parse(int argc,
 		goto err_out;
 	}
 
-	if (cli_args->auth.type == ELASTO_FILE_ABB) {
+	if ((cli_args->auth.type == ELASTO_FILE_ABB)
+	 || (cli_args->auth.type == ELASTO_FILE_APB)) {
 		cli_args->auth.az.ps_path = az_ps_file;
 		cli_args->auth.az.access_key = az_access_key;
-		/* don't show S3 usage strings */
+		/* don't show S3 or AFS usage strings */
 		cli_args->flags &= ~(CLI_FL_S3 | CLI_FL_AFS);
 	} else if (cli_args->auth.type == ELASTO_FILE_AFS) {
 		cli_args->auth.az.ps_path = az_ps_file;
 		cli_args->auth.az.access_key = az_access_key;
-		/* don't show S3 or ABB usage strings */
+		/* don't show S3 or Azure Blob usage strings */
 		cli_args->flags &= ~(CLI_FL_S3 | CLI_FL_AZ);
 	} else if (cli_args->auth.type == ELASTO_FILE_S3) {
 		cli_args->auth.s3.creds_path = s3_creds_file;
