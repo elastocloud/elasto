@@ -29,6 +29,7 @@
 #include "lib/op.h"
 #include "lib/conn.h"
 #include "lib/dbg.h"
+#include "lib/util.h"
 #include "linenoise.h"
 #include "cli_common.h"
 #include "cli_ls.h"
@@ -302,46 +303,37 @@ err_out:
 
 /**
  * Parse REST URI in the form proto://server
- * TODO currently only the following protocols are supported:
  */
-#define CLI_URI_AZURE_BLOCK_BLOB_LONG "azure_bb://"
-#define CLI_URI_AZURE_BLOCK_BLOB_SHORT "abb://"
-#define CLI_URI_AMAZON_S3_LONG "amazon_s3://"
-#define CLI_URI_AMAZON_S3_SHORT "s3://"
-#define CLI_URI_AZURE_FILE_SERVICE_LONG "azure_fs://"
-#define CLI_URI_AZURE_FILE_SERVICE_SHORT "afs://"
+struct cli_uri_mapping {
+	char *uri_long;
+	char *uri_short;
+	enum elasto_ftype type;
+} cli_uri_mapping[] = {
+	{"azure_bb://", "abb://", ELASTO_FILE_ABB},
+	{"azure_fs://", "afs://", ELASTO_FILE_AFS},
+	{"amazon_s3://", "s3://", ELASTO_FILE_S3},
+};
+
 static int
 cli_uri_parse(const char *uri,
 	      enum elasto_ftype *type)
 {
+	int i;
+
 	if (type == NULL) {
 		return -EINVAL;
 	}
 
-	if (strncmp(uri, CLI_URI_AZURE_BLOCK_BLOB_LONG,
-	    sizeof(CLI_URI_AZURE_BLOCK_BLOB_LONG) - 1) == 0) {
-		*type = ELASTO_FILE_ABB;
-	} else if (strncmp(uri, CLI_URI_AZURE_BLOCK_BLOB_SHORT,
-	    sizeof(CLI_URI_AZURE_BLOCK_BLOB_SHORT) - 1) == 0) {
-		*type = ELASTO_FILE_ABB;
-	} else if (strncmp(uri, CLI_URI_AMAZON_S3_LONG,
-	    sizeof(CLI_URI_AMAZON_S3_LONG) - 1) == 0) {
-		*type = ELASTO_FILE_S3;
-	} else if (strncmp(uri, CLI_URI_AMAZON_S3_SHORT,
-	    sizeof(CLI_URI_AMAZON_S3_SHORT) - 1) == 0) {
-		*type = ELASTO_FILE_S3;
-	} else if (strncmp(uri, CLI_URI_AZURE_FILE_SERVICE_SHORT,
-	    sizeof(CLI_URI_AZURE_FILE_SERVICE_SHORT) - 1) == 0) {
-		*type = ELASTO_FILE_AFS;
-	} else if (strncmp(uri, CLI_URI_AZURE_FILE_SERVICE_LONG,
-	    sizeof(CLI_URI_AZURE_FILE_SERVICE_LONG) - 1) == 0) {
-		*type = ELASTO_FILE_AFS;
-	} else {
-		dbg(0, "invalid URI string: %s\n", uri);
-		return -EINVAL;
+	for (i = 0; i < ARRAY_SIZE(cli_uri_mapping); i++) {
+		if ((strcmp(uri, cli_uri_mapping[i].uri_long) == 0)
+		 || (strcmp(uri, cli_uri_mapping[i].uri_short) == 0)) {
+			*type = cli_uri_mapping[i].type;
+			return 0;
+		}
 	}
 
-	return 0;
+	dbg(0, "invalid URI string: %s\n", uri);
+	return -EINVAL;
 }
 
 static int
@@ -510,12 +502,12 @@ cli_args_parse(int argc,
 
 	if (cli_args->auth.type == ELASTO_FILE_ABB) {
 		cli_args->auth.az.ps_path = az_ps_file;
-		cli_args->auth.az.access_key = az_access_key;;
+		cli_args->auth.az.access_key = az_access_key;
 		/* don't show S3 usage strings */
 		cli_args->flags &= ~(CLI_FL_S3 | CLI_FL_AFS);
 	} else if (cli_args->auth.type == ELASTO_FILE_AFS) {
 		cli_args->auth.az.ps_path = az_ps_file;
-		cli_args->auth.az.access_key = az_access_key;;
+		cli_args->auth.az.access_key = az_access_key;
 		/* don't show S3 or ABB usage strings */
 		cli_args->flags &= ~(CLI_FL_S3 | CLI_FL_AZ);
 	} else if (cli_args->auth.type == ELASTO_FILE_S3) {
