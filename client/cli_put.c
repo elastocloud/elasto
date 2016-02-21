@@ -45,6 +45,7 @@ cli_put_args_parse(int argc,
 	int ret;
 
 	if ((cli_args->auth.type != ELASTO_FILE_ABB)
+	 && (cli_args->auth.type != ELASTO_FILE_APB)
 	 && (cli_args->auth.type != ELASTO_FILE_AFS)
 	 && (cli_args->auth.type != ELASTO_FILE_S3)) {
 		ret = -ENOTSUP;

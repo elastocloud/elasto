@@ -55,8 +55,9 @@ cli_ls_args_parse(int argc,
 		  struct cli_args *cli_args)
 {
 	if ((cli_args->auth.type != ELASTO_FILE_ABB)
-	 && (cli_args->auth.type != ELASTO_FILE_S3)
-	 && (cli_args->auth.type != ELASTO_FILE_AFS)) {
+	 && (cli_args->auth.type != ELASTO_FILE_APB)
+	 && (cli_args->auth.type != ELASTO_FILE_AFS)
+	 && (cli_args->auth.type != ELASTO_FILE_S3)) {
 		return -ENOTSUP;
 	}
 
@@ -71,6 +72,7 @@ cli_ls_args_parse(int argc,
 		return -ENOMEM;
 	}
 
+	cli_args->cmd = CLI_CMD_LS;
 	return 0;
 }
 

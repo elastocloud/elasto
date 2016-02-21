@@ -37,12 +37,20 @@ cli_del_args_parse(int argc,
 		   char * const *argv,
 		   struct cli_args *cli_args)
 {
+	if ((cli_args->auth.type != ELASTO_FILE_ABB)
+	 && (cli_args->auth.type != ELASTO_FILE_APB)
+	 && (cli_args->auth.type != ELASTO_FILE_AFS)
+	 && (cli_args->auth.type != ELASTO_FILE_S3)) {
+		return -ENOTSUP;
+	}
+
 	/* path is parsed by libfile on open */
 	cli_args->path = strdup(argv[1]);
 	if (cli_args->path == NULL) {
 		return -ENOMEM;
 	}
 
+	cli_args->cmd = CLI_CMD_DEL;
 	return 0;
 }
 

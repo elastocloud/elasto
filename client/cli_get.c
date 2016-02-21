@@ -43,6 +43,14 @@ cli_get_args_parse(int argc,
 {
 	int ret;
 
+	if ((cli_args->auth.type != ELASTO_FILE_ABB)
+	 && (cli_args->auth.type != ELASTO_FILE_APB)
+	 && (cli_args->auth.type != ELASTO_FILE_AFS)
+	 && (cli_args->auth.type != ELASTO_FILE_S3)) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
 	/* path is parsed by libfile on open */
 	cli_args->path = strdup(argv[1]);
 	if (cli_args->path == NULL) {
@@ -57,7 +65,6 @@ cli_get_args_parse(int argc,
 	}
 
 	cli_args->cmd = CLI_CMD_GET;
-
 	return 0;
 
 err_path_free:
