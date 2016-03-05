@@ -152,6 +152,10 @@ cli_get_range_cb(struct elasto_frange *range,
 		goto err_out;
 	}
 
+	printf("getting allocated range of %" PRIu64 "@%" PRIu64 " bytes "
+	       "from %s\n",
+	       range_ctx->len, range_ctx->off, range_ctx->data_ctx->path);
+
 	ret = elasto_fread_cb(data_ctx->elasto_fh, range->off, range->len,
 			      range_ctx, cli_get_range_data_in_cb);
 	if (ret < 0) {
@@ -190,9 +194,9 @@ cli_get_data_ctx_setup(struct elasto_fh *fh,
 	}
 
 	if (len != 0) {
-		ret = fallocate(data_ctx->fd, 0, 0, len);
+		ret = ftruncate(data_ctx->fd, len);
 		if (ret < 0) {
-			printf("fallocate failed: %s\n", strerror(errno));
+			printf("ftruncate failed: %s\n", strerror(errno));
 			ret = -EBADF;
 			goto err_fd_close;
 		}
@@ -274,9 +278,6 @@ cli_get_handle(struct cli_args *cli_args)
 		goto err_fclose;
 	}
 
-	printf("getting %" PRIu64 " bytes from %s for %s\n",
-	       fstat.size, cli_args->path, cli_args->get.local_path);
-
 	ret = cli_get_data_ctx_setup(fh, cli_args->get.local_path, fstat.size,
 				     &data_ctx);
 	if (ret < 0) {
@@ -296,6 +297,9 @@ cli_get_handle(struct cli_args *cli_args)
 		}
 	} else {
 		struct cli_get_range_ctx *range_ctx;
+
+		printf("getting %" PRIu64 " bytes from %s for %s\n",
+		       fstat.size, cli_args->path, cli_args->get.local_path);
 
 		ret = cli_get_range_ctx_setup(data_ctx, 0, fstat.size,
 					      &range_ctx);
