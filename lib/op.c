@@ -455,3 +455,19 @@ op_rsp_process(struct op *op)
 	ret = op->rsp_process(op);
 	return ret;
 }
+
+const char *
+op_method_str(enum op_req_method method)
+{
+	const char *req_map[] = {NULL, "GET", "PUT", "DELETE", "POST", "HEAD"};
+
+	BUILD_ASSERT((REQ_METHOD_GET == 1) && (REQ_METHOD_PUT == 2)
+		  && (REQ_METHOD_DELETE == 3) && (REQ_METHOD_POST == 4)
+		  && (REQ_METHOD_HEAD == 5));
+
+	if ((method < REQ_METHOD_GET) || (method > REQ_METHOD_HEAD)) {
+		return NULL;
+	}
+
+	return req_map[method];
+}

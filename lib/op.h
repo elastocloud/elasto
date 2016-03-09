@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -29,11 +29,13 @@ struct op_rsp_error {
 	char *redir_endpoint;
 };
 
-#define REQ_METHOD_GET		"GET"
-#define REQ_METHOD_PUT		"PUT"
-#define REQ_METHOD_DELETE	"DELETE"
-#define REQ_METHOD_POST		"POST"
-#define REQ_METHOD_HEAD		"HEAD"
+enum op_req_method {
+	REQ_METHOD_GET = 1,
+	REQ_METHOD_PUT,
+	REQ_METHOD_DELETE,
+	REQ_METHOD_POST,
+	REQ_METHOD_HEAD,
+};
 
 struct op;
 typedef int (*req_sign_cb_t)(const char *acc,
@@ -49,7 +51,7 @@ struct op {
 	struct elasto_conn *econn;
 	int opcode;
 	char *sig_src;	/* debug, compare with signing error response */
-	const char *method;
+	enum op_req_method method;
 	bool url_https_only;	/* overrides conn insecure_http setting */
 	char *url_host;
 	char *url_path;
@@ -134,5 +136,7 @@ op_free(struct op *op);
 
 int
 op_rsp_process(struct op *op);
+
+const char *op_method_str(enum op_req_method method);
 
 #endif /* ifdef _OP_H_ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -657,7 +657,8 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 		return -ENOMEM;
 	}
 
-	dbg(3, "preparing %s request for dispatch to: %s\n", op->method, url);
+	dbg(3, "preparing %s request for dispatch to: %s\n",
+	    op_method_str(op->method), url);
 
 	ev_req = evhttp_request_new(ev_done_cb, op);
 	if (ev_req == NULL) {
@@ -671,9 +672,9 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 	evhttp_request_set_error_cb(ev_req, ev_err_cb);
 
 
-	if (strcmp(op->method, REQ_METHOD_GET) == 0) {
+	if (op->method == REQ_METHOD_GET) {
 		ev_req_type = EVHTTP_REQ_GET;
-	} else if (strcmp(op->method, REQ_METHOD_PUT) == 0) {
+	} else if (op->method == REQ_METHOD_PUT) {
 		ev_req_type = EVHTTP_REQ_PUT;
 		ret = elasto_conn_send_prepare_read_data(ev_req, op->req.data,
 							 &content_len);
@@ -681,7 +682,7 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 			dbg(0, "failed to attach read data\n");
 			goto err_ev_req_free;
 		}
-	} else if (strcmp(op->method, REQ_METHOD_POST) == 0) {
+	} else if (op->method == REQ_METHOD_POST) {
 		ev_req_type = EVHTTP_REQ_POST;
 		ret = elasto_conn_send_prepare_read_data(ev_req, op->req.data,
 							 &content_len);
@@ -689,15 +690,14 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 			dbg(0, "failed to attach read data\n");
 			goto err_ev_req_free;
 		}
-	} else if (strcmp(op->method, REQ_METHOD_HEAD) == 0) {
+	} else if (op->method == REQ_METHOD_HEAD) {
 		ev_req_type = EVHTTP_REQ_HEAD;
 		/* No body component with HEAD requests */
-	} else if (strcmp(op->method, REQ_METHOD_DELETE) == 0) {
+	} else if (op->method == REQ_METHOD_DELETE) {
 		ev_req_type = EVHTTP_REQ_DELETE;
 	} else {
-		dbg(0, "invalid request method: %s\n", op->method);
+		dbg(0, "invalid request method: %d\n", op->method);
 		ret = -EINVAL;
-		/* FIXME free read_data? */
 		goto err_ev_req_free;
 	}
 

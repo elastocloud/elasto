@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -366,6 +366,13 @@ sign_gen_lite_azure(const char *account,
 	uint8_t *md;
 	int md_len;
 	char *md_b64;
+	const char *method_str;
+
+	method_str = op_method_str(op->method);
+	if (method_str == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = canon_hdrs_gen(op->req.num_hdrs, &op->req.hdrs,
 			     HDR_PREFIX_AZ, false,
@@ -387,7 +394,7 @@ sign_gen_lite_azure(const char *account,
 		       "\n"	/* Date (not supported) */
 		       "%s"	/* CanonicalizedHeaders */
 		       "%s",	/* CanonicalizedResource */
-		       op->method,
+		       method_str,
 		       content_type ? content_type : "",
 		       canon_hdrs, canon_rsc);
 	if (ret < 0) {
@@ -741,6 +748,13 @@ sign_gen_s3(const char *bkt_name,
 	uint8_t *md;
 	int md_len;
 	char *md_b64;
+	const char *method_str;
+
+	method_str = op_method_str(op->method);
+	if (method_str == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	canon_rsc = canon_rsc_gen_s3(bkt_name, op->url_host, op->url_path);
 	if (canon_rsc == NULL) {
@@ -764,7 +778,7 @@ sign_gen_s3(const char *bkt_name,
 		       "%s\n"	/* Date */
 		       "%s"	/* CanonicalizedHeaders */
 		       "%s",	/* CanonicalizedResource */
-		       op->method,
+		       method_str,
 		       content_md5 ? content_md5 : "",
 		       content_type ? content_type : "",
 		       date ? date : "",
