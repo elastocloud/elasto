@@ -7,14 +7,28 @@ def configure(conf):
 	conf.find_program('gzip', mandatory=True, var='GZIP')
 
 def build(bld):
-	if bld.env.A2X:
-		bld(rule='${A2X} --doctype manpage --format manpage ${SRC}',
-		    source='elasto_cli.asciidoc')
-	else:
+	def gen_manpage(task):
+		src = task.inputs[0].abspath()
+		# a2x outputs to src dir by default, so use explicit dest dir
+		a2x_out_dir = task.outputs[0].bld_dir()
+
+		cmd = ('%s -d manpage -f manpage --destination-dir=%s %s'
+		       % (task.env.A2X, a2x_out_dir, src))
+		return task.exec_command(cmd)
+
+	def gz_manpage(task):
+		src = task.inputs[0].abspath()
+		tgt = task.outputs[0].abspath()
+
+		cmd = '%s -c %s > %s' % (task.env.GZIP, src, tgt)
+		return task.exec_command(cmd)
+
+	if not bld.env.A2X:
 		print("Skipping documentation build: "
 		      "AsciiDoc a2x binary required")
-		# install pre-built man page
-	bld(rule='${GZIP} -c ${SRC} > ${TGT}',
-	    source='elasto_cli.1',
-	    target='elasto_cli.1.gz')
+		return
+
+	bld(rule=gen_manpage, source='elasto_cli.asciidoc',
+	    target='elasto_cli.1')
+	bld(rule=gz_manpage, source='elasto_cli.1', target='elasto_cli.1.gz')
 	bld.install_files('${MANDIR}/man1/', ['elasto_cli.1.gz'])
