@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -1320,8 +1320,8 @@ cm_file_afs_list_ranges(void **state)
 	assert_true(ret >= 0);
 
 	/* ensure written sections are the only allocated ranges */
-	ret = elasto_flist_ranges(fh, 0, BYTES_IN_GB, 0,
-				  cm_file_afs_list_ranges_cb, &num_cbs);
+	ret = elasto_flist_ranges(fh, 0, BYTES_IN_GB, 0, &num_cbs,
+				  cm_file_afs_list_ranges_cb);
 	assert_true(ret >= 0);
 
 	assert_int_equal(num_cbs, 2);
