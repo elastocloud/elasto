@@ -3,6 +3,16 @@ def options(opt):
 
 def configure(conf):
 	conf.load('compiler_c')
+	conf.check_cc(msg = 'Checking for SEEK_HOLE/SEEK_DATA',
+		      fragment='''
+				#include <unistd.h>
+				int main()
+				{
+					lseek(-1, 0, SEEK_DATA);
+					lseek(-1, 0, SEEK_HOLE);
+					return 0;
+				}''',
+		      mandatory=True)
 
 def build(bld):
 	bld.program(source='elasto_client.c linenoise.c cli_ls.c cli_put.c '
