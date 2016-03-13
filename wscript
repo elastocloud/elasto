@@ -14,7 +14,9 @@ def options(opt):
 def configure(conf):
 	conf.load('compiler_c')
 	conf.load('gnu_dirs')
-	conf.env.CFLAGS = ['-Wall', '-g', '-D_LARGEFILE64_SOURCE', '-D_GNU_SOURCE']
+	conf.env.CFLAGS = ['-Wall', '-D_LARGEFILE64_SOURCE', '-D_GNU_SOURCE']
+	# append flags from CFLAGS environment var
+	conf.cc_add_flags()
 	conf.env.LIBELASTO_API_VERS = LIBELASTO_API_VERS
 	conf.define('LIBELASTO_API_VERS', LIBELASTO_API_VERS)
 	conf.define('ELASTO_VERS', VERSION)
