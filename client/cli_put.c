@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -22,7 +22,9 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <inttypes.h>
 
+#include "ccan/list/list.h"
 #include "lib/file/file_api.h"
 #include "cli_common.h"
 #include "cli_put.h"
@@ -75,8 +77,18 @@ err_out:
 }
 
 struct cli_put_data_ctx {
+	struct elasto_fh *elasto_fh;
 	int fd;
 	char *path;
+	uint64_t total_len;
+	uint64_t num_ranges;
+	struct list_head ranges;
+};
+
+struct cli_put_range_ctx {
+	struct list_node list;
+	struct cli_put_data_ctx *data_ctx;
+	uint64_t off;
 	uint64_t len;
 };
 
@@ -87,12 +99,13 @@ cli_put_data_out_cb(uint64_t stream_off,
 		    uint64_t *buf_len,
 		    void *priv)
 {
-	struct cli_put_data_ctx *data_ctx = priv;
+	struct cli_put_range_ctx *range_ctx = priv;
+	struct cli_put_data_ctx *data_ctx = range_ctx->data_ctx;
 	uint8_t *out_buf;
 	size_t read;
 	int ret;
 
-	if (need > data_ctx->len) {
+	if (need > data_ctx->total_len) {
 		printf("bogus need len in data cb\n");
 		ret = -EINVAL;
 		goto err_out;
@@ -104,7 +117,7 @@ cli_put_data_out_cb(uint64_t stream_off,
 		goto err_out;
 	}
 
-	read = pread(data_ctx->fd, out_buf, need, stream_off);
+	read = pread(data_ctx->fd, out_buf, need, range_ctx->off + stream_off);
 	if ((read == -1) || (read != need)) {
 		printf("read callback failed: %s\n", strerror(errno));
 		ret = -EBADF;
@@ -123,7 +136,31 @@ err_out:
 }
 
 static int
-cli_put_data_ctx_setup(const char *path,
+cli_put_range_ctx_setup(struct cli_put_data_ctx *data_ctx,
+			uint64_t range_off,
+			uint64_t range_len,
+			struct cli_put_range_ctx **_range_ctx)
+{
+	struct cli_put_range_ctx *range_ctx;
+
+	range_ctx = malloc(sizeof(*range_ctx));
+	if (range_ctx == NULL) {
+		return -ENOMEM;
+	}
+	memset(range_ctx, 0, sizeof(*range_ctx));
+	range_ctx->data_ctx = data_ctx;
+	range_ctx->off = range_off;
+	range_ctx->len = range_len;
+	list_add_tail(&data_ctx->ranges, &range_ctx->list);
+	data_ctx->num_ranges++;
+	*_range_ctx = range_ctx;
+
+	return 0;
+}
+
+static int
+cli_put_data_ctx_setup(struct elasto_fh *fh,
+		       const char *path,
 		       uint64_t len,
 		       struct cli_put_data_ctx **_data_ctx)
 {
@@ -135,6 +172,9 @@ cli_put_data_ctx_setup(const char *path,
 		ret = -ENOMEM;
 		goto err_out;
 	}
+	memset(data_ctx, 0, sizeof(*data_ctx));
+
+	data_ctx->elasto_fh = fh;
 
 	data_ctx->fd = open(path, O_RDONLY);
 	if (data_ctx->fd == -1) {
@@ -147,7 +187,8 @@ cli_put_data_ctx_setup(const char *path,
 		ret = -ENOMEM;
 		goto err_fd_close;
 	}
-	data_ctx->len = len;
+	data_ctx->total_len = len;
+	list_head_init(&data_ctx->ranges);
 
 	*_data_ctx = data_ctx;
 
@@ -164,17 +205,99 @@ err_out:
 static void
 cli_put_data_ctx_free(struct cli_put_data_ctx *data_ctx)
 {
+	struct cli_put_range_ctx *range_ctx;
+	struct cli_put_range_ctx *range_ctx_n;
+
 	free(data_ctx->path);
 	if (close(data_ctx->fd) == -1) {
 		printf("close failed: %s\n", strerror(errno));
 	}
+	list_for_each_safe(&data_ctx->ranges, range_ctx, range_ctx_n, list) {
+		free(range_ctx);
+	}
 	free(data_ctx);
+}
+
+static int
+cli_seek_data_put(struct cli_put_data_ctx *data_ctx)
+{
+	int ret;
+	off_t data_start;
+	off_t data_end;
+	off_t data_cur = 0;
+
+	if (data_ctx->total_len == 0) {
+		return 0;
+	}
+
+	do {
+		off_t next_hole;
+		off_t range_len;
+		struct cli_put_range_ctx *range_ctx;
+
+		data_start = lseek(data_ctx->fd, data_cur, SEEK_DATA);
+		if (data_start == (off_t)-1) {
+			ret = -errno;
+			if (ret == -ENXIO) {
+				break;
+			}
+			printf("lseek DATA failed: %s\n", strerror(-ret));
+			goto err_out;
+		}
+
+		if (data_start >= data_ctx->total_len) {
+			break;
+		}
+
+		next_hole = lseek(data_ctx->fd, data_start + 1, SEEK_HOLE);
+		if (next_hole == (off_t)-1) {
+			ret = -errno;
+			if (ret == -ENXIO) {
+				break;
+			}
+			printf("lseek HOLE failed: %s\n", strerror(-ret));
+			goto err_out;
+		}
+
+		if (next_hole >= data_ctx->total_len) {
+			data_end = data_ctx->total_len - 1;
+		} else {
+			data_end = next_hole - 1;
+		}
+
+		assert(data_end >= data_start);
+		range_len = data_end - data_start + 1;
+
+		ret = cli_put_range_ctx_setup(data_ctx, data_start, range_len,
+					      &range_ctx);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		printf("putting allocated range of %" PRIu64 "@%" PRIu64 " bytes "
+		       "to %s\n",
+		       range_ctx->len, range_ctx->off, range_ctx->data_ctx->path);
+
+		ret = elasto_fwrite_cb(data_ctx->elasto_fh, range_ctx->off,
+				       range_ctx->len, range_ctx,
+				       cli_put_data_out_cb);
+		if (ret < 0) {
+			printf("write failed with: %s\n", strerror(-ret));
+			goto err_out;
+		}
+		data_cur = data_end + 1;
+	} while (data_cur < data_ctx->total_len);
+
+	ret = 0;
+err_out:
+	return ret;
 }
 
 int
 cli_put_handle(struct cli_args *cli_args)
 {
 	struct elasto_fh *fh;
+	struct elasto_fstatfs fstatfs;
 	struct cli_put_data_ctx *data_ctx;
 	struct stat st;
 	int ret;
@@ -189,26 +312,47 @@ cli_put_handle(struct cli_args *cli_args)
 		goto err_out;
 	}
 
+	/* statfs to determine whether sparse uploads are possible */
+	ret = elasto_fstatfs(fh, &fstatfs);
+	if (ret < 0) {
+		printf("fstatfs failed: %s\n", strerror(-ret));
+		goto err_fclose;
+	}
+
 	ret = stat(cli_args->put.local_path, &st);
 	if (ret < 0) {
 		printf("failed to stat %s\n", cli_args->put.local_path);
 		goto err_fclose;
 	}
 
-	printf("putting %ld bytes from %s to %s\n",
-	       (long int)st.st_size, cli_args->put.local_path, cli_args->path);
-
-	ret = cli_put_data_ctx_setup(cli_args->put.local_path, st.st_size,
+	ret = cli_put_data_ctx_setup(fh, cli_args->put.local_path, st.st_size,
 				     &data_ctx);
 	if (ret < 0) {
 		goto err_fclose;
 	}
 
-	ret = elasto_fwrite_cb(fh, 0, st.st_size, data_ctx,
-			       cli_put_data_out_cb);
-	if (ret < 0) {
-		printf("write failed with: %s\n", strerror(-ret));
-		goto err_data_ctx_cleanup;
+	if (fstatfs.cap_flags | ELASTO_FSTATFS_CAP_SPARSE) {
+		ret = elasto_ftruncate(fh, st.st_size);
+		if (ret < 0) {
+			printf("truncate failed with: %s\n", strerror(-ret));
+			goto err_data_ctx_cleanup;
+		}
+
+		ret = cli_seek_data_put(data_ctx);
+		if (ret < 0) {
+			goto err_data_ctx_cleanup;
+		}
+	} else {
+		printf("putting %ld bytes from %s to %s\n",
+		       (long int)st.st_size, cli_args->put.local_path,
+		       cli_args->path);
+
+		ret = elasto_fwrite_cb(fh, 0, st.st_size, data_ctx,
+				       cli_put_data_out_cb);
+		if (ret < 0) {
+			printf("write failed with: %s\n", strerror(-ret));
+			goto err_data_ctx_cleanup;
+		}
 	}
 
 	ret = 0;
