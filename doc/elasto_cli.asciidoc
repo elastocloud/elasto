@@ -56,11 +56,12 @@ OPTIONS
 	deriving it from the credentials file. Currently only the protocol in
 	the URI is processed. Supported values are:
 [width="15%"]
-|=================================
-|*abb://* | Azure Block Blob Service
+|===========================================
+|*abb://* | Azure Blob Service (Block Blobs)
+|*apb://* | Azure Blob Service (Page Blobs)
 |*afs://* | Azure File Service
 |*s3://*  | Amazon S3
-|=================================
+|===========================================
 
 'command'::
 	Client command to execute, refer to list below. If no command is

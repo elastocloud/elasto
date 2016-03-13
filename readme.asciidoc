@@ -102,11 +102,14 @@ credentials parameters:
 
 Service URI
 ^^^^^^^^^^^
-Two storage services can be used with Azure:
-
-*Azure Blob Service* (default)::
+*Azure Blob Service* (Block Blobs - default)::
 -----------------------------------------------------
 > elasto_cli -u abb:// ...
+-----------------------------------------------------
+
+*Azure Blob Service* (Page Blobs)::
+-----------------------------------------------------
+> elasto_cli -u apb:// ...
 -----------------------------------------------------
 
 *Azure File Service*::
