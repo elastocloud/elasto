@@ -12,5 +12,4 @@ def build(bld):
 			 ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		    use=['elasto_file'],
 		    includes = '. ..',
-		    defines = ['_GNU_SOURCE'],
 		    install_path = '${BINDIR}')

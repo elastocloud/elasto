@@ -15,8 +15,7 @@ def build(bld):
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto_file', 'elasto_req_azure_blob'],
-		  includes = '. .. ../../ ../../../',
-		  defines = ['_GNU_SOURCE'])
+		  includes = '. .. ../../ ../../../')
 	bld.shlib(source='''afs_dir.c afs_handle.c afs_io.c afs_open.c
 			    afs_stat.c afs_unlink.c''',
 		  target='elasto_file_mod_afs',
@@ -24,7 +23,6 @@ def build(bld):
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto_file', 'elasto_req_azure_fs'],
-		  includes = '. .. ../../ ../../../',
-		  defines = ['_GNU_SOURCE'])
+		  includes = '. .. ../../ ../../../')
 	if bld.cmd == 'install':
 		bld.add_post_fun(call_ldconfig)

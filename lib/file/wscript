@@ -20,8 +20,7 @@ def build(bld):
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5',
 		       'dl'],
 		  use=['elasto_core'],
-		  includes = '. .. ../../',
-		  defines = ['_GNU_SOURCE'])
+		  includes = '. .. ../../')
 	bld.install_as('${INCLUDEDIR}/elasto/file.h', 'file_api.h')
 	if bld.cmd == 'install':
 		bld.add_post_fun(call_ldconfig)

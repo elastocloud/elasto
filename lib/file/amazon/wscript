@@ -15,7 +15,6 @@ def build(bld):
 		  lib=['crypto', 'expat', 'ssl',
 		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		  use=['elasto_file', 'elasto_req_s3'],
-		  includes = '. .. ../../ ../../../',
-		  defines = ['_GNU_SOURCE'])
+		  includes = '. .. ../../ ../../../')
 	if bld.cmd == 'install':
 		bld.add_post_fun(call_ldconfig)

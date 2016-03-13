@@ -21,5 +21,4 @@ def build(bld):
 		    use=['elasto_req_azure_blob', 'elasto_req_azure_fs',
 			 'elasto_req_s3', 'elasto_file'],
 		    includes = '. .. ../lib',
-		    defines = ['_GNU_SOURCE'],
 		    install_path = None)
