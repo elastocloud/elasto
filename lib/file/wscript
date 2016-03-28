@@ -22,6 +22,10 @@ def build(bld):
 		  use=['elasto_core'],
 		  includes = '. .. ../../')
 	bld.install_as('${INCLUDEDIR}/elasto/file.h', 'file_api.h')
+	bld(features="subst",
+	    source="elasto_file.pc.in",
+	    target="elasto_file.pc",
+	    install_path="${LIBDIR}/pkgconfig")
 	if bld.cmd == 'install':
 		bld.add_post_fun(call_ldconfig)
 	bld.recurse(recurse_subdirs)
