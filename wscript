@@ -1,6 +1,6 @@
 APPNAME = 'elasto'
-VERSION = '0.7.0'
-LIBELASTO_API_VERS = '0.0.4'
+VERSION = '0.7.2'
+LIBELASTO_API_VERS = '0.1.0'
 
 top = '.'
 out = 'build'
