@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -141,6 +141,7 @@ afs_fopen_file(struct afs_fh *afs_fh,
 {
 	int ret;
 	struct op *op;
+	bool created = false;
 
 	if (flags & ELASTO_FOPEN_DIRECTORY) {
 		dbg(1, "attempt to open file with directory flag set\n");
@@ -173,13 +174,14 @@ afs_fopen_file(struct afs_fh *afs_fh,
 		if (ret < 0) {
 			goto err_op_free;
 		}
+		created = true;
 		goto done;
 	} else if (ret < 0) {
 		goto err_op_free;
 	}
 
 done:
-	ret = 0;
+	ret = (created ? ELASTO_FOPEN_RET_CREATED : ELASTO_FOPEN_RET_EXISTED);
 err_op_free:
 	op_free(op);
 err_out:
@@ -192,6 +194,7 @@ afs_fopen_dir(struct afs_fh *afs_fh,
 {
 	int ret;
 	struct op *op;
+	bool created = false;
 
 	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
 		dbg(1, "attempt to open dir without directory flag\n");
@@ -222,13 +225,14 @@ afs_fopen_dir(struct afs_fh *afs_fh,
 		if (ret < 0) {
 			goto err_op_free;
 		}
+		created = true;
 		goto done;
 	} else if (ret < 0) {
 		goto err_op_free;
 	}
 
 done:
-	ret = 0;
+	ret = (created ? ELASTO_FOPEN_RET_CREATED : ELASTO_FOPEN_RET_EXISTED);
 err_op_free:
 	op_free(op);
 err_out:
@@ -242,6 +246,7 @@ afs_fopen_share(struct afs_fh *afs_fh,
 {
 	int ret;
 	struct op *op;
+	bool created = false;
 
 	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
 		dbg(1, "attempt to open share without dir flag set\n");
@@ -273,11 +278,12 @@ afs_fopen_share(struct afs_fh *afs_fh,
 		if (ret < 0) {
 			goto err_op_free;
 		}
+		created = true;
 	} else if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = (created ? ELASTO_FOPEN_RET_CREATED : ELASTO_FOPEN_RET_EXISTED);
 err_op_free:
 	op_free(op);
 err_out:
@@ -464,7 +470,7 @@ afs_fopen_acc_existing(struct afs_fh *afs_fh,
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = ELASTO_FOPEN_RET_EXISTED;
 err_op_free:
 	op_free(op);
 err_out:
@@ -510,7 +516,7 @@ afs_fopen_root(struct afs_fh *afs_fh,
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = ELASTO_FOPEN_RET_EXISTED;
 err_op_free:
 	op_free(op);
 err_out:
@@ -595,6 +601,7 @@ afs_fopen(void *mod_priv,
 			if (ret < 0) {
 				goto err_mgmt_conn_free;
 			}
+			ret = ELASTO_FOPEN_RET_CREATED;
 		} else {
 			ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
 			if (ret < 0) {
@@ -605,6 +612,7 @@ afs_fopen(void *mod_priv,
 			if (ret < 0) {
 				goto err_io_conn_free;
 			}
+			ret = ELASTO_FOPEN_RET_EXISTED;
 		}
 	} else {
 		ret = afs_fopen_root(afs_fh, flags);
@@ -616,7 +624,7 @@ afs_fopen(void *mod_priv,
 	}
 	afs_fh->open_flags = flags;
 
-	return 0;
+	return ret;
 
 err_io_conn_free:
 	elasto_conn_free(afs_fh->io_conn);

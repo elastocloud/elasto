@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -48,6 +48,7 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 {
 	int ret;
 	struct op *op;
+	bool created = false;
 
 	if (flags & ELASTO_FOPEN_DIRECTORY) {
 		dbg(1, "attempt to open object with directory flag set\n");
@@ -85,11 +86,12 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		if (ret < 0) {
 			goto err_op_free;
 		}
+		created = true;
 	} else if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = (created ? ELASTO_FOPEN_RET_CREATED : ELASTO_FOPEN_RET_EXISTED);
 err_op_free:
 	op_free(op);
 err_out:
@@ -103,6 +105,7 @@ s3_fopen_bkt(struct s3_fh *s3_fh,
 {
 	int ret;
 	struct op *op;
+	bool created = false;
 
 	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
 		dbg(1, "attempt to open bucket without dir flag set\n");
@@ -146,11 +149,12 @@ s3_fopen_bkt(struct s3_fh *s3_fh,
 		if (ret < 0) {
 			goto err_op_free;
 		}
+		created = true;
 	} else if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = (created ? ELASTO_FOPEN_RET_CREATED : ELASTO_FOPEN_RET_EXISTED);
 err_op_free:
 	op_free(op);
 err_out:
@@ -190,7 +194,7 @@ s3_fopen_root(struct s3_fh *s3_fh,
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = ELASTO_FOPEN_RET_EXISTED;
 err_op_free:
 	op_free(op);
 err_out:
@@ -242,7 +246,7 @@ s3_fopen(void *mod_priv,
 		}
 	}
 
-	return 0;
+	return ret;
 
 err_conn_free:
 	elasto_conn_free(s3_fh->conn);

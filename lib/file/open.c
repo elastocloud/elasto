@@ -80,7 +80,7 @@ elasto_fopen(const struct elasto_fauth *auth,
 	}
 
 	*_fh = fh;
-	return 0;
+	return ret;
 
 err_fh_free:
 	elasto_fh_free(fh);

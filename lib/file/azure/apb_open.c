@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -143,6 +143,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 	int ret;
 	struct op *op;
 	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
+	bool created = false;
 
 	if (flags & ELASTO_FOPEN_DIRECTORY) {
 		dbg(1, "attempt to open blob with directory flag set\n");
@@ -173,6 +174,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 		if (ret < 0) {
 			goto err_op_free;
 		}
+		created = true;
 		goto done;
 	} else if (ret < 0) {
 		goto err_op_free;
@@ -191,7 +193,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 	}
 
 done:
-	ret = 0;
+	ret = (created ? ELASTO_FOPEN_RET_CREATED : ELASTO_FOPEN_RET_EXISTED);
 err_op_free:
 	op_free(op);
 err_out:
@@ -205,6 +207,7 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 	int ret;
 	struct op *op;
 	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
+	bool created = false;
 
 	if (flags & ELASTO_FOPEN_DIRECTORY) {
 		dbg(1, "attempt to open blob with directory flag set\n");
@@ -241,6 +244,7 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 		if (ret < 0) {
 			goto err_op_free;
 		}
+		created = true;
 		goto done;
 	} else if (ret < 0) {
 		goto err_op_free;
@@ -248,6 +252,7 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 
 	blob_prop_get_rsp = az_rsp_blob_prop_get(op);
 	if (blob_prop_get_rsp == NULL) {
+		ret = -ENOMEM;
 		goto err_op_free;
 	}
 
@@ -259,7 +264,7 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 	}
 
 done:
-	ret = 0;
+	ret = (created ? ELASTO_FOPEN_RET_CREATED : ELASTO_FOPEN_RET_EXISTED);
 err_op_free:
 	op_free(op);
 err_out:
@@ -272,6 +277,7 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 {
 	int ret;
 	struct op *op;
+	bool created = false;
 
 	if ((flags & ELASTO_FOPEN_DIRECTORY) == 0) {
 		dbg(1, "attempt to open container without dir flag set\n");
@@ -302,11 +308,12 @@ apb_fopen_ctnr(struct apb_fh *apb_fh,
 		if (ret < 0) {
 			goto err_op_free;
 		}
+		created = true;
 	} else if (ret < 0) {
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = (created ? ELASTO_FOPEN_RET_CREATED : ELASTO_FOPEN_RET_EXISTED);
 err_op_free:
 	op_free(op);
 err_out:
@@ -466,7 +473,7 @@ apb_fopen_acc_create(struct apb_fh *apb_fh,
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = ELASTO_FOPEN_RET_CREATED;
 err_op_free:
 	op_free(op);
 err_out:
@@ -500,7 +507,7 @@ apb_fopen_acc_existing(struct apb_fh *apb_fh,
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = ELASTO_FOPEN_RET_EXISTED;
 err_op_free:
 	op_free(op);
 err_out:
@@ -546,7 +553,7 @@ apb_fopen_root(struct apb_fh *apb_fh,
 		goto err_op_free;
 	}
 
-	ret = 0;
+	ret = ELASTO_FOPEN_RET_EXISTED;
 err_op_free:
 	op_free(op);
 err_out:
@@ -628,6 +635,7 @@ apb_abb_fopen(void *mod_priv,
 			if (ret < 0) {
 				goto err_mgmt_conn_free;
 			}
+			ret = ELASTO_FOPEN_RET_CREATED;
 		} else {
 			ret = apb_io_conn_init(apb_fh, &apb_fh->io_conn);
 			if (ret < 0) {
@@ -638,6 +646,7 @@ apb_abb_fopen(void *mod_priv,
 			if (ret < 0) {
 				goto err_io_conn_free;
 			}
+			ret = ELASTO_FOPEN_RET_EXISTED;
 		}
 	} else {
 		ret = apb_fopen_root(apb_fh, flags);
@@ -648,7 +657,7 @@ apb_abb_fopen(void *mod_priv,
 		/* IO conn not needed */
 	}
 
-	return 0;
+	return ret;
 
 err_io_conn_free:
 	elasto_conn_free(apb_fh->io_conn);

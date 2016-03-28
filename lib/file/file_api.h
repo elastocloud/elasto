@@ -80,6 +80,29 @@ enum elasto_fopen_token_key {
 	ELASTO_FOPEN_TOK_CREATE_AT_LOCATION	= 1,
 };
 
+/**
+ * Open return values
+ *
+ * @ELASTO_FOPEN_RET_EXISTED:	existing file/dir was successfully opened
+ * @ELASTO_FOPEN_RET_CREATED:	file/dir was successfully created and opened
+ */
+enum elasto_fopen_success_ret {
+	/* -errno on failure */
+	ELASTO_FOPEN_RET_EXISTED	= 0,
+	ELASTO_FOPEN_RET_CREATED	= 1,
+};
+
+/**
+ * open and possibly create a file or directory
+ *
+ * @auth:	Cloud backend authentication information
+ * @path:	Path to open
+ * @flags:	@elasto_fopen_flags mask
+ * @open_toks:	custom open tokens
+ * @fh:		handle returned on success
+ *
+ * @returns:	-errno on error, enum elasto_fopen_success_ret on success
+ */
 int
 elasto_fopen(const struct elasto_fauth *auth,
 	     const char *path,
