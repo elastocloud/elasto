@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -14,7 +14,14 @@
 #ifndef _S3_PATH_H_
 #define _S3_PATH_H_
 
+enum s3_path_type {
+	S3_PATH_ROOT = 1,
+	S3_PATH_BKT,
+	S3_PATH_OBJ,
+};
+
 struct s3_path {
+	enum s3_path_type type;
 	char *host;
 	char *bkt;
 	char *obj;
@@ -32,18 +39,12 @@ s3_path_dup(const struct s3_path *path_orig,
 	    struct s3_path *path_dup);
 
 #define S3_PATH_IS_SVC(path) \
-	((path != NULL) \
-	 && (path->bkt == NULL) \
-	 && (path->obj == NULL))
+	((path != NULL) && (path->type == S3_PATH_ROOT))
 
 #define S3_PATH_IS_BKT(path) \
-	((path != NULL) \
-	 && (path->bkt != NULL) \
-	 && (path->obj == NULL))
+	((path != NULL) && (path->type == S3_PATH_BKT))
 
 #define S3_PATH_IS_OBJ(path) \
-	((path != NULL) \
-	 && (path->bkt != NULL) \
-	 && (path->obj != NULL))
+	((path != NULL) && (path->type == S3_PATH_OBJ))
 
 #endif /* _S3_PATH_H_ */

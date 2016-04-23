@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -118,6 +118,7 @@ s3_path_parse(const char *path,
 
 	if (*s == '\0') {
 		/* empty or leading slashes only */
+		s3_path->type = S3_PATH_ROOT;
 		goto done;
 	}
 
@@ -130,6 +131,7 @@ s3_path_parse(const char *path,
 	s = strchr(comp1, '/');
 	if (s == NULL) {
 		/* bucket only */
+		s3_path->type = S3_PATH_BKT;
 		goto done;
 	}
 
@@ -139,6 +141,7 @@ s3_path_parse(const char *path,
 
 	if (*s == '\0') {
 		/* bucket + slashes only */
+		s3_path->type = S3_PATH_BKT;
 		goto done;
 	}
 
@@ -154,7 +157,9 @@ s3_path_parse(const char *path,
 		ret = -EINVAL;
 		goto err_2_free;
 	}
+	s3_path->type = S3_PATH_OBJ;
 done:
+	assert(s3_path->type != 0);
 	s3_path->host = host;
 	s3_path->bkt = comp1;
 	s3_path->obj = comp2;
@@ -200,6 +205,7 @@ s3_path_dup(const struct s3_path *path_orig,
 		}
 	}
 
+	dup.type = path_orig->type;
 	if (path_orig->bkt != NULL) {
 		dup.bkt = strdup(path_orig->bkt);
 		if (dup.bkt == NULL) {
