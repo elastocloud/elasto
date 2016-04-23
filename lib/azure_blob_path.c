@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -57,6 +57,7 @@ az_blob_path_parse(const char *path,
 
 	if (*s == '\0') {
 		/* empty or leading slashes only */
+		az_path->type = AZ_BLOB_PATH_ROOT;
 		goto done;
 	}
 
@@ -69,6 +70,7 @@ az_blob_path_parse(const char *path,
 	s = strchr(comp1, '/');
 	if (s == NULL) {
 		/* account only */
+		az_path->type = AZ_BLOB_PATH_ACC;
 		goto done;
 	}
 
@@ -78,6 +80,7 @@ az_blob_path_parse(const char *path,
 
 	if (*s == '\0') {
 		/* account + slashes only */
+		az_path->type = AZ_BLOB_PATH_ACC;
 		goto done;
 	}
 
@@ -90,6 +93,7 @@ az_blob_path_parse(const char *path,
 	s = strchr(comp2, '/');
 	if (s == NULL) {
 		/* ctnr only */
+		az_path->type = AZ_BLOB_PATH_CTNR;
 		goto done;
 	}
 
@@ -99,6 +103,7 @@ az_blob_path_parse(const char *path,
 
 	if (*s == '\0') {
 		/* container + slashes only */
+		az_path->type = AZ_BLOB_PATH_CTNR;
 		goto done;
 	}
 
@@ -115,7 +120,10 @@ az_blob_path_parse(const char *path,
 		ret = -EINVAL;
 		goto err_3_free;
 	}
+
+	az_path->type = AZ_BLOB_PATH_BLOB;
 done:
+	assert(az_path->type != 0);
 	az_path->acc = comp1;
 	az_path->ctnr = comp2;
 	az_path->blob = comp3;
@@ -154,6 +162,7 @@ az_blob_path_dup(const struct az_blob_path *path_orig,
 	int ret;
 	struct az_blob_path dup = { 0 };
 
+	dup.type = path_orig->type;
 	if (path_orig->acc != NULL) {
 		dup.acc = strdup(path_orig->acc);
 		if (dup.acc == NULL) {

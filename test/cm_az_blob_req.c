@@ -117,6 +117,7 @@ cm_az_blob_req_init(void **state)
 		       cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_true(ret >= 0);
 
+	path.type = AZ_BLOB_PATH_CTNR;
 	path.acc = cm_us->acc,
 	path.ctnr = cm_op_az_blob_req_state.ctnr,
 	ret = az_req_ctnr_create(&path, &op);
@@ -139,6 +140,7 @@ cm_az_blob_req_deinit(void **state)
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	struct op *op;
 	struct az_blob_path path = {
+		.type = AZ_BLOB_PATH_CTNR,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
 	};
@@ -170,6 +172,7 @@ cm_az_blob_req_ctnrs_list(void **state)
 	struct azure_ctnr *ctnr;
 	bool found_ctnr;
 	struct az_blob_path path = {
+		.type = AZ_BLOB_PATH_ACC,
 		.acc = cm_us->acc,
 	};
 	ret = az_req_ctnr_list(&path, &op);
@@ -200,6 +203,7 @@ cm_az_blob_req_ctnr_props(void **state)
 	struct op *op;
 	struct az_rsp_ctnr_prop_get *ctnr_prop_get;
 	struct az_blob_path path = {
+		.type = AZ_BLOB_PATH_CTNR,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
 	};
@@ -229,6 +233,7 @@ cm_az_blob_req_blob_create(void **state)
 
 	/* put 1TB page blob */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_BLOB_PATH_BLOB;
 	path.acc = cm_us->acc;
 	path.ctnr = cm_op_az_blob_req_state.ctnr;
 	path.blob = "blob1";
@@ -242,6 +247,7 @@ cm_az_blob_req_blob_create(void **state)
 
 	/* confirm new blob exists */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_BLOB_PATH_CTNR;
 	path.acc = cm_us->acc;
 	path.ctnr = cm_op_az_blob_req_state.ctnr;
 	ret = az_req_blob_list(&path, &op);
@@ -263,6 +269,7 @@ cm_az_blob_req_blob_create(void **state)
 
 	/* cleanup */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_BLOB_PATH_BLOB;
 	path.acc = cm_us->acc;
 	path.ctnr = cm_op_az_blob_req_state.ctnr;
 	path.blob = "blob1";
@@ -284,6 +291,7 @@ cm_az_blob_req_page_blob_io(void **state)
 	struct elasto_data *data;
 	uint8_t buf[1024];
 	struct az_blob_path path = {
+		.type = AZ_BLOB_PATH_BLOB,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
 		.blob = "blob1",
@@ -360,6 +368,7 @@ cm_az_blob_req_blob_props(void **state)
 	struct op *op;
 	struct az_rsp_blob_prop_get *blob_prop_get;
 	struct az_blob_path path = {
+		.type = AZ_BLOB_PATH_BLOB,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
 		.blob = "blob1",
@@ -419,11 +428,13 @@ cm_az_blob_req_blob_cp(void **state)
 	struct elasto_data *data;
 	uint8_t buf[1024];
 	struct az_blob_path src_path = {
+		.type = AZ_BLOB_PATH_BLOB,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
 		.blob = "blob1",
 	};
 	struct az_blob_path dst_path = {
+		.type = AZ_BLOB_PATH_BLOB,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
 		.blob = "blob2",
@@ -498,6 +509,7 @@ cm_az_blob_req_page_ranges(void **state)
 	struct elasto_data *data;
 	uint8_t buf[1024];
 	struct az_blob_path path = {
+		.type = AZ_BLOB_PATH_BLOB,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
 		.blob = "blob1",

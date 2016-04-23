@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -14,6 +14,13 @@
 #ifndef _AZURE_BLOB_PATH_H_
 #define _AZURE_BLOB_PATH_H_
 
+enum az_blob_path_type {
+	AZ_BLOB_PATH_ROOT = 1,
+	AZ_BLOB_PATH_ACC,
+	AZ_BLOB_PATH_CTNR,
+	AZ_BLOB_PATH_BLOB,
+};
+
 /**
  * Azure Blob Service path representation
  *
@@ -21,33 +28,26 @@
  * carry one or more containers, which in turn can carry one or more
  * blobs.
  *
+ * @type: value to indicate which path fields are set/NULL
  * @acc: Storage account name
  * @ctnr: Container name
  * @blob: Blob name, used for page and block blobs.
  */
 struct az_blob_path {
+	enum az_blob_path_type type;
 	char *acc;
 	char *ctnr;
 	char *blob;
 };
 
 #define AZ_BLOB_PATH_IS_ACC(path) \
-	((path != NULL) \
-	 && (path->acc != NULL) \
-	 && (path->ctnr == NULL) \
-	 && (path->blob == NULL))
+	((path != NULL) && (path->type == AZ_BLOB_PATH_ACC))
 
 #define AZ_BLOB_PATH_IS_CTNR(path) \
-	((path != NULL) \
-	 && (path->acc != NULL) \
-	 && (path->ctnr != NULL) \
-	 && (path->blob == NULL))
+	((path != NULL) && (path->type == AZ_BLOB_PATH_CTNR))
 
 #define AZ_BLOB_PATH_IS_BLOB(path) \
-	((path != NULL) \
-	 && (path->acc != NULL) \
-	 && (path->ctnr != NULL) \
-	 && (path->blob != NULL))
+	((path != NULL) && (path->type == AZ_BLOB_PATH_BLOB))
 
 int
 az_blob_path_parse(const char *path_str,
