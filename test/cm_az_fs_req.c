@@ -116,6 +116,7 @@ cm_az_fs_req_init(void **state)
 		       cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_true(ret >= 0);
 
+	path.type = AZ_FS_PATH_SHARE;
 	path.acc = cm_us->acc,
 	path.share = cm_op_az_fs_state.share,
 	ret = az_fs_req_share_create(&path, AZ_FS_SHARE_QUOTA_MAX_GB, &op);
@@ -138,6 +139,7 @@ cm_az_fs_req_deinit(void **state)
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	struct op *op;
 	struct az_fs_path path = {
+		.type = AZ_FS_PATH_SHARE,
 		.acc = cm_us->acc,
 		.share = cm_op_az_fs_state.share,
 	};
@@ -169,6 +171,7 @@ cm_az_fs_req_shares_list(void **state)
 	struct az_fs_share *share;
 	bool found_share;
 	struct az_fs_path path = {
+		.type = AZ_FS_PATH_ACC,
 		.acc = cm_us->acc,
 	};
 	ret = az_fs_req_shares_list(&path, &op);
@@ -201,6 +204,7 @@ cm_az_fs_req_share_props(void **state)
 	struct op *op;
 	struct az_fs_rsp_share_prop_get *share_prop_get;
 	struct az_fs_path path = {
+		.type = AZ_FS_PATH_SHARE,
 		.acc = cm_us->acc,
 		.share = cm_op_az_fs_state.share,
 	};
@@ -225,9 +229,9 @@ cm_az_fs_req_dir_create(void **state)
 	struct op *op;
 	struct az_fs_rsp_dirs_files_list *dirs_files_list_rsp;
 	struct az_fs_ent *ent;
-	struct az_fs_path path;
+	struct az_fs_path path = { 0 };
 
-	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.dir = "truth";
@@ -241,6 +245,7 @@ cm_az_fs_req_dir_create(void **state)
 
 	/* check that the newly created directory exists in the base share */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_SHARE;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	ret = az_fs_req_dirs_files_list(&path, &op);
@@ -260,6 +265,7 @@ cm_az_fs_req_dir_create(void **state)
 
 	/* create nested subdirectory */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.parent_dir = "truth";
@@ -274,6 +280,7 @@ cm_az_fs_req_dir_create(void **state)
 
 	/* confirm new subdir exists */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.dir = "truth";
@@ -294,6 +301,7 @@ cm_az_fs_req_dir_create(void **state)
 
 	/* confirm new subdir is empty */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.parent_dir = "truth";
@@ -312,6 +320,7 @@ cm_az_fs_req_dir_create(void **state)
 
 	/* cleanup subdir */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.parent_dir = "truth";
@@ -326,6 +335,7 @@ cm_az_fs_req_dir_create(void **state)
 
 	/* cleanup parent */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.dir = "truth";
@@ -339,6 +349,7 @@ cm_az_fs_req_dir_create(void **state)
 
 	/* check that share is now empty - this time use a NULL dir component */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_SHARE;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	ret = az_fs_req_dirs_files_list(&path, &op);
@@ -362,6 +373,7 @@ cm_az_fs_req_dir_props(void **state)
 	struct op *op;
 	struct az_fs_rsp_dir_prop_get *dir_prop_get;
 	struct az_fs_path path = {
+		.type = AZ_FS_PATH_ENT,
 		.acc = cm_us->acc,
 		.share = cm_op_az_fs_state.share,
 		.dir = "dir1",
@@ -396,10 +408,10 @@ cm_az_fs_req_file_create(void **state)
 	struct op *op;
 	struct az_fs_rsp_dirs_files_list *dirs_files_list_rsp;
 	struct az_fs_ent *ent;
-	struct az_fs_path path;
+	struct az_fs_path path = { 0 };
 
 	/* create base file and directory */
-	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.file = "file1";
@@ -412,6 +424,7 @@ cm_az_fs_req_file_create(void **state)
 	op_free(op);
 
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.dir = "dir1";
@@ -425,6 +438,7 @@ cm_az_fs_req_file_create(void **state)
 
 	/* create nested file */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.parent_dir = "dir1";
@@ -439,6 +453,7 @@ cm_az_fs_req_file_create(void **state)
 
 	/* confirm new entries exists */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_SHARE;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	ret = az_fs_req_dirs_files_list(&path, &op);
@@ -464,6 +479,7 @@ cm_az_fs_req_file_create(void **state)
 
 	/* cleanup dir, not empty */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.dir = "dir1";
@@ -478,6 +494,7 @@ cm_az_fs_req_file_create(void **state)
 
 	/* cleanup nested file */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.parent_dir = "dir1";
@@ -492,6 +509,7 @@ cm_az_fs_req_file_create(void **state)
 
 	/* cleanup dir, now empty */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.dir = "dir1";
@@ -505,6 +523,7 @@ cm_az_fs_req_file_create(void **state)
 
 	/* cleanup base file */
 	memset(&path, 0, sizeof(path));
+	path.type = AZ_FS_PATH_ENT;
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.file = "file1";
@@ -526,6 +545,7 @@ cm_az_fs_req_file_io(void **state)
 	struct elasto_data *data;
 	uint8_t buf[1024];
 	struct az_fs_path path = {
+		.type = AZ_FS_PATH_ENT,
 		.acc = cm_us->acc,
 		.share = cm_op_az_fs_state.share,
 		.file = "file1",
@@ -603,6 +623,7 @@ cm_az_fs_req_file_props(void **state)
 	struct az_fs_rsp_file_prop_get *file_prop_get;
 	uint64_t relevant;
 	struct az_fs_path path = {
+		.type = AZ_FS_PATH_ENT,
 		.acc = cm_us->acc,
 		.share = cm_op_az_fs_state.share,
 		.file = "file1",
@@ -666,11 +687,13 @@ cm_az_fs_req_file_cp(void **state)
 	uint8_t buf[1024];
 	struct az_fs_rsp_file_cp *file_cp;
 	struct az_fs_path src_path = {
+		.type = AZ_FS_PATH_ENT,
 		.acc = cm_us->acc,
 		.share = cm_op_az_fs_state.share,
 		.file = "file1",
 	};
 	struct az_fs_path dst_path = {
+		.type = AZ_FS_PATH_ENT,
 		.acc = cm_us->acc,
 		.share = cm_op_az_fs_state.share,
 		.file = "file2",
@@ -765,6 +788,7 @@ cm_az_fs_req_file_ranges(void **state)
 	struct elasto_data *data;
 	uint8_t buf[1024];
 	struct az_fs_path path = {
+		.type = AZ_FS_PATH_ENT,
 		.acc = cm_us->acc,
 		.share = cm_op_az_fs_state.share,
 		.file = "file1",
@@ -893,6 +917,7 @@ cm_az_fs_req_file_ranges_unaligned(void **state)
 	uint8_t buf[1024];
 	uint8_t aligned_buf[1024 + 512];
 	struct az_fs_path path = {
+		.type = AZ_FS_PATH_ENT,
 		.acc = cm_us->acc,
 		.share = cm_op_az_fs_state.share,
 		.file = "file1",

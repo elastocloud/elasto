@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -14,12 +14,20 @@
 #ifndef _AZURE_FS_PATH_H_
 #define _AZURE_FS_PATH_H_
 
+enum az_fs_path_type {
+	AZ_FS_PATH_ROOT = 1,
+	AZ_FS_PATH_ACC,
+	AZ_FS_PATH_SHARE,
+	AZ_FS_PATH_ENT,
+};
+
 /**
  * Azure File Service path representation
  *
  * The Azure File Service allows for files and folders at any depth under a
  * share.
  *
+ * @type: value to indicate which path fields are set/NULL
  * @acc: Azure account name
  * @share: Azure File Server share name
  * @parent_dir: Parent directory for @file or @dir. NULL if item is nested
@@ -29,6 +37,7 @@
  * @dir: Same as @fs_ent.
  */
 struct az_fs_path {
+	enum az_fs_path_type type;
 	char *acc;
 	char *share;
 	char *parent_dir;
@@ -40,25 +49,14 @@ struct az_fs_path {
 };
 
 #define AZ_FS_PATH_IS_ACC(path) \
-	((path != NULL) \
-	 && (path->acc != NULL) \
-	 && (path->share == NULL) \
-	 && (path->parent_dir == NULL) \
-	 && (path->fs_ent == NULL))
+	((path != NULL) && (path->type == AZ_FS_PATH_ACC))
 
 #define AZ_FS_PATH_IS_SHARE(path) \
-	((path != NULL) \
-	 && (path->acc != NULL) \
-	 && (path->share != NULL) \
-	 && (path->parent_dir == NULL) \
-	 && (path->fs_ent == NULL))
+	((path != NULL) && (path->type == AZ_FS_PATH_SHARE))
 
 /* for files and directories, @parent_dir can be NULL */
 #define AZ_FS_PATH_IS_ENT(path) \
-	((path != NULL) \
-	 && (path->acc != NULL) \
-	 && (path->share != NULL) \
-	 && (path->fs_ent != NULL))
+	((path != NULL) && (path->type == AZ_FS_PATH_ENT))
 
 int
 az_fs_path_parse(const char *path_str,

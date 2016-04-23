@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -58,6 +58,7 @@ az_fs_path_parse(const char *path_str,
 
 	if (*s == '\0') {
 		/* empty or leading slashes only */
+		az_fs_path->type = AZ_FS_PATH_ROOT;
 		goto done;
 	}
 
@@ -70,6 +71,7 @@ az_fs_path_parse(const char *path_str,
 	s = strchr(comp1, '/');
 	if (s == NULL) {
 		/* acc only */
+		az_fs_path->type = AZ_FS_PATH_ACC;
 		goto done;
 	}
 
@@ -79,6 +81,7 @@ az_fs_path_parse(const char *path_str,
 
 	if (*s == '\0') {
 		/* acc + slashes only */
+		az_fs_path->type = AZ_FS_PATH_ACC;
 		goto done;
 	}
 
@@ -91,6 +94,7 @@ az_fs_path_parse(const char *path_str,
 	s = strchr(comp2, '/');
 	if (s == NULL) {
 		/* share only */
+		az_fs_path->type = AZ_FS_PATH_SHARE;
 		goto done;
 	}
 
@@ -100,6 +104,7 @@ az_fs_path_parse(const char *path_str,
 
 	if (*s == '\0') {
 		/* share + slashes only */
+		az_fs_path->type = AZ_FS_PATH_SHARE;
 		goto done;
 	}
 
@@ -115,6 +120,7 @@ az_fs_path_parse(const char *path_str,
 		/* midpart is the last path component */
 		trailer = midpart;
 		midpart = NULL;
+		az_fs_path->type = AZ_FS_PATH_ENT;
 		goto done;
 	}
 
@@ -138,8 +144,10 @@ az_fs_path_parse(const char *path_str,
 	}
 
 	assert(s >= midpart);
+	az_fs_path->type = AZ_FS_PATH_ENT;
 
 done:
+	assert(az_fs_path->type != 0);
 	az_fs_path->acc = comp1;
 	az_fs_path->share = comp2;
 	az_fs_path->parent_dir = midpart;
@@ -185,6 +193,7 @@ az_fs_path_dup(const struct az_fs_path *path_orig,
 	int ret;
 	struct az_fs_path dup = { 0 };
 
+	dup.type = path_orig->type;
 	if (path_orig->acc != NULL) {
 		dup.acc = strdup(path_orig->acc);
 		if (dup.acc == NULL) {
