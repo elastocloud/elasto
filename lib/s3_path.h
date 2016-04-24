@@ -20,6 +20,9 @@ enum s3_path_type {
 	S3_PATH_OBJ,
 };
 
+/* default host. bkt is normally added as prefix for bkt and obj operations */
+#define S3_PATH_HOST_DEFAULT "s3.amazonaws.com"
+
 struct s3_path {
 	enum s3_path_type type;
 	char *host;

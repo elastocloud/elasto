@@ -27,8 +27,6 @@
 #include "lib/dbg.h"
 #include "lib/s3_path.h"
 
-/* default host. bkt is normally added as prefix for bkt and obj operations */
-#define S3_FOPEN_HOST_DEFAULT "s3.amazonaws.com"
 #define S3_URI_PREFIX "s3://"
 
 /* _very_ basic URI host component parser. Doesn't come close to RFC 3986 */
@@ -106,7 +104,7 @@ s3_path_parse(const char *path,
 	} else {
 		s = (char *)path;
 
-		host = strdup(S3_FOPEN_HOST_DEFAULT);
+		host = strdup(S3_PATH_HOST_DEFAULT);
 		if (host == NULL) {
 			ret = -ENOMEM;
 			goto err_out;
