@@ -36,6 +36,7 @@ s3_path_uri_pull(const char *path,
 		 char **_after_host)
 {
 	int ret;
+	char *host_start;
 	char *host;
 	char *s = (char *)path;
 
@@ -54,34 +55,33 @@ s3_path_uri_pull(const char *path,
 		goto err_out;
 	}
 
-	host = strdup(s);
+	host_start = s;
+
+	s = strchr(host_start, '/');
+	if (s == NULL) {
+		/* host only */
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	host = strndup(host_start, s - host_start);
 	if (host == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
 	}
 
-	s = strchr(host, '/');
-	if (s == NULL) {
-		/* host only */
-		ret = -EINVAL;
-		goto err_host_free;
-	}
-
-	*(s++) = '\0';	/* null term for host */
 	*_host = host;
 	*_after_host = s;
 
 	return 0;
 
-err_host_free:
-	free(host);
 err_out:
 	return ret;
 }
 
 int
 s3_path_parse(const char *path,
-		     struct s3_path *s3_path)
+	      struct s3_path *s3_path)
 {
 	int ret;
 	char *s;
@@ -109,6 +109,12 @@ s3_path_parse(const char *path,
 			ret = -ENOMEM;
 			goto err_out;
 		}
+	}
+
+	if (*s != '/') {
+		/* no leading slash */
+		ret = -EINVAL;
+		goto err_out;
 	}
 
 	while (*s == '/')
@@ -151,7 +157,7 @@ s3_path_parse(const char *path,
 
 	s = strchr(comp2, '/');
 	if (s != NULL) {
-		dbg(0, "Invalid remote path: S3 object has trailing garbage");
+		dbg(0, "Invalid remote path: S3 object has trailing garbage\n");
 		ret = -EINVAL;
 		goto err_2_free;
 	}
@@ -172,7 +178,7 @@ err_2_free:
 err_1_free:
 	free(comp1);
 err_host_free:
-	free(comp1);
+	free(host);
 err_out:
 	return ret;
 }

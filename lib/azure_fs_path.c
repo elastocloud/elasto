@@ -53,6 +53,13 @@ az_fs_path_parse(const char *path_str,
 	}
 
 	s = (char *)path_str;
+
+	if (*s != '/') {
+		/* no leading slash */
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	while (*s == '/')
 		s++;
 

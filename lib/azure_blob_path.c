@@ -52,6 +52,13 @@ az_blob_path_parse(const char *path,
 	}
 
 	s = (char *)path;
+
+	if (*s != '/') {
+		/* no leading slash */
+		ret = -EINVAL;
+		goto err_out;
+	}
+
 	while (*s == '/')
 		s++;
 
@@ -116,7 +123,7 @@ az_blob_path_parse(const char *path,
 	s = strchr(comp3, '/');
 	if (s != NULL) {
 		/* blob has a trailing slash */
-		dbg(0, "Invalid remote path: blob has trailing garbage");
+		dbg(0, "Invalid remote path: blob has trailing garbage\n");
 		ret = -EINVAL;
 		goto err_3_free;
 	}
