@@ -53,6 +53,9 @@ int
 cm_az_fs_path_run(void);
 
 int
+cm_s3_path_run(void);
+
+int
 cm_file_run(void);
 
 void
