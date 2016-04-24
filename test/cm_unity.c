@@ -174,6 +174,7 @@ main(int argc,
 	cm_data_run();
 	cm_xml_run();
 	cm_az_blob_path_run();
+	cm_az_fs_path_run();
 	if (cm_ustate->ps_file == NULL) {
 		printf("skipping Azure cloud IO tests, "
 		       "no publish settings file\n");
