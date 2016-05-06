@@ -204,8 +204,8 @@ cli_args_usage(const char *progname,
 "-i			Insecure, use HTTP where possible "
 "(default: HTTPS only)\n"
 "-h history:		CLI history file (default: ~/.elasto_history)\n"
-"-u URI:		REST Server URI (default: derived from credentials "
-"file)\n\n",
+"-u URI:\t		REST Server URI (default: derived from credentials)"
+"\n\n",
 			progname);
 	}
 
@@ -380,11 +380,8 @@ cli_auth_args_validate(enum elasto_ftype type,
 }
 
 static void
-cli_args_free(const struct cli_cmd_spec *cmd,
-	      struct cli_args *cli_args)
+cli_args_free(struct cli_args *cli_args)
 {
-	if ((cmd != NULL) && (cmd->args_free != NULL))
-		cmd->args_free(cli_args);
 	if ((cli_args->auth.type == ELASTO_FILE_ABB)
 	 || (cli_args->auth.type == ELASTO_FILE_APB)
 	 || (cli_args->auth.type == ELASTO_FILE_AFS)) {
@@ -401,7 +398,7 @@ static int
 cli_args_parse(int argc,
 	       char * const *argv,
 	       struct cli_args *cli_args,
-	       const struct cli_cmd_spec **cmd_spec)
+	       int *opt_idx)
 {
 	int opt;
 	int ret;
@@ -542,18 +539,11 @@ cli_args_parse(int argc,
 
 	if (argc - optind == 0) {
 		/* no cmd string, elasto> prompt */
-		*cmd_spec = NULL;
 		cli_args->flags |= CLI_FL_PROMPT;
-		return 0;
+	} else {
+		cli_args->flags |= CLI_FL_BIN_ARG;
 	}
-
-	cli_args->flags = CLI_FL_BIN_ARG;
-	ret = cli_cmd_parse(argc - optind, &argv[optind],
-			    cli_args, cmd_spec);
-	if (ret < 0) {
-		goto err_out;
-	}
-
+	*opt_idx = optind;
 
 	return 0;
 err_out:
@@ -628,13 +618,36 @@ cli_cmd_tokenize(char *line,
 }
 
 static int
+cli_cmd_parse_run(int argc,
+		  char * const *argv,
+		  struct cli_args *cli_args)
+{
+	int ret;
+	const struct cli_cmd_spec *cmd;
+
+	ret = cli_cmd_parse(argc, argv,
+			    cli_args, &cmd);
+	if (ret < 0) {
+		goto err_out;
+	}
+	ret = cmd->handle(cli_args);
+	if (ret < 0) {
+		goto err_cmd_args_free;
+	}
+err_cmd_args_free:
+	if (cmd->args_free != NULL)
+		cmd->args_free(cli_args);
+err_out:
+	return ret;
+}
+
+static int
 cli_cmd_line_run(struct cli_args *cli_args,
 		 char *line)
 {
 	int ret;
 	int argc = 0;
 	char *argv[ARGS_MAX];
-	const struct cli_cmd_spec *cmd;
 	mode_t old_mask;
 
 	/* add to history before tokenising */
@@ -649,21 +662,9 @@ cli_cmd_line_run(struct cli_args *cli_args,
 	if (ret < 0) {
 		return ret;
 	}
-	ret = cli_cmd_parse(argc, argv,
-			    cli_args, &cmd);
-	if (ret < 0) {
-		return ret;
-	}
-	ret = cmd->handle(cli_args);
-	if (ret < 0) {
-		return ret;
-	}
-	if (cmd->args_free != NULL)
-		cmd->args_free(cli_args);
 
-	return 0;
+	return cli_cmd_parse_run(argc, argv, cli_args);
 }
-
 
 static int
 cli_cmd_line_start(struct cli_args *cli_args)
@@ -686,12 +687,12 @@ int
 main(int argc, char * const *argv)
 {
 	struct cli_args cli_args;
-	const struct cli_cmd_spec *cmd;
+	int opt_idx = 0;
 	int ret;
 
 	memset(&cli_args, 0, sizeof(cli_args));
 
-	ret = cli_args_parse(argc, argv, &cli_args, &cmd);
+	ret = cli_args_parse(argc, argv, &cli_args, &opt_idx);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -701,10 +702,14 @@ main(int argc, char * const *argv)
 		goto err_args_free;
 	}
 
-	if (cmd == NULL) {
+	if (cli_args.flags & CLI_FL_PROMPT) {
 		ret = cli_cmd_line_start(&cli_args);
 	} else {
-		ret = cmd->handle(&cli_args);
+		/* process remaining arguments as a command invocation */
+		assert(cli_args.flags & CLI_FL_BIN_ARG);
+		assert(opt_idx < argc);
+		ret = cli_cmd_parse_run(argc - opt_idx, &argv[opt_idx],
+					&cli_args);
 	}
 	if (ret < 0) {
 		goto err_global_clean;
@@ -714,7 +719,7 @@ main(int argc, char * const *argv)
 err_global_clean:
 	elasto_conn_subsys_deinit();
 err_args_free:
-	cli_args_free(cmd, &cli_args);
+	cli_args_free(&cli_args);
 err_out:
 	return ret;
 }
