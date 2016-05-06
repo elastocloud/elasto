@@ -67,7 +67,6 @@ cli_put_args_parse(int argc,
 		goto err_local_free;
 	}
 
-	cli_args->cmd = CLI_CMD_PUT;
 	return 0;
 
 err_local_free:

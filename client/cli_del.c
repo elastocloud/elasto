@@ -50,7 +50,6 @@ cli_del_args_parse(int argc,
 		return -ENOMEM;
 	}
 
-	cli_args->cmd = CLI_CMD_DEL;
 	return 0;
 }
 

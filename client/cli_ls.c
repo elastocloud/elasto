@@ -72,7 +72,6 @@ cli_ls_args_parse(int argc,
 		return -ENOMEM;
 	}
 
-	cli_args->cmd = CLI_CMD_LS;
 	return 0;
 }
 

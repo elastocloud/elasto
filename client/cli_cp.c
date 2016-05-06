@@ -64,7 +64,6 @@ cli_cp_args_parse(int argc,
 		goto err_src_free;
 	}
 
-	cli_args->cmd = CLI_CMD_CP;
 	return 0;
 
 err_src_free:

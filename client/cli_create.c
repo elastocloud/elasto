@@ -81,7 +81,6 @@ cli_create_args_parse(int argc,
 		goto err_args_free;
 	}
 
-	cli_args->cmd = CLI_CMD_CREATE;
 	return 0;
 
 err_args_free:

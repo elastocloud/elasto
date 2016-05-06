@@ -14,18 +14,6 @@
 #ifndef _CLI_COMMON_H_
 #define _CLI_COMMON_H_
 
-enum cli_cmd {
-	CLI_CMD_NONE = 0,
-	CLI_CMD_LS,
-	CLI_CMD_PUT,
-	CLI_CMD_GET,
-	CLI_CMD_DEL,
-	CLI_CMD_CP,
-	CLI_CMD_CREATE,
-	CLI_CMD_HELP,
-	CLI_CMD_EXIT,
-};
-
 /**
  * @CLI_FL_BIN_ARG:	run as argument to binary
  * @CLI_FL_PROMPT:	run from elasto> prompt
@@ -51,7 +39,6 @@ struct cli_args {
 	char *path;
 	struct elasto_fauth auth;
 	char *history_file;
-	enum cli_cmd cmd;
 	union {
 		struct {
 		} ls;

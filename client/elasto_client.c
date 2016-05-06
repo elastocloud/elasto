@@ -54,7 +54,6 @@ cli_help_handle(struct cli_args *cli_args)
 }
 
 struct cli_cmd_spec {
-	enum cli_cmd id;
 	char *name;
 	char *az_help;
 	char *afs_help;
@@ -69,7 +68,6 @@ struct cli_cmd_spec {
 	enum cli_fl feature_flags;
 } cli_cmd_specs[] = {
 	{
-		.id = CLI_CMD_LS,
 		.name = "ls",
 		.az_help = "[<account>[/container[/blob]]]",
 		.afs_help = "[<account>[/share[/dir path]]]",
@@ -83,7 +81,6 @@ struct cli_cmd_spec {
 					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
-		.id = CLI_CMD_PUT,
 		.name = "put",
 		.az_help = "<local path> <account>/<container>/<blob>",
 		.afs_help = "<local path> <account>/<share>/<file path>",
@@ -97,7 +94,6 @@ struct cli_cmd_spec {
 					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
-		.id = CLI_CMD_GET,
 		.name = "get",
 		.az_help = "<account>/<container>/<blob> <local path>",
 		.afs_help = "<account>/<share>/<file path> <local path>",
@@ -111,7 +107,6 @@ struct cli_cmd_spec {
 					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
-		.id = CLI_CMD_DEL,
 		.name = "del",
 		.az_help = "<account>[/<container>[/<blob>]]",
 		.afs_help = "<account>[/<share>[/<file path>]]",
@@ -125,7 +120,6 @@ struct cli_cmd_spec {
 					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
-		.id = CLI_CMD_CP,
 		.name = "cp",
 		.az_help = "<src_acc>/<src_ctnr>/<src_blob> "
 			   "<dst_acc>/<dst_ctnr>/<dst_blob>",
@@ -141,7 +135,6 @@ struct cli_cmd_spec {
 				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
-		.id = CLI_CMD_CREATE,
 		.name = "create",
 		.az_help = "[-L <location>] <account>[/<container>]",
 		.afs_help = "[-L <location>] <account>[/<share>[/<dir path>]]",
@@ -155,21 +148,18 @@ struct cli_cmd_spec {
 				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
-		.id = CLI_CMD_HELP,
 		.name = "help",
 		.handle = &cli_help_handle,
 		.feature_flags = CLI_FL_PROMPT
 				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 	},
 	{
-		.id = CLI_CMD_EXIT,
 		.name = "exit",
 		.handle = &cli_exit_handle,
 		/* alias for quit, never display */
 		.feature_flags = 0,
 	},
 	{
-		.id = CLI_CMD_EXIT,
 		.name = "quit",
 		.handle = &cli_exit_handle,
 		.feature_flags = CLI_FL_PROMPT
@@ -177,7 +167,7 @@ struct cli_cmd_spec {
 	},
 	{
 		/* must be last entry */
-		.id = CLI_CMD_NONE,
+		.name = NULL,
 	},
 };
 
@@ -209,7 +199,7 @@ cli_args_usage(const char *progname,
 	}
 
 	fprintf(stderr, "Commands:\n");
-	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
+	for (cmd = cli_cmd_specs; cmd->name != NULL; cmd++) {
 		/*
 		 * Filter listing based on whether run from elasto> prompt or as
 		 * binary arg, and whether Azure or S3 credentials were provided.
@@ -242,7 +232,7 @@ cli_cmd_lookup(const char *name)
 {
 	struct cli_cmd_spec *cmd;
 
-	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
+	for (cmd = cli_cmd_specs; cmd->name != NULL; cmd++) {
 		if (strcmp(cmd->name, name) == 0)
 			return cmd;
 	}
@@ -561,7 +551,7 @@ cli_cmd_line_completion(const char *line,
 {
 	struct cli_cmd_spec *cmd;
 
-	for (cmd = cli_cmd_specs; cmd->id != CLI_CMD_NONE; cmd++) {
+	for (cmd = cli_cmd_specs; cmd->name != NULL; cmd++) {
 		if (!strncmp(cmd->name, line, strlen(line)))
 			linenoiseAddCompletion(lcs, cmd->name);
 	}

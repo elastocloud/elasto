@@ -64,7 +64,6 @@ cli_get_args_parse(int argc,
 		goto err_path_free;
 	}
 
-	cli_args->cmd = CLI_CMD_GET;
 	return 0;
 
 err_path_free:
