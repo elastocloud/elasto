@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -39,12 +39,11 @@
 #include "cli_cp.h"
 #include "cli_create.h"
 
+#define CLI_HANDLE_RET_EXIT 1000
 int
 cli_exit_handle(struct cli_args *cli_args)
 {
-	exit(0);
-	/* not reached */
-	return 0;
+	return CLI_HANDLE_RET_EXIT;
 }
 
 int
@@ -669,14 +668,16 @@ cli_cmd_line_run(struct cli_args *cli_args,
 static int
 cli_cmd_line_start(struct cli_args *cli_args)
 {
-	char *line;
+	int ret = 0;
 
 	linenoiseSetCompletionCallback(cli_cmd_line_completion);
 	linenoiseHistoryLoad(cli_args->history_file);
-	while((line = linenoise("elasto> ")) != NULL) {
-		if (line[0] != '\0') {
-			cli_cmd_line_run(cli_args, line);
-			/* ignore errors */
+	while (ret != CLI_HANDLE_RET_EXIT) {
+		char *line = linenoise("elasto> ");
+		if (line == NULL) {
+			break;
+		} else if (line[0] != '\0') {
+			ret = cli_cmd_line_run(cli_args, line);
 		}
 		free(line);
 	}
