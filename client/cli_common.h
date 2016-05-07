@@ -59,9 +59,34 @@ struct cli_args {
 	};
 };
 
+struct cli_cmd_spec {
+	struct list_node list;
+	char *name;
+	char *az_help;
+	char *afs_help;
+	char *s3_help;
+	int arg_min;
+	int arg_max;
+	int (*args_parse)(int argc,
+			  char * const *argv,
+			  struct cli_args *cli_args);
+	int (*handle)(struct cli_args *);
+	void (*args_free)(struct cli_args *);
+	enum cli_fl feature_flags;
+};
+
+void
+cli_cmd_register(struct cli_cmd_spec *spec);
+
+void
+cli_cmd_unregister(struct cli_cmd_spec *spec);
+
 void
 cli_args_usage(const char *progname,
 	       enum cli_fl flags,
 	       const char *msg);
+
+#define cli_cmd_init void __attribute__((constructor (101)))
+#define cli_cmd_deinit void __attribute__((destructor (101)))
 
 #endif /* ifdef _CLI_COMMON_H_ */

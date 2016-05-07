@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -23,8 +23,8 @@
 #include <sys/stat.h>
 
 #include "lib/file/file_api.h"
+#include "ccan/list/list.h"
 #include "cli_common.h"
-#include "cli_create.h"
 
 void
 cli_create_args_free(struct cli_args *cli_args)
@@ -121,4 +121,28 @@ cli_create_handle(struct cli_args *cli_args)
 	ret = 0;
 err_out:
 	return ret;
+}
+
+static struct cli_cmd_spec spec = {
+	.name = "create",
+	.az_help = "[-L <location>] <account>[/<container>]",
+	.afs_help = "[-L <location>] <account>[/<share>[/<dir path>]]",
+	.s3_help = "[-L <location>] <bucket>",
+	.arg_min = 1,
+	.arg_max = 7,
+	.args_parse = &cli_create_args_parse,
+	.handle = &cli_create_handle,
+	.args_free = &cli_create_args_free,
+	.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+			| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+};
+
+static cli_cmd_init cli_create_init(void)
+{
+	cli_cmd_register(&spec);
+}
+
+static cli_cmd_deinit cli_create_deinit(void)
+{
+	cli_cmd_unregister(&spec);
 }

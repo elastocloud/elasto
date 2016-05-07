@@ -27,7 +27,6 @@
 #include "ccan/list/list.h"
 #include "lib/file/file_api.h"
 #include "cli_common.h"
-#include "cli_get.h"
 
 void
 cli_get_args_free(struct cli_args *cli_args)
@@ -322,4 +321,28 @@ err_fclose:
 	}
 err_out:
 	return ret;
+}
+
+static struct cli_cmd_spec spec = {
+	.name = "get",
+	.az_help = "<account>/<container>/<blob> <local path>",
+	.afs_help = "<account>/<share>/<file path> <local path>",
+	.s3_help = "<bucket>/<object> <local path>",
+	.arg_min = 2,
+	.arg_max = 2,
+	.args_parse = &cli_get_args_parse,
+	.handle = &cli_get_handle,
+	.args_free = &cli_get_args_free,
+	.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+};
+
+static cli_cmd_init cli_get_init(void)
+{
+	cli_cmd_register(&spec);
+}
+
+static cli_cmd_deinit cli_get_deinit(void)
+{
+	cli_cmd_unregister(&spec);
 }

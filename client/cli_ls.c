@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -23,10 +23,10 @@
 #include <sys/stat.h>
 #include <inttypes.h>
 
-#include "lib/util.h"
 #include "lib/file/file_api.h"
+#include "lib/util.h"
+#include "ccan/list/list.h"
 #include "cli_common.h"
-#include "cli_ls.h"
 
 static void
 human_size(double bytes,
@@ -126,4 +126,28 @@ err_fclose:
 	}
 err_out:
 	return ret;
+}
+
+static struct cli_cmd_spec spec = {
+	.name = "ls",
+	.az_help = "[<account>[/container[/blob]]]",
+	.afs_help = "[<account>[/share[/dir path]]]",
+	.s3_help = "[<bucket>]",
+	.arg_min = 0,
+	.arg_max = 1,
+	.args_parse = &cli_ls_args_parse,
+	.handle = &cli_ls_handle,
+	.args_free = &cli_ls_args_free,
+	.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+};
+
+static cli_cmd_init cli_ls_init(void)
+{
+	cli_cmd_register(&spec);
+}
+
+static cli_cmd_deinit cli_ls_deinit(void)
+{
+	cli_cmd_unregister(&spec);
 }

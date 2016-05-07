@@ -27,7 +27,6 @@
 #include "ccan/list/list.h"
 #include "lib/file/file_api.h"
 #include "cli_common.h"
-#include "cli_put.h"
 
 /* split any blob over 10MB into separate blocks */
 #define BLOCK_THRESHOLD (10 * 1024 * 1024)
@@ -363,4 +362,28 @@ err_fclose:
 	}
 err_out:
 	return ret;
+}
+
+static struct cli_cmd_spec spec = {
+	.name = "put",
+	.az_help = "<local path> <account>/<container>/<blob>",
+	.afs_help = "<local path> <account>/<share>/<file path>",
+	.s3_help = "<local path> <bucket>/<object>",
+	.arg_min = 2,
+	.arg_max = 2,
+	.args_parse = &cli_put_args_parse,
+	.handle = &cli_put_handle,
+	.args_free = &cli_put_args_free,
+	.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+};
+
+static cli_cmd_init cli_put_init(void)
+{
+	cli_cmd_register(&spec);
+}
+
+static cli_cmd_deinit cli_put_deinit(void)
+{
+	cli_cmd_unregister(&spec);
 }

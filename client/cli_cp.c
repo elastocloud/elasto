@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -25,8 +25,8 @@
 #include <inttypes.h>
 
 #include "lib/file/file_api.h"
+#include "ccan/list/list.h"
 #include "cli_common.h"
-#include "cli_cp.h"
 
 void
 cli_cp_args_free(struct cli_args *cli_args)
@@ -125,4 +125,30 @@ err_src_close:
 	}
 err_out:
 	return ret;
+}
+
+static struct cli_cmd_spec spec = {
+	.name = "cp",
+	.az_help = "<src_acc>/<src_ctnr>/<src_blob> "
+		   "<dst_acc>/<dst_ctnr>/<dst_blob>",
+	.afs_help = "<src_acc>/<src_share>/<src_file_path> "
+		    "<dst_acc>/<dst_share>/<dst_file_path>",
+	.s3_help = "<bucket>/<object> <bucket>/<object>",
+	.arg_min = 2,
+	.arg_max = 2,
+	.args_parse = &cli_cp_args_parse,
+	.handle = &cli_cp_handle,
+	.args_free = &cli_cp_args_free,
+	.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
+			| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+};
+
+static cli_cmd_init cli_cp_init(void)
+{
+	cli_cmd_register(&spec);
+}
+
+static cli_cmd_deinit cli_cp_deinit(void)
+{
+	cli_cmd_unregister(&spec);
 }

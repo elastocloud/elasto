@@ -32,12 +32,20 @@
 #include "lib/util.h"
 #include "linenoise.h"
 #include "cli_common.h"
-#include "cli_ls.h"
-#include "cli_put.h"
-#include "cli_get.h"
-#include "cli_del.h"
-#include "cli_cp.h"
-#include "cli_create.h"
+
+static struct list_head cli_cmds = LIST_HEAD_INIT(cli_cmds);
+
+void
+cli_cmd_register(struct cli_cmd_spec *spec)
+{
+	list_add_tail(&cli_cmds, &spec->list);
+}
+
+void
+cli_cmd_unregister(struct cli_cmd_spec *spec)
+{
+	list_del(&spec->list);
+}
 
 #define CLI_HANDLE_RET_EXIT 1000
 int
@@ -53,123 +61,42 @@ cli_help_handle(struct cli_args *cli_args)
 	return 0;
 }
 
-struct cli_cmd_spec {
-	char *name;
-	char *az_help;
-	char *afs_help;
-	char *s3_help;
-	int arg_min;
-	int arg_max;
-	int (*args_parse)(int argc,
-			  char * const *argv,
-			  struct cli_args *cli_args);
-	int (*handle)(struct cli_args *);
-	void (*args_free)(struct cli_args *);
-	enum cli_fl feature_flags;
-} cli_cmd_specs[] = {
-	{
-		.name = "ls",
-		.az_help = "[<account>[/container[/blob]]]",
-		.afs_help = "[<account>[/share[/dir path]]]",
-		.s3_help = "[<bucket>]",
-		.arg_min = 0,
-		.arg_max = 1,
-		.args_parse = &cli_ls_args_parse,
-		.handle = &cli_ls_handle,
-		.args_free = &cli_ls_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
-	},
-	{
-		.name = "put",
-		.az_help = "<local path> <account>/<container>/<blob>",
-		.afs_help = "<local path> <account>/<share>/<file path>",
-		.s3_help = "<local path> <bucket>/<object>",
-		.arg_min = 2,
-		.arg_max = 2,
-		.args_parse = &cli_put_args_parse,
-		.handle = &cli_put_handle,
-		.args_free = &cli_put_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
-	},
-	{
-		.name = "get",
-		.az_help = "<account>/<container>/<blob> <local path>",
-		.afs_help = "<account>/<share>/<file path> <local path>",
-		.s3_help = "<bucket>/<object> <local path>",
-		.arg_min = 2,
-		.arg_max = 2,
-		.args_parse = &cli_get_args_parse,
-		.handle = &cli_get_handle,
-		.args_free = &cli_get_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
-	},
-	{
-		.name = "del",
-		.az_help = "<account>[/<container>[/<blob>]]",
-		.afs_help = "<account>[/<share>[/<file path>]]",
-		.s3_help = "<bucket>[/<object>]",
-		.arg_min = 1,
-		.arg_max = 1,
-		.args_parse = &cli_del_args_parse,
-		.handle = &cli_del_handle,
-		.args_free = &cli_del_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
-	},
-	{
-		.name = "cp",
-		.az_help = "<src_acc>/<src_ctnr>/<src_blob> "
-			   "<dst_acc>/<dst_ctnr>/<dst_blob>",
-		.afs_help = "<src_acc>/<src_share>/<src_file_path> "
-			    "<dst_acc>/<dst_share>/<dst_file_path>",
-		.s3_help = "<bucket>/<object> <bucket>/<object>",
-		.arg_min = 2,
-		.arg_max = 2,
-		.args_parse = &cli_cp_args_parse,
-		.handle = &cli_cp_handle,
-		.args_free = &cli_cp_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
-	},
-	{
-		.name = "create",
-		.az_help = "[-L <location>] <account>[/<container>]",
-		.afs_help = "[-L <location>] <account>[/<share>[/<dir path>]]",
-		.s3_help = "[-L <location>] <bucket>",
-		.arg_min = 1,
-		.arg_max = 7,
-		.args_parse = &cli_create_args_parse,
-		.handle = &cli_create_handle,
-		.args_free = &cli_create_args_free,
-		.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
-	},
-	{
-		.name = "help",
-		.handle = &cli_help_handle,
-		.feature_flags = CLI_FL_PROMPT
-				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
-	},
-	{
-		.name = "exit",
-		.handle = &cli_exit_handle,
-		/* alias for quit, never display */
-		.feature_flags = 0,
-	},
-	{
-		.name = "quit",
-		.handle = &cli_exit_handle,
-		.feature_flags = CLI_FL_PROMPT
-				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
-	},
-	{
-		/* must be last entry */
-		.name = NULL,
-	},
+static struct cli_cmd_spec help_spec = {
+	.name = "help",
+	.handle = &cli_help_handle,
+	.feature_flags = CLI_FL_PROMPT | CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
 };
+
+static struct cli_cmd_spec exit_spec = {
+	.name = "exit",
+	.handle = &cli_exit_handle,
+	/* alias for quit, never display */
+	.feature_flags = 0,
+};
+
+static struct cli_cmd_spec quit_spec = {
+	.name = "quit",
+	.handle = &cli_exit_handle,
+	.feature_flags = CLI_FL_PROMPT | CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+};
+
+__attribute__((constructor))
+static void
+cli_cmd_builtins_register(void)
+{
+	cli_cmd_register(&help_spec);
+	cli_cmd_register(&exit_spec);
+	cli_cmd_register(&quit_spec);
+}
+
+__attribute__((destructor))
+static void
+cli_cmd_builtins_unregister(void)
+{
+	cli_cmd_unregister(&help_spec);
+	cli_cmd_unregister(&exit_spec);
+	cli_cmd_unregister(&quit_spec);
+}
 
 void
 cli_args_usage(const char *progname,
@@ -199,7 +126,7 @@ cli_args_usage(const char *progname,
 	}
 
 	fprintf(stderr, "Commands:\n");
-	for (cmd = cli_cmd_specs; cmd->name != NULL; cmd++) {
+	list_for_each(&cli_cmds, cmd, list) {
 		/*
 		 * Filter listing based on whether run from elasto> prompt or as
 		 * binary arg, and whether Azure or S3 credentials were provided.
@@ -232,7 +159,7 @@ cli_cmd_lookup(const char *name)
 {
 	struct cli_cmd_spec *cmd;
 
-	for (cmd = cli_cmd_specs; cmd->name != NULL; cmd++) {
+	list_for_each(&cli_cmds, cmd, list) {
 		if (strcmp(cmd->name, name) == 0)
 			return cmd;
 	}
@@ -551,9 +478,10 @@ cli_cmd_line_completion(const char *line,
 {
 	struct cli_cmd_spec *cmd;
 
-	for (cmd = cli_cmd_specs; cmd->name != NULL; cmd++) {
-		if (!strncmp(cmd->name, line, strlen(line)))
+	list_for_each(&cli_cmds, cmd, list) {
+		if (!strncmp(cmd->name, line, strlen(line))) {
 			linenoiseAddCompletion(lcs, cmd->name);
+		}
 	}
 }
 
@@ -681,6 +609,8 @@ main(int argc, char * const *argv)
 	int opt_idx = 0;
 	int ret;
 
+	cli_cmd_builtins_register();
+
 	memset(&cli_args, 0, sizeof(cli_args));
 
 	ret = cli_args_parse(argc, argv, &cli_args, &opt_idx);
@@ -712,5 +642,6 @@ err_global_clean:
 err_args_free:
 	cli_args_free(&cli_args);
 err_out:
+	cli_cmd_builtins_unregister();
 	return ret;
 }
