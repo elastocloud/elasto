@@ -329,7 +329,7 @@ cli_put_handle(struct cli_args *cli_args)
 		goto err_fclose;
 	}
 
-	if (fstatfs.cap_flags | ELASTO_FSTATFS_CAP_SPARSE) {
+	if (fstatfs.cap_flags & ELASTO_FSTATFS_CAP_SPARSE) {
 		ret = elasto_ftruncate(fh, st.st_size);
 		if (ret < 0) {
 			printf("truncate failed with: %s\n", strerror(-ret));

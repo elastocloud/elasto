@@ -282,7 +282,7 @@ cli_get_handle(struct cli_args *cli_args)
 		goto err_fclose;
 	}
 
-	if (fstatfs.cap_flags | ELASTO_FSTATFS_CAP_SPARSE) {
+	if (fstatfs.cap_flags & ELASTO_FSTATFS_CAP_SPARSE) {
 		/*
 		 * perform space efficient download by only getting allocated
 		 * regions.
