@@ -104,7 +104,8 @@ cli_put_data_out_cb(uint64_t stream_off,
 	int ret;
 
 	if (need > data_ctx->total_len) {
-		printf("bogus need len in data cb\n");
+		printf("bogus need len in data cb (need=%" PRIu64 ", total=%"
+		       PRIu64 "\n", need, data_ctx->total_len);
 		ret = -EINVAL;
 		goto err_out;
 	}
@@ -341,11 +342,19 @@ cli_put_handle(struct cli_args *cli_args)
 			goto err_data_ctx_cleanup;
 		}
 	} else {
+		struct cli_put_range_ctx *range_ctx;
+
 		printf("putting %ld bytes from %s to %s\n",
 		       (long int)st.st_size, cli_args->put.local_path,
 		       cli_args->path);
 
-		ret = elasto_fwrite_cb(fh, 0, st.st_size, data_ctx,
+		ret = cli_put_range_ctx_setup(data_ctx, 0, st.st_size,
+					      &range_ctx);
+		if (ret < 0) {
+			goto err_data_ctx_cleanup;
+		}
+
+		ret = elasto_fwrite_cb(fh, 0, st.st_size, range_ctx,
 				       cli_put_data_out_cb);
 		if (ret < 0) {
 			printf("write failed with: %s\n", strerror(-ret));
