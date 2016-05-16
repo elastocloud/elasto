@@ -114,7 +114,7 @@ s3_path_parse(const char *path,
 	if (*s != '/') {
 		/* no leading slash */
 		ret = -EINVAL;
-		goto err_out;
+		goto err_host_free;
 	}
 
 	while (*s == '/')
