@@ -144,9 +144,6 @@ Alternatives
 ------------
 
 [horizontal]
-Deltacloud::	An API that abstracts differences between clouds.
-		http://deltacloud.apache.org/
-
 libs3::		A C Library API for Amazon S3.
 		https://github.com/bji/libs3
 
