@@ -89,4 +89,9 @@ cli_args_usage(const char *progname,
 #define cli_cmd_init void __attribute__((constructor (101)))
 #define cli_cmd_deinit void __attribute__((destructor (101)))
 
+int
+cli_path_realize(const char *real_cwd,
+		 const char *usr_path,
+		 char **_real_abs_path);
+
 #endif /* ifdef _CLI_COMMON_H_ */
