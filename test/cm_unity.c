@@ -79,6 +79,7 @@ cm_unity_state_free(void)
 {
 	free(cm_ustate->acc);
 	free(cm_ustate->ctnr);
+	free(cm_ustate->share);
 	free(cm_ustate->ps_file);
 	free(cm_ustate->s3_id);
 	free(cm_ustate->s3_secret);
