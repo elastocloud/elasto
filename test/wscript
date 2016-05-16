@@ -15,11 +15,11 @@ def build(bld):
 	bld.program(source='''cm_unity.c cm_data.c  cm_sign_azure.c cm_sign_s3.c
 			      cm_file.c cm_xml.c cm_az_fs_req.c
 			      cm_az_blob_req.c cm_az_blob_path.c
-			      cm_az_fs_path.c cm_s3_path.c''',
+			      cm_az_fs_path.c cm_s3_path.c cm_cli_path.c''',
 		    target='cm_unity',
 		    lib=['crypto', 'cmocka', 'expat', 'ssl', 'uuid',
 			 ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
 		    use=['elasto_req_azure_blob', 'elasto_req_azure_fs',
-			 'elasto_req_s3', 'elasto_file'],
+			 'elasto_req_s3', 'elasto_file', 'cli_path'],
 		    includes = '. .. ../lib',
 		    install_path = None)
