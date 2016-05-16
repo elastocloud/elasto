@@ -307,6 +307,7 @@ cli_args_free(struct cli_args *cli_args)
 		free(cli_args->auth.s3.creds_path);
 	}
 	free(cli_args->history_file);
+	free(cli_args->cwd);
 	free(cli_args->progname);
 }
 
@@ -320,6 +321,7 @@ cli_args_parse(int argc,
 	int ret;
 	extern char *optarg;
 	extern int optind;
+	char *cwd = NULL;
 	char *az_ps_file = NULL;
 	char *az_access_key = NULL;
 	char *s3_creds_file = NULL;
@@ -330,6 +332,13 @@ cli_args_parse(int argc,
 		ret = -ENOMEM;
 		goto err_out;
 	}
+
+	cwd = strdup("/");
+	if (cwd == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
 	cli_args->auth.insecure_http = false;
 	/* show help for all backends by default */
 	cli_args->flags = CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3;
@@ -450,7 +459,7 @@ cli_args_parse(int argc,
 		}
 	}
 	cli_args->history_file = history_file;
-
+	cli_args->cwd = cwd;
 	cli_args->progname = progname;
 
 	if (argc - optind == 0) {
@@ -467,6 +476,7 @@ err_out:
 	free(az_access_key);
 	free(s3_creds_file);
 	free(history_file);
+	free(cwd);
 	free(progname);
 
 	return ret;

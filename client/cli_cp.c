@@ -50,17 +50,14 @@ cli_cp_args_parse(int argc,
 		goto err_out;
 	}
 
-	/* path is parsed by libfile on open */
-	cli_args->cp.src_path = strdup(argv[1]);
-	if (cli_args->cp.src_path == NULL) {
-		ret = -ENOMEM;
+	/* paths parsed by libfile on open */
+	ret = cli_path_realize(cli_args->cwd, argv[1], &cli_args->cp.src_path);
+	if (ret < 0) {
 		goto err_out;
 	}
 
-	/* path is parsed by libfile on open */
-	cli_args->path = strdup(argv[2]);
-	if (cli_args->path == NULL) {
-		ret = -ENOMEM;
+	ret = cli_path_realize(cli_args->cwd, argv[2], &cli_args->path);
+	if (ret < 0) {
 		goto err_src_free;
 	}
 

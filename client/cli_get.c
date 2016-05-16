@@ -51,9 +51,8 @@ cli_get_args_parse(int argc,
 	}
 
 	/* path is parsed by libfile on open */
-	cli_args->path = strdup(argv[1]);
-	if (cli_args->path == NULL) {
-		ret = -ENOMEM;
+	ret = cli_path_realize(cli_args->cwd, argv[1], &cli_args->path);
+	if (ret < 0) {
 		goto err_out;
 	}
 

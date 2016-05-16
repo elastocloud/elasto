@@ -45,12 +45,7 @@ cli_del_args_parse(int argc,
 	}
 
 	/* path is parsed by libfile on open */
-	cli_args->path = strdup(argv[1]);
-	if (cli_args->path == NULL) {
-		return -ENOMEM;
-	}
-
-	return 0;
+	return cli_path_realize(cli_args->cwd, argv[1], &cli_args->path);
 }
 
 int

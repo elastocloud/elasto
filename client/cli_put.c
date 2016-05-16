@@ -60,9 +60,8 @@ cli_put_args_parse(int argc,
 	}
 
 	/* path is parsed by libfile on open */
-	cli_args->path = strdup(argv[2]);
-	if (cli_args->path == NULL) {
-		ret = -ENOMEM;
+	ret = cli_path_realize(cli_args->cwd, argv[2], &cli_args->path);
+	if (ret < 0) {
 		goto err_local_free;
 	}
 

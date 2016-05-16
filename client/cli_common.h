@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -30,12 +30,17 @@ enum cli_fl {
 };
 
 /*
+ * @progname: client binary path, as invoked
  * @flags: features available to this instance
+ * @cwd: realized current working dir (always '/', cd isn't yet implemented)
+ * @path: per-command absolute realized path, to be passed to libelasto_file
+ * @auth: authentication information
+ * @history_file: path where client command history is preserved
  */
 struct cli_args {
 	char *progname;
 	enum cli_fl flags;
-	/* unparsed path for libfile */
+	char *cwd;
 	char *path;
 	struct elasto_fauth auth;
 	char *history_file;

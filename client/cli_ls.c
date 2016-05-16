@@ -54,6 +54,8 @@ cli_ls_args_parse(int argc,
 		  char * const *argv,
 		  struct cli_args *cli_args)
 {
+	char *usr_path = NULL;
+
 	if ((cli_args->auth.type != ELASTO_FILE_ABB)
 	 && (cli_args->auth.type != ELASTO_FILE_APB)
 	 && (cli_args->auth.type != ELASTO_FILE_AFS)
@@ -61,18 +63,11 @@ cli_ls_args_parse(int argc,
 		return -ENOTSUP;
 	}
 
-	/* path is parsed by libfile on open */
 	if (argc == 2) {
-		cli_args->path = strdup(argv[1]);
-	} else {
-		/* no explicit path - assume root */
-		cli_args->path = strdup("/");
-	}
-	if (cli_args->path == NULL) {
-		return -ENOMEM;
+		usr_path = argv[1];
 	}
 
-	return 0;
+	return cli_path_realize(cli_args->cwd, usr_path, &cli_args->path);
 }
 
 static int
