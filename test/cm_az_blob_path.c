@@ -76,7 +76,11 @@ cm_az_blob_path_acc(void **state)
 	az_blob_path_free(&path);
 
 	/* no leading slash */
-	ret = az_blob_path_parse("ao", &path);
+	ret = az_blob_path_parse("aoo", &path);
+	assert_true(ret < 0);
+
+	/* upper case invalid */
+	ret = az_blob_path_parse("/AOO", &path);
 	assert_true(ret < 0);
 }
 
@@ -94,14 +98,24 @@ cm_az_blob_path_ctnr(void **state)
 	assert_null(path.blob);
 	az_blob_path_free(&path);
 
-	ret = az_blob_path_parse("//ace///ctne//", &path);
+	ret = az_blob_path_parse("//ace///ct-ne//", &path);
 	assert_true(ret >= 0);
 	assert_int_equal(path.type, AZ_BLOB_PATH_CTNR);
 	assert_string_equal(path.acc, "ace");
-	assert_string_equal(path.ctnr, "ctne");
+	assert_string_equal(path.ctnr, "ct-ne");
 	az_blob_path_free(&path);
 
-	ret = az_blob_path_parse("ao/co", &path);
+	ret = az_blob_path_parse("aoo/coo", &path);
+	assert_true(ret < 0);
+
+	/* upper case invalid */
+	ret = az_blob_path_parse("/aoo/COO", &path);
+	assert_true(ret < 0);
+
+	/* hyphens invalid */
+	ret = az_blob_path_parse("/aoo/-ctnr", &path);
+	assert_true(ret < 0);
+	ret = az_blob_path_parse("/aoo/ct--nr", &path);
 	assert_true(ret < 0);
 }
 
@@ -127,13 +141,13 @@ cm_az_blob_path_blob(void **state)
 	assert_string_equal(path.blob, "bloe");
 	az_blob_path_free(&path);
 
-	ret = az_blob_path_parse("ao/co/bo", &path);
+	ret = az_blob_path_parse("aoo/coo/bo", &path);
 	assert_true(ret < 0);
 
 	/* trailing garbage */
-	ret = az_blob_path_parse("/ao/co/bo/", &path);
+	ret = az_blob_path_parse("/aoo/coo/bo/", &path);
 	assert_true(ret < 0);
-	ret = az_blob_path_parse("/ao/co/bo/asdf", &path);
+	ret = az_blob_path_parse("/aoo/coo/bo/asdf", &path);
 	assert_true(ret < 0);
 }
 
