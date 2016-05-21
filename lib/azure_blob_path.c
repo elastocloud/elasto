@@ -22,7 +22,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <inttypes.h>
-#include <sys/stat.h>
+#include <ctype.h>
 
 #include "ccan/list/list.h"
 #include "lib/exml.h"
@@ -36,6 +36,63 @@
 #include "lib/util.h"
 #include "lib/dbg.h"
 #include "lib/data.h"
+
+static int
+az_blob_path_validate(struct az_blob_path *az_path)
+{
+	int i;
+	char c;
+
+	assert(az_path != NULL);
+
+	switch (az_path->type) {
+	case AZ_BLOB_PATH_BLOB:
+		/* anything goes, rely on server */
+	case AZ_BLOB_PATH_CTNR:	/* FALL THROUGH */
+		/*
+		 * Must be lower case, digit, or hyphen. Can't start with a
+		 * hyphen or contain two in a row.
+		 */
+		for (i = 0; i < strlen(az_path->ctnr); i++) {
+			c = az_path->ctnr[i];
+			if (islower(c) || isdigit(c)
+				    || ((c == '-') && (i > 0)
+					    && (az_path->ctnr[i - 1] != '-'))) {
+				continue;
+			}
+			dbg(0, "invalid container string: %s\n", az_path->ctnr);
+			goto fail;
+		}
+		if ((i < 3) || (i > 63)) {
+			dbg(0, "invalid container string length: %d\n", i);
+			goto fail;
+		}
+	case AZ_BLOB_PATH_ACC:	/* FALL THROUGH */
+		/*
+		 * Must be lower case or digit.
+		 */
+		for (i = 0; i < strlen(az_path->acc); i++) {
+			c = az_path->acc[i];
+			if (islower(c) || isdigit(c)) {
+				continue;
+			}
+			dbg(0, "invalid account string: %s\n", az_path->acc);
+			goto fail;
+		}
+		if ((i < 3) || (i > 24)) {
+			dbg(0, "invalid account string length: %d\n", i);
+			goto fail;
+		}
+	case AZ_BLOB_PATH_ROOT:	/* FALL THROUGH */
+		/* nothing to validate for root */
+	default:
+		break;
+	}
+
+	return 0;
+fail:
+	return -EINVAL;
+}
 
 int
 az_blob_path_parse(const char *path,
@@ -134,6 +191,10 @@ done:
 	az_path->acc = comp1;
 	az_path->ctnr = comp2;
 	az_path->blob = comp3;
+	ret = az_blob_path_validate(az_path);
+	if (ret < 0) {
+		goto err_3_free;
+	}
 	dbg(2, "parsed %s as APB path: acc=%s, ctnr=%s, blob=%s\n",
 	    path, (az_path->acc ? az_path->acc : ""),
 	    (az_path->ctnr ? az_path->ctnr : ""),
