@@ -78,7 +78,11 @@ cm_az_fs_path_acc(void **state)
 	az_fs_path_free(&path);
 
 	/* no leading slash */
-	ret = az_fs_path_parse("ao", &path);
+	ret = az_fs_path_parse("aoo", &path);
+	assert_true(ret < 0);
+
+	/* upper case invalid */
+	ret = az_fs_path_parse("/AOO", &path);
 	assert_true(ret < 0);
 }
 
@@ -97,14 +101,24 @@ cm_az_fs_path_share(void **state)
 	assert_null(path.fs_ent);
 	az_fs_path_free(&path);
 
-	ret = az_fs_path_parse("//ace///shre//", &path);
+	ret = az_fs_path_parse("//ace///sh-re//", &path);
 	assert_true(ret >= 0);
 	assert_int_equal(path.type, AZ_FS_PATH_SHARE);
 	assert_string_equal(path.acc, "ace");
-	assert_string_equal(path.share, "shre");
+	assert_string_equal(path.share, "sh-re");
 	az_fs_path_free(&path);
 
-	ret = az_fs_path_parse("ao/so", &path);
+	ret = az_fs_path_parse("aoo/soo", &path);
+	assert_true(ret < 0);
+
+	/* upper case invalid */
+	ret = az_fs_path_parse("/aoo/soO", &path);
+	assert_true(ret < 0);
+
+	/* hyphens invalid */
+	ret = az_fs_path_parse("/aoo/-share", &path);
+	assert_true(ret < 0);
+	ret = az_fs_path_parse("/aoo/sh--re", &path);
 	assert_true(ret < 0);
 }
 
@@ -139,11 +153,11 @@ cm_az_fs_path_file(void **state)
 	assert_string_equal(path.file, "file");
 	az_fs_path_free(&path);
 
-	ret = az_fs_path_parse("ao/so/fo", &path);
+	ret = az_fs_path_parse("aoo/soo/fo", &path);
 	assert_true(ret < 0);
 
 	/* trailing slash not *currently* allowed */
-	ret = az_fs_path_parse("/ao/so/fo/", &path);
+	ret = az_fs_path_parse("/aoo/soo/fo/", &path);
 	assert_true(ret < 0);
 }
 
