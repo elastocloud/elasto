@@ -22,7 +22,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <inttypes.h>
-#include <sys/stat.h>
+#include <ctype.h>
 
 #include "ccan/list/list.h"
 #include "lib/exml.h"
@@ -36,6 +36,59 @@
 #include "lib/util.h"
 #include "lib/dbg.h"
 #include "lib/data.h"
+
+static int
+az_fs_path_validate(struct az_fs_path *az_fs_path)
+{
+	int i;
+	char c;
+
+	assert(az_fs_path != NULL);
+
+	switch (az_fs_path->type) {
+	case AZ_FS_PATH_ENT:
+	case AZ_FS_PATH_SHARE:	/* FALL THROUGH */
+		/* matches blob service container name requirements */
+		for (i = 0; i < strlen(az_fs_path->share); i++) {
+			c = az_fs_path->share[i];
+			if (islower(c) || isdigit(c)
+				    || ((c == '-') && (i > 0)
+					&& (az_fs_path->share[i - 1] != '-'))) {
+				continue;
+			}
+			dbg(0, "invalid share string: %s\n", az_fs_path->share);
+			goto fail;
+		}
+		if ((i < 3) || (i > 63)) {
+			dbg(0, "invalid share string length: %d\n", i);
+			goto fail;
+		}
+	case AZ_FS_PATH_ACC:	/* FALL THROUGH */
+		/*
+		 * Must be lower case or digit.
+		 */
+		for (i = 0; i < strlen(az_fs_path->acc); i++) {
+			c = az_fs_path->acc[i];
+			if (islower(c) || isdigit(c)) {
+				continue;
+			}
+			dbg(0, "invalid account string: %s\n", az_fs_path->acc);
+			goto fail;
+		}
+		if ((i < 3) || (i > 24)) {
+			dbg(0, "invalid account string length: %d\n", i);
+			goto fail;
+		}
+	case AZ_FS_PATH_ROOT:	/* FALL THROUGH */
+		/* nothing to validate for root */
+	default:
+		break;
+	}
+
+	return 0;
+fail:
+	return -EINVAL;
+}
 
 int
 az_fs_path_parse(const char *path_str,
@@ -160,6 +213,10 @@ done:
 	az_fs_path->parent_dir = midpart;
 	/* fs_ent, file or dir. all are members of the same union */
 	az_fs_path->fs_ent = trailer;
+	ret = az_fs_path_validate(az_fs_path);
+	if (ret < 0) {
+		goto err_trailer_free;
+	}
 	dbg(2, "parsed %s as AFS path: acc=%s, share=%s, parent_dir=%s, "
 	       "file or dir=%s\n",
 	    path_str, (az_fs_path->acc ? az_fs_path->acc : ""),
@@ -169,6 +226,8 @@ done:
 
 	return 0;
 
+err_trailer_free:
+	free(trailer);
 err_midpart_free:
 	free(midpart);
 err_2_free:
