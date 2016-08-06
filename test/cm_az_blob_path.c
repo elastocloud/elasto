@@ -27,6 +27,7 @@
 #include <cmocka.h>
 
 #include "ccan/list/list.h"
+#include "lib/util.h"
 #include "azure_blob_path.h"
 #include "dbg.h"
 
@@ -60,6 +61,7 @@ cm_az_blob_path_acc(void **state)
 {
 	int ret;
 	struct az_blob_path path = { 0 };
+	char oversize[30];
 
 	ret = az_blob_path_parse("/acc", &path);
 	assert_true(ret >= 0);
@@ -82,6 +84,17 @@ cm_az_blob_path_acc(void **state)
 	/* upper case invalid */
 	ret = az_blob_path_parse("/AOO", &path);
 	assert_true(ret < 0);
+
+	/* too short */
+	ret = az_blob_path_parse("/ao", &path);
+	assert_int_equal(ret, -EINVAL);
+
+	/* too long */
+	memset(oversize, 'a', ARRAY_SIZE(oversize));
+	oversize[0] = '/';
+	oversize[ARRAY_SIZE(oversize) - 1] = '\0';
+	ret = az_blob_path_parse(oversize, &path);
+	assert_int_equal(ret, -EINVAL);
 }
 
 static void
@@ -89,6 +102,8 @@ cm_az_blob_path_ctnr(void **state)
 {
 	int ret;
 	struct az_blob_path path = { 0 };
+	char oversize[70];
+	char *huge_path;
 
 	ret = az_blob_path_parse("/acc/ctnr", &path);
 	assert_true(ret >= 0);
@@ -117,6 +132,18 @@ cm_az_blob_path_ctnr(void **state)
 	assert_true(ret < 0);
 	ret = az_blob_path_parse("/aoo/ct--nr", &path);
 	assert_true(ret < 0);
+
+	/* too short */
+	ret = az_blob_path_parse("/aoo/ct", &path);
+	assert_int_equal(ret, -EINVAL);
+
+	/* too long */
+	memset(oversize, 'c', ARRAY_SIZE(oversize));
+	oversize[ARRAY_SIZE(oversize) - 1] = '\0';
+	asprintf(&huge_path, "/aoo/%s", oversize);
+	ret = az_blob_path_parse(huge_path, &path);
+	assert_int_equal(ret, -EINVAL);
+	free(huge_path);
 }
 
 static void
@@ -124,6 +151,8 @@ cm_az_blob_path_blob(void **state)
 {
 	int ret;
 	struct az_blob_path path = { 0 };
+	char oversize[1030];
+	char *huge_path;
 
 	ret = az_blob_path_parse("/acc/ctnr/blob", &path);
 	assert_true(ret >= 0);
@@ -149,6 +178,14 @@ cm_az_blob_path_blob(void **state)
 	assert_true(ret < 0);
 	ret = az_blob_path_parse("/aoo/coo/bo/asdf", &path);
 	assert_true(ret < 0);
+
+	/* too long */
+	memset(oversize, 'b', ARRAY_SIZE(oversize));
+	oversize[ARRAY_SIZE(oversize) - 1] = '\0';
+	asprintf(&huge_path, "/aoo/coo/%s", oversize);
+	ret = az_blob_path_parse(huge_path, &path);
+	assert_int_equal(ret, -EINVAL);
+	free(huge_path);
 }
 
 static void

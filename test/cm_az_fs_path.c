@@ -27,6 +27,7 @@
 #include <cmocka.h>
 
 #include "ccan/list/list.h"
+#include "lib/util.h"
 #include "azure_fs_path.h"
 #include "dbg.h"
 
@@ -127,6 +128,8 @@ cm_az_fs_path_file(void **state)
 {
 	int ret;
 	struct az_fs_path path = { 0 };
+	char oversize[260];
+	char *huge_path;
 
 	ret = az_fs_path_parse("/acc/share/file", &path);
 	assert_true(ret >= 0);
@@ -159,6 +162,14 @@ cm_az_fs_path_file(void **state)
 	/* trailing slash not *currently* allowed */
 	ret = az_fs_path_parse("/aoo/soo/fo/", &path);
 	assert_true(ret < 0);
+
+	/* too long */
+	memset(oversize, 'f', ARRAY_SIZE(oversize));
+	oversize[ARRAY_SIZE(oversize) - 1] = '\0';
+	asprintf(&huge_path, "/aoo/soo/%s", oversize);
+	ret = az_fs_path_parse(huge_path, &path);
+	assert_int_equal(ret, -EINVAL);
+	free(huge_path);
 }
 
 static void
