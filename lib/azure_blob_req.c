@@ -1464,6 +1464,7 @@ az_req_block_put(const struct az_blob_path *path,
 		 * Prior to encoding, the string must be less than or equal to
 		 * 64 bytes in size.
 		 */
+		dbg(0, "invalid blk_id: %s\n", blk_id);
 		ret = -EINVAL;
 		goto err_out;
 	}

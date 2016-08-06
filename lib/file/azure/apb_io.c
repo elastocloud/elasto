@@ -411,10 +411,10 @@ abb_fwrite_multi_handle(struct apb_fh *apb_fh,
 
 	/*
 	 * For a given blob, the length of the value specified for the
-	 * blockid parameter must be the same size for each block.
+	 * blockid parameter must be the same size for each block, and
+	 * mustn't exceed 64 bytes.
 	 */
-	ret = asprintf(&blk->id, "%s_block%06d",
-		       apb_fh->path.blob, blk_num);
+	ret = asprintf(&blk->id, "block%06d", blk_num);
 	if (ret < 0) {
 		ret = -ENOMEM;
 		goto err_blk_free;
