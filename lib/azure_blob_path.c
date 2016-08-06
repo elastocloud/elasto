@@ -47,7 +47,10 @@ az_blob_path_validate(struct az_blob_path *az_path)
 
 	switch (az_path->type) {
 	case AZ_BLOB_PATH_BLOB:
-		/* anything goes, rely on server */
+		if (strlen(az_path->blob) > 1024) {
+			dbg(0, "oversize blob name\n");
+			goto fail;
+		}
 	case AZ_BLOB_PATH_CTNR:	/* FALL THROUGH */
 		/*
 		 * Must be lower case, digit, or hyphen. Can't start with a
