@@ -300,6 +300,12 @@ cli_put_handle(struct cli_args *cli_args)
 	struct stat st;
 	int ret;
 
+	ret = stat(cli_args->put.local_path, &st);
+	if (ret < 0) {
+		printf("failed to stat %s\n", cli_args->put.local_path);
+		goto err_out;
+	}
+
 	/* open with exclusive create flags */
 	ret = elasto_fopen(&cli_args->auth, cli_args->path,
 			   ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL,
@@ -314,12 +320,6 @@ cli_put_handle(struct cli_args *cli_args)
 	ret = elasto_fstatfs(fh, &fstatfs);
 	if (ret < 0) {
 		printf("fstatfs failed: %s\n", strerror(-ret));
-		goto err_fclose;
-	}
-
-	ret = stat(cli_args->put.local_path, &st);
-	if (ret < 0) {
-		printf("failed to stat %s\n", cli_args->put.local_path);
 		goto err_fclose;
 	}
 
