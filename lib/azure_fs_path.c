@@ -47,6 +47,15 @@ az_fs_path_validate(struct az_fs_path *az_fs_path)
 
 	switch (az_fs_path->type) {
 	case AZ_FS_PATH_ENT:
+		if (strlen(az_fs_path->fs_ent) > 255) {
+			dbg(0, "oversize file or dir name: %s\n",
+			    az_fs_path->fs_ent);
+			goto fail;
+		}
+		/*
+		 * TODO plenty more to validate here:
+		 * https://msdn.microsoft.com/en-us/library/azure/dn167011.aspx
+		 */
 	case AZ_FS_PATH_SHARE:	/* FALL THROUGH */
 		/* matches blob service container name requirements */
 		for (i = 0; i < strlen(az_fs_path->share); i++) {
