@@ -56,6 +56,7 @@ struct op {
 	char *url_host;
 	char *url_path;
 	int redirs;
+	int retries;
 
 	struct {
 		uint64_t read_cbs;
@@ -130,6 +131,9 @@ op_rsp_error_match(struct op *op,
 
 int
 op_req_redirect(struct op *op);
+
+int
+op_req_retry(struct op *op);
 
 void
 op_free(struct op *op);

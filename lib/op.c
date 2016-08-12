@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012-2013, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -25,6 +25,7 @@
 #include <unistd.h>
 #include <inttypes.h>
 #include <time.h>
+#include <event2/http.h>
 
 #include "ccan/list/list.h"
 #include "dbg.h"
@@ -319,8 +320,11 @@ op_free(struct op *op)
 }
 
 /*
- * Process error response and return 0, or -EAGAIN in the case of a redirect.
- * Error information is stored under op->rsp.err.
+ * Process error response and store details in op->rsp.err
+ * @return:
+ *	-EAGAIN: redirect error, to be handled by the connection layer
+ *	-ECONNABORTED: disconnected, to be handled by the connection layer
+ *	0: any other error
  */
 static int
 op_rsp_error_process(struct op *op)
@@ -329,8 +333,10 @@ op_rsp_error_process(struct op *op)
 	struct xml_doc *xdoc;
 	bool got_err_msg = false;
 
-	if (op->rsp.err_code == 0) {
-		return 0;
+	assert(op->rsp.err_code != 0);
+
+	if (op->rsp.err_code == HTTP_SERVUNAVAIL) {
+		return -ECONNABORTED;
 	}
 
 	if (op->rsp.err.off == 0) {
@@ -435,6 +441,43 @@ op_req_redirect(struct op *op)
 	list_head_init(&op->rsp.hdrs);
 	op->rsp.data = data;
 	op->redirs++;
+
+	return 0;
+}
+
+#define OP_MAX_RETRIES 2
+int
+op_req_retry(struct op *op)
+{
+	struct elasto_data *data;
+
+	if (op->retries >= OP_MAX_RETRIES) {
+		dbg(0, "maximum retries exceeded: %d\n", op->retries);
+		return -ETIMEDOUT;
+	}
+	op->retries++;
+
+	dbg(1, "retrying %d request on %s\n",
+	    op->opcode, op->url_host);
+
+	if (op->req_sign != NULL) {
+		int ret;
+		/*
+		 * Remove existing auth hdr added by conn layer
+		 */
+		ret = op_req_hdr_del(op, "Authorization");
+		if (ret < 0) {
+			dbg(0, "no auth header for redirected req\n");
+		}
+	}
+
+	/* save rsp data buffer */
+	data = op->rsp.data;
+	op->rsp.data = NULL;
+	op_rsp_free(op);
+	memset(&op->rsp, 0, sizeof(op->rsp));
+	list_head_init(&op->rsp.hdrs);
+	op->rsp.data = data;
 
 	return 0;
 }

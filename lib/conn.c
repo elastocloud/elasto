@@ -456,7 +456,7 @@ ev_err_cb(enum evhttp_request_error ev_req_error,
 		break;
 	case EVREQ_HTTP_EOF:
 		dbg(0, "got client error: EOF\n");
-		op->rsp.err_code = HTTP_NOTFOUND;
+		op->rsp.err_code = HTTP_SERVUNAVAIL;
 		break;
 	case EVREQ_HTTP_INVALID_HEADER:
 		dbg(0, "got client error: invalid header\n");
@@ -1055,10 +1055,22 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 				goto err_out;
 			}
 			op->econn = econn_redirect;
+		} else if (ret == -ECONNABORTED) {
+			dbg(1, "disconnect on send - reconnecting for resend\n");
+			ret = elasto_conn_ev_connect(econn);
+			if (ret < 0) {
+				dbg(0, "reconnect failed\n");
+				goto err_out;
+			}
+			ret = op_req_retry(op);
+			if (ret < 0) {
+				goto err_out;
+			}
+			op->econn = econn;
 		} else if (ret < 0) {
 			goto err_out;
 		}
-	} while (econn_redirect != NULL);
+	} while (op->econn != NULL);
 
 	return 0;
 
