@@ -55,7 +55,7 @@ struct op {
 	bool url_https_only;	/* overrides conn insecure_http setting */
 	char *url_host;
 	char *url_path;
-	int redirs;
+	int redirects;
 	int retries;
 
 	struct {

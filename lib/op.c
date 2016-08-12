@@ -402,6 +402,7 @@ err_out:
 	return ret;
 }
 
+#define OP_MAX_REDIRECTS 2
 int
 op_req_redirect(struct op *op)
 {
@@ -415,6 +416,11 @@ op_req_redirect(struct op *op)
 		dbg(0, "no endpoint for redirect\n");
 		return -EFAULT;
 	}
+	if (op->redirects >= OP_MAX_REDIRECTS) {
+		dbg(0, "maximum redirects exceeded: %d\n", op->redirects);
+		return -ELOOP;
+	}
+	op->redirects++;
 
 	dbg(1, "redirecting %d request from %s to %s\n",
 	    op->opcode, op->url_host, op->rsp.err.redir_endpoint);
@@ -440,7 +446,6 @@ op_req_redirect(struct op *op)
 	memset(&op->rsp, 0, sizeof(op->rsp));
 	list_head_init(&op->rsp.hdrs);
 	op->rsp.data = data;
-	op->redirs++;
 
 	return 0;
 }

@@ -971,7 +971,6 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		    struct op *op)
 {
 	int ret;
-	int redirects = 0;
 	enum evhttp_cmd_type ev_req_type;
 	char *url;
 	struct elasto_conn *econn_redirect = NULL;
@@ -1042,10 +1041,6 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 			/* response is a redirect, resend via new conn */
 			ret = op_req_redirect(op);
 			if (ret < 0) {
-				goto err_out;
-			}
-			if (++redirects > 2) {
-				ret = -ELOOP;
 				goto err_out;
 			}
 			/* use original connection as redirect copy source */
