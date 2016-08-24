@@ -53,6 +53,9 @@ elasto_fop_send_recv(struct elasto_conn *conn,
 		dbg(1, "failed response: %d\n", op->rsp.err_code);
 
 		switch (op->rsp.err_code) {
+			case 403:
+				return -EPERM;
+				break;
 			case 404:
 				return -ENOENT;
 				break;

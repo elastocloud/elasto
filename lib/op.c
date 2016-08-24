@@ -389,6 +389,9 @@ op_rsp_error_process(struct op *op)
 		ret = -EAGAIN;
 	} else if (got_err_msg) {
 		dbg(0, "got error msg: %s\n", op->rsp.err.msg);
+		if (op->rsp.err_code == 403) {
+			dbg(1, "signature source was: %s\n", op->sig_src);
+		}
 	}
 
 	exml_free(xdoc);
