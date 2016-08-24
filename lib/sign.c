@@ -265,12 +265,21 @@ canon_hdrs_gen(uint32_t num_hdrs,
 	free(hdr_array);
 out_empty:
 	*canon_hdrs_out = hdr_str;
-	if (content_type_out != NULL)
+	if (content_type_out != NULL) {
 		*content_type_out = ctype;
-	if (content_md5_out != NULL)
+	} else {
+		free(ctype);
+	}
+	if (content_md5_out != NULL) {
 		*content_md5_out = md5;
-	if (date_out != NULL)
+	} else {
+		free(md5);
+	}
+	if (date_out != NULL) {
 		*date_out = date;
+	} else {
+		free(date);
+	}
 
 	return 0;
 
