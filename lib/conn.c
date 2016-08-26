@@ -701,6 +701,18 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 		goto err_ev_req_free;
 	}
 
+	/* Content-Length needs to be present during signing */
+	ret = asprintf(&clen_str, "%" PRIu64, content_len);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_ev_req_free;
+	}
+	ret = op_req_hdr_add(op, "Content-Length", clen_str);
+	free(clen_str);
+	if (ret < 0) {
+		goto err_ev_req_free;
+	}
+
 	if (op->req_sign != NULL) {
 		ret = op->req_sign(econn->sign.account, econn->sign.key,
 				   econn->sign.key_len, op);
@@ -715,18 +727,6 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 		goto err_ev_req_free;
 	}
 
-	ret = asprintf(&clen_str, "%" PRIu64, content_len);
-	if (ret < 0) {
-		ret = -ENOMEM;
-		goto err_ev_req_free;
-	}
-	/* evhttp_add_header returns -1 for EINVAL and ENOMEM */
-	ret = evhttp_add_header(ev_out_hdrs, "Content-Length", clen_str);
-	free(clen_str);
-	if (ret < 0) {
-		ret = -EINVAL;
-		goto err_ev_req_free;
-	}
 	ret = evhttp_add_header(ev_out_hdrs, "Host", op->url_host);
 	if (ret < 0) {
 		ret = -EINVAL;
