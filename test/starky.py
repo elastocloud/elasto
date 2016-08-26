@@ -95,7 +95,7 @@ class StarkyTestAzureCreate(unittest.TestCase):
 		'''
 		acc_name = self.ctx.acc_name_get()
 		sp = subprocess
-		cmd = "%s -- create -l label -d desc -L \"%s\" %s" \
+		cmd = "%s -- create -L \"%s\" %s" \
 		      % (self.ctx.cli_az_cmd, self.ctx.acc_loc, acc_name)
 		try:
 			out = sp.check_output(cmd, shell=True)
@@ -124,7 +124,7 @@ class StarkyTestAzureCreate(unittest.TestCase):
 		acc_name = self.ctx.acc_name_get()
 		sp = subprocess
 
-		cmd = "%s -- create -l label -d desc -L \"%s\" %s" \
+		cmd = "%s -- create -L \"%s\" %s" \
 		      % (self.ctx.cli_az_cmd, self.ctx.acc_loc, acc_name)
 		try:
 			out = sp.check_output(cmd, shell=True)
@@ -180,7 +180,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 
 		self.acc_name = self.ctx.acc_name_get()
 		sp = subprocess
-		cmd = "%s -- create -l label -d desc -L \"%s\" %s" \
+		cmd = "%s -- create -L \"%s\" %s" \
 		      % (self.ctx.cli_az_cmd, self.ctx.acc_loc, self.acc_name)
 		try:
 			out = sp.check_output(cmd, shell=True)
