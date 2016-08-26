@@ -405,6 +405,26 @@ err_out:
 	return ret;
 }
 
+/*
+ * Remove existing clen and auth hdrs added by conn layer
+ */
+static void
+op_req_dup_hdrs_del(struct op *op)
+{
+	int ret;
+
+	ret = op_req_hdr_del(op, "Content-Length");
+	if (ret < 0) {
+		dbg(0, "no clen for to-be-resent req\n");
+	}
+	if (op->req_sign != NULL) {
+		ret = op_req_hdr_del(op, "Authorization");
+		if (ret < 0) {
+			dbg(0, "no auth header for to-be-resent req\n");
+		}
+	}
+}
+
 #define OP_MAX_REDIRECTS 2
 int
 op_req_redirect(struct op *op)
@@ -431,16 +451,7 @@ op_req_redirect(struct op *op)
 	op->url_host = op->rsp.err.redir_endpoint;
 	op->rsp.err.redir_endpoint = NULL;
 
-	if (op->req_sign != NULL) {
-		int ret;
-		/*
-		 * Remove existing auth hdr added by conn layer
-		 */
-		ret = op_req_hdr_del(op, "Authorization");
-		if (ret < 0) {
-			dbg(0, "no auth header for redirected req\n");
-		}
-	}
+	op_req_dup_hdrs_del(op);
 
 	/* save rsp data buffer */
 	data = op->rsp.data;
@@ -468,16 +479,7 @@ op_req_retry(struct op *op)
 	dbg(1, "retrying %d request on %s\n",
 	    op->opcode, op->url_host);
 
-	if (op->req_sign != NULL) {
-		int ret;
-		/*
-		 * Remove existing auth hdr added by conn layer
-		 */
-		ret = op_req_hdr_del(op, "Authorization");
-		if (ret < 0) {
-			dbg(0, "no auth header for redirected req\n");
-		}
-	}
+	op_req_dup_hdrs_del(op);
 
 	/* save rsp data buffer */
 	data = op->rsp.data;
