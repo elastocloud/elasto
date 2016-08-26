@@ -23,6 +23,9 @@ import optparse
 import os.path
 import tempfile
 import shutil
+import uuid
+
+AZ_ACC_MAXLEN = 24
 
 def md5_for_file(f, block_size=2**20):
 	md5 = hashlib.md5()
@@ -74,9 +77,8 @@ class StarkyContext:
 			self.cli_s3_cmd += " -i"
 
 	def acc_name_get(self):
-		# TODO check for uniqueness, must be valid and unique within the
-		# azure.com DNS namespace
-		return self.acc_prefix + str(random.randint(0, 10000))
+		return self.acc_prefix + \
+			uuid.uuid4().hex[:AZ_ACC_MAXLEN - len(self.acc_prefix)]
 
 	def bkt_name_get(self):
 		return self.acc_name_get()
