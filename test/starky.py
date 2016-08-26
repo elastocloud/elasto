@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # 
-# Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+# Copyright (C) SUSE LINUX GmbH 2013-2016, all rights reserved.
 # 
 # This library is free software; you can redistribute it and/or modify it
 # under the terms of the GNU Lesser General Public License as published
@@ -53,21 +53,20 @@ class StarkyContext:
 		else:
 			raise Exception("Could not locate elasto_cli")
 
-		if (options.ps_file == None):
-			raise Exception("publish settings file not specified")
-
-		self.pub_set_file = options.ps_file
-		if (os.path.exists(self.pub_set_file) == False):
-			raise Exception("invalid publish settings file")
+		if options.ps_file:
+			self.pub_set_file = options.ps_file
+			if (os.path.exists(self.pub_set_file) == False):
+				raise Exception("invalid publish settings file")
 
 		self.cli_az_cmd = "%s -d %d -s \"%s\"" \
 				  % (self.cli_bin, options.debug_level,
 				     self.pub_set_file)
 
-		if (options.s3_creds_file == None):
-			raise Exception("S3 key file not specified")
+		if options.s3_creds_file:
+			self.s3_creds_file = options.s3_creds_file
+			if (os.path.exists(self.s3_creds_file) == False):
+				raise Exception("invalid S3 creds file")
 
-		self.s3_creds_file = options.s3_creds_file
 		self.cli_s3_cmd = "%s -d %d -k %s" \
 				  % (self.cli_bin, options.debug_level,
 				     options.s3_creds_file)
@@ -489,11 +488,13 @@ if __name__ == '__main__':
 	(options, args) = parser.parse_args()
 	ctx = StarkyContext(options)
 	suite = unittest.TestSuite()
-	suite.addTest(StarkyTestAzureCreate("test_account", ctx))
-	suite.addTest(StarkyTestAzureCreate("test_container", ctx))
-	suite.addTest(StarkyTestAzureIo("test_put_get_md5", ctx))
-	suite.addTest(StarkyTestAzureIo("test_cp_md5", ctx))
-	suite.addTest(StarkyTestS3Create("test_bucket", ctx))
-	suite.addTest(StarkyTestS3Io("test_put_get_obj_md5", ctx))
-	suite.addTest(StarkyTestS3Io("test_cp_obj_md5", ctx))
+	if ctx.pub_set_file:
+		suite.addTest(StarkyTestAzureCreate("test_account", ctx))
+		suite.addTest(StarkyTestAzureCreate("test_container", ctx))
+		suite.addTest(StarkyTestAzureIo("test_put_get_md5", ctx))
+		suite.addTest(StarkyTestAzureIo("test_cp_md5", ctx))
+	if ctx.s3_creds_file:
+		suite.addTest(StarkyTestS3Create("test_bucket", ctx))
+		suite.addTest(StarkyTestS3Io("test_put_get_obj_md5", ctx))
+		suite.addTest(StarkyTestS3Io("test_cp_obj_md5", ctx))
 	unittest.TextTestRunner().run(suite)
