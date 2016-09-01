@@ -42,7 +42,7 @@ cm_file_mkdir(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d",
+	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -64,7 +64,7 @@ cm_file_rmdir(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d",
+	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 	cm_us->ctnr_suffix++; /* ensure future creations don't conflict */
@@ -88,7 +88,7 @@ cm_file_share_create(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d",
+	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
@@ -114,7 +114,7 @@ cm_file_share_del(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d",
+	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 	cm_us->share_suffix++; /* ensure future creations don't conflict */
@@ -140,7 +140,7 @@ cm_file_create(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/create_test",
+	ret = asprintf(&path, "/%s/%s%d/create_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -229,7 +229,7 @@ cm_file_io(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/io_test",
+	ret = asprintf(&path, "/%s/%s%d/io_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -272,7 +272,7 @@ cm_file_lease_basic(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/lease_test",
+	ret = asprintf(&path, "/%s/%s%d/lease_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -320,7 +320,7 @@ cm_file_lease_multi(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/lease_multi_test",
+	ret = asprintf(&path, "/%s/%s%d/lease_multi_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -380,7 +380,7 @@ cm_file_lease_break(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/lease_multi_test",
+	ret = asprintf(&path, "/%s/%s%d/lease_multi_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -439,7 +439,7 @@ cm_file_truncate_basic(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/truncate_test",
+	ret = asprintf(&path, "/%s/%s%d/truncate_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -491,7 +491,7 @@ cm_file_stat_basic(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/stat_test",
+	ret = asprintf(&path, "/%s/%s%d/stat_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -635,7 +635,7 @@ cm_file_dir_lease_basic(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d",
+	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -686,7 +686,7 @@ cm_file_dir_lease_multi(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d",
+	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -748,7 +748,7 @@ cm_file_dir_lease_break(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d",
+	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -1015,7 +1015,7 @@ cm_file_abb_io(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/abb_io_test",
+	ret = asprintf(&path, "/%s/%s%d/abb_io_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -1094,7 +1094,7 @@ cm_file_data_cb(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/cb_io_test",
+	ret = asprintf(&path, "/%s/%s%d/cb_io_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
@@ -1129,7 +1129,7 @@ cm_file_afs_io(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/afs_io_test",
+	ret = asprintf(&path, "/%s/%s%d/afs_io_test",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
@@ -1202,7 +1202,7 @@ cm_file_afs_path_encoding(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/afs encoding test",
+	ret = asprintf(&path, "/%s/%s%d/afs encoding test",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
@@ -1216,7 +1216,7 @@ cm_file_afs_path_encoding(void **state)
 	assert_false(ret < 0);
 	free(path);
 
-	ret = asprintf(&path, "%s/%s%d/afs$",
+	ret = asprintf(&path, "/%s/%s%d/afs$",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
@@ -1232,7 +1232,7 @@ cm_file_afs_path_encoding(void **state)
 	free(path);
 
 	/* Azure FS supports '/' and '\' as directory path separators */
-	ret = asprintf(&path, "%s/%s%d/afs$\\both path separators",
+	ret = asprintf(&path, "/%s/%s%d/afs$\\both path separators",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
@@ -1247,7 +1247,7 @@ cm_file_afs_path_encoding(void **state)
 	assert_false(ret < 0);
 	free(path);
 
-	ret = asprintf(&path, "%s/%s%d",
+	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
@@ -1297,7 +1297,7 @@ cm_file_afs_list_ranges(void **state)
 	auth.az.ps_path = cm_us->ps_file;
 	auth.insecure_http = cm_us->insecure_http;
 
-	ret = asprintf(&path, "%s/%s%d/afs_io_test",
+	ret = asprintf(&path, "/%s/%s%d/afs_io_test",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
