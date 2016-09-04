@@ -44,7 +44,6 @@ class StarkyContext:
 	acc_prefix = "elastotest"
 	acc_loc = "West Europe"
 	bkt_loc = "eu-west-1"
-	ctnr = "starky"
 	az_acc_persist = None
 	az_acc_persist_created = False
 
@@ -137,9 +136,9 @@ class StarkyTestAzureCreate(unittest.TestCase):
 		'''
 		Check for an account's existence using ls.
 		'''
-		acc_name = self.ctx.acc_name_get()
+		acc = self.ctx.acc_name_get()
 		sp = subprocess
-		cmd = self.ctx.cli_az_cmd + " -- ls " + acc_name
+		cmd = self.ctx.cli_az_cmd + " -- ls " + acc
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -151,10 +150,12 @@ class StarkyTestAzureCreate(unittest.TestCase):
 		'''
 		Create a container, then check for its existence using ls.
 		'''
-		acc_name = self.ctx.acc_name_get()
+		acc = self.ctx.acc_name_get()
+		# use test name as ctnr name, but substitute invalid '_'
+		ctnr = self.id().split('.')[-1].replace('_', '-')
 		sp = subprocess
 		cmd = "%s -- create %s/%s" \
-		      % (self.ctx.cli_az_cmd, acc_name, self.ctx.ctnr)
+		      % (self.ctx.cli_az_cmd, acc, ctnr)
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -163,7 +164,7 @@ class StarkyTestAzureCreate(unittest.TestCase):
 					+ str(e.returncode))
 
 		cmd = "%s -- ls %s/%s" \
-		      % (self.ctx.cli_az_cmd, acc_name, self.ctx.ctnr)
+		      % (self.ctx.cli_az_cmd, acc, ctnr)
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -172,7 +173,7 @@ class StarkyTestAzureCreate(unittest.TestCase):
 					+ str(e.returncode))
 
 		cmd = "%s -- del %s/%s" \
-		      % (self.ctx.cli_az_cmd, acc_name, self.ctx.ctnr)
+		      % (self.ctx.cli_az_cmd, acc, ctnr)
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -184,7 +185,7 @@ class StarkyTestAzureCreate(unittest.TestCase):
 		'''
 		Create a page blob, then check for its existence using ls.
 		'''
-		acc_name = self.ctx.acc_name_get()
+		acc = self.ctx.acc_name_get()
 		sp = subprocess
 		# TODO, no client mechanism as yet
 
@@ -203,10 +204,12 @@ class StarkyTestAzureIo(unittest.TestCase):
 			self.assertTrue(False, "failed to create tmpdir")
 		self.tmp_dir_created = True
 
-		self.acc_name = self.ctx.acc_name_get()
+		self.acc = self.ctx.acc_name_get()
+		# use test name as ctnr name, but substitute invalid '_'
+		self.ctnr = self.id().split('.')[-1].replace('_', '-')
 		sp = subprocess
 		cmd = "%s -- create %s/%s" \
-		      % (self.ctx.cli_az_cmd, self.acc_name, self.ctx.ctnr)
+		      % (self.ctx.cli_az_cmd, self.acc, self.ctnr)
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -220,7 +223,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 
 		sp = subprocess
 		cmd = "%s -- del %s/%s" \
-		      % (self.ctx.cli_az_cmd, self.acc_name, self.ctx.ctnr)
+		      % (self.ctx.cli_az_cmd, self.acc, self.ctnr)
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -234,7 +237,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 		# put the elasto client binary
 		cmd = "%s -- put \"%s\" %s/%s/%s" \
 		      % (self.ctx.cli_az_cmd,
-			 self.ctx.cli_bin, self.acc_name, self.ctx.ctnr, "blob")
+			 self.ctx.cli_bin, self.acc, self.ctnr, "blob")
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -245,7 +248,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 		# read back binary
 		cmd = "%s -- get %s/%s/%s %s" \
 		      % (self.ctx.cli_az_cmd,
-			 self.acc_name, self.ctx.ctnr, "blob", tmp_path)
+			 self.acc, self.ctnr, "blob", tmp_path)
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -269,7 +272,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 		# put the elasto client binary
 		cmd = "%s -- put \"%s\" %s/%s/%s" \
 		      % (self.ctx.cli_az_cmd,
-			 self.ctx.cli_bin, self.acc_name, self.ctx.ctnr, "blob")
+			 self.ctx.cli_bin, self.acc, self.ctnr, "blob")
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -279,8 +282,8 @@ class StarkyTestAzureIo(unittest.TestCase):
 
 		cmd = "%s -- cp %s/%s/%s %s/%s/%s" \
 		      % (self.ctx.cli_az_cmd,
-			 self.acc_name, self.ctx.ctnr, "blob",
-			 self.acc_name, self.ctx.ctnr, "cp_blob")
+			 self.acc, self.ctnr, "blob",
+			 self.acc, self.ctnr, "cp_blob")
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -291,7 +294,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 		# read back copy of binary
 		cmd = "%s -- get %s/%s/%s %s" \
 		      % (self.ctx.cli_az_cmd,
-			 self.acc_name, self.ctx.ctnr, "cp_blob", tmp_path)
+			 self.acc, self.ctnr, "cp_blob", tmp_path)
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
