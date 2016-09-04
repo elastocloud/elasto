@@ -92,7 +92,7 @@ gen_date_str(void)
 }
 
 #define AZ_API_VERS_MGMT "2012-03-01"
-#define AZ_API_VERS_BLOB "2015-02-21"
+#define AZ_API_VERS_BLOB "2015-12-11"
 
 int
 az_req_common_hdr_fill(struct op *op,
