@@ -37,12 +37,16 @@ def md5_for_file(f, block_size=2**20):
 	return md5.digest()
 
 class StarkyContext:
+	s3_run = False
+	az_run = False
 	pub_set_file = None
 	s3_creds_file = None
 	acc_prefix = "elastotest"
 	acc_loc = "West Europe"
 	bkt_loc = "eu-west-1"
 	ctnr = "starky"
+	az_acc_persist = None
+	az_acc_persist_created = False
 
 	def __init__(self, options):
 		# find elasto_cli binary
@@ -53,34 +57,73 @@ class StarkyContext:
 		else:
 			raise Exception("Could not locate elasto_cli")
 
+
 		if options.ps_file:
 			self.pub_set_file = options.ps_file
 			if (os.path.exists(self.pub_set_file) == False):
 				raise Exception("invalid publish settings file")
 
-		self.cli_az_cmd = "%s -d %d -s \"%s\"" \
-				  % (self.cli_bin, options.debug_level,
-				     self.pub_set_file)
+			self.cli_az_cmd = "%s -d %d -s \"%s\"" \
+					  % (self.cli_bin, options.debug_level,
+					     self.pub_set_file)
+			if (options.insecure == True):
+				self.cli_az_cmd += " -i"
+
+			self.acc_persist_create()
+			self.az_acc_persist_created = True
+			self.az_run = True
 
 		if options.s3_creds_file:
 			self.s3_creds_file = options.s3_creds_file
 			if (os.path.exists(self.s3_creds_file) == False):
 				raise Exception("invalid S3 creds file")
 
-		self.cli_s3_cmd = "%s -d %d -k %s" \
-				  % (self.cli_bin, options.debug_level,
-				     options.s3_creds_file)
+			self.cli_s3_cmd = "%s -d %d -k %s" \
+					  % (self.cli_bin, options.debug_level,
+					     options.s3_creds_file)
+			if (options.insecure == True):
+				self.cli_s3_cmd += " -i"
 
-		if (options.insecure == True):
-			self.cli_az_cmd += " -i"
-			self.cli_s3_cmd += " -i"
+			self.s3_run = True
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, exc_type, exc_value, traceback):
+		if self.az_acc_persist_created:
+			self.acc_persist_delete()
 
 	def acc_name_get(self):
+		return self.az_acc_persist
+
+	def acc_name_generate(self):
 		return self.acc_prefix + \
 			uuid.uuid4().hex[:AZ_ACC_MAXLEN - len(self.acc_prefix)]
 
+	def acc_persist_create(self):
+		self.az_acc_persist = self.acc_name_generate()
+		sp = subprocess
+		cmd = "%s -- create -L \"%s\" %s" \
+		      % (self.cli_az_cmd, self.acc_loc,
+			 self.az_acc_persist)
+		try:
+			print "-> %s\n" % (cmd)
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			raise
+
+	def acc_persist_delete(self):
+		sp = subprocess
+		cmd = "%s -- del %s" % (self.cli_az_cmd,
+					self.az_acc_persist)
+		try:
+			print "-> %s\n" % (cmd)
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			raise
+
 	def bkt_name_get(self):
-		return self.acc_name_get()
+		return self.acc_name_generate()
 
 
 class StarkyTestAzureCreate(unittest.TestCase):
@@ -92,30 +135,16 @@ class StarkyTestAzureCreate(unittest.TestCase):
 
 	def test_account(self):
 		'''
-		Create an account, then check for its existence using ls.
+		Check for an account's existence using ls.
 		'''
 		acc_name = self.ctx.acc_name_get()
 		sp = subprocess
-		cmd = "%s -- create -L \"%s\" %s" \
-		      % (self.ctx.cli_az_cmd, self.ctx.acc_loc, acc_name)
-		try:
-			out = sp.check_output(cmd, shell=True)
-		except sp.CalledProcessError, e:
-			self.assertTrue(False, "create failed with "
-					+ str(e.returncode) + e.output)
-
 		cmd = self.ctx.cli_az_cmd + " -- ls " + acc_name
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "ls failed with "
-					+ str(e.returncode))
-
-		cmd = self.ctx.cli_az_cmd + " -- del " + acc_name
-		try:
-			out = sp.check_output(cmd, shell=True)
-		except sp.CalledProcessError, e:
-			self.assertTrue(False, "del failed with "
 					+ str(e.returncode))
 
 	def test_container(self):
@@ -124,18 +153,10 @@ class StarkyTestAzureCreate(unittest.TestCase):
 		'''
 		acc_name = self.ctx.acc_name_get()
 		sp = subprocess
-
-		cmd = "%s -- create -L \"%s\" %s" \
-		      % (self.ctx.cli_az_cmd, self.ctx.acc_loc, acc_name)
-		try:
-			out = sp.check_output(cmd, shell=True)
-		except sp.CalledProcessError, e:
-			self.assertTrue(False, "create failed with "
-					+ str(e.returncode) + e.output)
-
 		cmd = "%s -- create %s/%s" \
 		      % (self.ctx.cli_az_cmd, acc_name, self.ctx.ctnr)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "create container failed with "
@@ -144,13 +165,16 @@ class StarkyTestAzureCreate(unittest.TestCase):
 		cmd = "%s -- ls %s/%s" \
 		      % (self.ctx.cli_az_cmd, acc_name, self.ctx.ctnr)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "ls failed with "
 					+ str(e.returncode))
 
-		cmd = "%s -- del %s" % (self.ctx.cli_az_cmd, acc_name)
+		cmd = "%s -- del %s/%s" \
+		      % (self.ctx.cli_az_cmd, acc_name, self.ctx.ctnr)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "del failed with "
@@ -181,17 +205,10 @@ class StarkyTestAzureIo(unittest.TestCase):
 
 		self.acc_name = self.ctx.acc_name_get()
 		sp = subprocess
-		cmd = "%s -- create -L \"%s\" %s" \
-		      % (self.ctx.cli_az_cmd, self.ctx.acc_loc, self.acc_name)
-		try:
-			out = sp.check_output(cmd, shell=True)
-		except sp.CalledProcessError, e:
-			self.assertTrue(False, "create failed with "
-					+ str(e.returncode) + e.output)
-
 		cmd = "%s -- create %s/%s" \
 		      % (self.ctx.cli_az_cmd, self.acc_name, self.ctx.ctnr)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "create container failed with "
@@ -202,9 +219,10 @@ class StarkyTestAzureIo(unittest.TestCase):
 			shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
 		sp = subprocess
-		cmd = "%s -- del %s" \
-		      % (self.ctx.cli_az_cmd, self.acc_name)
+		cmd = "%s -- del %s/%s" \
+		      % (self.ctx.cli_az_cmd, self.acc_name, self.ctx.ctnr)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "del failed with "
@@ -218,6 +236,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 		      % (self.ctx.cli_az_cmd,
 			 self.ctx.cli_bin, self.acc_name, self.ctx.ctnr, "blob")
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "put blob failed with "
@@ -228,6 +247,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 		      % (self.ctx.cli_az_cmd,
 			 self.acc_name, self.ctx.ctnr, "blob", tmp_path)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "get blob failed with "
@@ -251,6 +271,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 		      % (self.ctx.cli_az_cmd,
 			 self.ctx.cli_bin, self.acc_name, self.ctx.ctnr, "blob")
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "put blob failed with "
@@ -261,6 +282,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 			 self.acc_name, self.ctx.ctnr, "blob",
 			 self.acc_name, self.ctx.ctnr, "cp_blob")
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "cp blob failed with "
@@ -271,6 +293,7 @@ class StarkyTestAzureIo(unittest.TestCase):
 		      % (self.ctx.cli_az_cmd,
 			 self.acc_name, self.ctx.ctnr, "cp_blob", tmp_path)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "get blob failed with "
@@ -302,6 +325,7 @@ class StarkyTestS3Create(unittest.TestCase):
 		cmd = "%s -- create %s" \
 		      % (self.ctx.cli_s3_cmd, bkt_name)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "create failed with "
@@ -309,6 +333,7 @@ class StarkyTestS3Create(unittest.TestCase):
 
 		cmd = self.ctx.cli_s3_cmd + " -- ls " + bkt_name
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "ls failed with "
@@ -316,6 +341,7 @@ class StarkyTestS3Create(unittest.TestCase):
 
 		cmd = self.ctx.cli_s3_cmd + " -- del " + bkt_name
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "del failed with "
@@ -341,6 +367,7 @@ class StarkyTestS3Io(unittest.TestCase):
 		cmd = "%s -- create -L %s %s" \
 		      % (self.ctx.cli_s3_cmd, self.ctx.bkt_loc, self.bkt_name)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "create failed with "
@@ -354,6 +381,7 @@ class StarkyTestS3Io(unittest.TestCase):
 		cmd = "%s -- del %s" \
 		      % (self.ctx.cli_s3_cmd, self.bkt_name)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "del failed with "
@@ -367,6 +395,7 @@ class StarkyTestS3Io(unittest.TestCase):
 		      % (self.ctx.cli_s3_cmd,
 			 self.ctx.cli_bin, self.bkt_name, "obj")
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "put object failed with "
@@ -377,6 +406,7 @@ class StarkyTestS3Io(unittest.TestCase):
 		      % (self.ctx.cli_s3_cmd,
 			 self.bkt_name, "obj", tmp_path)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "get object failed with "
@@ -397,6 +427,7 @@ class StarkyTestS3Io(unittest.TestCase):
 		      % (self.ctx.cli_s3_cmd,
 			 self.bkt_name, "obj")
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "del object failed with "
@@ -410,6 +441,7 @@ class StarkyTestS3Io(unittest.TestCase):
 		      % (self.ctx.cli_s3_cmd,
 			 self.ctx.cli_bin, self.bkt_name, "obj")
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "put object failed with "
@@ -420,6 +452,7 @@ class StarkyTestS3Io(unittest.TestCase):
 			 self.bkt_name, "obj",
 			 self.bkt_name, "cp_obj")
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "cp object failed with "
@@ -430,6 +463,7 @@ class StarkyTestS3Io(unittest.TestCase):
 		      % (self.ctx.cli_s3_cmd,
 			 self.bkt_name, "cp_obj", tmp_path)
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "get object failed with "
@@ -450,6 +484,7 @@ class StarkyTestS3Io(unittest.TestCase):
 		      % (self.ctx.cli_s3_cmd,
 			 self.bkt_name, "obj")
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "del object failed with "
@@ -459,6 +494,7 @@ class StarkyTestS3Io(unittest.TestCase):
 		      % (self.ctx.cli_s3_cmd,
 			 self.bkt_name, "cp_obj")
 		try:
+			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "del object failed with "
@@ -486,15 +522,18 @@ if __name__ == '__main__':
 			  help="Insecure, use HTTP where possible",
 			  action="store_true")
 	(options, args) = parser.parse_args()
-	ctx = StarkyContext(options)
 	suite = unittest.TestSuite()
-	if ctx.pub_set_file:
-		suite.addTest(StarkyTestAzureCreate("test_account", ctx))
-		suite.addTest(StarkyTestAzureCreate("test_container", ctx))
-		suite.addTest(StarkyTestAzureIo("test_put_get_md5", ctx))
-		suite.addTest(StarkyTestAzureIo("test_cp_md5", ctx))
-	if ctx.s3_creds_file:
-		suite.addTest(StarkyTestS3Create("test_bucket", ctx))
-		suite.addTest(StarkyTestS3Io("test_put_get_obj_md5", ctx))
-		suite.addTest(StarkyTestS3Io("test_cp_obj_md5", ctx))
-	unittest.TextTestRunner().run(suite)
+	with StarkyContext(options) as ctx:
+		if ctx.az_run:
+			if ctx.pub_set_file:
+				# acc creation and deletion only possible with ps_file
+				suite.addTest(StarkyTestAzureCreate("test_account",
+								    ctx))
+			suite.addTest(StarkyTestAzureCreate("test_container", ctx))
+			suite.addTest(StarkyTestAzureIo("test_put_get_md5", ctx))
+			suite.addTest(StarkyTestAzureIo("test_cp_md5", ctx))
+		if ctx.s3_run:
+			suite.addTest(StarkyTestS3Create("test_bucket", ctx))
+			suite.addTest(StarkyTestS3Io("test_put_get_obj_md5", ctx))
+			suite.addTest(StarkyTestS3Io("test_cp_obj_md5", ctx))
+		unittest.TextTestRunner().run(suite)
