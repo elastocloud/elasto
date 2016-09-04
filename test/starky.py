@@ -44,7 +44,7 @@ class StarkyContext:
 	acc_prefix = "elastotest"
 	acc_loc = "West Europe"
 	bkt_loc = "eu-west-1"
-	az_acc_persist = None
+	az_acc = None
 	az_acc_persist_created = False
 
 	def __init__(self, options):
@@ -68,8 +68,30 @@ class StarkyContext:
 			if (options.insecure == True):
 				self.cli_az_cmd += " -i"
 
+			self.az_acc = self.acc_name_generate()
 			self.acc_persist_create()
 			self.az_acc_persist_created = True
+			self.az_run = True
+
+		if options.az_access_key:
+			self.az_access_key = options.az_access_key
+			if (options.az_acc == None):
+				raise Exception("Azure access key requires \
+						additional account parameter")
+			self.az_acc = options.az_acc
+
+			if (options.ps_file != None):
+				raise Exception("Azure access key cannot be \
+						specified with ps file")
+
+			self.cli_az_cmd = "%s -d %d -K \"%s\"" \
+					  % (self.cli_bin, options.debug_level,
+					     options.az_access_key)
+			if (options.insecure == True):
+				self.cli_az_cmd += " -i"
+
+			self.acc_stat()
+			self.az_acc_persist_created = False
 			self.az_run = True
 
 		if options.s3_creds_file:
@@ -93,18 +115,17 @@ class StarkyContext:
 			self.acc_persist_delete()
 
 	def acc_name_get(self):
-		return self.az_acc_persist
+		return self.az_acc
 
 	def acc_name_generate(self):
 		return self.acc_prefix + \
 			uuid.uuid4().hex[:AZ_ACC_MAXLEN - len(self.acc_prefix)]
 
 	def acc_persist_create(self):
-		self.az_acc_persist = self.acc_name_generate()
 		sp = subprocess
 		cmd = "%s -- create -L \"%s\" %s" \
 		      % (self.cli_az_cmd, self.acc_loc,
-			 self.az_acc_persist)
+			 self.acc_name_get())
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -114,7 +135,17 @@ class StarkyContext:
 	def acc_persist_delete(self):
 		sp = subprocess
 		cmd = "%s -- del %s" % (self.cli_az_cmd,
-					self.az_acc_persist)
+					self.acc_name_get())
+		try:
+			print "-> %s\n" % (cmd)
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			raise
+
+	def acc_stat(self):
+		sp = subprocess
+		cmd = "%s -- ls %s" % (self.cli_az_cmd,
+					self.acc_name_get())
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
@@ -508,6 +539,16 @@ if __name__ == '__main__':
 	parser.add_option("-s", "--azure_ps_file",
 			  dest="ps_file",
 			  help="Azure PublishSettings file",
+			  type="string",
+			  default=None)
+	parser.add_option("-A", "--azure_account",
+			  dest="az_acc",
+			  help="Azure account",
+			  type="string",
+			  default=None)
+	parser.add_option("-K", "--azure_access_key",
+			  dest="az_access_key",
+			  help="Access key for given Azure account",
 			  type="string",
 			  default=None)
 	parser.add_option("-k", "--s3_creds_file",
