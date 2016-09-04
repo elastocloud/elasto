@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2012, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -21,6 +21,14 @@ sign_gen_lite_azure(const char *account,
 		    struct op *op,
 		    char **sig_src,
 		    char **sig_str);
+
+int
+sign_gen_shared_azure(const char *account,
+		      const uint8_t *key,
+		      int key_len,
+		      struct op *op,
+		      char **sig_src,
+		      char **sig_str);
 
 int
 sign_gen_s3(const char *bkt_name,

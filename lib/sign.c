@@ -21,6 +21,8 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <ctype.h>
+/* for http decoding */
+#include <event2/http.h>
 
 #include "ccan/list/list.h"
 #include "base64.h"
@@ -128,7 +130,9 @@ canon_hdrs_gen(uint32_t num_hdrs,
 	       char **canon_hdrs_out,
 	       char **content_type_out,
 	       char **content_md5_out,
-	       char **date_out)
+	       char **content_len_out,
+	       char **date_out,
+	       char **range_out)
 {
 	struct op_hdr *hdr;
 	int count = 0;
@@ -138,7 +142,9 @@ canon_hdrs_gen(uint32_t num_hdrs,
 	char *hdr_str;
 	char *ctype = NULL;
 	char *md5 = NULL;
+	char *clen = NULL;
 	char *date = NULL;
+	char *range = NULL;
 	char *s;
 	int hdr_str_len = 0;
 
@@ -218,6 +224,22 @@ canon_hdrs_gen(uint32_t num_hdrs,
 				goto err_array_free;
 			}
 			dbg(6, "got Date hdr: %s\n", date);
+		} else if (strcasecmp(hdr->key, "Content-Length") == 0) {
+			assert(clen == NULL);
+			clen = strdup(hdr->val);
+			if (clen == NULL) {
+				ret = -ENOMEM;
+				goto err_array_free;
+			}
+			dbg(6, "got Content-Length hdr: %s\n", clen);
+		} else if (strcasecmp(hdr->key, "Range") == 0) {
+			assert(range == NULL);
+			range = strdup(hdr->val);
+			if (range == NULL) {
+				ret = -ENOMEM;
+				goto err_array_free;
+			}
+			dbg(6, "got Range hdr: %s\n", range);
 		}
 	}
 	if (count == 0) {
@@ -275,10 +297,20 @@ out_empty:
 	} else {
 		free(md5);
 	}
+	if (content_len_out != NULL) {
+		*content_len_out = clen;
+	} else {
+		free(clen);
+	}
 	if (date_out != NULL) {
 		*date_out = date;
 	} else {
 		free(date);
+	}
+	if (range_out != NULL) {
+		*range_out = range;
+	} else {
+		free(range);
 	}
 
 	return 0;
@@ -287,6 +319,7 @@ err_array_free:
 	free(ctype);
 	free(md5);
 	free(date);
+	free(range);
 	for (i = 0; i < count; i++)
 		free(hdr_array[i]);
 	free(hdr_array);
@@ -385,7 +418,8 @@ sign_gen_lite_azure(const char *account,
 
 	ret = canon_hdrs_gen(op->req.num_hdrs, &op->req.hdrs,
 			     HDR_PREFIX_AZ, false,
-			     &canon_hdrs, &content_type, NULL, NULL);
+			     &canon_hdrs, &content_type,
+			     NULL, NULL, NULL, NULL);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -435,6 +469,348 @@ err_rsc_free:
 	free(canon_rsc);
 err_hdrs_free:
 	free(canon_hdrs);
+	free(content_type);
+err_out:
+	return ret;
+}
+
+struct qp {
+	char *lowered;
+	char *key_decoded;
+	size_t kd_len;
+	char *val_decoded;
+	size_t vd_len;
+};
+
+static int
+qp_cmp_lexi(const void *p1, const void *p2)
+{
+	const struct qp *qp1 = p1;
+	const struct qp *qp2 = p2;
+	return strcmp(qp1->lowered, qp2->lowered);
+}
+
+/*
+ * Convert all parameter names to lowercase.
+ *
+ * Sort the query parameters lexicographically by parameter name, in ascending
+ * order.
+ *
+ * URL-decode each query parameter name and value.
+ *
+ * Append each query parameter name and value to the string in the following
+ * format, making sure to include the colon (:) between the name and the value:
+ * parameter-name:parameter-value
+ *
+ * If a query parameter has more than one value, sort all values
+ * lexicographically, then include them in a comma-separated list:
+ * parameter-name:parameter-value-1,parameter-value-2,parameter-value-n
+ *
+ * Append a new-line character (\n) after each name-value pair.
+ *
+ * TODO This could be optimised by storing the parameters as a linked list, and
+ * requiring that k=v pairs are added to the list in lexicographic order.
+ */
+static int
+canon_query_params_gen(const char *query_params,
+		       char *out_buf,
+		       size_t buf_len)
+{
+
+	struct qp params[50];
+	int count;
+	const char *q_start;
+	const char *q_end;
+	char *s;
+	size_t len;
+	int key_len_total;
+	int val_len_total;
+	int i;
+	int ret;
+
+	key_len_total = 0;
+	val_len_total = 0;
+	count = 0;
+	q_start = query_params;
+
+	for (i = 0; i < ARRAY_SIZE(params); i++) {
+
+		q_end = strchrnul(q_start, '&');
+		if (q_start >= q_end) {
+			dbg(0, "invalid query params: %s\n", query_params);
+			ret = -EINVAL;
+			goto err_array_free;
+		}
+
+		len = q_end - q_start;
+		assert(len > 0);
+		params[i].lowered = strndup(q_start, len);
+		if (params[i].lowered == NULL) {
+			ret = -ENOMEM;
+			goto err_array_free;
+		}
+
+		/* convert param to lowercase */
+		for (s = params[i].lowered; ((*s != '=') && (*s != '\0')); s++) {
+			*s = tolower(*s);
+		}
+
+		if (*s == '=') {
+			params[i].val_decoded = evhttp_uridecode(s + 1, 0,
+							&params[i].vd_len);
+			if (params[i].val_decoded == NULL) {
+				ret = -ENOMEM;
+				goto err_array_free;
+			}
+			/* terminate key for decoding */
+			*s = 0;
+		} else {
+			params[i].val_decoded = NULL;
+			params[i].vd_len = 0;
+		}
+
+		params[i].key_decoded = evhttp_uridecode(params[i].lowered, 0,
+							 &params[i].kd_len);
+		if (params[i].key_decoded == NULL) {
+			ret = -ENOMEM;
+			goto err_array_free;
+		}
+
+		val_len_total += params[i].vd_len;
+		key_len_total += params[i].kd_len;
+		count++;
+
+		if (*q_end == '\0') {
+			break;
+		}
+		q_start = q_end + 1;
+	}
+
+	if (i == ARRAY_SIZE(params)) {
+		/* ensure cleanup */
+		count = ARRAY_SIZE(params) - 1;
+		ret = -EINVAL;
+		goto err_array_free;
+	}
+
+	qsort(params, count, sizeof(struct qp), qp_cmp_lexi);
+
+	s = out_buf;
+
+	for (i = 0; i < count; i++) {
+		/*
+		 * TODO - If a query parameter has more than one value, sort all
+		 * values lexicographically, then include them in a
+		 * comma-separated list:
+		 * parameter-name:parameter-value-1,parameter-value-n
+		 * -> multi value params aren't used yet, so we can be lazy here
+		 */
+		if (i > 0) {
+			assert((params[i].kd_len != params[i - 1].kd_len)
+				|| memcmp(params[i].key_decoded,
+					  params[i - 1].key_decoded,
+				MIN(params[i].kd_len, params[i - 1].kd_len)));
+		}
+
+		memcpy(s, params[i].key_decoded, params[i].kd_len);
+		s += params[i].kd_len;
+		buf_len -= params[i].kd_len;
+		assert(buf_len >= 0);
+
+		*s = ':';
+		s++;
+		buf_len--;
+		assert(buf_len >= 0);
+
+		memcpy(s, params[i].val_decoded, params[i].vd_len);
+		s += params[i].vd_len;
+		buf_len -= params[i].vd_len;
+		assert(buf_len >= 0);
+
+		*s = '\n';
+		s++;
+		buf_len--;
+		assert(buf_len >= 0);
+
+		free(params[i].lowered);
+		free(params[i].val_decoded);
+		free(params[i].key_decoded);
+	}
+	assert(count > 0);
+	assert(s > out_buf);
+	/* overwrite last newline with terminator */
+	*(s - 1) = '\0';
+
+	return 0;
+
+err_array_free:
+	for (i = 0; i < count; i++) {
+		free(params[i].lowered);
+		free(params[i].val_decoded);
+		free(params[i].key_decoded);
+	}
+	return ret;
+}
+
+static int
+canon_rsc_gen(const char *account,
+	      const char *url_path,
+	      char **_canon_rsc)
+{
+	int ret;
+	char *s;
+	char *q;
+	char *comp;
+	char *buf = NULL;
+	int buf_len;
+	char *canon_query_str = NULL;
+
+	dbg(3, "generating canon rsc from: %s and %s\n", account, url_path);
+
+	/* find the first forward slash after the protocol */
+	s = strchrnul(url_path, '/');
+
+	q = strchr(s, '?');
+	if (q == NULL) {
+		/* no parameters, nice and easy */
+		ret = asprintf(&buf, "/%s%s", account, s);
+		if (ret < 0) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+		goto done;
+	}
+
+	/* +3 = '/' prefix, '\n' query separator, null term */
+	buf_len = strlen(account) + strlen(url_path) + 3;
+	buf = malloc(buf_len);
+	if (buf == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	/* terminate url str after estimating buffer length */
+	*q = '\0';
+
+	ret = snprintf(buf, buf_len, "/%s%s\n", account, s);
+	assert(ret > 0);
+	ret = canon_query_params_gen(q + 1, buf + ret, buf_len - ret);
+	if (ret < 0) {
+		goto err_buf_free;
+	}
+	dbg(3, "generated canon rsc: %s\n", buf);
+
+done:
+	*_canon_rsc = buf;
+	return 0;
+
+err_buf_free:
+	free(buf);
+err_out:
+	return ret;
+}
+
+/*
+ * https://msdn.microsoft.com/en-us/library/azure/dd179428.aspx
+ * Shared Key for Blob, Queue, and File Services.
+ */
+int
+sign_gen_shared_azure(const char *account,
+		    const uint8_t *key,
+		    int key_len,
+		    struct op *op,
+		    char **sig_src,
+		    char **sig_str)
+{
+	int ret;
+	char *canon_hdrs;
+	char *content_type = NULL;
+	char *content_md5 = NULL;
+	char *content_len = NULL;
+	char *date = NULL;
+	char *range = NULL;
+	char *canon_rsc;
+	char *str_to_sign = NULL;
+	uint8_t *md;
+	int md_len;
+	char *md_b64;
+	const char *method_str;
+
+	method_str = op_method_str(op->method);
+	if (method_str == NULL) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	ret = canon_hdrs_gen(op->req.num_hdrs, &op->req.hdrs,
+			     HDR_PREFIX_AZ, false,
+			     &canon_hdrs, &content_type, &content_md5,
+			     &content_len, &date, &range);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	ret = canon_rsc_gen(account, op->url_path, &canon_rsc);
+	if (ret < 0) {
+		goto err_hdrs_free;
+	}
+
+	ret = asprintf(&str_to_sign,
+		       "%s\n"	/* VERB */
+		       "\n"	/* Content-Encoding (not supported) */
+		       "\n"	/* Content-Language (not supported) */
+		       "%s\n"	/* Content-Length - XXX empty if zero! */
+		       "%s\n"	/* Content-MD5 */
+		       "%s\n"	/* Content-Type */
+		       "%s\n"	/* Date */
+		       "\n"	/* If-Modified-Since */
+		       "\n"	/* If-Match */
+		       "\n"	/* If-None-Match */
+		       "\n"	/* If-Unmodified-Since */
+		       "%s\n"	/* Range */
+		       "%s"	/* CanonicalizedHeaders */
+		       "%s",	/* CanonicalizedResource */
+		       method_str,
+		       content_len && strcmp(content_len, "0") ? content_len : "",
+		       content_md5 ? content_md5 : "",
+		       content_type ? content_type : "",
+		       date ? date : "",
+		       range ? range : "",
+		       canon_hdrs, canon_rsc);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_rsc_free;
+	}
+
+	ret = hmac_sha(EVP_sha256(), key, key_len,
+		       (uint8_t *)str_to_sign, strlen(str_to_sign),
+		       &md, &md_len);
+	if (ret < 0) {
+		goto err_str_free;
+	}
+
+	ret = base64_encode(md, md_len, &md_b64);
+	if (ret < 0) {
+		ret = -EINVAL;
+		goto err_md_free;
+	}
+	*sig_str = md_b64;
+	*sig_src = str_to_sign;
+	str_to_sign = NULL;
+
+err_md_free:
+	free(md);
+err_str_free:
+	free(str_to_sign);
+err_rsc_free:
+	free(canon_rsc);
+err_hdrs_free:
+	free(canon_hdrs);
+	free(content_len);
+	free(content_md5);
+	free(content_type);
+	free(date);
+	free(range);
 err_out:
 	return ret;
 }
@@ -773,7 +1149,8 @@ sign_gen_s3(const char *bkt_name,
 
 	ret = canon_hdrs_gen(op->req.num_hdrs, &op->req.hdrs,
 			     HDR_PREFIX_S3, true,
-			     &canon_hdrs, &content_type, &content_md5, &date);
+			     &canon_hdrs, &content_type, &content_md5, NULL,
+			     &date, NULL);
 	if (ret < 0) {
 		dbg(0, "failed to generate canon hdrs: %s\n",
 		    strerror(-ret));
