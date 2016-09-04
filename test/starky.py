@@ -56,17 +56,19 @@ class StarkyContext:
 		else:
 			raise Exception("Could not locate elasto_cli")
 
+		# add generic params applicable to both PS file and access key
+		self.cli_az_cmd = "%s -d %d -u %s" \
+				  % (self.cli_bin, options.debug_level,
+				     options.server_uri)
+		if (options.insecure == True):
+			self.cli_az_cmd += " -i"
 
 		if options.ps_file:
 			self.pub_set_file = options.ps_file
 			if (os.path.exists(self.pub_set_file) == False):
 				raise Exception("invalid publish settings file")
 
-			self.cli_az_cmd = "%s -d %d -s \"%s\"" \
-					  % (self.cli_bin, options.debug_level,
-					     self.pub_set_file)
-			if (options.insecure == True):
-				self.cli_az_cmd += " -i"
+			self.cli_az_cmd += " -s \"%s\"" % (self.pub_set_file)
 
 			self.az_acc = self.acc_name_generate()
 			self.acc_persist_create()
@@ -84,11 +86,7 @@ class StarkyContext:
 				raise Exception("Azure access key cannot be \
 						specified with ps file")
 
-			self.cli_az_cmd = "%s -d %d -K \"%s\"" \
-					  % (self.cli_bin, options.debug_level,
-					     options.az_access_key)
-			if (options.insecure == True):
-				self.cli_az_cmd += " -i"
+			self.cli_az_cmd += " -K \"%s\"" % (options.az_access_key)
 
 			self.acc_stat()
 			self.az_acc_persist_created = False
@@ -565,6 +563,11 @@ if __name__ == '__main__':
 			  dest="insecure",
 			  help="Insecure, use HTTP where possible",
 			  action="store_true")
+	parser.add_option("-u", "--uri",
+			  dest="server_uri",
+			  help="REST server URI (default=abb://)",
+			  type="string",
+			  default="abb://")
 	(options, args) = parser.parse_args()
 	suite = unittest.TestSuite()
 	with StarkyContext(options) as ctx:
