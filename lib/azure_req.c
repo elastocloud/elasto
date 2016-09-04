@@ -51,14 +51,14 @@ az_req_sign(const char *acc,
 		return -EINVAL;
 	}
 
-	ret = sign_gen_lite_azure(acc, key, key_len,
+	ret = sign_gen_shared_azure(acc, key, key_len,
 				  op, &op->sig_src, &sig_str);
 	if (ret < 0) {
 		dbg(0, "Azure signing failed: %s\n",
 		    strerror(-ret));
 		return ret;
 	}
-	ret = asprintf(&hdr_str, "SharedKeyLite %s:%s",
+	ret = asprintf(&hdr_str, "SharedKey %s:%s",
 		       acc, sig_str);
 	free(sig_str);
 	if (ret < 0) {
