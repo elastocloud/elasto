@@ -52,26 +52,21 @@ cm_unity_state_get(void)
 static int
 cm_unity_state_init(void)
 {
-	int ret;
 	unsigned int seedy = time(NULL);
 
 	cm_ustate = malloc(sizeof(*cm_ustate));
-	if (cm_ustate == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
+	assert(cm_ustate != NULL);
 	memset(cm_ustate, 0, sizeof(*cm_ustate));
 	cm_ustate->insecure_http = false;
-	cm_ustate->acc = strdup("elastotest");
 	cm_ustate->ctnr = strdup("testctnr");
+	assert(cm_ustate->ctnr != NULL);
 	srand(seedy);
 	cm_ustate->ctnr_suffix = rand();
 	cm_ustate->share = strdup("testshare");
+	assert(cm_ustate->share != NULL);
 	cm_ustate->share_suffix = rand();
 
-	ret = 0;
-err_out:
-	return ret;
+	return 0;
 }
 
 static void
@@ -89,8 +84,8 @@ cm_unity_state_free(void)
 static void
 cm_unity_usage(const char *progname)
 {
-	printf("Usage: %s [-s publish settings] [-k S3 key-duo]"
-	       " [-d debug_level] [-i]\n", progname);
+	printf("Usage: %s [-s Azure publish settings] [-A Azure account] "
+	       "[-k S3 key-duo] [-d debug_level] [-i]\n", progname);
 }
 
 int
@@ -108,12 +103,19 @@ main(int argc,
 		goto err_out;
 	}
 
-	while ((opt = getopt(argc, argv, "s:k:d:?i")) != -1) {
+	while ((opt = getopt(argc, argv, "s:A:k:d:?i")) != -1) {
 		char *sep;
 		switch (opt) {
 		case 's':
 			cm_ustate->ps_file = strdup(optarg);
 			if (cm_ustate->ps_file == NULL) {
+				ret = -ENOMEM;
+				goto err_state_free;
+			}
+			break;
+		case 'A':
+			cm_ustate->acc = strdup(optarg);
+			if (cm_ustate->acc == NULL) {
 				ret = -ENOMEM;
 				goto err_state_free;
 			}
@@ -166,6 +168,13 @@ main(int argc,
 			ret = -ENOMEM;
 			goto err_state_free;
 		}
+	}
+
+	if ((cm_ustate->ps_file != NULL) && (cm_ustate->acc == NULL)) {
+		printf("An account must be provided with Azure credentials\n");
+		cm_unity_usage(argv[0]);
+		ret = -EINVAL;
+		goto err_state_free;
 	}
 
 	dbg_level_set(debug_level);
