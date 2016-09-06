@@ -74,7 +74,12 @@ static void
 cm_unity_auth_state_init(void)
 {
 	/* az_auth.type set by test suites */
-	assert(cm_ustate->ps_file != NULL);
+	if (cm_ustate->az_access_key != NULL) {
+		cm_ustate->az_auth.az.access_key = cm_ustate->az_access_key;
+	} else {
+		assert(cm_ustate->ps_file != NULL);
+		cm_ustate->az_auth.az.ps_path = cm_ustate->ps_file;
+	}
 	cm_ustate->az_auth.az.ps_path = cm_ustate->ps_file;
 	cm_ustate->az_auth.insecure_http = cm_ustate->insecure_http;
 }
@@ -86,6 +91,7 @@ cm_unity_state_free(void)
 	free(cm_ustate->ctnr);
 	free(cm_ustate->share);
 	free(cm_ustate->ps_file);
+	free(cm_ustate->az_access_key);
 	free(cm_ustate->s3_id);
 	free(cm_ustate->s3_secret);
 	free(cm_ustate);
@@ -94,8 +100,9 @@ cm_unity_state_free(void)
 static void
 cm_unity_usage(const char *progname)
 {
-	printf("Usage: %s [-s Azure publish settings] [-A Azure account] "
-	       "[-k S3 key-duo] [-d debug_level] [-i]\n", progname);
+	printf("Usage: %s [-s Azure publish settings] [-K Azure access key] "
+	       "[-A Azure account] [-k S3 key-duo] [-d debug_level] [-i]\n",
+	       progname);
 }
 
 int
@@ -113,12 +120,19 @@ main(int argc,
 		goto err_out;
 	}
 
-	while ((opt = getopt(argc, argv, "s:A:k:d:?i")) != -1) {
+	while ((opt = getopt(argc, argv, "s:K:A:k:d:?i")) != -1) {
 		char *sep;
 		switch (opt) {
 		case 's':
 			cm_ustate->ps_file = strdup(optarg);
 			if (cm_ustate->ps_file == NULL) {
+				ret = -ENOMEM;
+				goto err_state_free;
+			}
+			break;
+		case 'K':
+			cm_ustate->az_access_key = strdup(optarg);
+			if (cm_ustate->az_access_key == NULL) {
 				ret = -ENOMEM;
 				goto err_state_free;
 			}
@@ -180,7 +194,8 @@ main(int argc,
 		}
 	}
 
-	if ((cm_ustate->ps_file != NULL) && (cm_ustate->acc == NULL)) {
+	if (((cm_ustate->ps_file != NULL) || (cm_ustate->az_access_key != NULL))
+						&& (cm_ustate->acc == NULL)) {
 		printf("An account must be provided with Azure credentials\n");
 		cm_unity_usage(argv[0]);
 		ret = -EINVAL;
@@ -197,9 +212,10 @@ main(int argc,
 	cm_az_fs_path_run();
 	cm_s3_path_run();
 	cm_cli_path_run();
-	if (cm_ustate->ps_file == NULL) {
-		printf("skipping Azure cloud IO tests, "
-		       "no publish settings file\n");
+	if ((cm_ustate->ps_file == NULL)
+					&& (cm_ustate->az_access_key == NULL)) {
+		printf("skipping Azure cloud IO tests, no credentials "
+		       "provided\n");
 	} else {
 		cm_unity_auth_state_init();
 		cm_file_run();

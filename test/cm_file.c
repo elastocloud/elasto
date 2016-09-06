@@ -34,19 +34,16 @@ static void
 cm_file_mkdir(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fmkdir(&auth,
+	ret = elasto_fmkdir(&cm_us->az_auth,
 			    path);
 	assert_false(ret < 0);
 	free(path);
@@ -56,20 +53,17 @@ static void
 cm_file_rmdir(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 	cm_us->ctnr_suffix++; /* ensure future creations don't conflict */
 
-	ret = elasto_frmdir(&auth,
+	ret = elasto_frmdir(&cm_us->az_auth,
 			    path);
 	assert_false(ret < 0);
 	free(path);
@@ -79,20 +73,17 @@ static void
 cm_file_share_create(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	struct elasto_fh *fh = NULL;
 
-	auth.type = ELASTO_FILE_AFS;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_AFS;
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth, path, ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL
+	ret = elasto_fopen(&cm_us->az_auth, path, ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL
 				        | ELASTO_FOPEN_DIRECTORY, NULL, &fh);
 	assert_int_equal(ret, ELASTO_FOPEN_RET_CREATED);
 
@@ -105,21 +96,19 @@ static void
 cm_file_share_del(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	struct elasto_fh *fh = NULL;
 
-	auth.type = ELASTO_FILE_AFS;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_AFS;
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 	cm_us->share_suffix++; /* ensure future creations don't conflict */
 
-	ret = elasto_fopen(&auth, path, ELASTO_FOPEN_DIRECTORY, NULL, &fh);
+	ret = elasto_fopen(&cm_us->az_auth, path, ELASTO_FOPEN_DIRECTORY, NULL,
+			   &fh);
 	assert_int_equal(ret, ELASTO_FOPEN_RET_EXISTED);
 
 	ret = elasto_funlink_close(fh);
@@ -131,20 +120,17 @@ static void
 cm_file_create(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d/create_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
 			   NULL, &fh);
@@ -153,13 +139,13 @@ cm_file_create(void **state)
 	ret = elasto_fclose(fh);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
 			   NULL, &fh);
 	assert_int_equal(ret, -EEXIST);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   0,
 			   NULL, &fh);
@@ -168,7 +154,7 @@ cm_file_create(void **state)
 	ret = elasto_fclose(fh);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_CREATE,
 			   NULL, &fh);
@@ -219,21 +205,18 @@ static void
 cm_file_io(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	uint8_t buf[1024];
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d/io_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_CREATE,
 			   NULL, &fh);
@@ -262,21 +245,18 @@ static void
 cm_file_lease_basic(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d/lease_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
 			   NULL, &fh);
@@ -309,22 +289,19 @@ static void
 cm_file_lease_multi(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh1;
 	struct elasto_fh *fh2;
 	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d/lease_multi_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
 			   NULL, &fh1);
@@ -333,7 +310,7 @@ cm_file_lease_multi(void **state)
 	ret = elasto_flease_acquire(fh1, -1);
 	assert_int_equal(ret, 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   0,
 			   NULL, &fh2);
@@ -369,22 +346,19 @@ static void
 cm_file_lease_break(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh1;
 	struct elasto_fh *fh2;
 	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d/lease_multi_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
 			   NULL, &fh1);
@@ -393,7 +367,7 @@ cm_file_lease_break(void **state)
 	ret = elasto_flease_acquire(fh1, -1);
 	assert_int_equal(ret, 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   0,
 			   NULL, &fh2);
@@ -429,21 +403,18 @@ static void
 cm_file_truncate_basic(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d/truncate_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
 			   NULL, &fh);
@@ -479,7 +450,6 @@ static void
 cm_file_stat_basic(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct elasto_fstat fstat;
@@ -487,15 +457,13 @@ cm_file_stat_basic(void **state)
 	int i;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d/stat_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
 			   NULL, &fh);
@@ -526,17 +494,14 @@ static void
 cm_file_dir_open(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	/* open root */
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   "/",
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh);
@@ -544,14 +509,14 @@ cm_file_dir_open(void **state)
 	elasto_fclose(fh);
 
 	/* open root without dir flag */
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   "/",
 			   0,
 			   NULL, &fh);
 	assert_int_equal(ret, -EINVAL);
 
 	/* open root with create flags - should fail */
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   "/",
 			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
 			    | ELASTO_FOPEN_EXCL),
@@ -562,7 +527,7 @@ cm_file_dir_open(void **state)
 	ret = asprintf(&path, "/%s", cm_us->acc);
 	assert_true(ret >= 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh);
@@ -571,14 +536,14 @@ cm_file_dir_open(void **state)
 	assert_true(ret >= 0);
 
 	/* account without dir flag */
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   0,
 			   NULL, &fh);
 	assert_true(ret < 0);
 
 	/* account with create flags - already exists */
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
 			    | ELASTO_FOPEN_EXCL),
@@ -592,14 +557,14 @@ cm_file_dir_open(void **state)
 	assert_true(ret >= 0);
 	cm_us->ctnr_suffix++;
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh);
 	assert_true(ret < 0);
 
 	/* open non-existent ctnr with create flags */
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
 			    | ELASTO_FOPEN_EXCL),
@@ -608,13 +573,13 @@ cm_file_dir_open(void **state)
 	ret = elasto_fclose(fh);
 	assert_true(ret >= 0);
 
-	ret = elasto_frmdir(&auth,
+	ret = elasto_frmdir(&cm_us->az_auth,
 			    path);
 	assert_false(ret < 0);
 	free(path);
 
 	/* open root with invalid flags */
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   "/",
 			   ~ELASTO_FOPEN_FLAGS_MASK,
 			   NULL, &fh);
@@ -625,21 +590,18 @@ static void
 cm_file_dir_lease_basic(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh);
@@ -675,22 +637,19 @@ static void
 cm_file_dir_lease_multi(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh1;
 	struct elasto_fh *fh2;
 	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh1);
@@ -699,7 +658,7 @@ cm_file_dir_lease_multi(void **state)
 	ret = elasto_flease_acquire(fh1, -1);
 	assert_int_equal(ret, 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh2);
@@ -737,22 +696,19 @@ static void
 cm_file_dir_lease_break(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh1;
 	struct elasto_fh *fh2;
 	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh1);
@@ -761,7 +717,7 @@ cm_file_dir_lease_break(void **state)
 	ret = elasto_flease_acquire(fh1, -1);
 	assert_int_equal(ret, 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh2);
@@ -810,7 +766,6 @@ static void
 cm_file_dir_readdir(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *acc_path = NULL;
 	char *ctnr_name = NULL;
 	char *ctnr_path = NULL;
@@ -822,11 +777,9 @@ cm_file_dir_readdir(void **state)
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	struct elasto_dent finder_dent;
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   "/",
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh_root);
@@ -853,7 +806,7 @@ cm_file_dir_readdir(void **state)
 	ret = asprintf(&ctnr_path, "/%s/%s", cm_us->acc, ctnr_name);
 	assert_true(ret >= 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   ctnr_path,
 			   (ELASTO_FOPEN_DIRECTORY | ELASTO_FOPEN_CREATE
 			    | ELASTO_FOPEN_EXCL),
@@ -863,7 +816,7 @@ cm_file_dir_readdir(void **state)
 	/* open the account */
 	ret = asprintf(&acc_path, "/%s", cm_us->acc);
 	assert_true(ret >= 0);
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   acc_path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh_acc);
@@ -889,7 +842,7 @@ cm_file_dir_readdir(void **state)
 	ret = asprintf(&blob_path, "/%s/%s/readdir", cm_us->acc, ctnr_name);
 	assert_true(ret >= 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   blob_path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
 			   NULL, &fh_blob);
@@ -916,7 +869,7 @@ cm_file_dir_readdir(void **state)
 	ret = elasto_fclose(fh_ctnr);
 	assert_true(ret >= 0);
 
-	ret = elasto_frmdir(&auth,
+	ret = elasto_frmdir(&cm_us->az_auth,
 			    ctnr_path);
 	assert_false(ret < 0);
 	free(acc_path);
@@ -927,18 +880,15 @@ static void
 cm_file_dir_stat(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct elasto_fstat fstat;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_AZURE;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_APB;
 
 	/* stat root */
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   "/",
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh);
@@ -958,7 +908,7 @@ cm_file_dir_stat(void **state)
 	ret = asprintf(&path, "/%s", cm_us->acc);
 	assert_true(ret >= 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh);
@@ -978,7 +928,7 @@ cm_file_dir_stat(void **state)
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_true(ret >= 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh);
@@ -1004,22 +954,19 @@ static void
 cm_file_abb_io(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	uint8_t buf[1024];
 	uint64_t half;
 
-	auth.type = ELASTO_FILE_ABB;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_ABB;
 
 	ret = asprintf(&path, "/%s/%s%d/abb_io_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_CREATE,
 			   NULL, &fh);
@@ -1085,20 +1032,17 @@ static void
 cm_file_data_cb(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
-	auth.type = ELASTO_FILE_ABB;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_ABB;
 
 	ret = asprintf(&path, "/%s/%s%d/cb_io_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_CREATE,
 			   NULL, &fh);
@@ -1119,21 +1063,18 @@ static void
 cm_file_afs_io(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	uint8_t buf[1024];
 
-	auth.type = ELASTO_FILE_AFS;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_AFS;
 
 	ret = asprintf(&path, "/%s/%s%d/afs_io_test",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_CREATE,
 			   NULL, &fh);
@@ -1192,21 +1133,18 @@ static void
 cm_file_afs_path_encoding(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	int cb_called;
 
-	auth.type = ELASTO_FILE_AFS;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_AFS;
 
 	ret = asprintf(&path, "/%s/%s%d/afs encoding test",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_CREATE,
 			   NULL, &fh);
@@ -1220,7 +1158,7 @@ cm_file_afs_path_encoding(void **state)
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL
 			   | ELASTO_FOPEN_DIRECTORY,
@@ -1236,7 +1174,7 @@ cm_file_afs_path_encoding(void **state)
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL
 			   | ELASTO_FOPEN_DIRECTORY,
@@ -1251,7 +1189,7 @@ cm_file_afs_path_encoding(void **state)
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_DIRECTORY,
 			   NULL, &fh);
@@ -1286,22 +1224,19 @@ static void
 cm_file_afs_list_ranges(void **state)
 {
 	int ret;
-	struct elasto_fauth auth;
 	char *path = NULL;
 	struct elasto_fh *fh;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	uint8_t buf[1024];
 	int num_cbs = 0;
 
-	auth.type = ELASTO_FILE_AFS;
-	auth.az.ps_path = cm_us->ps_file;
-	auth.insecure_http = cm_us->insecure_http;
+	cm_us->az_auth.type = ELASTO_FILE_AFS;
 
 	ret = asprintf(&path, "/%s/%s%d/afs_io_test",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
 	assert_false(ret < 0);
 
-	ret = elasto_fopen(&auth,
+	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_CREATE,
 			   NULL, &fh);

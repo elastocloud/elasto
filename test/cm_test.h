@@ -21,6 +21,7 @@
  */
 struct cm_unity_state {
 	char *ps_file;
+	char *az_access_key;
 	char *s3_id;
 	char *s3_secret;
 	bool insecure_http;
