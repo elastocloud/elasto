@@ -29,6 +29,7 @@ struct cm_unity_state {
 	int ctnr_suffix;
 	char *share;
 	int share_suffix;
+	struct elasto_fauth az_auth;
 };
 
 struct cm_unity_state *

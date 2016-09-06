@@ -26,9 +26,9 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include "lib/file/file_api.h"
 #include "cm_test.h"
 #include "lib/util.h"
-#include "lib/file/file_api.h"
 
 static void
 cm_file_mkdir(void **state)

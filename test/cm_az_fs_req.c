@@ -26,6 +26,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include "lib/file/file_api.h"
 #include "cm_test.h"
 #include "ccan/list/list.h"
 #include "lib/exml.h"

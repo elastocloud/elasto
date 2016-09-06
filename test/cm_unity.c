@@ -26,6 +26,7 @@
 #include <cmocka.h>
 
 #include "ccan/list/list.h"
+#include "lib/file/file_api.h"
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/sign.h"
@@ -67,6 +68,15 @@ cm_unity_state_init(void)
 	cm_ustate->share_suffix = rand();
 
 	return 0;
+}
+
+static void
+cm_unity_auth_state_init(void)
+{
+	/* az_auth.type set by test suites */
+	assert(cm_ustate->ps_file != NULL);
+	cm_ustate->az_auth.az.ps_path = cm_ustate->ps_file;
+	cm_ustate->az_auth.insecure_http = cm_ustate->insecure_http;
 }
 
 static void
@@ -191,6 +201,7 @@ main(int argc,
 		printf("skipping Azure cloud IO tests, "
 		       "no publish settings file\n");
 	} else {
+		cm_unity_auth_state_init();
 		cm_file_run();
 		cm_az_fs_req_run();
 		cm_az_blob_req_run();
