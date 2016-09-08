@@ -17,7 +17,6 @@
  * under the License.
  */
 
-#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -37,6 +36,7 @@
 #include <errno.h>
 #include <scsi/scsi.h>
 #define _BITS_UIO_H
+#include <event2/event.h>
 #include <linux/target_core_user.h>
 #include <libtcmu.h>
 #include "scsi_defs.h"
@@ -62,13 +62,13 @@ void errp(const char *fmt, ...)
 	va_end(va);
 }
 
-struct tcmu_device *tcmu_dev_array[128];
-size_t dev_array_len = 0;
+struct event_base *ev_base;
 
 struct elasto_state {
 	char *path;
 	struct elasto_fauth *auth;
 	struct elasto_fh *efh;
+	struct event *ev;
 
 	int block_size;
 	long long num_lbas;
@@ -371,126 +371,6 @@ tcmu_elasto_cfg_check(const char *cfgstring,
 	return true;
 }
 
-static int tcmu_elasto_open(struct tcmu_device *dev)
-{
-	struct elasto_state *estate;
-	struct elasto_fh *efh;
-	int ret = 0;
-	int close_ret = 0;
-	char *config;
-	long long size;
-
-	estate = calloc(1, sizeof(*estate));
-	if (estate == NULL) {
-		return -ENOMEM;
-	}
-
-	tcmu_set_dev_private(dev, estate);
-
-	estate->block_size = tcmu_get_attribute(dev, "hw_block_size");
-	if (estate->block_size == -1) {
-		errp("Could not get device block size\n");
-		ret = -EIO;
-		goto err_estate_free;
-	}
-
-	size = tcmu_get_device_size(dev);
-	if (size == -1) {
-		errp("Could not get device size\n");
-		ret = -EIO;
-		goto err_estate_free;
-	}
-
-	estate->num_lbas = size / estate->block_size;
-
-	config = tcmu_get_dev_cfgstring(dev);
-	if (config == NULL) {
-		errp("no configuration found in cfgstring\n");
-		ret = -EINVAL;
-		goto err_estate_free;
-	}
-
-	errp("parsing tcmu config: %s\n", config);
-
-	ret = tcmu_elasto_cfg_parse(config, &estate->auth, &estate->path);
-	if (ret < 0) {
-		ret = -EINVAL;
-		goto err_estate_free;
-	}
-
-	ret = elasto_fopen(estate->auth, estate->path, ELASTO_FOPEN_CREATE,
-			   NULL, &efh);
-	if (ret < 0) {
-		errp("failed to open elasto path: %s\n", estate->path);
-		goto err_auth_free;
-	}
-
-	if (ret == ELASTO_FOPEN_RET_CREATED) {
-		/* new file, truncate to size */
-		ret = elasto_ftruncate(efh, size);
-		if (ret < 0) {
-			errp("failed to open elasto path: %s\n", estate->path);
-			goto err_efh_close;
-		}
-	} else {
-		struct elasto_fstat est;
-		assert(ret == ELASTO_FOPEN_RET_EXISTED);
-
-		ret = elasto_fstat(efh, &est);
-		if (ret < 0) {
-			errp("failed to stat elasto path: %s\n", estate->path);
-			goto err_efh_close;
-		}
-
-		if (est.size != size) {
-			ret = -EINVAL;
-			errp("elasto file size %llu doesn't match tcmu device "
-			     "size %llu\n", est.size, size);
-			goto err_efh_close;
-		}
-
-		if (est.blksize != estate->block_size) {
-			ret = -EINVAL;
-			errp("elasto block size %llu doesn't match tcmu device "
-			     "size %llu\n", est.blksize, estate->block_size);
-			goto err_efh_close;
-		}
-	}
-	estate->efh = efh;
-
-	/* Add new device to our horrible fixed-length array */
-	tcmu_dev_array[dev_array_len] = dev;
-	dev_array_len++;
-
-	return 0;
-
-err_efh_close:
-	close_ret = elasto_fclose(efh);
-	if (close_ret < 0) {
-		errp("failed to close elasto path");
-	}
-err_auth_free:
-	tcmu_elasto_auth_free(estate->auth);
-	free(estate->path);
-err_estate_free:
-	free(estate);
-	return ret;
-}
-
-static void tcmu_elasto_close(struct tcmu_device *dev)
-{
-	int ret;
-	struct elasto_state *estate = tcmu_get_dev_private(dev);
-
-	ret = elasto_fclose(estate->efh);
-	if (ret < 0) {
-		errp("failed to close elasto path");
-	}
-	tcmu_elasto_auth_free(estate->auth);
-	free(estate->path);
-	free(estate);
-}
-
 static int set_medium_error(uint8_t *sense)
 {
 	return tcmu_set_sense_data(sense, MEDIUM_ERROR, ASC_READ_ERROR, NULL);
@@ -689,6 +569,176 @@ write:
 	return result;
 }
 
+static void
+tcmu_elasto_dev_cb(evutil_socket_t fd,
+		   short event,
+		   void *arg)
+{
+		struct tcmulib_cmd *cmd;
+		struct tcmu_device *dev = arg;
+
+		tcmulib_processing_start(dev);
+
+		while ((cmd = tcmulib_get_next_command(dev)) != NULL) {
+			int ret;
+			ret = tcmu_elasto_cmd_handle(dev,
+					     cmd->cdb,
+					     cmd->iovec,
+					     cmd->iov_cnt,
+					     cmd->sense_buf);
+			tcmulib_command_complete(dev, cmd, ret);
+		}
+
+		tcmulib_processing_complete(dev);
+}
+
+static int tcmu_elasto_open(struct tcmu_device *dev)
+{
+	struct elasto_state *estate;
+	struct elasto_fh *efh;
+	int fd;
+	int ret = 0;
+	int close_ret = 0;
+	char *config;
+	long long size;
+
+	estate = calloc(1, sizeof(*estate));
+	if (estate == NULL) {
+		return -ENOMEM;
+	}
+
+	estate->block_size = tcmu_get_attribute(dev, "hw_block_size");
+	if (estate->block_size == -1) {
+		errp("Could not get device block size\n");
+		ret = -EIO;
+		goto err_estate_free;
+	}
+
+	size = tcmu_get_device_size(dev);
+	if (size == -1) {
+		errp("Could not get device size\n");
+		ret = -EIO;
+		goto err_estate_free;
+	}
+
+	estate->num_lbas = size / estate->block_size;
+
+	config = tcmu_get_dev_cfgstring(dev);
+	if (config == NULL) {
+		errp("no configuration found in cfgstring\n");
+		ret = -EINVAL;
+		goto err_estate_free;
+	}
+
+	errp("parsing tcmu config: %s\n", config);
+
+	ret = tcmu_elasto_cfg_parse(config, &estate->auth, &estate->path);
+	if (ret < 0) {
+		ret = -EINVAL;
+		goto err_estate_free;
+	}
+
+	ret = elasto_fopen(estate->auth, estate->path, ELASTO_FOPEN_CREATE,
+			   NULL, &efh);
+	if (ret < 0) {
+		errp("failed to open elasto path: %s\n", estate->path);
+		goto err_auth_free;
+	}
+
+	if (ret == ELASTO_FOPEN_RET_CREATED) {
+		/* new file, truncate to size */
+		ret = elasto_ftruncate(efh, size);
+		if (ret < 0) {
+			errp("failed to open elasto path: %s\n", estate->path);
+			goto err_efh_close;
+		}
+	} else {
+		struct elasto_fstat est;
+		assert(ret == ELASTO_FOPEN_RET_EXISTED);
+
+		ret = elasto_fstat(efh, &est);
+		if (ret < 0) {
+			errp("failed to stat elasto path: %s\n", estate->path);
+			goto err_efh_close;
+		}
+
+		if (est.size != size) {
+			ret = -EINVAL;
+			errp("elasto file size %llu doesn't match tcmu device "
+			     "size %llu\n", est.size, size);
+			goto err_efh_close;
+		}
+
+		if (est.blksize != estate->block_size) {
+			ret = -EINVAL;
+			errp("elasto block size %llu doesn't match tcmu device "
+			     "size %llu\n", est.blksize, estate->block_size);
+			goto err_efh_close;
+		}
+	}
+	estate->efh = efh;
+
+	fd = tcmu_get_dev_fd(dev);
+	if (fd < 0) {
+		errp("failed to get dev_fd\n");
+		ret = -EIO;
+		goto err_efh_close;
+	}
+
+	estate->ev = event_new(ev_base, fd, (EV_READ | EV_PERSIST),
+				   tcmu_elasto_dev_cb, dev);
+	if (estate->ev == NULL) {
+		ret = -ENOMEM;
+		errp("failed to allocate master event\n");
+		goto err_efh_close;
+	}
+
+	ret = event_add(estate->ev, NULL);
+	if (ret < 0) {
+		ret = -ENOMEM;
+		goto err_ev_free;
+	}
+
+	tcmu_set_dev_private(dev, estate);
+
+	return 0;
+
+err_ev_free:
+	event_free(estate->ev);
+err_efh_close:
+	close_ret = elasto_fclose(efh);
+	if (close_ret < 0) {
+		errp("failed to close elasto path");
+	}
+err_auth_free:
+	tcmu_elasto_auth_free(estate->auth);
+	free(estate->path);
+err_estate_free:
+	free(estate);
+	return ret;
+}
+
+static void tcmu_elasto_close(struct tcmu_device *dev)
+{
+	int ret;
+	struct elasto_state *estate = tcmu_get_dev_private(dev);
+
+	ret = event_del(estate->ev);
+	if (ret < 0) {
+		errp("failed to delete event");
+	}
+
+	event_free(estate->ev);
+
+	ret = elasto_fclose(estate->efh);
+	if (ret < 0) {
+		errp("failed to close elasto path");
+	}
+	tcmu_elasto_auth_free(estate->auth);
+	free(estate->path);
+	free(estate);
+}
+
 static const char tcmu_elasto_cfg_desc[] =
 	"Elasto config string is of the form:\n"
 	"\"apb://<account>/<container>/<blob> <access key>\"\n"
@@ -710,73 +760,74 @@ struct tcmulib_handler elasto_handler = {
 	.removed = tcmu_elasto_close,
 };
 
-int main(int argc, char **argv)
+static void
+tcmu_master_cb(evutil_socket_t fd,
+	       short event,
+	       void *arg)
+{
+	struct tcmulib_context *tcmulib_ctx = arg;
+	/*
+	 * If any tcmu devices have been added or removed, the
+	 * added() and removed() handler callbacks will be called
+	 * from within this.
+	 */
+	tcmulib_master_fd_ready(tcmulib_ctx);
+}
+
+int main(int argc,
+	 char **argv)
 {
 	struct tcmulib_context *tcmulib_ctx;
-	struct pollfd pollfds[16];
-	int i;
+	struct event *ev_master;
 	int ret;
 
 	elasto_fdebug(1);
 
-	/* If any TCMU devices that exist that match subtype,
-	   handler->added() will now be called from within
-	   tcmulib_initialize(). */
+	ev_base = event_base_new();
+	if (ev_base == NULL) {
+		errp("event_base_new failed\n");
+		goto err_out;
+	}
+
+	/*
+	 * If any TCMU devices that exist that match subtype,
+	 * handler->added() will now be called from within
+	 * tcmulib_initialize().
+	 */
 	tcmulib_ctx = tcmulib_initialize(&elasto_handler, 1, errp);
 	if (tcmulib_ctx <= 0) {
 		errp("tcmulib_initialize failed with %p\n", tcmulib_ctx);
-		exit(1);
+		goto err_ev_base_free;
+	}
+
+	ev_master = event_new(ev_base, tcmulib_get_master_fd(tcmulib_ctx),
+			      (EV_READ | EV_PERSIST), tcmu_master_cb,
+			      tcmulib_ctx);
+	if (ev_master == NULL) {
+		errp("failed to allocate master event\n");
+		goto err_tcmu_ctx_close;
+	}
+
+	ret = event_add(ev_master, NULL);
+	if (ret < 0) {
+		goto err_ev_master_free;
 	}
 
 	while (1) {
-		pollfds[0].fd = tcmulib_get_master_fd(tcmulib_ctx);
-		pollfds[0].events = POLLIN;
-		pollfds[0].revents = 0;
-
-		for (i = 0; i < dev_array_len; i++) {
-			pollfds[i+1].fd = tcmu_get_dev_fd(tcmu_dev_array[i]);
-			pollfds[i+1].events = POLLIN;
-			pollfds[i+1].revents = 0;
-		}
-
-		ret = poll(pollfds, dev_array_len+1, -1);
-
-		if (ret <= 0) {
-			errp("poll() returned %d, exiting\n", ret);
-			exit(1);
-		}
-
-		if (pollfds[0].revents) {
-			/* If any tcmu devices have been added or removed, the
-			   added() and removed() handler callbacks will be called
-			   from within this. */
-			tcmulib_master_fd_ready(tcmulib_ctx);
-
-			/* Since devices (may) have changed, re-poll() instead of
-			   processing per-device fds. */
-			continue;
-		}
-
-		for (i = 0; i < dev_array_len; i++) {
-			if (pollfds[i+1].revents) {
-				struct tcmulib_cmd *cmd;
-				struct tcmu_device *dev = tcmu_dev_array[i];
-
-				tcmulib_processing_start(dev);
-
-				while ((cmd = tcmulib_get_next_command(dev)) != NULL) {
-					ret = tcmu_elasto_cmd_handle(dev,
-							     cmd->cdb,
-							     cmd->iovec,
-							     cmd->iov_cnt,
-							     cmd->sense_buf);
-					tcmulib_command_complete(dev, cmd, ret);
-				}
-
-				tcmulib_processing_complete(dev);
-			}
+		ret = event_base_dispatch(ev_base);
+		if (ret < 0) {
+			errp("event dispatch loop failed\n");
+			break;
 		}
 	}
 
-	return 0;
+	event_del(ev_master);
+err_ev_master_free:
+	event_free(ev_master);
+err_tcmu_ctx_close:
+	tcmulib_close(tcmulib_ctx);
+err_ev_base_free:
+	event_base_free(ev_base);
+err_out:
+	return 1;
 }
