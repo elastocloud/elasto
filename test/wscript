@@ -13,7 +13,7 @@ def build(bld):
 		print("Skipping test: Cmocka and uuid libraries required")
 		return
 	bld.program(source='''cm_unity.c cm_data.c  cm_sign_azure.c cm_sign_s3.c
-			      cm_file.c cm_xml.c cm_az_fs_req.c
+			      cm_file.c cm_file_local.c cm_xml.c cm_az_fs_req.c
 			      cm_az_blob_req.c cm_az_blob_path.c
 			      cm_az_fs_path.c cm_s3_path.c cm_cli_path.c''',
 		    target='cm_unity',

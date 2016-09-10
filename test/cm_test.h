@@ -31,6 +31,9 @@ struct cm_unity_state {
 	char *share;
 	int share_suffix;
 	struct elasto_fauth az_auth;
+
+	char *local_tmpdir;
+	struct elasto_fauth local_auth;
 };
 
 struct cm_unity_state *
@@ -62,6 +65,9 @@ cm_cli_path_run(void);
 
 int
 cm_file_run(void);
+
+int
+cm_file_local_run(void);
 
 void
 cm_file_buf_fill(uint8_t *buf,

@@ -53,6 +53,8 @@ cm_unity_state_get(void)
 static int
 cm_unity_state_init(void)
 {
+	char tmpdir[] = "/tmp/elasto-test-XXXXXX";
+	char *tmpd;
 	unsigned int seedy = time(NULL);
 
 	cm_ustate = malloc(sizeof(*cm_ustate));
@@ -66,6 +68,12 @@ cm_unity_state_init(void)
 	cm_ustate->share = strdup("testshare");
 	assert(cm_ustate->share != NULL);
 	cm_ustate->share_suffix = rand();
+
+	tmpd = mkdtemp(tmpdir);
+	assert(tmpd != NULL);
+	cm_ustate->local_tmpdir = strdup(tmpd);
+	assert(cm_ustate->local_tmpdir != NULL);
+	cm_ustate->local_auth.type = ELASTO_FILE_LOCAL;
 
 	return 0;
 }
@@ -87,6 +95,16 @@ cm_unity_auth_state_init(void)
 static void
 cm_unity_state_free(void)
 {
+	int ret;
+
+	ret = rmdir(cm_ustate->local_tmpdir);
+	if (ret < 0) {
+		ret = -errno;
+		printf("failed to cleanup %s: %s\n",
+		       cm_ustate->local_tmpdir, strerror(-ret));
+	}
+	free(cm_ustate->local_tmpdir);
+
 	free(cm_ustate->acc);
 	free(cm_ustate->ctnr);
 	free(cm_ustate->share);
@@ -212,6 +230,7 @@ main(int argc,
 	cm_az_fs_path_run();
 	cm_s3_path_run();
 	cm_cli_path_run();
+	cm_file_local_run();
 	if ((cm_ustate->ps_file == NULL)
 					&& (cm_ustate->az_access_key == NULL)) {
 		printf("skipping Azure cloud IO tests, no credentials "
