@@ -1,0 +1,6 @@
+The libelasto_file local back-end
+---------------------------------
+
+The libelasto_file "local" back-end is intended for API testing. Instead
+of mapping API calls to cloud I/O requests, the local back-end uses
+regular POSIX syscalls to read and write to the local filesystem.

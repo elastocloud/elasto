@@ -26,6 +26,7 @@ enum elasto_ftype {
 	ELASTO_FILE_S3,		/* S3 object store */
 	ELASTO_FILE_ABB,	/* Azure block blob store */
 	ELASTO_FILE_AFS,	/* Azure file service */
+	ELASTO_FILE_LOCAL,	/* test back-end: local FS I/O */
 };
 
 struct elasto_fauth {

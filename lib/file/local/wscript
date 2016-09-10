@@ -1,0 +1,19 @@
+def options(opt):
+	opt.load('compiler_c')
+
+def configure(conf):
+	conf.load('compiler_c')
+
+def call_ldconfig(bld):
+	bld.exec_command('/sbin/ldconfig')
+
+def build(bld):
+	bld.shlib(source='''local_dir.c local_handle.c local_io.c local_open.c
+			 local_stat.c local_unlink.c local_path.c''',
+		  target='elasto_file_mod_local',
+		  vnum=bld.env.LIBELASTO_API_VERS,
+		  lib=['crypto', 'expat', 'ssl',
+		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  use=['elasto_file'],
+		  includes = '. .. ../../ ../../../',
+		  install_path = None)	# test backend - don't ship

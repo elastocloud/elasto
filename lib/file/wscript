@@ -1,4 +1,4 @@
-recurse_subdirs = 'azure amazon'
+recurse_subdirs = 'azure amazon local'
 
 def options(opt):
 	opt.load('compiler_c')
