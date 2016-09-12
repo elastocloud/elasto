@@ -52,9 +52,16 @@ modprobe target_core_user tcm_loop || _fatal "failed to load LIO kernel modules"
 	|| _fatal "$LIO_CFGFS not present - LIO kernel modules not loaded?"
 mkdir -p ${LIO_CFGFS}/core/user_0/${lu_name} \
 	||  _fatal "failed to create tcmu backstore"
-echo "dev_config=elasto/${elasto_path} ${azure_acc_key}" \
-			> ${LIO_CFGFS}/core/user_0/${lu_name}/control \
-			|| _fatal "LIO control file I/O failed"
+if [ -z "${azure_acc_key}" ]; then
+	# could be a local FS (test back-end) URI (no access key needed)
+	echo "dev_config=elasto/${elasto_path}" \
+				> ${LIO_CFGFS}/core/user_0/${lu_name}/control \
+				|| _fatal "LIO control file I/O failed"
+else
+	echo "dev_config=elasto/${elasto_path} ${azure_acc_key}" \
+				> ${LIO_CFGFS}/core/user_0/${lu_name}/control \
+				|| _fatal "LIO control file I/O failed"
+fi
 echo "dev_size=${lu_size}" \
 			> ${LIO_CFGFS}/core/user_0/${lu_name}/control \
 			|| _fatal "LIO control file I/O failed"

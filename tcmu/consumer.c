@@ -250,6 +250,90 @@ tcmu_elasto_freadv(struct elasto_state *estate,
 	return 0;
 }
 
+#define TCMU_ELASTO_URI_APB "apb://"
+#define TCMU_ELASTO_URI_LOCAL "local://"
+
+static int
+tcmu_elasto_apb_cfg_parse(const char *uri_cfg,
+			  char **_path,
+			  char **_access_key)
+{
+	int ret;
+	int len;
+	const char *path_cfg;
+	char *path;
+	char *access_key;
+
+	/* path immediately follows URI. -2 to keep one '/' as root prefix */
+	path_cfg = uri_cfg + sizeof(TCMU_ELASTO_URI_APB) - 2;
+
+	/* space separator between path and access key */
+	access_key = strchr(path_cfg, ' ');
+	if (access_key == NULL) {
+		errp("No access key\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (access_key <= path_cfg)  {
+		errp("Bad config");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	len = access_key - path_cfg;
+	path = strndup(path_cfg, len);
+	if (path == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	while (*access_key == ' ') {
+		access_key++;
+	}
+
+	if (strlen(access_key) > 256)  {
+		errp("access key too long");
+		ret = -EINVAL;
+		goto err_path_free;
+	}
+
+	*_access_key = strdup(access_key);
+	if (*_access_key == NULL) {
+		ret = -ENOMEM;
+		goto err_path_free;
+	}
+
+	*_path = path;
+
+	return 0;
+
+err_path_free:
+	free(path);
+err_out:
+	return ret;
+}
+
+static int
+tcmu_elasto_local_cfg_parse(const char *uri_cfg,
+			    char **_path)
+{
+	char *path;
+
+	/* path immediately follows URI. -2 to keep one '/' as root prefix */
+	uri_cfg += sizeof(TCMU_ELASTO_URI_LOCAL) - 2;
+
+	/* nothing aside from the path to process */
+	path = strdup(uri_cfg);
+	if (path == NULL) {
+		return -ENOMEM;
+	}
+
+	*_path = path;
+
+	return 0;
+}
+
 #define TCMU_ELASTO_HND "elasto/"
 static int
 tcmu_elasto_cfg_parse(const char *cfgstring,
@@ -259,10 +343,7 @@ tcmu_elasto_cfg_parse(const char *cfgstring,
 	int ret;
 	struct elasto_fauth *auth;
 	const char *uri;
-	const char *path_cfg;
 	char *path;
-	char *access_key;
-	size_t len;
 
 	auth = malloc(sizeof(*auth));
 	if (auth == NULL) {
@@ -278,63 +359,37 @@ tcmu_elasto_cfg_parse(const char *cfgstring,
 		goto err_auth_free;
 	}
 
-	/* next is the Azure Page Blob URI */
+	/* next the Elasto URI: Azure Page Blob or local FS (test back-end) */
 	uri = cfgstring + sizeof(TCMU_ELASTO_HND) - 1;
-	if (strncmp(uri, "apb://", sizeof("apb://") - 1)) {
-		errp("Bad REST protocol URI: %s\n", cfgstring);
+
+	if (!strncmp(uri, TCMU_ELASTO_URI_APB,
+					sizeof(TCMU_ELASTO_URI_APB) - 1)) {
+		auth->type = ELASTO_FILE_APB;
+		/* insecure_http cfg param not yet supported */
+		ret = tcmu_elasto_apb_cfg_parse(uri, &path, &auth->az.access_key);
+		if (ret < 0) {
+			errp("failed to parse apb cfg: %s\n", uri);
+			goto err_auth_free;
+		}
+	} else if (!strncmp(uri, TCMU_ELASTO_URI_LOCAL,
+					sizeof(TCMU_ELASTO_URI_LOCAL) - 1)) {
+		auth->type = ELASTO_FILE_LOCAL;
+
+		ret = tcmu_elasto_local_cfg_parse(uri, &path);
+		if (ret < 0) {
+			errp("failed to parse local cfg: %s\n", uri);
+			goto err_auth_free;
+		}
+	} else {
+		errp("Bad Elasto URI: %s\n", uri);
 		ret = -EINVAL;
 		goto err_auth_free;
 	}
-	auth->type = ELASTO_FILE_APB;
-
-	/* path immediately follows URI, but keep one '/' as root prefix */
-	path_cfg = uri + sizeof("apb:/") - 1;
-
-	/* space separator between path and access key */
-	access_key = strchr(path_cfg, ' ');
-	if (access_key == NULL) {
-		errp("No access key\n");
-		ret = -EINVAL;
-		goto err_auth_free;
-	}
-
-	if (access_key <= path_cfg)  {
-		errp("Bad config");
-		ret = -EINVAL;
-		goto err_auth_free;
-	}
-
-	len = access_key - path_cfg;
-	path = strndup(path_cfg, len);
-	if (path == NULL) {
-		ret = -ENOMEM;
-		goto err_auth_free;
-	}
-
-	while (*access_key == ' ') {
-		access_key++;
-	}
-
-	if (strlen(access_key) > 256)  {
-		errp("access key too long");
-		ret = -EINVAL;
-		goto err_path_free;
-	}
-
-	auth->az.access_key = strdup(access_key);
-	if (auth->az.access_key == NULL) {
-		ret = -ENOMEM;
-		goto err_path_free;
-	}
-
-	/* insecure_http is disabled */
 
 	*_auth = auth;
 	*_path = path;
 	return 0;
 
-err_path_free:
-	free(path);
 err_auth_free:
 	free(auth);
 err_out:
