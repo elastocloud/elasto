@@ -250,66 +250,118 @@ tcmu_elasto_freadv(struct elasto_state *estate,
 	return 0;
 }
 
+#define TCMU_ELASTO_APB_CFG_FLAG_INSECURE_HTTP "insecure-http"
+static int
+tcmu_elasto_apb_flags_parse(const char *flags,
+			    bool *_insecure_http)
+{
+	bool insecure_http = false;
+
+	/* currently only a single flag is supported, so don't tokenise */
+	if (!strcmp(flags, TCMU_ELASTO_APB_CFG_FLAG_INSECURE_HTTP)) {
+		insecure_http = true;
+	} else {
+		errp("invalid elasto APB flags: %s\n", flags);
+		return -EINVAL;
+	}
+
+	*_insecure_http = insecure_http;
+	return 0;
+}
+
+enum {
+	TCMU_ELASTO_APB_CFG_OFF_PATH = 0,
+	TCMU_ELASTO_APB_CFG_OFF_KEY = 1,
+	TCMU_ELASTO_APB_CFG_OFF_FLAGS = 2,
+};
+
 #define TCMU_ELASTO_URI_APB "apb://"
 #define TCMU_ELASTO_URI_LOCAL "local://"
 
 static int
 tcmu_elasto_apb_cfg_parse(const char *uri_cfg,
 			  char **_path,
-			  char **_access_key)
+			  char **_access_key,
+			  bool *_insecure_http)
 {
 	int ret;
-	int len;
-	const char *path_cfg;
-	char *path;
-	char *access_key;
+	int i;
+	char *path_cfg = NULL;
+	char *path = NULL;
+	char *key = NULL;
+	bool insecure_http = false;
 
 	/* path immediately follows URI. -2 to keep one '/' as root prefix */
-	path_cfg = uri_cfg + sizeof(TCMU_ELASTO_URI_APB) - 2;
-
-	/* space separator between path and access key */
-	access_key = strchr(path_cfg, ' ');
-	if (access_key == NULL) {
-		errp("No access key\n");
-		ret = -EINVAL;
+	path_cfg = strdup(uri_cfg + sizeof(TCMU_ELASTO_URI_APB) - 2);
+	if (path_cfg == NULL) {
+		ret = -ENOMEM;
 		goto err_out;
 	}
 
-	if (access_key <= path_cfg)  {
-		errp("Bad config");
-		ret = -EINVAL;
-		goto err_out;
+	for (i = 0; i <= TCMU_ELASTO_APB_CFG_OFF_FLAGS; i++) {
+		char *token;
+		char *saveptr;
+
+		token = strtok_r((i == 0 ? path_cfg : NULL), " ", &saveptr);
+		if (token == NULL) {
+			break;
+		}
+
+		switch (i) {
+			case TCMU_ELASTO_APB_CFG_OFF_PATH:
+				path = strdup(token);
+				if (path == NULL) {
+					ret = -ENOMEM;
+					goto err_cfg_free;
+				}
+				break;
+			case TCMU_ELASTO_APB_CFG_OFF_KEY:
+				key = strdup(token);
+				if (key == NULL) {
+					ret = -ENOMEM;
+					goto err_cfg_free;
+				}
+				break;
+			case TCMU_ELASTO_APB_CFG_OFF_FLAGS:
+				ret = tcmu_elasto_apb_flags_parse(token, &insecure_http);
+				if (ret < 0) {
+					goto err_cfg_free;
+				}
+				break;
+			default:
+				errp("invalid apb config: %s", uri_cfg);
+				ret = -EINVAL;
+				goto err_cfg_free;
+				break;
+		}
 	}
 
-	len = access_key - path_cfg;
-	path = strndup(path_cfg, len);
 	if (path == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	while (*access_key == ' ') {
-		access_key++;
-	}
-
-	if (strlen(access_key) > 256)  {
-		errp("access key too long");
 		ret = -EINVAL;
-		goto err_path_free;
+		goto err_cfg_free;
 	}
 
-	*_access_key = strdup(access_key);
-	if (*_access_key == NULL) {
-		ret = -ENOMEM;
-		goto err_path_free;
+	if ((key == NULL) || (strlen(key) > 256)) {
+		errp("invalid access key");
+		ret = -EINVAL;
+		goto err_cfg_free;
 	}
 
+	if (insecure_http) {
+		dbgp("warning: insecure HTTP requested\n");
+	}
+
+	free(path_cfg);
 	*_path = path;
+	*_access_key = key;
+	*_insecure_http = insecure_http;
 
 	return 0;
 
-err_path_free:
+err_cfg_free:
 	free(path);
+	free(key);
+	free(path_cfg);
 err_out:
 	return ret;
 }
@@ -365,8 +417,8 @@ tcmu_elasto_cfg_parse(const char *cfgstring,
 	if (!strncmp(uri, TCMU_ELASTO_URI_APB,
 					sizeof(TCMU_ELASTO_URI_APB) - 1)) {
 		auth->type = ELASTO_FILE_APB;
-		/* insecure_http cfg param not yet supported */
-		ret = tcmu_elasto_apb_cfg_parse(uri, &path, &auth->az.access_key);
+		ret = tcmu_elasto_apb_cfg_parse(uri, &path,
+				&auth->az.access_key, &auth->insecure_http);
 		if (ret < 0) {
 			errp("failed to parse apb cfg: %s\n", uri);
 			goto err_auth_free;
@@ -791,13 +843,14 @@ static void tcmu_elasto_close(struct tcmu_device *dev)
 
 static const char tcmu_elasto_cfg_desc[] =
 	"Elasto config string is of the form:\n"
-	"\"apb://<account>/<container>/<blob> <access key>\"\n"
+	"\"apb://<account>/<container>/<blob> <access key> [insecure-http]\"\n"
 	"where:\n"
-	"  apb://      REST protocol URI (Azure Page Blob)\n"
-	"  account     Microsoft Azure account name\n"
-	"  container   Container within the Azure account\n"
-	"  blob        Page blob name\n"
-	"  access key  Azure account access key";
+	"  apb://        REST protocol URI (Azure Page Blob)\n"
+	"  account       Microsoft Azure account name\n"
+	"  container     Container within the Azure account\n"
+	"  blob          Page blob name\n"
+	"  access key    Azure account access key\n"
+	"  insecure-http Instead of HTTPS, use HTTP where possible (insecure!)";
 
 struct tcmulib_handler elasto_handler = {
 	.name = "Elasto handler",
