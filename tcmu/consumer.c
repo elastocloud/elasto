@@ -411,9 +411,6 @@ tcmu_elasto_cfg_check(const char *cfgstring,
 	struct elasto_fauth *auth;
 	char *path;
 
-	printf("faking good config\n");
-	return true;
-
 	ret = tcmu_elasto_cfg_parse(cfgstring, &auth, &path);
 	if (ret < 0) {
 		*reason = strdup(strerror(-ret));
