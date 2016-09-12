@@ -725,10 +725,8 @@ static int tcmu_elasto_open(struct tcmu_device *dev)
 		}
 
 		if (est.blksize != estate->block_size) {
-			ret = -EINVAL;
-			errp("elasto block size %llu doesn't match tcmu device "
+			dbgp("elasto block size %llu doesn't match tcmu device "
 			     "size %llu\n", est.blksize, estate->block_size);
-			goto err_efh_close;
 		}
 	}
 	estate->efh = efh;
