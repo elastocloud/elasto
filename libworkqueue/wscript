@@ -5,6 +5,4 @@ def configure(conf):
 	conf.load('compiler_c')
 
 def build(bld):
-	bld.shlib(source='workqueue.c',
-		  target='elasto_wq',
-		  includes = '. ..')
+	bld.stlib(source='workqueue.c', target='elasto_wq')
