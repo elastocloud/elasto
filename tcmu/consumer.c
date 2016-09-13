@@ -35,12 +35,14 @@
 #include <assert.h>
 #include <errno.h>
 #include <scsi/scsi.h>
+#include <pthread.h>
 #define _BITS_UIO_H
 #include <event2/event.h>
 #include <linux/target_core_user.h>
 #include <libtcmu.h>
 #include "scsi_defs.h"
 #include "lib/file/file_api.h"
+#include "libworkqueue/workqueue.h"
 
 struct tcmu_elasto_args {
 	int debug_level;
@@ -84,11 +86,19 @@ struct elasto_state {
 	int block_size;
 	long long num_lbas;
 
+	pthread_key_t worker_state_key;
+	struct workqueue_ctx *wq;
+
 	/*
 	 * Current tcmu helper API reports WCE=1, but doesn't
 	 * implement inquiry VPD 0xb2, so clients will not know UNMAP
 	 * or WRITE_SAME are supported. TODO: fix this
 	 */
+};
+
+struct elasto_worker_state {
+	struct elasto_state *estate;
+	struct elasto_fh *efh;
 };
 
 #define min(a,b) ({ \
@@ -707,7 +717,82 @@ tcmu_elasto_dev_cb(evutil_socket_t fd,
 		tcmulib_processing_complete(dev);
 }
 
-static int tcmu_elasto_open(struct tcmu_device *dev)
+static void
+tcmu_elasto_worker_init(void *data)
+{
+	struct elasto_state *estate = data;
+	struct elasto_worker_state *worker_state;
+	int ret;
+	int close_ret;
+
+	dbgp("starting worker\n");
+
+	worker_state = malloc(sizeof(*worker_state));
+	if (worker_state == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	worker_state->estate = estate;
+
+	/*
+	 * If needed, the create always happens in the master thread.
+	 * TODO: dup estate->efh instead of reopening, to save stat I/O.
+	 */
+	ret = elasto_fopen(estate->auth, estate->path, 0, NULL,
+			   &worker_state->efh);
+	if (ret < 0) {
+		errp("worker failed to open path %s\n", estate->path);
+		goto err_worker_state_free;
+	}
+
+	/* open a per-thread handler */
+	ret = pthread_setspecific(estate->worker_state_key, worker_state);
+	if (ret != 0) {
+		errp("failed to set worker state\n");
+		ret = -ret;
+		goto err_efh_close;
+	}
+
+	return;
+
+err_efh_close:
+	close_ret = elasto_fclose(worker_state->efh);
+	if (close_ret < 0) {
+		errp("failed to close elasto path");
+	}
+err_worker_state_free:
+	free(worker_state);
+err_out:
+	/* TODO signal to master thread */
+	return;
+}
+
+static void
+tcmu_elasto_worker_destroy(void *data)
+{
+	struct elasto_state *estate = data;
+	struct elasto_worker_state *worker_state;
+	int ret;
+
+	worker_state = pthread_getspecific(estate->worker_state_key);
+	if (worker_state == NULL) {
+		errp("failed to get worker state\n");
+		return;
+	}
+
+	ret = elasto_fclose(worker_state->efh);
+	if (ret < 0) {
+		errp("failed to close elasto path");
+	}
+
+	free(worker_state);
+
+	dbgp("destroyed worker\n");
+}
+
+static int
+tcmu_elasto_open(struct tcmu_device *dev)
 {
 	struct elasto_state *estate;
 	struct elasto_fh *efh;
@@ -716,6 +801,9 @@ static int tcmu_elasto_open(struct tcmu_device *dev)
 	int close_ret = 0;
 	char *config;
 	long long size;
+	int wq_depth;
+	int wq_workers;
+	struct worker_thread_ops wq_ops;
 
 	estate = calloc(1, sizeof(*estate));
 	if (estate == NULL) {
@@ -791,11 +879,34 @@ static int tcmu_elasto_open(struct tcmu_device *dev)
 	}
 	estate->efh = efh;
 
+	/* key to track per-worker thread state */
+	ret = pthread_key_create(&estate->worker_state_key, NULL);
+	if (ret != 0) {
+		ret = -ret;
+		errp("failed to create worker state key\n");
+		goto err_efh_close;
+	}
+
+	/* TODO derive queue depth from LIO attribute - tcmu_get_attribute() */
+	wq_depth = 128;
+	wq_workers = 16;
+
+	wq_ops.worker_constructor = tcmu_elasto_worker_init;
+	wq_ops.worker_destructor = tcmu_elasto_worker_destroy;
+	wq_ops.data = estate;
+
+	estate->wq = workqueue_init(wq_depth, wq_workers, &wq_ops);
+	if (estate->wq == NULL) {
+		errp("workqueue_init() failed\n");
+		ret = -EIO;
+		goto err_wskey_del;
+	}
+
 	fd = tcmu_get_dev_fd(dev);
 	if (fd < 0) {
 		errp("failed to get dev_fd\n");
 		ret = -EIO;
-		goto err_efh_close;
+		goto err_wq_destroy;
 	}
 
 	estate->ev = event_new(ev_base, fd, (EV_READ | EV_PERSIST),
@@ -803,7 +914,7 @@ static int tcmu_elasto_open(struct tcmu_device *dev)
 	if (estate->ev == NULL) {
 		ret = -ENOMEM;
 		errp("failed to allocate master event\n");
-		goto err_efh_close;
+		goto err_wq_destroy;
 	}
 
 	ret = event_add(estate->ev, NULL);
@@ -818,6 +929,10 @@ static int tcmu_elasto_open(struct tcmu_device *dev)
 
 err_ev_free:
 	event_free(estate->ev);
+err_wq_destroy:
+	workqueue_destroy(estate->wq);
+err_wskey_del:
+	pthread_key_delete(estate->worker_state_key);
 err_efh_close:
 	close_ret = elasto_fclose(efh);
 	if (close_ret < 0) {
@@ -842,6 +957,10 @@ static void tcmu_elasto_close(struct tcmu_device *dev)
 	}
 
 	event_free(estate->ev);
+
+	/* trigger and wait for worker thread destructors */
+	workqueue_destroy(estate->wq);
+	pthread_key_delete(estate->worker_state_key);
 
 	ret = elasto_fclose(estate->efh);
 	if (ret < 0) {
