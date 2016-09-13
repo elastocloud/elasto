@@ -66,6 +66,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <unistd.h>
 
 #ifdef DEBUG
 #define DEBUG_MSG(fmt, s...) { printf("%s:%d " fmt, __FUNCTION__,__LINE__, ## s); }
