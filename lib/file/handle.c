@@ -182,3 +182,16 @@ elasto_fh_validate(struct elasto_fh *fh)
 
 	return 0;
 }
+
+int
+elasto_subsystem_init(void)
+{
+	int ret;
+
+	ret = elasto_conn_subsys_init();
+	if (ret < 0) {
+		dbg(0, "failed to initialize connection subsystem\n");
+	}
+
+	return ret;
+}

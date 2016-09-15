@@ -303,6 +303,9 @@ elasto_flist_ranges(struct elasto_fh *fh,
 int
 elasto_fdebug(int level);
 
+int
+elasto_subsystem_init(void);
+
 #ifdef  __cplusplus
 }
 #endif

@@ -62,12 +62,6 @@ elasto_fopen(const struct elasto_fauth *auth,
 
 	dbg(3, "opening path %s with flags 0x%" PRIx64 "\n", path, flags);
 
-	ret = elasto_conn_subsys_init();
-	if (ret < 0) {
-		dbg(0, "failed to initialize connection subsystem\n");
-		goto err_out;
-	}
-
 	ret = elasto_fh_init(auth, path, flags, &fh);
 	if (ret < 0) {
 		dbg(0, "failed to initialize elasto fh\n");
