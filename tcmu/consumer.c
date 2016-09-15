@@ -76,6 +76,7 @@ errp(const char *fmt, ...)
 }
 
 struct event_base *ev_base;
+pthread_once_t once_control = PTHREAD_ONCE_INIT;
 
 struct elasto_state {
 	char *path;
@@ -88,6 +89,8 @@ struct elasto_state {
 
 	pthread_key_t worker_state_key;
 	struct workqueue_ctx *wq;
+
+	struct tcmu_device *dev;
 
 	/*
 	 * Current tcmu helper API reports WCE=1, but doesn't
@@ -505,14 +508,15 @@ static int set_medium_error(uint8_t *sense)
  * Return scsi status or TCMU_NOT_HANDLED
  */
 int tcmu_elasto_cmd_handle(
-	struct tcmu_device *dev,
+	struct elasto_worker_state *worker_state,
 	uint8_t *cdb,
 	struct iovec *iovec,
 	size_t iov_cnt,
 	uint8_t *sense)
 {
-	struct elasto_state *estate = tcmu_get_dev_private(dev);
-	struct elasto_fh *efh;
+	struct elasto_state *estate = worker_state->estate;
+	struct tcmu_device *dev = estate->dev;
+	struct elasto_fh *efh = worker_state->efh;
 	uint8_t cmd;
 	int ret;
 	uint32_t length;
@@ -694,27 +698,91 @@ write:
 	return result;
 }
 
+/*
+ * worker thread needs cmd and worker_state_key, so we unfortunately need to
+ * allocate and free a per-cmd tcmu_elasto_cmd struct to pass everything through
+ * to the worker function.
+ */
+struct tcmu_elasto_cmd {
+	struct tcmulib_cmd *cmd;
+	struct elasto_state *estate;
+};
+
+static void
+tcmu_elasto_worker_handle(void *arg)
+{
+	struct tcmu_elasto_cmd *te_cmd = arg;
+	struct tcmulib_cmd *cmd = te_cmd->cmd;
+	struct elasto_state *estate = te_cmd->estate;
+	struct elasto_worker_state *worker_state;
+	int result;
+
+	free(te_cmd);
+
+	/* obtain thread local state */
+	worker_state = pthread_getspecific(estate->worker_state_key);
+	if (worker_state == NULL) {
+		errp("failed to get worker state\n");
+		return;
+	}
+
+	result = tcmu_elasto_cmd_handle(worker_state,
+			     cmd->cdb,
+			     cmd->iovec,
+			     cmd->iov_cnt,
+			     cmd->sense_buf);
+
+	tcmulib_command_complete(estate->dev, cmd, result);
+	tcmulib_processing_complete(estate->dev);
+}
+
 static void
 tcmu_elasto_dev_cb(evutil_socket_t fd,
 		   short event,
 		   void *arg)
 {
-		struct tcmulib_cmd *cmd;
-		struct tcmu_device *dev = arg;
+	struct tcmulib_cmd *cmd;
+	struct tcmu_device *dev = arg;
+	struct elasto_state *estate = tcmu_get_dev_private(dev);
+	struct tcmu_elasto_cmd *te_cmd;
+	int result;
 
-		tcmulib_processing_start(dev);
+	assert(estate->dev == dev);
+	tcmulib_processing_start(dev);
 
-		while ((cmd = tcmulib_get_next_command(dev)) != NULL) {
-			int ret;
-			ret = tcmu_elasto_cmd_handle(dev,
-					     cmd->cdb,
-					     cmd->iovec,
-					     cmd->iov_cnt,
-					     cmd->sense_buf);
-			tcmulib_command_complete(dev, cmd, ret);
+	while ((cmd = tcmulib_get_next_command(dev)) != NULL) {
+		int ret;
+
+		te_cmd = malloc(sizeof(*te_cmd));
+		if (te_cmd == NULL) {
+			ret = -ENOMEM;
+			goto err_cmd_complete;
 		}
 
-		tcmulib_processing_complete(dev);
+		te_cmd->cmd = cmd;
+		te_cmd->estate = estate;
+
+		ret = workqueue_add_work(estate->wq, 0, 0,
+					 tcmu_elasto_worker_handle,
+					 te_cmd);
+		if (ret < 0) {
+			errp("failed to queue cmd work\n");
+			goto err_te_cmd_free;
+		}
+	}
+
+	return;
+
+err_te_cmd_free:
+	free(te_cmd);
+err_cmd_complete:
+	result = tcmu_set_sense_data(cmd->sense_buf,
+				     HARDWARE_ERROR,
+				     ASC_INTERNAL_TARGET_FAILURE,
+				     NULL);
+	tcmulib_command_complete(dev, cmd, result);
+	tcmulib_processing_complete(dev);
+	/* TODO queue event to raise error in master thread */
 }
 
 static void
@@ -841,6 +909,9 @@ tcmu_elasto_open(struct tcmu_device *dev)
 		goto err_estate_free;
 	}
 
+	/* elasto_subsystem_init() should only be called once */
+	pthread_once(&once_control, elasto_subsystem_init);
+
 	ret = elasto_fopen(estate->auth, estate->path, ELASTO_FOPEN_CREATE,
 			   NULL, &efh);
 	if (ret < 0) {
@@ -924,6 +995,7 @@ tcmu_elasto_open(struct tcmu_device *dev)
 	}
 
 	tcmu_set_dev_private(dev, estate);
+	estate->dev = dev;
 
 	return 0;
 
