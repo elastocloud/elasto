@@ -172,6 +172,7 @@ op_hdr_date_time_val_lookup(struct list_head *hdrs,
 		return ret;
 	}
 
+	memset(&tm, 0, sizeof(tm));
 	sval_end = strptime(sval, "%a, %d %b %Y %H:%M:%S %Z", &tm);
 	if (sval_end == NULL) {
 		dbg(0, "invalid time format at %s: %s\n", key, sval);
