@@ -42,18 +42,29 @@
 #include "scsi_defs.h"
 #include "lib/file/file_api.h"
 
+struct tcmu_elasto_args {
+	int debug_level;
+};
+
+struct tcmu_elasto_args tcmu_elasto_args = { 0 };
+
 /*
  * Debug API implementation
  */
-void dbgp(const char *fmt, ...)
+static void
+dbgp(const char *fmt, ...)
 {
 	va_list va;
-	va_start(va, fmt);
-	vprintf(fmt, va);
-	va_end(va);
+
+	if (tcmu_elasto_args.debug_level > 0) {
+		va_start(va, fmt);
+		vprintf(fmt, va);
+		va_end(va);
+	}
 }
 
-void errp(const char *fmt, ...)
+static void
+errp(const char *fmt, ...)
 {
 	va_list va;
 
@@ -877,6 +888,46 @@ tcmu_master_cb(evutil_socket_t fd,
 	tcmulib_master_fd_ready(tcmulib_ctx);
 }
 
+void
+tcmu_elasto_args_usage(const char *progname)
+{
+	fprintf(stderr,
+"Usage: %s [options] <cmd> <cmd args>\n\n"
+"Options:\n"
+"-d log_level:		Log debug messages (default: 0)\n",
+		progname);
+}
+
+static int
+tcmu_elasto_args_parse(int argc,
+		       char * const *argv,
+		       struct tcmu_elasto_args *args)
+{
+	const char *progname = argv[0];
+	int opt;
+	int ret;
+
+	/* set defaults */
+	args->debug_level = 0;
+
+	while ((opt = getopt(argc, argv, "d:?")) != -1) {
+		switch (opt) {
+		case 'd':
+			args->debug_level = (int)strtol(optarg, NULL, 10);
+			break;
+		default: /* '?' */
+			tcmu_elasto_args_usage(progname);
+			ret = -EINVAL;
+			goto err_out;
+			break;
+		}
+	}
+
+	ret = 0;
+err_out:
+	return ret;
+}
+
 int main(int argc,
 	 char **argv)
 {
@@ -884,7 +935,11 @@ int main(int argc,
 	struct event *ev_master;
 	int ret;
 
-	elasto_fdebug(1);
+	ret = tcmu_elasto_args_parse(argc, argv, &tcmu_elasto_args);
+	if (ret < 0) {
+		goto err_out;
+	}
+	elasto_fdebug(tcmu_elasto_args.debug_level);
 
 	ev_base = event_base_new();
 	if (ev_base == NULL) {
