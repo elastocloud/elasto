@@ -859,6 +859,18 @@ tcmu_elasto_worker_destroy(void *data)
 	dbgp("destroyed worker\n");
 }
 
+static void
+tcmu_elasto_subsystem_init(void)
+{
+	int ret;
+
+	ret = elasto_subsystem_init();
+	if (ret < 0) {
+		errp("failed to init elasto subsystems\n");
+		abort();
+	}
+}
+
 static int
 tcmu_elasto_open(struct tcmu_device *dev)
 {
@@ -910,7 +922,7 @@ tcmu_elasto_open(struct tcmu_device *dev)
 	}
 
 	/* elasto_subsystem_init() should only be called once */
-	pthread_once(&once_control, elasto_subsystem_init);
+	pthread_once(&once_control, tcmu_elasto_subsystem_init);
 
 	ret = elasto_fopen(estate->auth, estate->path, ELASTO_FOPEN_CREATE,
 			   NULL, &efh);
