@@ -42,18 +42,29 @@
 #include "scsi_defs.h"
 #include "lib/file/file_api.h"
 
+struct tcmu_elasto_args {
+	int debug_level;
+};
+
+struct tcmu_elasto_args tcmu_elasto_args = { 0 };
+
 /*
  * Debug API implementation
  */
-void dbgp(const char *fmt, ...)
+static void
+dbgp(const char *fmt, ...)
 {
 	va_list va;
-	va_start(va, fmt);
-	vprintf(fmt, va);
-	va_end(va);
+
+	if (tcmu_elasto_args.debug_level > 0) {
+		va_start(va, fmt);
+		vprintf(fmt, va);
+		va_end(va);
+	}
 }
 
-void errp(const char *fmt, ...)
+static void
+errp(const char *fmt, ...)
 {
 	va_list va;
 
@@ -887,10 +898,6 @@ tcmu_elasto_args_usage(const char *progname)
 		progname);
 }
 
-struct tcmu_elasto_args {
-	int debug_level;
-};
-
 static int
 tcmu_elasto_args_parse(int argc,
 		       char * const *argv,
@@ -924,7 +931,6 @@ err_out:
 int main(int argc,
 	 char **argv)
 {
-	struct tcmu_elasto_args tcmu_elasto_args = { 0 };
 	struct tcmulib_context *tcmulib_ctx;
 	struct event *ev_master;
 	int ret;
