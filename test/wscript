@@ -17,8 +17,8 @@ def build(bld):
 			      cm_az_blob_req.c cm_az_blob_path.c
 			      cm_az_fs_path.c cm_s3_path.c cm_cli_path.c''',
 		    target='cm_unity',
-		    lib=['crypto', 'cmocka', 'expat', 'ssl', 'uuid',
-			 ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		    lib=['crypto', 'cmocka', 'expat', 'ssl', 'uuid']
+			+ bld.env.LIBEVENT_LIBS,
 		    use=['elasto_req_azure_blob', 'elasto_req_azure_fs',
 			 'elasto_req_s3', 'elasto_file', 'cli_path'],
 		    includes = '. .. ../lib',

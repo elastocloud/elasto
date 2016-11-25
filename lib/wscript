@@ -14,32 +14,27 @@ def build(bld):
 			    util.c''',
 		  target='elasto_core',
 		  vnum=bld.env.LIBELASTO_API_VERS,
-		  lib=['crypto', 'expat', 'ssl',
-		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		  use=['ccan'],
 		  includes = '. ..')
 	bld.stlib(source='s3_creds.c s3_req.c s3_path.c',
 		  target='elasto_req_s3',
-		  lib=['crypto', 'expat', 'ssl',
-		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_core'],
 		  includes = '. ..')
 	bld.shlib(source='''azure_ssl.c azure_req.c azure_mgmt_req.c''',
 		  target='elasto_req_azure_core',
-		  lib=['crypto', 'expat', 'ssl',
-		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_core'],
 		  includes = '. ..')
 	bld.stlib(source='''azure_fs_req.c azure_fs_path.c''',
 		  target='elasto_req_azure_fs',
-		  lib=['crypto', 'expat', 'ssl',
-		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_req_azure_core'],
 		  includes = '. ..')
 	bld.stlib(source='''azure_blob_req.c azure_blob_path.c''',
 		  target='elasto_req_azure_blob',
-		  lib=['crypto', 'expat', 'ssl',
-		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_req_azure_core'],
 		  includes = '. ..')
 	bld.recurse(recurse_subdirs)
