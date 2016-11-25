@@ -20,10 +20,18 @@ def configure(conf):
 	conf.env.LIBELASTO_API_VERS = LIBELASTO_API_VERS
 	conf.define('LIBELASTO_API_VERS', LIBELASTO_API_VERS)
 	conf.define('ELASTO_VERS', VERSION)
-	conf.check(lib='event')
-	# coarse check for libevent >= 2.1.x, whick doesn't have a pkgconfig.
-	# a check for bufferevent_openssl_socket_new() would be better.
-	conf.check(header_name='event2/visibility.h')
+	libevent_core_vers = conf.check_cfg(package='libevent',
+					    modversion='libevent',
+					    mandatory=True)
+	if not libevent_core_vers.startswith("2.1."):
+		conf.fatal("Unsupported libevent version " + libevent_core_vers)
+	conf.check_cfg(package='libevent', args='--libs')
+	conf.env.append_unique('LIBEVENT_LIBS', conf.env.LIB_LIBEVENT)
+	conf.check_cfg(package='libevent_openssl',
+		       modversion='libevent_openssl',
+		       mandatory=True)
+	conf.check_cfg(package='libevent_openssl', args='--libs')
+	conf.env.append_unique('LIBEVENT_LIBS', conf.env.LIB_LIBEVENT_OPENSSL)
 	conf.check(lib='crypto')
 	conf.check(lib='expat')
 	conf.recurse(recurse_subdirs)

@@ -12,8 +12,7 @@ def build(bld):
 			 s3_unlink.c''',
 		  target='elasto_file_mod_s3',
 		  vnum=bld.env.LIBELASTO_API_VERS,
-		  lib=['crypto', 'expat', 'ssl',
-		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_file', 'elasto_req_s3'],
 		  includes = '. .. ../../ ../../../')
 	if bld.cmd == 'install':

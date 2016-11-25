@@ -16,9 +16,7 @@ def build(bld):
 			    stat.c token.c''',
 		  target='elasto_file',
 		  vnum=bld.env.LIBELASTO_API_VERS,
-		  lib=['crypto', 'expat', 'ssl',
-		       ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5',
-		       'dl'],
+		  lib=['crypto', 'expat', 'ssl', 'dl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_core'],
 		  includes = '. .. ../../')
 	bld.install_as('${INCLUDEDIR}/elasto/file.h', 'file_api.h')

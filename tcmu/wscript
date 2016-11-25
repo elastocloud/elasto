@@ -12,8 +12,8 @@ def build(bld):
 		return
 	bld.program(source='consumer.c',
 		    target='elasto_tcmu',
-		    lib=['crypto', 'expat', 'ssl', 'tcmu',
-			 ':libevent-2.1.so.5', ':libevent_openssl-2.1.so.5'],
+		    lib=['crypto', 'expat', 'ssl', 'tcmu']
+			+ bld.env.LIBEVENT_LIBS,
 		    use=['elasto_file'],
 		    includes = '. ..',
 		    install_path = '${BINDIR}')
