@@ -51,7 +51,7 @@ struct tcmu_elasto_args {
 
 struct tcmu_elasto_args tcmu_elasto_args = {
 	.debug_level = 0,
-	.num_worker_threads = 16,
+	.num_worker_threads = 1,
 };
 
 /*
