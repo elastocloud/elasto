@@ -48,7 +48,9 @@ struct tcmu_elasto_args {
 	int debug_level;
 };
 
-struct tcmu_elasto_args tcmu_elasto_args = { 0 };
+struct tcmu_elasto_args tcmu_elasto_args = {
+	.debug_level = 0,
+};
 
 /*
  * Debug API implementation
@@ -1092,13 +1094,15 @@ tcmu_master_cb(evutil_socket_t fd,
 }
 
 void
-tcmu_elasto_args_usage(const char *progname)
+tcmu_elasto_args_usage(const char *progname,
+		       struct tcmu_elasto_args *def_args)
 {
 	fprintf(stderr,
 "Usage: %s [options] <cmd> <cmd args>\n\n"
 "Options:\n"
-"-d log_level:		Log debug messages (default: 0)\n",
-		progname);
+"-d log_level:		Log debug messages (default: %d)\n",
+		progname,
+		def_args->debug_level);
 }
 
 static int
@@ -1109,9 +1113,8 @@ tcmu_elasto_args_parse(int argc,
 	const char *progname = argv[0];
 	int opt;
 	int ret;
-
-	/* set defaults */
-	args->debug_level = 0;
+	/* make a copy of initialised defaults for usage text */
+	struct tcmu_elasto_args def_args = *args;
 
 	while ((opt = getopt(argc, argv, "d:?")) != -1) {
 		switch (opt) {
@@ -1119,7 +1122,7 @@ tcmu_elasto_args_parse(int argc,
 			args->debug_level = (int)strtol(optarg, NULL, 10);
 			break;
 		default: /* '?' */
-			tcmu_elasto_args_usage(progname);
+			tcmu_elasto_args_usage(progname, &def_args);
 			ret = -EINVAL;
 			goto err_out;
 			break;
