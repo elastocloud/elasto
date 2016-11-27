@@ -46,10 +46,12 @@
 
 struct tcmu_elasto_args {
 	int debug_level;
+	uint32_t num_worker_threads;
 };
 
 struct tcmu_elasto_args tcmu_elasto_args = {
 	.debug_level = 0,
+	.num_worker_threads = 16,
 };
 
 /*
@@ -884,7 +886,6 @@ tcmu_elasto_open(struct tcmu_device *dev)
 	char *config;
 	long long size;
 	int wq_depth;
-	int wq_workers;
 	struct worker_thread_ops wq_ops;
 
 	estate = calloc(1, sizeof(*estate));
@@ -974,13 +975,14 @@ tcmu_elasto_open(struct tcmu_device *dev)
 
 	/* TODO derive queue depth from LIO attribute - tcmu_get_attribute() */
 	wq_depth = 128;
-	wq_workers = 16;
 
 	wq_ops.worker_constructor = tcmu_elasto_worker_init;
 	wq_ops.worker_destructor = tcmu_elasto_worker_destroy;
 	wq_ops.data = estate;
 
-	estate->wq = workqueue_init(wq_depth, wq_workers, &wq_ops);
+	estate->wq = workqueue_init(wq_depth,
+				    tcmu_elasto_args.num_worker_threads,
+				    &wq_ops);
 	if (estate->wq == NULL) {
 		errp("workqueue_init() failed\n");
 		ret = -EIO;
@@ -1098,11 +1100,13 @@ tcmu_elasto_args_usage(const char *progname,
 		       struct tcmu_elasto_args *def_args)
 {
 	fprintf(stderr,
-"Usage: %s [options] <cmd> <cmd args>\n\n"
+"Usage: %s [options]\n\n"
 "Options:\n"
-"-d log_level:		Log debug messages (default: %d)\n",
+"-d log_level:          Log debug messages (default: %d)\n"
+"-t num_threads:        Number of per-device worker threads (default: %d)\n",
 		progname,
-		def_args->debug_level);
+		def_args->debug_level,
+		def_args->num_worker_threads);
 }
 
 static int
@@ -1116,10 +1120,27 @@ tcmu_elasto_args_parse(int argc,
 	/* make a copy of initialised defaults for usage text */
 	struct tcmu_elasto_args def_args = *args;
 
-	while ((opt = getopt(argc, argv, "d:?")) != -1) {
+	while ((opt = getopt(argc, argv, "d:t:?")) != -1) {
+		char *sval_end;
+
 		switch (opt) {
 		case 'd':
-			args->debug_level = (int)strtol(optarg, NULL, 10);
+			args->debug_level = (int)strtol(optarg, &sval_end, 10);
+			if ((sval_end == optarg) || (args->debug_level < 0)
+						 || (args->debug_level > 10)) {
+				ret = -EINVAL;
+				goto err_out;
+			}
+			break;
+		case 't':
+			args->num_worker_threads
+				= (uint32_t)strtoul(optarg, &sval_end, 10);
+			if ((sval_end == optarg)
+					|| (args->num_worker_threads == 0)
+					|| (args->num_worker_threads > 1024)) {
+				ret = -EINVAL;
+				goto err_out;
+			}
 			break;
 		default: /* '?' */
 			tcmu_elasto_args_usage(progname, &def_args);
@@ -1143,6 +1164,7 @@ int main(int argc,
 
 	ret = tcmu_elasto_args_parse(argc, argv, &tcmu_elasto_args);
 	if (ret < 0) {
+		errp("argument parsing failed: %s\n", strerror(-ret));
 		goto err_out;
 	}
 	elasto_fdebug(tcmu_elasto_args.debug_level);
