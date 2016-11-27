@@ -1162,6 +1162,9 @@ int main(int argc,
 	struct event *ev_master;
 	int ret;
 
+	errp("WARNING: tcmu_elasto is currently unstable, and may cause data "
+	     "corruption!\n");
+
 	ret = tcmu_elasto_args_parse(argc, argv, &tcmu_elasto_args);
 	if (ret < 0) {
 		errp("argument parsing failed: %s\n", strerror(-ret));
