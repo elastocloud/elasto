@@ -7,6 +7,7 @@ FABRIC_UUID=`uuidgen |sed "s#.*-##g"`
 LU_UUID=`uuidgen |sed "s#.*-##g"`
 
 function _usage {
+	[ -n "$1" ] && echo "error: $*"
 	echo "usage: $0 -l <lun> -n <name> -p <elasto_path> -K <azure_key> -s <size>"
 	exit 1
 }
@@ -16,7 +17,7 @@ function _fatal {
 	exit 1
 }
 
-lun=0
+lun=""
 lu_name=""
 elasto_path=""
 azure_acc_key=""
@@ -45,6 +46,11 @@ while getopts ":l:n:p:K:s:" o; do
 done
 shift $((OPTIND - 1))
 [ -z "$1" ] || _usage
+[ -n "$lun" ] || _usage "<lun> parameter required"
+[ -n "$lu_name" ] || _usage "<name> parameter required"
+[ -n "$elasto_path" ] || _usage "<elasto_path> parameter required"
+[ -n "$azure_acc_key" ] || _usage "<azure_key> parameter required"
+[ -n "$lu_size" ] || _usage "<size> parameter required"
 
 modprobe target_core_user tcm_loop || _fatal "failed to load LIO kernel modules"
 
