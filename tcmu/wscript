@@ -17,3 +17,5 @@ def build(bld):
 		    use=['elasto_file', 'elasto_wq'],
 		    includes = '. ..',
 		    install_path = '${BINDIR}')
+	bld.install_as('${BINDIR}/elasto_tcmu_configfs',
+		       'elasto_tcmu_configfs.sh')
