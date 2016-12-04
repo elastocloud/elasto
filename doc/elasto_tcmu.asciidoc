@@ -1,0 +1,74 @@
+ELASTO_TCMU(1)
+==============
+:doctype: manpage
+
+
+NAME
+----
+elasto_tcmu - Cloud backed SCSI target
+
+
+SYNOPSIS
+--------
+*elasto_tcmu* ['-?'] ['-d log level'] ['-t worker threads']
+
+
+WARNING
+-------
+elasto_tcmu is *currently unstable*, and may cause data corruption! Therefore,
+it is currently only suitable for testing.
+
+
+DESCRIPTION
+-----------
+elasto_tcmu offers a SCSI target back-end that, alongside the Linux I/O target
+(LIO) and tcmu-runner, is capable of mapping SCSI I/O requests into Azure Page
+Blob REST requests.
+This functionality allows an Azure Page Blob to be mapped as a local Linux block
+device, or exposed via an LIO supported SCSI transport, such as iSCSI.
+
+
+OPTIONS
+-------
+*-?*::
+	Print help message and exit.
+
+*-d* 'log level'::
+	Print debugging information.
+
+*-t* 'worker threads'::
+	Specify the number of worker threads that should be spawned to handle
+	I/O for a given device. Due to a thread safety bug, increasing this from
+	the default value (-t 1) is currently *not recommended*.
+
+
+CONFIGURATION
+-------------
+As with other LIO components, elasto_tcmu devices are configured via ConfigFS.
+With the target_core_user module loaded, and elasto_tcmu running, a device can
+be configured with:
+
+-----------------------------------------------------
+# mkdir -p ${CONFIGFS}target/core/user_0/${DEV_NAME}
+# echo "dev_config=elasto/${ELASTO_PATH} ${AZURE_ACC_KEY}" \
+	> ${CONFIGFS}/target/core/user_0/${DEV_NAME}/control
+# echo "dev_size=${DEV_SIZE}" \
+	> ${CONFIGFS}/target/core/user_0/${DEV_NAME}/control
+# echo "hw_block_size=512" > ${CONFIGFS}/target/core/user_0/${DEV_NAME}/control
+# echo 1 > ${CONFIGFS}/target/core/user_0/${DEV_NAME}/enable
+-----------------------------------------------------
+
+The helper script 'elasto_tcmu_configfs' simplifies ConfigFS configuration, and
+is packaged with the elasto_tcmu binary.
+
+
+RESOURCES
+---------
+*LIO SCSI target website*:: http://linux-iscsi.org
+*tcmu-runner website*:: http://github.com/open-iscsi/tcmu-runner
+*Elasto website*:: http://elastocloud.org
+
+
+AUTHOR
+------
+The Elasto project was created by David Disseldorp.

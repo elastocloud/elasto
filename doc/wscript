@@ -32,3 +32,8 @@ def build(bld):
 	    target='elasto_cli.1')
 	bld(rule=gz_manpage, source='elasto_cli.1', target='elasto_cli.1.gz')
 	bld.install_files('${MANDIR}/man1/', ['elasto_cli.1.gz'])
+
+	bld(rule=gen_manpage, source='elasto_tcmu.asciidoc',
+	    target='elasto_tcmu.1')
+	bld(rule=gz_manpage, source='elasto_tcmu.1', target='elasto_tcmu.1.gz')
+	bld.install_files('${MANDIR}/man1/', ['elasto_tcmu.1.gz'])
