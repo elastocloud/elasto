@@ -37,3 +37,9 @@ def build(bld):
 	    target='elasto_tcmu.1')
 	bld(rule=gz_manpage, source='elasto_tcmu.1', target='elasto_tcmu.1.gz')
 	bld.install_files('${MANDIR}/man1/', ['elasto_tcmu.1.gz'])
+
+	bld(rule=gen_manpage, source='elasto_tcmu_configfs.asciidoc',
+	    target='elasto_tcmu_configfs.8')
+	bld(rule=gz_manpage, source='elasto_tcmu_configfs.8',
+	    target='elasto_tcmu_configfs.8.gz')
+	bld.install_files('${MANDIR}/man8/', ['elasto_tcmu_configfs.8.gz'])
