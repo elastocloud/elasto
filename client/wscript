@@ -19,8 +19,9 @@ def build(bld):
 		  target='cli_path',
 		  use=['elasto_core'],
 		  includes = '. ..')
-	bld.program(source='elasto_client.c linenoise.c cli_ls.c cli_put.c '
-			   'cli_get.c cli_del.c cli_create.c cli_cp.c',
+	bld.program(source='''elasto_client.c linenoise.c cli_ls.c cli_put.c
+			      cli_get.c cli_del.c cli_create.c cli_cp.c
+			      cli_util.c''',
 		    target='elasto_cli',
 		    lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		    use=['elasto_file', 'cli_path'],
