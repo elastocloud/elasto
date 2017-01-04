@@ -27,21 +27,7 @@
 #include "lib/util.h"
 #include "ccan/list/list.h"
 #include "cli_common.h"
-
-static void
-human_size(double bytes,
-	   char *buf,
-	   size_t buflen)
-{
-	int i = 0;
-	const char* units[] = {"B", "K", "M", "G", "T", "P", "E", "Z"};
-
-	while ((bytes > 1024) && (i < ARRAY_SIZE(units) - 1)) {
-		bytes /= 1024;
-		i++;
-	}
-	snprintf(buf, buflen, "%.*f %s", i, bytes, units[i]);
-}
+#include "cli_util.h"
 
 void
 cli_ls_args_free(struct cli_args *cli_args)
@@ -79,7 +65,8 @@ cli_ls_readdir_cb(struct elasto_dent *dent,
 
 	size_buf[0] = '\0';
 	if (dent->fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) {
-		human_size(dent->fstat.size, size_buf, ARRAY_SIZE(size_buf));
+		cli_human_size(dent->fstat.size, size_buf,
+			       ARRAY_SIZE(size_buf));
 	}
 
 	if ((dent->fstat.field_mask & ELASTO_FSTAT_FIELD_TYPE)
