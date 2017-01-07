@@ -633,6 +633,33 @@ ev_done_cb(struct evhttp_request *ev_req,
 	}
 }
 
+static int
+elasto_conn_req_type_map(enum op_req_method method,
+			 enum evhttp_cmd_type *_ev_req_type)
+{
+	int i;
+	struct {
+		enum op_req_method method;
+		enum evhttp_cmd_type ev_req_type;
+	} mapping[] = {
+		{ REQ_METHOD_GET, EVHTTP_REQ_GET },
+		{ REQ_METHOD_PUT, EVHTTP_REQ_PUT },
+		{ REQ_METHOD_POST, EVHTTP_REQ_POST },
+		{ REQ_METHOD_HEAD, EVHTTP_REQ_HEAD },
+		{ REQ_METHOD_DELETE, EVHTTP_REQ_DELETE },
+	};
+
+	for (i = 0; i < ARRAY_SIZE(mapping); i++) {
+		if (mapping[i].method == method) {
+			*_ev_req_type = mapping[i].ev_req_type;
+			return 0;
+		}
+	}
+
+	dbg(0, "invalid request method: %d\n", method);
+	return -EINVAL;
+}
+
 /* a bit ugly, the signature src string is stored in @op for debugging */
 static int
 elasto_conn_send_prepare(struct elasto_conn *econn,
@@ -671,34 +698,19 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 	/* on error, the error cb and then the completion cb will be called */
 	evhttp_request_set_error_cb(ev_req, ev_err_cb);
 
-
-	if (op->method == REQ_METHOD_GET) {
-		ev_req_type = EVHTTP_REQ_GET;
-	} else if (op->method == REQ_METHOD_PUT) {
-		ev_req_type = EVHTTP_REQ_PUT;
-		ret = elasto_conn_send_prepare_read_data(ev_req, op->req.data,
-							 &content_len);
-		if (ret < 0) {
-			dbg(0, "failed to attach read data\n");
-			goto err_ev_req_free;
-		}
-	} else if (op->method == REQ_METHOD_POST) {
-		ev_req_type = EVHTTP_REQ_POST;
-		ret = elasto_conn_send_prepare_read_data(ev_req, op->req.data,
-							 &content_len);
-		if (ret < 0) {
-			dbg(0, "failed to attach read data\n");
-			goto err_ev_req_free;
-		}
-	} else if (op->method == REQ_METHOD_HEAD) {
-		ev_req_type = EVHTTP_REQ_HEAD;
-		/* No body component with HEAD requests */
-	} else if (op->method == REQ_METHOD_DELETE) {
-		ev_req_type = EVHTTP_REQ_DELETE;
-	} else {
-		dbg(0, "invalid request method: %d\n", op->method);
-		ret = -EINVAL;
+	ret = elasto_conn_req_type_map(op->method, &ev_req_type);
+	if (ret < 0) {
 		goto err_ev_req_free;
+	}
+
+	if ((ev_req_type == EVHTTP_REQ_PUT)
+	 || (ev_req_type == EVHTTP_REQ_POST)) {
+		ret = elasto_conn_send_prepare_read_data(ev_req, op->req.data,
+							 &content_len);
+		if (ret < 0) {
+			dbg(0, "failed to attach read data\n");
+			goto err_ev_req_free;
+		}
 	}
 
 	/* Content-Length needs to be present during signing */
@@ -737,13 +749,6 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 		ret = -EINVAL;
 		goto err_ev_req_free;
 	}
-#if 0
-	ret = evhttp_add_header(ev_out_hdrs, "Accept", "*/*");
-	if (ret < 0) {
-		ret = -EINVAL;
-		goto err_ev_req_free;
-	}
-#endif
 	list_for_each(&op->req.hdrs, hdr, list) {
 		dbg(3, "packing header: %s = %s\n", hdr->key, hdr->val);
 		ret = evhttp_add_header(ev_out_hdrs, hdr->key, hdr->val);
