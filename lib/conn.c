@@ -293,6 +293,7 @@ ev_write_std(struct op *op,
 }
 
 struct conn_op {
+	struct elasto_conn *econn_orig;
 	bool econn_is_redirect;
 	struct elasto_conn *econn;
 	struct evhttp_request *ev_http;
@@ -1033,6 +1034,7 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		goto err_out;
 	}
 	memset(conn_op, 0, sizeof(*conn_op));
+	conn_op->econn_orig = econn;
 	conn_op->econn = econn;
 	conn_op->op = op;
 
@@ -1084,7 +1086,8 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 				goto err_conn_op_free;
 			}
 			/* use original connection as redirect copy source */
-			ret = elasto_conn_redirect(econn, conn_op->op->url_host,
+			ret = elasto_conn_redirect(conn_op->econn_orig,
+						   conn_op->op->url_host,
 						   &conn_op->econn);
 			if (ret < 0) {
 				conn_op_flag_error(conn_op, ret);
@@ -1093,6 +1096,7 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 			conn_op->econn_is_redirect = true;
 		} else if (ret == -ECONNABORTED) {
 			dbg(1, "disconnect on send - reconnecting for resend\n");
+			conn_op->econn = conn_op->econn_orig;
 			ret = elasto_conn_ev_connect(conn_op->econn);
 			if (ret < 0) {
 				dbg(0, "reconnect failed\n");
@@ -1104,12 +1108,13 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 				conn_op_flag_error(conn_op, ret);
 				goto err_conn_op_free;
 			}
-			conn_op->econn = econn;
 		} else if (ret < 0) {
 			conn_op_flag_error(conn_op, ret);
 			goto err_conn_op_free;
 		}
 	} while (conn_op->econn != NULL);
+
+	free(conn_op);
 
 	return 0;
 
