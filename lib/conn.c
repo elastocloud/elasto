@@ -297,7 +297,19 @@ struct conn_op {
 	struct elasto_conn *econn;
 	struct evhttp_request *ev_http;
 	struct op *op;
+	/* used for tracking internal (conn layer) errors */
+	int error_ret;
 };
+
+static void
+conn_op_flag_error(struct conn_op *conn_op,
+		   int error_ret)
+{
+	dbg(0, "flagging connection error %d for op 0x%x\n",
+	    error_ret, conn_op->op->opcode);
+
+	conn_op->error_ret = error_ret;
+}
 
 static void
 conn_op_cancel(struct conn_op *conn_op)
@@ -1029,6 +1041,7 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 					       &conn_op->ev_http,
 					       &ev_req_type, &url);
 		if (ret < 0) {
+			conn_op_flag_error(conn_op, ret);
 			goto err_op_unassoc;
 		}
 
@@ -1037,14 +1050,14 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		if (ret < 0) {
 			/* on failure, the request is freed */
 			conn_op->ev_http = NULL;
-			ret = -ENOMEM;
+			conn_op_flag_error(conn_op, -ENOMEM);
 			goto err_preped_free;
 		}
 
 		ret = event_base_dispatch(conn_op->econn->ev_base);
 		if (ret < 0) {
 			dbg(0, "event_base_dispatch() failed\n");
-			ret = -EBADF;
+			conn_op_flag_error(conn_op, -EBADF);
 			goto err_preped_free;
 		}
 
@@ -1067,12 +1080,14 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 			/* response is a redirect, resend via new conn */
 			ret = op_req_redirect(conn_op->op);
 			if (ret < 0) {
+				conn_op_flag_error(conn_op, ret);
 				goto err_conn_op_free;
 			}
 			/* use original connection as redirect copy source */
 			ret = elasto_conn_redirect(econn, conn_op->op->url_host,
 						   &conn_op->econn);
 			if (ret < 0) {
+				conn_op_flag_error(conn_op, ret);
 				goto err_conn_op_free;
 			}
 			conn_op->econn_is_redirect = true;
@@ -1081,14 +1096,17 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 			ret = elasto_conn_ev_connect(conn_op->econn);
 			if (ret < 0) {
 				dbg(0, "reconnect failed\n");
+				conn_op_flag_error(conn_op, ret);
 				goto err_conn_op_free;
 			}
 			ret = op_req_retry(conn_op->op);
 			if (ret < 0) {
+				conn_op_flag_error(conn_op, ret);
 				goto err_conn_op_free;
 			}
 			conn_op->econn = econn;
 		} else if (ret < 0) {
+			conn_op_flag_error(conn_op, ret);
 			goto err_conn_op_free;
 		}
 	} while (conn_op->econn != NULL);
@@ -1107,6 +1125,7 @@ err_op_unassoc:
 		elasto_conn_free(conn_op->econn);
 	}
 err_conn_op_free:
+	ret = conn_op->error_ret;
 	free(conn_op);
 err_out:
 	return ret;
