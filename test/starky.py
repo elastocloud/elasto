@@ -175,6 +175,15 @@ class StarkyTestAzureCreate(unittest.TestCase):
 			self.assertTrue(False, "ls failed with "
 					+ str(e.returncode))
 
+		cmd = "%s -- stat %s" \
+		      % (self.ctx.cli_az_cmd, acc)
+		try:
+			print "-> %s\n" % (cmd)
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "stat failed with "
+					+ str(e.returncode))
+
 	def test_container(self):
 		'''
 		Create a container, then check for its existence using ls.
@@ -199,6 +208,15 @@ class StarkyTestAzureCreate(unittest.TestCase):
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "ls failed with "
+					+ str(e.returncode))
+
+		cmd = "%s -- stat %s/%s" \
+		      % (self.ctx.cli_az_cmd, acc, ctnr)
+		try:
+			print "-> %s\n" % (cmd)
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "stat failed with "
 					+ str(e.returncode))
 
 		cmd = "%s -- del %s/%s" \
