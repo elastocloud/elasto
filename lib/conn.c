@@ -292,16 +292,23 @@ ev_write_std(struct op *op,
 	return 0;
 }
 
+struct conn_op {
+	bool econn_is_redirect;
+	struct elasto_conn *econn;
+	struct evhttp_request *ev_http;
+	struct op *op;
+};
+
 static void
-conn_op_cancel(struct op *op)
+conn_op_cancel(struct conn_op *conn_op)
 {
 	dbg(0, "cancelling outstanding op\n");
-	evhttp_cancel_request(op->req.ev_http);
-	op->req.ev_http = NULL;
+	evhttp_cancel_request(conn_op->ev_http);
+	conn_op->ev_http = NULL;
 
-	if (!op->rsp.is_error) {
-		op->rsp.is_error = true;
-		op->rsp.err_code = HTTP_BADREQUEST;
+	if (!conn_op->op->rsp.is_error) {
+		conn_op->op->rsp.is_error = true;
+		conn_op->op->rsp.err_code = HTTP_BADREQUEST;
 	}
 }
 
@@ -310,23 +317,24 @@ static void
 ev_write_cb(struct evhttp_request *ev_req,
 	    void *data)
 {
-	struct op *op = (struct op *)data;
+	struct conn_op *conn_op = (struct conn_op *)data;
+	struct op *op = conn_op->op;
 	size_t len;
 	uint64_t num_bytes;
 	int ret;
 	struct evbuffer *ev_in_buf;
 
-	assert(op->req.ev_http == ev_req);
+	assert(conn_op->ev_http == ev_req);
 	ev_in_buf = evhttp_request_get_input_buffer(ev_req);
 	if (ev_in_buf == NULL) {
 		dbg(0, "invalid NULL input buffer in write callback!\n");
-		conn_op_cancel(op);
+		conn_op_cancel(conn_op);
 		return;
 	}
 	len = evbuffer_get_length(ev_in_buf);
 	if (len <= 0) {
 		dbg(0, "invalid input buffer len: %d\n", (int)len);
-		conn_op_cancel(op);
+		conn_op_cancel(conn_op);
 		return;
 	}
 	num_bytes = len;
@@ -350,7 +358,7 @@ ev_write_cb(struct evhttp_request *ev_req,
 		}
 		if (ret < 0) {
 			dbg(0, "failed to allocate response buffer\n");
-			conn_op_cancel(op);
+			conn_op_cancel(conn_op);
 			return;
 		}
 	}
@@ -361,7 +369,7 @@ ev_write_cb(struct evhttp_request *ev_req,
 		ret = ev_write_std(op, ev_in_buf, num_bytes);
 	}
 	if (ret < 0) {
-		conn_op_cancel(op);
+		conn_op_cancel(conn_op);
 		return;
 	}
 	return;
@@ -372,7 +380,8 @@ ev_hdr_cb(struct evhttp_request *ev_req,
 	  void *data)
 {
 	int ret;
-	struct op *op = (struct op *)data;
+	struct conn_op *conn_op = (struct conn_op *)data;
+	struct op *op = conn_op->op;
 	struct evkeyvalq *ev_in_hdrs;
 	struct evkeyval *ev_hdr;
 
@@ -427,7 +436,7 @@ ev_hdr_cb(struct evhttp_request *ev_req,
 
 err_disconnect:
 	/* ev_req is freed by libevent on callback error */
-	op->req.ev_http = NULL;
+	conn_op->ev_http = NULL;
 	/* TODO set op error? */
 	return -1;	/* force disconnect */
 }
@@ -436,10 +445,11 @@ static void
 ev_err_cb(enum evhttp_request_error ev_req_error,
 	  void *data)
 {
-	struct op *op = (struct op *)data;
+	struct conn_op *conn_op = (struct conn_op *)data;
+	struct op *op = conn_op->op;
 
 	/* ev_req is freed by libevent on error callback */
-	op->req.ev_http = NULL;
+	conn_op->ev_http = NULL;
 
 	if (op->rsp.is_error == true) {
 		dbg(0, "is_error already set in error cb, ignoring %d\n",
@@ -587,12 +597,13 @@ ev_done_cb(struct evhttp_request *ev_req,
 	   void *data)
 {
 	int ret;
-	struct op *op = (struct op *)data;
+	struct conn_op *conn_op = (struct conn_op *)data;
+	struct op *op = conn_op->op;
 	struct evbuffer *ev_in_buf;
 	size_t len;
 
 	/* FIXME ev_req always freed after done callback?? */
-	op->req.ev_http = NULL;
+	conn_op->ev_http = NULL;
 
 	if (ev_req == NULL) {
 		dbg(0, "NULL request on completion, an error occurred!\n");
@@ -622,12 +633,12 @@ ev_done_cb(struct evhttp_request *ev_req,
 		return;
 	}
 
-	if ((op->econn == NULL) || (op->econn->ev_base == NULL)) {
+	if ((conn_op->econn == NULL) || (conn_op->econn->ev_base == NULL)) {
 		dbg(0, "unable to break connection loop\n");
 		return;
 	}
 
-	ret = event_base_loopbreak(op->econn->ev_base);
+	ret = event_base_loopbreak(conn_op->econn->ev_base);
 	if (ret < 0) {
 		dbg(0, "failed to break connection loop\n");
 	}
@@ -662,12 +673,13 @@ elasto_conn_req_type_map(enum op_req_method method,
 
 /* a bit ugly, the signature src string is stored in @op for debugging */
 static int
-elasto_conn_send_prepare(struct elasto_conn *econn,
-			 struct op *op,
+elasto_conn_send_prepare(struct conn_op *conn_op,
 			 struct evhttp_request **_ev_req,
 			 enum evhttp_cmd_type *_ev_req_type,
 			 char **_url)
 {
+	struct elasto_conn *econn = conn_op->econn;
+	struct op *op = conn_op->op;
 	int ret;
 	struct op_hdr *hdr;
 	char *url;
@@ -687,7 +699,7 @@ elasto_conn_send_prepare(struct elasto_conn *econn,
 	dbg(3, "preparing %s request for dispatch to: %s\n",
 	    op_method_str(op->method), url);
 
-	ev_req = evhttp_request_new(ev_done_cb, op);
+	ev_req = evhttp_request_new(ev_done_cb, conn_op);
 	if (ev_req == NULL) {
 		ret = -ENOMEM;
 		goto err_url_free;
@@ -978,7 +990,7 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 	int ret;
 	enum evhttp_cmd_type ev_req_type;
 	char *url;
-	struct elasto_conn *econn_redirect = NULL;
+	struct conn_op *conn_op;
 
 	if (strcmp(econn->hostname, op->url_host)) {
 		dbg(0, "invalid connection for op 0x%x: %s != %s\n",
@@ -1003,89 +1015,99 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		}
 	}
 
-	op->econn = econn;
+	conn_op = malloc(sizeof(*conn_op));
+	if (conn_op == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(conn_op, 0, sizeof(*conn_op));
+	conn_op->econn = econn;
+	conn_op->op = op;
+
 	do {
-		ret = elasto_conn_send_prepare(op->econn, op, &op->req.ev_http,
+		ret = elasto_conn_send_prepare(conn_op,
+					       &conn_op->ev_http,
 					       &ev_req_type, &url);
 		if (ret < 0) {
 			goto err_op_unassoc;
 		}
 
-		ret = evhttp_make_request(op->econn->ev_conn, op->req.ev_http,
+		ret = evhttp_make_request(conn_op->econn->ev_conn, conn_op->ev_http,
 					  ev_req_type, url);
 		if (ret < 0) {
 			/* on failure, the request is freed */
-			op->req.ev_http = NULL;
+			conn_op->ev_http = NULL;
 			ret = -ENOMEM;
 			goto err_preped_free;
 		}
 
-		ret = event_base_dispatch(op->econn->ev_base);
+		ret = event_base_dispatch(conn_op->econn->ev_base);
 		if (ret < 0) {
 			dbg(0, "event_base_dispatch() failed\n");
 			ret = -EBADF;
 			goto err_preped_free;
 		}
 
-		if (op->req.ev_http != NULL) {
+		if (conn_op->ev_http != NULL) {
 			/* ev_req is cancelled / freed on error */
-			evhttp_request_free(op->req.ev_http);
-			op->req.ev_http = NULL;
+			evhttp_request_free(conn_op->ev_http);
+			conn_op->ev_http = NULL;
 		}
-		op->econn = NULL;
+
+		if (conn_op->econn_is_redirect) {
+			elasto_conn_ev_disconnect(conn_op->econn);
+			elasto_conn_free(conn_op->econn);
+			conn_op->econn_is_redirect = false;
+		}
+		conn_op->econn = NULL;
 		free(url);
 
-		if (econn_redirect != NULL) {
-			elasto_conn_ev_disconnect(econn_redirect);
-			elasto_conn_free(econn_redirect);
-			econn_redirect = NULL;
-		}
-
-		ret = op_rsp_process(op);
+		ret = op_rsp_process(conn_op->op);
 		if (ret == -EAGAIN) {
 			/* response is a redirect, resend via new conn */
-			ret = op_req_redirect(op);
+			ret = op_req_redirect(conn_op->op);
 			if (ret < 0) {
-				goto err_out;
+				goto err_conn_op_free;
 			}
 			/* use original connection as redirect copy source */
-			ret = elasto_conn_redirect(econn, op->url_host,
-						   &econn_redirect);
+			ret = elasto_conn_redirect(econn, conn_op->op->url_host,
+						   &conn_op->econn);
 			if (ret < 0) {
-				goto err_out;
+				goto err_conn_op_free;
 			}
-			op->econn = econn_redirect;
+			conn_op->econn_is_redirect = true;
 		} else if (ret == -ECONNABORTED) {
 			dbg(1, "disconnect on send - reconnecting for resend\n");
-			ret = elasto_conn_ev_connect(econn);
+			ret = elasto_conn_ev_connect(conn_op->econn);
 			if (ret < 0) {
 				dbg(0, "reconnect failed\n");
-				goto err_out;
+				goto err_conn_op_free;
 			}
-			ret = op_req_retry(op);
+			ret = op_req_retry(conn_op->op);
 			if (ret < 0) {
-				goto err_out;
+				goto err_conn_op_free;
 			}
-			op->econn = econn;
+			conn_op->econn = econn;
 		} else if (ret < 0) {
-			goto err_out;
+			goto err_conn_op_free;
 		}
-	} while (op->econn != NULL);
+	} while (conn_op->econn != NULL);
 
 	return 0;
 
 err_preped_free:
-	if (op->req.ev_http != NULL) {
-		evhttp_request_free(op->req.ev_http);
-		op->req.ev_http = NULL;
+	if (conn_op->ev_http != NULL) {
+		evhttp_request_free(conn_op->ev_http);
+		conn_op->ev_http = NULL;
 	}
 	free(url);
 err_op_unassoc:
-	op->econn = NULL;
-	if (econn_redirect != NULL) {
-		elasto_conn_ev_disconnect(econn_redirect);
-		elasto_conn_free(econn_redirect);
+	if (conn_op->econn_is_redirect) {
+		elasto_conn_ev_disconnect(conn_op->econn);
+		elasto_conn_free(conn_op->econn);
 	}
+err_conn_op_free:
+	free(conn_op);
 err_out:
 	return ret;
 }

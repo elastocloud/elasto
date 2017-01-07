@@ -48,7 +48,6 @@ typedef int (*rsp_process_cb_t)(struct op *op);
 typedef void (*ebo_free_cb_t)(struct op *op);
 
 struct op {
-	struct elasto_conn *econn;
 	int opcode;
 	char *sig_src;	/* debug, compare with signing error response */
 	enum op_req_method method;
@@ -63,7 +62,6 @@ struct op {
 		struct elasto_data *data;
 		uint32_t num_hdrs;
 		struct list_head hdrs;
-		struct evhttp_request *ev_http;
 	} req;
 
 	struct {
