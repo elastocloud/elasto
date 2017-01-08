@@ -77,6 +77,7 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 	ret = PKCS12_parse(p12, NULL, &pkey, &cert, NULL);
 	PKCS12_free(p12);
 	if (!ret) {
+		dbg(0, "Error parsing PKCS#12 data  - openssl initialised?\n");
 		ret = -EBADF;
 		goto err_bio_free;
 	}
@@ -93,6 +94,7 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 	if (pkey != NULL) {
 		ret = PEM_write_PrivateKey(fp, pkey, NULL, NULL, 0, NULL, NULL);
 		if (!ret) {
+			dbg(0, "Error writing key file %s\n", pem_file);
 			ret = -EBADF;
 			goto err_fp_close;
 		}
@@ -100,6 +102,7 @@ azure_ssl_pem_write(char *mcert_b64, char *pem_file)
 	if (cert != NULL) {
 		ret = PEM_write_X509_AUX(fp, cert);
 		if (!ret) {
+			dbg(0, "Error writing cert file %s\n", pem_file);
 			ret = -EBADF;
 			goto err_fp_close;
 		}

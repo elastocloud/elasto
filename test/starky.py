@@ -43,7 +43,7 @@ class StarkyContext:
 	s3_creds_file = None
 	acc_prefix = "elastotest"
 	acc_loc = "West Europe"
-	bkt_loc = "eu-west-1"
+	bkt_loc = "us-west-1"
 	az_acc = None
 	az_acc_persist_created = False
 
@@ -175,6 +175,15 @@ class StarkyTestAzureCreate(unittest.TestCase):
 			self.assertTrue(False, "ls failed with "
 					+ str(e.returncode))
 
+		cmd = "%s -- stat %s" \
+		      % (self.ctx.cli_az_cmd, acc)
+		try:
+			print "-> %s\n" % (cmd)
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "stat failed with "
+					+ str(e.returncode))
+
 	def test_container(self):
 		'''
 		Create a container, then check for its existence using ls.
@@ -199,6 +208,15 @@ class StarkyTestAzureCreate(unittest.TestCase):
 			out = sp.check_output(cmd, shell=True)
 		except sp.CalledProcessError, e:
 			self.assertTrue(False, "ls failed with "
+					+ str(e.returncode))
+
+		cmd = "%s -- stat %s/%s" \
+		      % (self.ctx.cli_az_cmd, acc, ctnr)
+		try:
+			print "-> %s\n" % (cmd)
+			out = sp.check_output(cmd, shell=True)
+		except sp.CalledProcessError, e:
+			self.assertTrue(False, "stat failed with "
 					+ str(e.returncode))
 
 		cmd = "%s -- del %s/%s" \
@@ -354,8 +372,8 @@ class StarkyTestS3Create(unittest.TestCase):
 		'''
 		bkt_name = self.ctx.bkt_name_get()
 		sp = subprocess
-		cmd = "%s -- create %s" \
-		      % (self.ctx.cli_s3_cmd, bkt_name)
+		cmd = "%s -- create -L %s %s" \
+		      % (self.ctx.cli_s3_cmd, self.ctx.bkt_loc, bkt_name)
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)

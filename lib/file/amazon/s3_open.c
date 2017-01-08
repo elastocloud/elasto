@@ -40,7 +40,7 @@
 #include "s3_handle.h"
 #include "s3_open.h"
 
-#define S3_FOPEN_LOCATION_DEFAULT "eu-central-1"
+#define S3_FOPEN_LOCATION_DEFAULT "us-west1"
 
 static int
 s3_fopen_obj(struct s3_fh *s3_fh,
