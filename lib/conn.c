@@ -964,10 +964,14 @@ elasto_conn_ev_disconnect(struct elasto_conn *econn)
 	}
 }
 
+/*
+ * initialise a temporary redirect connection, using properties of the original,
+ * aside from host and connection.
+ */
 static int
-elasto_conn_redirect(struct elasto_conn *econn_orig,
-		     const char *host_redirect,
-		     struct elasto_conn **_econn_redirect)
+elasto_conn_redirect_open(struct elasto_conn *econn_orig,
+			  const char *host_redirect,
+			  struct elasto_conn **_econn_redirect)
 {
 	int ret;
 	struct elasto_conn *econn_redirect;
@@ -979,21 +983,56 @@ elasto_conn_redirect(struct elasto_conn *econn_orig,
 		goto err_out;
 	}
 
-	ret = elasto_conn_init_s3(econn_orig->sign.account,
-				  (const char *)econn_orig->sign.key,
-				  econn_orig->insecure_http, host_redirect,
-				  &econn_redirect);
-	if (ret < 0) {
-		dbg(0, "failed to init redirected connection to %s\n",
-		    host_redirect);
+	econn_redirect = malloc(sizeof(*econn_redirect));
+	if (econn_redirect == NULL) {
+		ret = -ENOMEM;
 		goto err_out;
+	}
+
+	/*
+	 * use ev_base from original, to ensure consistent event loop
+	 * TODO add refcount to elasto_conn and take an econn_orig ref here.
+	 */
+	memset(econn_redirect, 0, sizeof(*econn_redirect));
+	econn_redirect->type = econn_orig->type;
+	econn_redirect->insecure_http = econn_orig->insecure_http;
+	econn_redirect->ev_base = econn_orig->ev_base;
+	econn_redirect->sign.key = econn_orig->sign.key;
+	econn_redirect->sign.key_len = econn_orig->sign.key_len;
+	econn_redirect->sign.account = econn_orig->sign.account;
+
+	econn_redirect->hostname = strdup(host_redirect);
+	if (econn_redirect->hostname == NULL) {
+		ret = -ENOMEM;
+		goto err_conn_free;
+	}
+
+	/* ev_bev, ev_conn, ssl_ctx and ssl filled during connection */
+	ret = elasto_conn_ev_connect(econn_redirect);
+	if (ret < 0) {
+		dbg(0, "failed to handle redirected connection to %s\n",
+		    host_redirect);
+		goto err_hostname_free;
 	}
 
 	dbg(3, "connected to %s for op redirect\n", host_redirect);
 	*_econn_redirect = econn_redirect;
-	ret = 0;
+	return 0;
+
+err_hostname_free:
+	free(econn_redirect->hostname);
+err_conn_free:
+	free(econn_redirect);
 err_out:
 	return ret;
+}
+
+static void
+elasto_conn_redirect_close(struct elasto_conn *econn_redirect)
+{
+	elasto_conn_ev_disconnect(econn_redirect);
+	free(econn_redirect->hostname);
+	free(econn_redirect);
 }
 
 int
@@ -1070,8 +1109,7 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		}
 
 		if (conn_op->econn_is_redirect) {
-			elasto_conn_ev_disconnect(conn_op->econn);
-			elasto_conn_free(conn_op->econn);
+			elasto_conn_redirect_close(conn_op->econn);
 			conn_op->econn_is_redirect = false;
 		}
 		conn_op->econn = NULL;
@@ -1086,9 +1124,9 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 				goto err_conn_op_free;
 			}
 			/* use original connection as redirect copy source */
-			ret = elasto_conn_redirect(conn_op->econn_orig,
-						   conn_op->op->url_host,
-						   &conn_op->econn);
+			ret = elasto_conn_redirect_open(conn_op->econn_orig,
+							conn_op->op->url_host,
+							&conn_op->econn);
 			if (ret < 0) {
 				conn_op_flag_error(conn_op, ret);
 				goto err_conn_op_free;
@@ -1126,8 +1164,7 @@ err_preped_free:
 	free(url);
 err_op_unassoc:
 	if (conn_op->econn_is_redirect) {
-		elasto_conn_ev_disconnect(conn_op->econn);
-		elasto_conn_free(conn_op->econn);
+		elasto_conn_redirect_close(conn_op->econn);
 	}
 err_conn_op_free:
 	ret = conn_op->error_ret;
