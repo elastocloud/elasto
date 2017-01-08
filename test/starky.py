@@ -43,7 +43,7 @@ class StarkyContext:
 	s3_creds_file = None
 	acc_prefix = "elastotest"
 	acc_loc = "West Europe"
-	bkt_loc = "eu-west-1"
+	bkt_loc = "us-west-1"
 	az_acc = None
 	az_acc_persist_created = False
 
@@ -372,8 +372,8 @@ class StarkyTestS3Create(unittest.TestCase):
 		'''
 		bkt_name = self.ctx.bkt_name_get()
 		sp = subprocess
-		cmd = "%s -- create %s" \
-		      % (self.ctx.cli_s3_cmd, bkt_name)
+		cmd = "%s -- create -L %s %s" \
+		      % (self.ctx.cli_s3_cmd, self.ctx.bkt_loc, bkt_name)
 		try:
 			print "-> %s\n" % (cmd)
 			out = sp.check_output(cmd, shell=True)
