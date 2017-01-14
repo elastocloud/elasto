@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -34,6 +34,28 @@
 #include "xmit.h"
 
 int
+elasto_fop_err_code_map(uint32_t err_code)
+{
+	int ret;
+
+	ret = -EIO;
+	switch (err_code) {
+	case 403:
+		ret = -EPERM;
+		break;
+	case 404:
+		ret = -ENOENT;
+		break;
+	default:
+		break;
+	}
+
+	dbg(1, "response error %u, mapped to errno %d\n", err_code, ret);
+
+	return ret;
+}
+
+int
 elasto_fop_send_recv(struct elasto_conn *conn,
 		     struct op *op)
 {
@@ -50,19 +72,7 @@ elasto_fop_send_recv(struct elasto_conn *conn,
 	}
 
 	if (op->rsp.is_error) {
-		dbg(1, "failed response: %d\n", op->rsp.err_code);
-
-		switch (op->rsp.err_code) {
-			case 403:
-				return -EPERM;
-				break;
-			case 404:
-				return -ENOENT;
-				break;
-			default:
-				return -EIO;
-				break;
-		}
+		return elasto_fop_err_code_map(op->rsp.err_code);
 	}
 
 	return 0;
