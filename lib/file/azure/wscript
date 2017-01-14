@@ -8,7 +8,7 @@ def call_ldconfig(bld):
 	bld.exec_command('/sbin/ldconfig')
 
 def build(bld):
-	bld.shlib(source='''apb_dir.c apb_handle.c apb_io.c apb_lease.c
+	bld.shlib(source='''apb_dir.c apb_handle.c apb_io.c abb_io.c apb_lease.c
 			    apb_open.c apb_stat.c apb_unlink.c''',
 		  target='elasto_file_mod_apb',
 		  vnum=bld.env.LIBELASTO_API_VERS,

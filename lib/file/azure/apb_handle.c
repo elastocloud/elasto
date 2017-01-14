@@ -39,6 +39,7 @@
 #include "lib/file/handle.h"
 #include "apb_handle.h"
 #include "apb_io.h"
+#include "abb_io.h"
 #include "apb_lease.h"
 #include "apb_open.h"
 #include "apb_dir.h"
