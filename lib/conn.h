@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -13,6 +13,8 @@
  */
 #ifndef _AZURE_CONN_H_
 #define _AZURE_CONN_H_
+
+#include <event2/util.h>
 
 enum elasto_conn_type {
 	CONN_TYPE_AZURE = 1,
@@ -43,6 +45,19 @@ int
 elasto_conn_sign_setkey(struct elasto_conn *econn,
 		       const char *account,
 		       const char *key_b64);
+
+/* asyncronously dispatch @op */
+struct event *
+elasto_conn_op_tx(struct elasto_conn *econn,
+		  struct op *op,
+		  void (*cb)(evutil_socket_t, short, void *),
+		  void *cb_arg);
+/* retrieve result of @op dispatch (after completion cb) */
+int
+elasto_conn_op_rx(struct event *ev_xmit);
+/* free async request state */
+void
+elasto_conn_op_free(struct event *ev_xmit);
 
 int
 elasto_conn_op_txrx(struct elasto_conn *econn,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -27,6 +27,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
+#include <event2/event_struct.h>
 #include <event2/bufferevent_ssl.h>
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
@@ -296,10 +297,16 @@ struct conn_op {
 	struct elasto_conn *econn_orig;
 	bool econn_is_redirect;
 	struct elasto_conn *econn;
+	/* event to track a single http req/rsp exchange */
 	struct evhttp_request *ev_http;
 	struct op *op;
 	/* used for tracking internal (conn layer) errors */
 	int error_ret;
+	/*
+	 * event to track entire op req/rsp exchange. may cover multiple http
+	 * req/rsp exchanges, depending on retries or redirects.
+	 */
+	struct event ev_xchng;
 };
 
 static void
@@ -887,15 +894,6 @@ static void
 conn_op_completion(struct conn_op *conn_op)
 {
 	int ret;
-	struct event_base *ev_base;
-
-	if ((conn_op->econn == NULL) || (conn_op->econn->ev_base == NULL)) {
-		dbg(0, "unable to break connection loop on op completion!\n");
-		conn_op->error_ret = -EBADF;
-		return;
-	}
-
-	ev_base = conn_op->econn->ev_base;
 
 	if (conn_op->ev_http != NULL) {
 		/* ev_req is cancelled / freed on error */
@@ -963,10 +961,9 @@ conn_op_completion(struct conn_op *conn_op)
 	}
 
 err_ev_break:
-	ret = event_base_loopbreak(ev_base);
-	if (ret < 0) {
-		dbg(0, "failed to break connection loop\n");
-	}
+	/* mark exchange as complete, allow completion callback to run */
+	dbg(2, "completed op 0x%x (%p)\n", conn_op->op->opcode, conn_op->op);
+	event_active(&conn_op->ev_xchng, 0, 0);
 }
 
 static void
@@ -995,7 +992,7 @@ ev_done_cb(struct evhttp_request *ev_req,
 						   op->rsp.err_code);
 	}
 
-	dbg(3, "op 0x%x completed with: %d %s\n", op->opcode, op->rsp.err_code,
+	dbg(3, "op 0x%x request done with: %d %s\n", op->opcode, op->rsp.err_code,
 	    evhttp_request_get_response_code_line(ev_req));
 
 	ev_in_buf = evhttp_request_get_input_buffer(ev_req);
@@ -1152,26 +1149,51 @@ err_url_free:
 	return ret;
 }
 
-int
-elasto_conn_op_txrx(struct elasto_conn *econn,
-		    struct op *op)
+/*
+ * send http request @op to server connected at @econn.
+ * @return: NULL on ENOMEM, or event to track entire req/rsp exchange for op.
+ */
+struct event *
+elasto_conn_op_tx(struct elasto_conn *econn,
+		  struct op *op,
+		  void (*cb)(evutil_socket_t, short, void *),
+		  void *cb_arg)
 {
 	int ret;
 	enum evhttp_cmd_type ev_req_type;
 	char *url;
 	struct conn_op *conn_op;
 
+	conn_op = malloc(sizeof(*conn_op));
+	if (conn_op == NULL) {
+		return NULL;
+	}
+	memset(conn_op, 0, sizeof(*conn_op));
+	conn_op->econn_orig = econn;
+	conn_op->econn = econn;
+	conn_op->op = op;
+
+	dbg(2, "sending op 0x%x (%p) on conn %p\n", op->opcode, op, econn);
+
+	ret = event_assign(&conn_op->ev_xchng, econn->ev_base, -1, 0,
+			   cb, cb_arg);
+	if (ret < 0) {
+		conn_op_flag_error(conn_op, -EINVAL);
+		goto err_out;
+	}
+	event_add(&conn_op->ev_xchng, NULL);
+
 	if (strcmp(econn->hostname, op->url_host)) {
 		dbg(0, "invalid connection for op 0x%x: %s != %s\n",
 		    op->opcode, econn->hostname, op->url_host);
-		ret = -EINVAL;
+		conn_op_flag_error(conn_op, -EINVAL);
 		goto err_out;
 	}
 
 	if (econn->insecure_http && op->url_https_only) {
 		dbg(0, "invalid connection for op 0x%x: connection is HTTP, "
 		       "but op requires HTTPS\n", op->opcode);
-		ret = -EINVAL;
+		conn_op_flag_error(conn_op, -EINVAL);
 		goto err_out;
 	}
 
@@ -1180,19 +1202,10 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		ret = elasto_conn_ev_connect(econn);
 		if (ret < 0) {
 			dbg(0, "failed to connect on send\n");
+			conn_op_flag_error(conn_op, ret);
 			goto err_out;
 		}
 	}
-
-	conn_op = malloc(sizeof(*conn_op));
-	if (conn_op == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	memset(conn_op, 0, sizeof(*conn_op));
-	conn_op->econn_orig = econn;
-	conn_op->econn = econn;
-	conn_op->op = op;
 
 	ret = elasto_conn_send_prepare(conn_op,
 				       &conn_op->ev_http,
@@ -1212,16 +1225,7 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		goto err_preped_free;
 	}
 
-	ret = event_base_dispatch(conn_op->econn->ev_base);
-	if (ret < 0) {
-		dbg(0, "event_base_dispatch() failed\n");
-		conn_op_flag_error(conn_op, -EBADF);
-		goto err_preped_free;
-	}
-
-	free(conn_op);
-
-	return 0;
+	return &conn_op->ev_xchng;
 
 err_preped_free:
 	if (conn_op->ev_http != NULL) {
@@ -1232,9 +1236,65 @@ err_op_unassoc:
 	if (conn_op->econn_is_redirect) {
 		elasto_conn_redirect_close(conn_op->econn);
 	}
-	ret = conn_op->error_ret;
-	free(conn_op);
 err_out:
+	return &conn_op->ev_xchng;
+}
+
+void
+elasto_conn_op_free(struct event *ev_xmit)
+{
+	struct conn_op *conn_op = container_of(ev_xmit, struct conn_op,
+						ev_xchng);
+	free(conn_op);
+}
+
+int
+elasto_conn_op_rx(struct event *ev_xmit)
+{
+	struct conn_op *conn_op = container_of(ev_xmit, struct conn_op,
+						ev_xchng);
+	int ret = conn_op->error_ret;
+
+	return ret;
+}
+
+static void
+elasto_conn_op_txrx_cmpl(evutil_socket_t sock,
+			 short flags,
+			 void *priv)
+{
+	struct event_base *ev_base = priv;
+	int ret;
+
+	/* break the event loop */
+	ret = event_base_loopbreak(ev_base);
+	if (ret < 0) {
+		dbg(0, "failed to break connection loop\n");
+	}
+}
+
+int
+elasto_conn_op_txrx(struct elasto_conn *econn,
+		    struct op *op)
+{
+	struct event *ev_xmit;
+	int ret;
+
+	ev_xmit = elasto_conn_op_tx(econn, op, elasto_conn_op_txrx_cmpl,
+				    econn->ev_base);
+	if (ev_xmit == NULL) {
+		return -ENOMEM;
+	}
+
+	ret = event_base_dispatch(econn->ev_base);
+	if (ret < 0) {
+		dbg(0, "event_base_dispatch() failed\n");
+		elasto_conn_op_free(ev_xmit);
+	}
+
+	ret = elasto_conn_op_rx(ev_xmit);
+	elasto_conn_op_free(ev_xmit);
+
 	return ret;
 }
 
