@@ -46,7 +46,17 @@
 #define ABB_IO_SIZE_HTTP (2 * BYTES_IN_MB)
 #define ABB_IO_SIZE_HTTPS (2 * BYTES_IN_MB)
 
-/* FIXME data_ctx is a dup of afx_io. combine in vfs */
+struct abb_fwrite_multi_state {
+	struct apb_fh *apb_fh;
+	uint64_t dest_off;
+	struct elasto_data *src_data;
+	uint64_t max_io;
+	uint64_t data_remain;
+	uint64_t data_off;
+	uint64_t blk_num;
+	struct list_head blks;
+};
+
 struct abb_fwrite_multi_data_ctx {
 	uint64_t this_off;
 	uint64_t this_len;
@@ -292,11 +302,8 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 		 uint64_t max_io)
 {
 	int ret;
+	struct abb_fwrite_multi_state *multi_state;
 	struct elasto_data *this_data;
-	uint64_t data_remain = dest_len;
-	uint64_t data_off = 0;
-	struct list_head blks;
-	uint64_t blk_num = 0;	/* can start at 0, unlike S3 multi-part */
 
 	if ((dest_len / max_io > 100000) || dest_len > INT64_MAX) {
 		/*
@@ -308,39 +315,59 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 
-	list_head_init(&blks);
-	while (data_remain > 0) {
+	multi_state = malloc(sizeof(*multi_state));
+	if (multi_state == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(multi_state, 0, sizeof(*multi_state));
+	multi_state->apb_fh = apb_fh;
+	multi_state->dest_off = dest_off;
+	multi_state->src_data = src_data;
+	multi_state->max_io = max_io;
+	multi_state->data_remain = dest_len;
+	/* blk_num can start at 0, unlike S3 multi-part */
+	list_head_init(&multi_state->blks);
+
+	while (multi_state->data_remain > 0) {
 		struct azure_block *blk;
-		uint64_t this_off = dest_off + data_off;
-		uint64_t this_len = MIN(max_io, data_remain);
+		uint64_t this_off = multi_state->dest_off
+					+ multi_state->data_off;
+		uint64_t this_len = MIN(multi_state->max_io,
+					multi_state->data_remain);
 
 		dbg(0, "multi fwrite: off=%" PRIu64 ", len=%" PRIu64 "\n",
 		    this_off, this_len);
 
-		ret = abb_fwrite_multi_data_setup(this_off, this_len, src_data,
+		ret = abb_fwrite_multi_data_setup(this_off, this_len,
+						  multi_state->src_data,
 						  &this_data);
 		if (ret < 0) {
 			dbg(0, "data setup failed\n");
 			goto err_mp_abort;
 		}
 
-		ret = abb_fwrite_multi_handle(apb_fh, blk_num, this_data, &blk);
+		ret = abb_fwrite_multi_handle(multi_state->apb_fh,
+					      multi_state->blk_num, this_data,
+					      &blk);
 		if (ret < 0) {
 			goto err_data_free;
 		}
 
 		abb_fwrite_multi_data_free(this_data);
-		data_off += this_len;
-		data_remain -= this_len;
-		list_add_tail(&blks, &blk->list);
-		blk_num++;
+		multi_state->data_off += this_len;
+		multi_state->data_remain -= this_len;
+		list_add_tail(&multi_state->blks, &blk->list);
+		multi_state->blk_num++;
 	}
 
-	ret = abb_fwrite_multi_finish(apb_fh, blk_num, &blks);
+	ret = abb_fwrite_multi_finish(multi_state->apb_fh, multi_state->blk_num,
+				      &multi_state->blks);
 	if (ret < 0) {
 		goto err_mp_abort;
 	}
-	abb_fwrite_blks_free(&blks);
+	abb_fwrite_blks_free(&multi_state->blks);
+	free(multi_state);
 
 	return 0;
 
@@ -348,7 +375,8 @@ err_data_free:
 	abb_fwrite_multi_data_free(this_data);
 err_mp_abort:
 	/* FIXME cleanup uploaded blob blocks */
-	abb_fwrite_blks_free(&blks);
+	abb_fwrite_blks_free(&multi_state->blks);
+	free(multi_state);
 err_out:
 	return ret;
 }
