@@ -79,6 +79,9 @@ elasto_conn_init_s3(const char *id,
 void
 elasto_conn_free(struct elasto_conn *econn);
 
+struct event_base *
+elasto_conn_ev_base_get(struct elasto_conn *econn);
+
 int
 elasto_conn_subsys_init(void);
 

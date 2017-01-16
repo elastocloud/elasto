@@ -1473,6 +1473,12 @@ ev_log_cb(int severity, const char *msg)
 	dbg(mapped_level, "%s\n", msg);
 }
 
+struct event_base *
+elasto_conn_ev_base_get(struct elasto_conn *econn)
+{
+	return econn->ev_base;
+}
+
 int
 elasto_conn_subsys_init(void)
 {
