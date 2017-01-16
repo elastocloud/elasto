@@ -1243,19 +1243,28 @@ err_out:
 void
 elasto_conn_op_free(struct event *ev_xmit)
 {
-	struct conn_op *conn_op = container_of(ev_xmit, struct conn_op,
-						ev_xchng);
+	struct conn_op *conn_op;
+
+	if (ev_xmit == NULL) {
+		return;
+	}
+
+	conn_op = container_of(ev_xmit, struct conn_op, ev_xchng);
 	free(conn_op);
 }
 
 int
 elasto_conn_op_rx(struct event *ev_xmit)
 {
-	struct conn_op *conn_op = container_of(ev_xmit, struct conn_op,
-						ev_xchng);
-	int ret = conn_op->error_ret;
+	struct conn_op *conn_op;
 
-	return ret;
+	if (ev_xmit == NULL) {
+		dbg(0, "elasto_conn_op_rx() called with NULL ev!\n");
+		return -EINVAL;
+	}
+
+	conn_op = container_of(ev_xmit, struct conn_op, ev_xchng);
+	return conn_op->error_ret;
 }
 
 static void
