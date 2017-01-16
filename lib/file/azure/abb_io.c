@@ -23,6 +23,7 @@
 #include <unistd.h>
 #include <inttypes.h>
 #include <sys/stat.h>
+#include <event2/event.h>
 
 #include "ccan/list/list.h"
 #include "lib/exml.h"
@@ -42,25 +43,38 @@
 #include "apb_stat.h"
 #include "abb_io.h"
 
+#define ABB_MAX_IN_FLIGHT 8
 #define ABB_MAX_PART (4 * BYTES_IN_MB)
 #define ABB_IO_SIZE_HTTP (2 * BYTES_IN_MB)
 #define ABB_IO_SIZE_HTTPS (2 * BYTES_IN_MB)
 
-struct abb_fwrite_multi_state {
+struct abb_io_multi_state {
+	int error_ret;
 	struct apb_fh *apb_fh;
-	uint64_t dest_off;
-	struct elasto_data *src_data;
+	struct event_base *ev_base;
+	uint64_t off;
+	struct elasto_data *data;
 	uint64_t max_io;
 	uint64_t data_remain;
 	uint64_t data_off;
-	uint64_t blk_num;
+	uint32_t max_in_flight;
+	uint32_t in_flight;
+	/*
+	 * blks list is needed as a parameter for block list put req, so use
+	 * same list to access child data_ctxs with container_of().
+	 */
+	uint32_t blk_num;
 	struct list_head blks;
 };
 
 struct abb_fwrite_multi_data_ctx {
+	struct abb_io_multi_state *parent_state;
 	uint64_t this_off;
 	uint64_t this_len;
-	struct elasto_data *src_data;
+	struct op *op;
+	struct event *ev_tx;
+	struct elasto_data *this_data;
+	struct azure_block blk;
 };
 
 static int
@@ -71,18 +85,23 @@ abb_fwrite_multi_iov_data_out_cb(uint64_t stream_off,
 				void *priv)
 {
 	struct abb_fwrite_multi_data_ctx *data_ctx = priv;
+	struct elasto_data *src_data;
 	int ret;
 	uint8_t *this_src_buf;
 	uint8_t *out_buf;
 
 	/* sanity checks */
 	if ((need > ABB_MAX_PART)
-	 || (data_ctx->this_off + stream_off + need
-					> data_ctx->src_data->len)) {
+			 || (data_ctx->parent_state == NULL)
+			 || (data_ctx->parent_state->data == NULL)
+			 || ((data_ctx->this_off + stream_off + need)
+				> data_ctx->parent_state->data->len)) {
 		dbg(0, "failed write len sanity check!\n");
 		ret = -EINVAL;
 		goto err_out;
 	}
+
+	src_data = data_ctx->parent_state->data;
 
 	/* TODO add free_cb to ELASTO_DATA_CB and avoid copy */
 	out_buf = malloc(need);
@@ -91,8 +110,7 @@ abb_fwrite_multi_iov_data_out_cb(uint64_t stream_off,
 		goto err_out;
 	}
 
-	this_src_buf = data_ctx->src_data->iov.buf
-					+ data_ctx->this_off + stream_off;
+	this_src_buf = src_data->iov.buf + data_ctx->this_off + stream_off;
 	memcpy(out_buf, this_src_buf, need);
 	/* out_buf freed by connection layer after send */
 	*_out_buf = out_buf;
@@ -111,21 +129,27 @@ abb_fwrite_multi_cb_data_out_cb(uint64_t stream_off,
 			       void *priv)
 {
 	struct abb_fwrite_multi_data_ctx *data_ctx = priv;
+	struct elasto_data *src_data;
 	int ret;
 	uint8_t *this_out_buf = NULL;
 	uint64_t this_buf_len = 0;
 
 	/* sanity checks */
 	if ((need > ABB_MAX_PART)
-	 || (data_ctx->this_off + stream_off + need > data_ctx->src_data->len)) {
+			 || (data_ctx->parent_state == NULL)
+			 || (data_ctx->parent_state->data == NULL)
+			 || ((data_ctx->this_off + stream_off + need)
+				> data_ctx->parent_state->data->len)) {
 		dbg(0, "failed write len sanity check!\n");
 		ret = -EINVAL;
 		goto err_out;
 	}
 
-	ret = data_ctx->src_data->cb.out_cb(data_ctx->this_off + stream_off,
-					    need, &this_out_buf, &this_buf_len,
-					    data_ctx->src_data->cb.priv);
+	src_data = data_ctx->parent_state->data;
+
+	ret = src_data->cb.out_cb(data_ctx->this_off + stream_off, need,
+				  &this_out_buf, &this_buf_len,
+				  src_data->cb.priv);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -140,12 +164,11 @@ err_out:
 }
 
 static int
-abb_fwrite_multi_data_setup(uint64_t this_off,
+abb_fwrite_multi_data_setup(struct abb_io_multi_state *multi_state,
+			    uint64_t this_off,
 			    uint64_t this_len,
-			    struct elasto_data *src_data,
-			    struct elasto_data **_this_data)
+			    struct abb_fwrite_multi_data_ctx **_data_ctx)
 {
-	struct elasto_data *this_data;
 	struct abb_fwrite_multi_data_ctx *data_ctx;
 	int ret;
 
@@ -154,19 +177,22 @@ abb_fwrite_multi_data_setup(uint64_t this_off,
 		ret = -ENOMEM;
 		goto err_out;
 	}
+	memset(data_ctx, 0, sizeof(*data_ctx));
 
+	data_ctx->parent_state = multi_state;
 	data_ctx->this_off = this_off;
 	data_ctx->this_len = this_len;
-	data_ctx->src_data = src_data;
 
-	if (src_data->type == ELASTO_DATA_IOV) {
+	if (multi_state->data->type == ELASTO_DATA_IOV) {
 		ret = elasto_data_cb_new(this_len,
 					 abb_fwrite_multi_iov_data_out_cb,
-					 0, NULL, data_ctx, &this_data);
-	} else if (src_data->type == ELASTO_DATA_CB) {
+					 0, NULL, data_ctx,
+					 &data_ctx->this_data);
+	} else if (multi_state->data->type == ELASTO_DATA_CB) {
 		ret = elasto_data_cb_new(this_len,
 					 abb_fwrite_multi_cb_data_out_cb,
-					 0, NULL, data_ctx, &this_data);
+					 0, NULL, data_ctx,
+					 &data_ctx->this_data);
 	} else {
 		assert(false);	/* already checked */
 	}
@@ -174,7 +200,7 @@ abb_fwrite_multi_data_setup(uint64_t this_off,
 		goto err_ctx_free;
 	}
 
-	*_this_data = this_data;
+	*_data_ctx = data_ctx;
 
 	return 0;
 
@@ -185,72 +211,183 @@ err_out:
 }
 
 static void
-abb_fwrite_multi_data_free(struct elasto_data *this_data)
+abb_fwrite_multi_data_free(struct abb_fwrite_multi_data_ctx *data_ctx)
 {
-	struct abb_fwrite_multi_data_ctx *data_ctx = this_data->cb.priv;
-
+	elasto_conn_op_free(data_ctx->ev_tx);
+	if (data_ctx->op != NULL) {
+		data_ctx->op->req.data = NULL;
+		op_free(data_ctx->op);
+	}
+	elasto_data_free(data_ctx->this_data);
+	free(data_ctx->blk.id);
 	free(data_ctx);
-	elasto_data_free(this_data);
+}
+
+static void
+abb_fwrite_multi_data_list_free(struct list_head *blks)
+{
+	struct azure_block *blk;
+	struct azure_block *blk_n;
+
+	list_for_each_safe(blks, blk, blk_n, list) {
+		struct abb_fwrite_multi_data_ctx *data_ctx;
+
+		data_ctx = container_of(blk, struct abb_fwrite_multi_data_ctx,
+					blk);
+		abb_fwrite_multi_data_free(data_ctx);
+	}
+}
+
+static void
+abb_io_multi_error_set(struct abb_io_multi_state *multi_state,
+		       int ret)
+{
+	/* first error code takes precedence */
+	if ((multi_state->error_ret != 0) || (ret == 0)) {
+		return;
+	}
+
+	dbg(0, "setting multi-state put error: %d\n", ret);
+	multi_state->error_ret = ret;
+}
+
+static void
+abb_io_multi_tx_pipe_fill(struct abb_io_multi_state *multi_state);
+
+static void
+abb_fwrite_multi_tx_cmpl(evutil_socket_t sock,
+			 short flags,
+			 void *priv)
+{
+	int ret;
+	struct abb_fwrite_multi_data_ctx *data_ctx = priv;
+	struct abb_io_multi_state *multi_state = data_ctx->parent_state;
+
+	ret = elasto_conn_op_rx(data_ctx->ev_tx);
+	if (ret < 0) {
+		dbg(2, "part put failed: %s\n", strerror(-ret));
+		abb_io_multi_error_set(multi_state, ret);
+		goto out_loopbreak;
+	}
+	if (data_ctx->op->rsp.is_error) {
+		ret = elasto_fop_err_code_map(data_ctx->op->rsp.err_code);
+		dbg(2, "part put error response: %d\n", ret);
+		abb_io_multi_error_set(multi_state, ret);
+		goto out_loopbreak;
+	}
+
+	data_ctx->blk.state = BLOCK_STATE_UNCOMMITED;
+	data_ctx->parent_state->in_flight--;
+	abb_io_multi_tx_pipe_fill(data_ctx->parent_state);
+
+	if ((data_ctx->parent_state->in_flight != 0)
+			|| (data_ctx->parent_state->data_remain != 0)) {
+		dbg(3, "fwrite multi tx: still in flight: %u, data remaining: %"
+		    PRIu64 "\n", data_ctx->parent_state->in_flight,
+		    data_ctx->parent_state->data_remain);
+		return;
+	}
+
+out_loopbreak:
+	/* all done or error, tell event loop to exit */
+	ret = event_base_loopbreak(multi_state->ev_base);
+	if (ret < 0) {
+		dbg(0, "failed to break dispatch loop\n");
+	}
+	/* data_ctx cleanup after event loop exit */
 }
 
 static int
-abb_fwrite_multi_handle(struct apb_fh *apb_fh,
-			int blk_num,
-			struct elasto_data *this_data,
-			struct azure_block **_blk)
+abb_fwrite_multi_tx(struct abb_io_multi_state *multi_state,
+		    uint64_t this_off,
+		    uint64_t this_len)
 {
 	int ret;
-	struct op *op;
 	struct azure_block *blk;
+	struct abb_fwrite_multi_data_ctx *data_ctx;
+	struct event *ev_tx;
 
-	blk = malloc(sizeof(*blk));
-	if (blk == NULL) {
-		ret = -ENOMEM;
+	ret = abb_fwrite_multi_data_setup(multi_state,
+					  this_off, this_len,
+					  &data_ctx);
+	if (ret < 0) {
+		dbg(0, "data setup failed\n");
 		goto err_out;
 	}
-	memset(blk, 0, sizeof(*blk));
+
+	blk = &data_ctx->blk;
 
 	/*
 	 * For a given blob, the length of the value specified for the
 	 * blockid parameter must be the same size for each block, and
 	 * mustn't exceed 64 bytes.
 	 */
-	ret = asprintf(&blk->id, "block%06d", blk_num);
+	ret = asprintf(&blk->id, "block%06d", multi_state->blk_num);
 	if (ret < 0) {
 		ret = -ENOMEM;
-		goto err_blk_free;
+		goto err_data_ctx_free;
 	}
 
-	ret = az_req_block_put(&apb_fh->path,
+	ret = az_req_block_put(&multi_state->apb_fh->path,
 			       blk->id,
-			       this_data,
-			       &op);
+			       data_ctx->this_data,
+			       &data_ctx->op);
 	if (ret < 0) {
-		goto err_id_free;
+		goto err_data_ctx_free;
 	}
 
-	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
-	if (ret < 0) {
-		dbg(0, "part put failed: %s\n", strerror(-ret));
-		goto err_op_free;
+	ev_tx = elasto_conn_op_tx(multi_state->apb_fh->io_conn, data_ctx->op,
+				  abb_fwrite_multi_tx_cmpl, data_ctx);
+	if (ev_tx == NULL) {
+		ret = -ENOMEM;
+		goto err_data_ctx_free;
 	}
-
-	blk->state = BLOCK_STATE_UNCOMMITED;
-	*_blk = blk;
-	op->req.data = NULL;
-	op_free(op);
+	data_ctx->ev_tx = ev_tx;
+	list_add_tail(&multi_state->blks, &blk->list);
+	multi_state->blk_num++;
 
 	return 0;
 
-err_op_free:
-	op->req.data = NULL;
-	op_free(op);
-err_id_free:
-	free(blk->id);
-err_blk_free:
-	free(blk);
+err_data_ctx_free:
+	abb_fwrite_multi_data_free(data_ctx);
 err_out:
 	return ret;
+}
+
+static void
+abb_io_multi_tx_pipe_fill(struct abb_io_multi_state *multi_state)
+{
+	int ret;
+
+	while ((multi_state->in_flight < multi_state->max_in_flight)
+					&& (multi_state->data_remain > 0)) {
+		uint64_t this_off = multi_state->off
+					+ multi_state->data_off;
+		uint64_t this_len = MIN(multi_state->max_io,
+					multi_state->data_remain);
+
+		dbg(0, "multi fwrite: off=%" PRIu64 ", len=%" PRIu64 "\n",
+		    this_off, this_len);
+
+		ret = abb_fwrite_multi_tx(multi_state, this_off, this_len);
+		if (ret < 0) {
+			goto err_break;
+		}
+
+		multi_state->data_off += this_len;
+		multi_state->data_remain -= this_len;
+		multi_state->in_flight++;
+	}
+
+	return;
+
+err_break:
+	abb_io_multi_error_set(multi_state, ret);
+	ret = event_base_loopbreak(multi_state->ev_base);
+	if (ret < 0) {
+		dbg(0, "failed to break dispatch loop\n");
+	}
+	/* data_ctx cleanup after event loop exit */
 }
 
 static int
@@ -282,18 +419,6 @@ err_out:
 	return ret;
 }
 
-static void
-abb_fwrite_blks_free(struct list_head *blks)
-{
-	struct azure_block *blk;
-	struct azure_block *blk_n;
-
-	list_for_each_safe(blks, blk, blk_n, list) {
-		free(blk->id);
-		free(blk);
-	}
-}
-
 static int
 abb_fwrite_multi(struct apb_fh *apb_fh,
 		 uint64_t dest_off,
@@ -302,8 +427,7 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 		 uint64_t max_io)
 {
 	int ret;
-	struct abb_fwrite_multi_state *multi_state;
-	struct elasto_data *this_data;
+	struct abb_io_multi_state *multi_state;
 
 	if ((dest_len / max_io > 100000) || dest_len > INT64_MAX) {
 		/*
@@ -321,61 +445,44 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 		goto err_out;
 	}
 	memset(multi_state, 0, sizeof(*multi_state));
+	multi_state->ev_base = elasto_conn_ev_base_get(apb_fh->io_conn);
 	multi_state->apb_fh = apb_fh;
-	multi_state->dest_off = dest_off;
-	multi_state->src_data = src_data;
+	multi_state->off = dest_off;
+	multi_state->data = src_data;
 	multi_state->max_io = max_io;
 	multi_state->data_remain = dest_len;
+	multi_state->max_in_flight = ABB_MAX_IN_FLIGHT;
 	/* blk_num can start at 0, unlike S3 multi-part */
 	list_head_init(&multi_state->blks);
 
-	while (multi_state->data_remain > 0) {
-		struct azure_block *blk;
-		uint64_t this_off = multi_state->dest_off
-					+ multi_state->data_off;
-		uint64_t this_len = MIN(multi_state->max_io,
-					multi_state->data_remain);
+	abb_io_multi_tx_pipe_fill(multi_state);
 
-		dbg(0, "multi fwrite: off=%" PRIu64 ", len=%" PRIu64 "\n",
-		    this_off, this_len);
-
-		ret = abb_fwrite_multi_data_setup(this_off, this_len,
-						  multi_state->src_data,
-						  &this_data);
-		if (ret < 0) {
-			dbg(0, "data setup failed\n");
-			goto err_mp_abort;
-		}
-
-		ret = abb_fwrite_multi_handle(multi_state->apb_fh,
-					      multi_state->blk_num, this_data,
-					      &blk);
-		if (ret < 0) {
-			goto err_data_free;
-		}
-
-		abb_fwrite_multi_data_free(this_data);
-		multi_state->data_off += this_len;
-		multi_state->data_remain -= this_len;
-		list_add_tail(&multi_state->blks, &blk->list);
-		multi_state->blk_num++;
+	ret = event_base_dispatch(multi_state->ev_base);
+	if (ret < 0) {
+		dbg(0, "event_base_dispatch() failed\n");
+		goto err_mp_abort;
 	}
 
+	if (multi_state->error_ret != 0) {
+		ret = multi_state->error_ret;
+		goto err_mp_abort;
+	}
+
+	/* TODO could move this into the event loop */
 	ret = abb_fwrite_multi_finish(multi_state->apb_fh, multi_state->blk_num,
 				      &multi_state->blks);
 	if (ret < 0) {
 		goto err_mp_abort;
 	}
-	abb_fwrite_blks_free(&multi_state->blks);
+
+	abb_fwrite_multi_data_list_free(&multi_state->blks);
 	free(multi_state);
 
 	return 0;
 
-err_data_free:
-	abb_fwrite_multi_data_free(this_data);
 err_mp_abort:
 	/* FIXME cleanup uploaded blob blocks */
-	abb_fwrite_blks_free(&multi_state->blks);
+	abb_fwrite_multi_data_list_free(&multi_state->blks);
 	free(multi_state);
 err_out:
 	return ret;
