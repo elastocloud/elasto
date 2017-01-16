@@ -251,6 +251,84 @@ abb_io_multi_error_set(struct abb_io_multi_state *multi_state,
 	multi_state->error_ret = ret;
 }
 
+struct abb_fwrite_multi_finish_state {
+	struct abb_io_multi_state *multi_state;
+	struct op *op;
+	struct event *ev_tx;
+};
+
+static void
+abb_fwrite_multi_finish_cmpl(evutil_socket_t sock,
+			     short flags,
+			     void *priv)
+{
+	int ret;
+	struct abb_fwrite_multi_finish_state *finish_state = priv;
+	struct abb_io_multi_state *multi_state = finish_state->multi_state;
+
+	ret = elasto_conn_op_rx(finish_state->ev_tx);
+	if (ret < 0) {
+		dbg(2, "block list put failed: %s\n", strerror(-ret));
+		abb_io_multi_error_set(multi_state, ret);
+	} else if (finish_state->op->rsp.is_error) {
+		ret = elasto_fop_err_code_map(finish_state->op->rsp.err_code);
+		dbg(2, "block list put error response: %d\n", ret);
+		abb_io_multi_error_set(multi_state, ret);
+	}
+	elasto_conn_op_free(finish_state->ev_tx);
+	op_free(finish_state->op);
+
+	dbg(0, "multipart upload finished\n");
+
+	ret = event_base_loopbreak(multi_state->ev_base);
+	if (ret < 0) {
+		dbg(0, "failed to break dispatch loop\n");
+	}
+	/* data_ctx cleanup after event loop exit */
+}
+
+static int
+abb_fwrite_multi_finish(struct abb_io_multi_state *multi_state)
+{
+	int ret;
+	struct abb_fwrite_multi_finish_state *finish_state;
+
+	finish_state = malloc(sizeof(*finish_state));
+	if (finish_state == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	memset(finish_state, 0, sizeof(*finish_state));
+
+	finish_state->multi_state = multi_state;
+
+	ret = az_req_block_list_put(&multi_state->apb_fh->path,
+				    multi_state->blk_num, &multi_state->blks,
+				    &finish_state->op);
+	if (ret < 0) {
+		dbg(0, "multi-part done req init failed: %s\n", strerror(-ret));
+		goto err_state_free;
+	}
+
+	finish_state->ev_tx = elasto_conn_op_tx(multi_state->apb_fh->io_conn,
+						finish_state->op,
+						abb_fwrite_multi_finish_cmpl,
+						finish_state);
+	if (finish_state->ev_tx == NULL) {
+		dbg(0, "multi-part done tx failed: %s\n", strerror(-ret));
+		ret = -ENOMEM;
+		goto err_op_free;
+	}
+
+	return 0;
+err_op_free:
+	op_free(finish_state->op);
+err_state_free:
+	free(finish_state);
+err_out:
+	return ret;
+}
+
 static void
 abb_io_multi_tx_pipe_fill(struct abb_io_multi_state *multi_state);
 
@@ -267,13 +345,13 @@ abb_fwrite_multi_tx_cmpl(evutil_socket_t sock,
 	if (ret < 0) {
 		dbg(2, "part put failed: %s\n", strerror(-ret));
 		abb_io_multi_error_set(multi_state, ret);
-		goto out_loopbreak;
+		goto err_loopbreak;
 	}
 	if (data_ctx->op->rsp.is_error) {
 		ret = elasto_fop_err_code_map(data_ctx->op->rsp.err_code);
 		dbg(2, "part put error response: %d\n", ret);
 		abb_io_multi_error_set(multi_state, ret);
-		goto out_loopbreak;
+		goto err_loopbreak;
 	}
 
 	data_ctx->blk.state = BLOCK_STATE_UNCOMMITED;
@@ -288,8 +366,16 @@ abb_fwrite_multi_tx_cmpl(evutil_socket_t sock,
 		return;
 	}
 
-out_loopbreak:
-	/* all done or error, tell event loop to exit */
+	/* all done, just need to commit all blocks */
+	ret = abb_fwrite_multi_finish(multi_state);
+	if (ret < 0) {
+		abb_io_multi_error_set(multi_state, ret);
+		goto err_loopbreak;
+	}
+
+	return;
+
+err_loopbreak:
 	ret = event_base_loopbreak(multi_state->ev_base);
 	if (ret < 0) {
 		dbg(0, "failed to break dispatch loop\n");
@@ -391,35 +477,6 @@ err_break:
 }
 
 static int
-abb_fwrite_multi_finish(struct apb_fh *apb_fh,
-			uint64_t num_blks,
-			struct list_head *blks)
-{
-	int ret;
-	struct op *op;
-
-	ret = az_req_block_list_put(&apb_fh->path,
-				    num_blks, blks, &op);
-	if (ret < 0) {
-		dbg(0, "multi-part done req init failed: %s\n", strerror(-ret));
-		goto err_out;
-	}
-
-	ret = elasto_fop_send_recv(apb_fh->io_conn, op);
-	if (ret < 0) {
-		dbg(0, "multi-part done req failed: %s\n", strerror(-ret));
-		goto err_op_free;
-	}
-
-	dbg(0, "multipart upload finished\n");
-	ret = 0;
-err_op_free:
-	op_free(op);
-err_out:
-	return ret;
-}
-
-static int
 abb_fwrite_multi(struct apb_fh *apb_fh,
 		 uint64_t dest_off,
 		 uint64_t dest_len,
@@ -465,13 +522,6 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 
 	if (multi_state->error_ret != 0) {
 		ret = multi_state->error_ret;
-		goto err_mp_abort;
-	}
-
-	/* TODO could move this into the event loop */
-	ret = abb_fwrite_multi_finish(multi_state->apb_fh, multi_state->blk_num,
-				      &multi_state->blks);
-	if (ret < 0) {
 		goto err_mp_abort;
 	}
 
