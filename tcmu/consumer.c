@@ -42,7 +42,7 @@
 #include <libtcmu.h>
 #include "scsi_defs.h"
 #include "lib/file/file_api.h"
-#include "libworkqueue/workqueue.h"
+#include "third_party/libworkqueue/workqueue.h"
 
 struct tcmu_elasto_args {
 	int debug_level;
