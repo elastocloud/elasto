@@ -1,4 +1,4 @@
-recurse_subdirs = 'libworkqueue'
+recurse_subdirs = 'libworkqueue hostcheck'
 
 def options(opt):
 	opt.load('compiler_c')
