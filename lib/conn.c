@@ -36,6 +36,7 @@
 #include <event2/http.h>
 #include <event2/keyvalq_struct.h>
 
+#include "third_party/hostcheck/libevent_https_client.h"
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
@@ -674,9 +675,13 @@ elasto_conn_ev_ssl_init(struct elasto_conn *econn,
 	X509_STORE_set_default_paths(store);
 
 	/*
-	 * XXX Use default openssl certificate verification. Should consider:
+	 * OpenSSL doesn't (currently) do server certificate hostname
+	 * verification, so we need to add a wrapper callback.
 	 * https://crypto.stanford.edu/~dabo/pubs/abstracts/ssl-client-bugs.html
+	 * Use libevent https-client (which makes use of iSECPartners and cURL
+	 * helpers) to do this.
 	 */
+	libevent_https_client_ssl_cert_verify_init(ssl_ctx, econn->hostname);
 
 	if (econn->pem_file != NULL) {
 		ret = SSL_CTX_use_certificate_chain_file(ssl_ctx,

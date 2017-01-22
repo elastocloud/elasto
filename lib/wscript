@@ -15,7 +15,7 @@ def build(bld):
 		  target='elasto_core',
 		  vnum=bld.env.LIBELASTO_API_VERS,
 		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
-		  use=['ccan'],
+		  use=['ccan',  'hostcheck'],
 		  includes = '. ..')
 	bld.stlib(source='s3_creds.c s3_req.c s3_path.c',
 		  target='elasto_req_s3',
