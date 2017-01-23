@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -27,6 +27,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
+#include <event2/event_struct.h>
 #include <event2/bufferevent_ssl.h>
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
@@ -35,6 +36,7 @@
 #include <event2/http.h>
 #include <event2/keyvalq_struct.h>
 
+#include "third_party/hostcheck/libevent_https_client.h"
 #include "ccan/list/list.h"
 #include "dbg.h"
 #include "base64.h"
@@ -296,10 +298,16 @@ struct conn_op {
 	struct elasto_conn *econn_orig;
 	bool econn_is_redirect;
 	struct elasto_conn *econn;
+	/* event to track a single http req/rsp exchange */
 	struct evhttp_request *ev_http;
 	struct op *op;
 	/* used for tracking internal (conn layer) errors */
 	int error_ret;
+	/*
+	 * event to track entire op req/rsp exchange. may cover multiple http
+	 * req/rsp exchanges, depending on retries or redirects.
+	 */
+	struct event ev_xchng;
 };
 
 static void
@@ -648,27 +656,249 @@ err_out:
 }
 
 static int
+elasto_conn_ev_ssl_init(struct elasto_conn *econn,
+			SSL_CTX **_ssl_ctx,
+			SSL **_ssl)
+{
+	int ret;
+	SSL_CTX *ssl_ctx;
+	SSL *ssl;
+	X509_STORE *store;
+
+	ssl_ctx = SSL_CTX_new(SSLv23_method());
+	if (ssl_ctx == NULL) {
+		ret = -EFAULT;
+		goto err_out;
+	}
+
+	store = SSL_CTX_get_cert_store(ssl_ctx);
+	X509_STORE_set_default_paths(store);
+
+	/*
+	 * OpenSSL doesn't (currently) do server certificate hostname
+	 * verification, so we need to add a wrapper callback.
+	 * https://crypto.stanford.edu/~dabo/pubs/abstracts/ssl-client-bugs.html
+	 * Use libevent https-client (which makes use of iSECPartners and cURL
+	 * helpers) to do this.
+	 */
+	libevent_https_client_ssl_cert_verify_init(ssl_ctx, econn->hostname);
+
+	if (econn->pem_file != NULL) {
+		ret = SSL_CTX_use_certificate_chain_file(ssl_ctx,
+							 econn->pem_file);
+		if (ret != 1) {
+			ret = -EINVAL;
+			goto err_ctx_free;
+		}
+
+		ret = SSL_CTX_use_PrivateKey_file(ssl_ctx, econn->pem_file,
+						  SSL_FILETYPE_PEM);
+		if (ret != 1) {
+			ret = -EINVAL;
+			goto err_ctx_free;
+		}
+	}
+
+	ssl = SSL_new(ssl_ctx);
+	if (ssl == NULL) {
+		ret = -EFAULT;
+		goto err_ctx_free;
+	}
+
+	*_ssl_ctx = ssl_ctx;
+	*_ssl = ssl;
+
+	return 0;
+
+err_ctx_free:
+	SSL_CTX_free(ssl_ctx);
+err_out:
+	return ret;
+}
+
+static void
+elasto_conn_ev_disconnect(struct elasto_conn *econn)
+{
+	if (econn->ev_conn == NULL) {
+		return;
+	}
+	evhttp_connection_set_closecb(econn->ev_conn, NULL, NULL);
+	evhttp_connection_free(econn->ev_conn);
+	econn->ev_conn = NULL;
+	/* FIXME ev_bev is freed with the ev connection???!!!! */
+	// bufferevent_free(econn->ev_bev);
+	econn->ev_bev = NULL;
+	if (!econn->insecure_http) {
+		SSL_CTX_free(econn->ssl_ctx);
+	}
+}
+
+static void
+ev_conn_close_cb(struct evhttp_connection *ev_conn,
+		 void *data)
+{
+	struct elasto_conn *econn = (struct elasto_conn *)data;
+
+	dbg(0, "Connection to %s closed\n", econn->hostname);
+	elasto_conn_ev_disconnect(econn);
+}
+
+static int
+elasto_conn_ev_connect(struct elasto_conn *econn)
+{
+	int ret;
+	struct bufferevent *ev_bev;
+	struct evhttp_connection *ev_conn;
+	struct ssl_ctx_st *ssl_ctx;
+	struct ssl_st *ssl;
+	int port;
+
+	if ((econn->hostname == NULL) || (econn->ev_base == NULL)) {
+	       return -EINVAL;
+	}
+
+	if (econn->insecure_http) {
+		port = 80;
+		ev_bev = bufferevent_socket_new(econn->ev_base, -1,
+						BEV_OPT_CLOSE_ON_FREE);
+		if (ev_bev == NULL) {
+			ret = -ENOMEM;
+			goto err_out;
+		}
+		dbg(1, "Using HTTP instead of HTTPS\n");
+	} else {
+		port = 443;
+		ret = elasto_conn_ev_ssl_init(econn, &ssl_ctx, &ssl);
+		if (ret < 0) {
+			goto err_out;
+		}
+
+		/* set hostname for Server Name Indication (SNI) */
+		SSL_set_tlsext_host_name(ssl, econn->hostname);
+
+		ev_bev = bufferevent_openssl_socket_new(econn->ev_base,
+						    -1, ssl,
+						    BUFFEREVENT_SSL_CONNECTING,
+						    (BEV_OPT_CLOSE_ON_FREE
+						    | BEV_OPT_DEFER_CALLBACKS));
+		if (ev_bev == NULL) {
+			ret = -ENOMEM;
+			goto err_ssl_free;
+		}
+
+		/* Needed to avoid EOF error on server disconnect */
+		bufferevent_openssl_set_allow_dirty_shutdown(ev_bev, 1);
+	}
+
+	/* synchronously resolve hostname and connect */
+	ev_conn = evhttp_connection_base_bufferevent_new(econn->ev_base,
+							 NULL,
+							 ev_bev,
+							 econn->hostname,
+							 port);
+	if (ev_conn == NULL) {
+		dbg(0, "failed to resolve/connect to %s:%d\n",
+		    econn->hostname, port);
+		ret = -EBADF;
+		goto err_bev_free;
+	}
+
+	evhttp_connection_set_closecb(ev_conn, ev_conn_close_cb, econn);
+	/* 30s timeout */
+	evhttp_connection_set_timeout(ev_conn, 30);
+
+	econn->ev_bev = ev_bev;
+	econn->ssl_ctx = ssl_ctx;
+	econn->ssl = ssl;
+	econn->ev_conn = ev_conn;
+
+	return 0;
+
+err_bev_free:
+	bufferevent_free(ev_bev);
+err_ssl_free:
+	if (!econn->insecure_http) {
+		SSL_CTX_free(ssl_ctx);
+	}
+err_out:
+	return ret;
+}
+
+/*
+ * initialise a temporary redirect connection, using properties of the original,
+ * aside from host and connection.
+ */
+static int
 elasto_conn_redirect_open(struct elasto_conn *econn_orig,
 			  const char *host_redirect,
-			  struct elasto_conn **_econn_redirect);
+			  struct elasto_conn **_econn_redirect)
+{
+	int ret;
+	struct elasto_conn *econn_redirect;
+
+	assert(_econn_redirect != NULL);
+	if (econn_orig->type != CONN_TYPE_S3) {
+		dbg(0, "only S3 connections support redirects\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	econn_redirect = malloc(sizeof(*econn_redirect));
+	if (econn_redirect == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+
+	/*
+	 * use ev_base from original, to ensure consistent event loop
+	 * TODO add refcount to elasto_conn and take an econn_orig ref here.
+	 */
+	memset(econn_redirect, 0, sizeof(*econn_redirect));
+	econn_redirect->type = econn_orig->type;
+	econn_redirect->insecure_http = econn_orig->insecure_http;
+	econn_redirect->ev_base = econn_orig->ev_base;
+	econn_redirect->sign.key = econn_orig->sign.key;
+	econn_redirect->sign.key_len = econn_orig->sign.key_len;
+	econn_redirect->sign.account = econn_orig->sign.account;
+
+	econn_redirect->hostname = strdup(host_redirect);
+	if (econn_redirect->hostname == NULL) {
+		ret = -ENOMEM;
+		goto err_conn_free;
+	}
+
+	/* ev_bev, ev_conn, ssl_ctx and ssl filled during connection */
+	ret = elasto_conn_ev_connect(econn_redirect);
+	if (ret < 0) {
+		dbg(0, "failed to handle redirected connection to %s\n",
+		    host_redirect);
+		goto err_hostname_free;
+	}
+
+	dbg(3, "connected to %s for op redirect\n", host_redirect);
+	*_econn_redirect = econn_redirect;
+	return 0;
+
+err_hostname_free:
+	free(econn_redirect->hostname);
+err_conn_free:
+	free(econn_redirect);
+err_out:
+	return ret;
+}
+
 static void
-elasto_conn_redirect_close(struct elasto_conn *econn_redirect);
-static int
-elasto_conn_ev_connect(struct elasto_conn *econn);
+elasto_conn_redirect_close(struct elasto_conn *econn_redirect)
+{
+	elasto_conn_ev_disconnect(econn_redirect);
+	free(econn_redirect->hostname);
+	free(econn_redirect);
+}
 
 static void
 conn_op_completion(struct conn_op *conn_op)
 {
 	int ret;
-	struct event_base *ev_base;
-
-	if ((conn_op->econn == NULL) || (conn_op->econn->ev_base == NULL)) {
-		dbg(0, "unable to break connection loop on op completion!\n");
-		conn_op->error_ret = -EBADF;
-		return;
-	}
-
-	ev_base = conn_op->econn->ev_base;
 
 	if (conn_op->ev_http != NULL) {
 		/* ev_req is cancelled / freed on error */
@@ -736,10 +966,9 @@ conn_op_completion(struct conn_op *conn_op)
 	}
 
 err_ev_break:
-	ret = event_base_loopbreak(ev_base);
-	if (ret < 0) {
-		dbg(0, "failed to break connection loop\n");
-	}
+	/* mark exchange as complete, allow completion callback to run */
+	dbg(2, "completed op 0x%x (%p)\n", conn_op->op->opcode, conn_op->op);
+	event_active(&conn_op->ev_xchng, 0, 0);
 }
 
 static void
@@ -768,7 +997,7 @@ ev_done_cb(struct evhttp_request *ev_req,
 						   op->rsp.err_code);
 	}
 
-	dbg(3, "op 0x%x completed with: %d %s\n", op->opcode, op->rsp.err_code,
+	dbg(3, "op 0x%x request done with: %d %s\n", op->opcode, op->rsp.err_code,
 	    evhttp_request_get_response_code_line(ev_req));
 
 	ev_in_buf = evhttp_request_get_input_buffer(ev_req);
@@ -925,265 +1154,51 @@ err_url_free:
 	return ret;
 }
 
-static void
-elasto_conn_ev_disconnect(struct elasto_conn *econn);
-
-static void
-ev_conn_close_cb(struct evhttp_connection *ev_conn,
-		 void *data)
-{
-	struct elasto_conn *econn = (struct elasto_conn *)data;
-
-	dbg(0, "Connection to %s closed\n", econn->hostname);
-	elasto_conn_ev_disconnect(econn);
-}
-
-static int
-elasto_conn_ev_ssl_init(struct elasto_conn *econn,
-			SSL_CTX **_ssl_ctx,
-			SSL **_ssl)
-{
-	int ret;
-	SSL_CTX *ssl_ctx;
-	SSL *ssl;
-	X509_STORE *store;
-
-	ssl_ctx = SSL_CTX_new(SSLv23_method());
-	if (ssl_ctx == NULL) {
-		ret = -EFAULT;
-		goto err_out;
-	}
-
-	store = SSL_CTX_get_cert_store(ssl_ctx);
-	X509_STORE_set_default_paths(store);
-
-	/*
-	 * XXX Use default openssl certificate verification. Should consider:
-	 * https://crypto.stanford.edu/~dabo/pubs/abstracts/ssl-client-bugs.html
-	 */
-
-	if (econn->pem_file != NULL) {
-		ret = SSL_CTX_use_certificate_chain_file(ssl_ctx,
-							 econn->pem_file);
-		if (ret != 1) {
-			ret = -EINVAL;
-			goto err_ctx_free;
-		}
-
-		ret = SSL_CTX_use_PrivateKey_file(ssl_ctx, econn->pem_file,
-						  SSL_FILETYPE_PEM);
-		if (ret != 1) {
-			ret = -EINVAL;
-			goto err_ctx_free;
-		}
-	}
-
-	ssl = SSL_new(ssl_ctx);
-	if (ssl == NULL) {
-		ret = -EFAULT;
-		goto err_ctx_free;
-	}
-
-	*_ssl_ctx = ssl_ctx;
-	*_ssl = ssl;
-
-	return 0;
-
-err_ctx_free:
-	SSL_CTX_free(ssl_ctx);
-err_out:
-	return ret;
-}
-
-static int
-elasto_conn_ev_connect(struct elasto_conn *econn)
-{
-	int ret;
-	struct bufferevent *ev_bev;
-	struct evhttp_connection *ev_conn;
-	struct ssl_ctx_st *ssl_ctx;
-	struct ssl_st *ssl;
-	int port;
-
-	if ((econn->hostname == NULL) || (econn->ev_base == NULL)) {
-	       return -EINVAL;
-	}
-
-	if (econn->insecure_http) {
-		port = 80;
-		ev_bev = bufferevent_socket_new(econn->ev_base, -1,
-						BEV_OPT_CLOSE_ON_FREE);
-		if (ev_bev == NULL) {
-			ret = -ENOMEM;
-			goto err_out;
-		}
-		dbg(1, "Using HTTP instead of HTTPS\n");
-	} else {
-		port = 443;
-		ret = elasto_conn_ev_ssl_init(econn, &ssl_ctx, &ssl);
-		if (ret < 0) {
-			goto err_out;
-		}
-
-		/* set hostname for Server Name Indication (SNI) */
-		SSL_set_tlsext_host_name(ssl, econn->hostname);
-
-		ev_bev = bufferevent_openssl_socket_new(econn->ev_base,
-						    -1, ssl,
-						    BUFFEREVENT_SSL_CONNECTING,
-						    (BEV_OPT_CLOSE_ON_FREE
-						    | BEV_OPT_DEFER_CALLBACKS));
-		if (ev_bev == NULL) {
-			ret = -ENOMEM;
-			goto err_ssl_free;
-		}
-
-		/* Needed to avoid EOF error on server disconnect */
-		bufferevent_openssl_set_allow_dirty_shutdown(ev_bev, 1);
-	}
-
-	/* synchronously resolve hostname and connect */
-	ev_conn = evhttp_connection_base_bufferevent_new(econn->ev_base,
-							 NULL,
-							 ev_bev,
-							 econn->hostname,
-							 port);
-	if (ev_conn == NULL) {
-		dbg(0, "failed to resolve/connect to %s:%d\n",
-		    econn->hostname, port);
-		ret = -EBADF;
-		goto err_bev_free;
-	}
-
-	evhttp_connection_set_closecb(ev_conn, ev_conn_close_cb, econn);
-	/* 30s timeout */
-	evhttp_connection_set_timeout(ev_conn, 30);
-
-	econn->ev_bev = ev_bev;
-	econn->ssl_ctx = ssl_ctx;
-	econn->ssl = ssl;
-	econn->ev_conn = ev_conn;
-
-	return 0;
-
-err_bev_free:
-	bufferevent_free(ev_bev);
-err_ssl_free:
-	if (!econn->insecure_http) {
-		SSL_CTX_free(ssl_ctx);
-	}
-err_out:
-	return ret;
-}
-
-static void
-elasto_conn_ev_disconnect(struct elasto_conn *econn)
-{
-	if (econn->ev_conn == NULL) {
-		return;
-	}
-	evhttp_connection_set_closecb(econn->ev_conn, NULL, NULL);
-	evhttp_connection_free(econn->ev_conn);
-	econn->ev_conn = NULL;
-	/* FIXME ev_bev is freed with the ev connection???!!!! */
-	// bufferevent_free(econn->ev_bev);
-	econn->ev_bev = NULL;
-	if (!econn->insecure_http) {
-		SSL_CTX_free(econn->ssl_ctx);
-	}
-}
-
 /*
- * initialise a temporary redirect connection, using properties of the original,
- * aside from host and connection.
+ * send http request @op to server connected at @econn.
+ * @return: NULL on ENOMEM, or event to track entire req/rsp exchange for op.
  */
-static int
-elasto_conn_redirect_open(struct elasto_conn *econn_orig,
-			  const char *host_redirect,
-			  struct elasto_conn **_econn_redirect)
-{
-	int ret;
-	struct elasto_conn *econn_redirect;
-
-	assert(_econn_redirect != NULL);
-	if (econn_orig->type != CONN_TYPE_S3) {
-		dbg(0, "only S3 connections support redirects\n");
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	econn_redirect = malloc(sizeof(*econn_redirect));
-	if (econn_redirect == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	/*
-	 * use ev_base from original, to ensure consistent event loop
-	 * TODO add refcount to elasto_conn and take an econn_orig ref here.
-	 */
-	memset(econn_redirect, 0, sizeof(*econn_redirect));
-	econn_redirect->type = econn_orig->type;
-	econn_redirect->insecure_http = econn_orig->insecure_http;
-	econn_redirect->ev_base = econn_orig->ev_base;
-	econn_redirect->sign.key = econn_orig->sign.key;
-	econn_redirect->sign.key_len = econn_orig->sign.key_len;
-	econn_redirect->sign.account = econn_orig->sign.account;
-
-	econn_redirect->hostname = strdup(host_redirect);
-	if (econn_redirect->hostname == NULL) {
-		ret = -ENOMEM;
-		goto err_conn_free;
-	}
-
-	/* ev_bev, ev_conn, ssl_ctx and ssl filled during connection */
-	ret = elasto_conn_ev_connect(econn_redirect);
-	if (ret < 0) {
-		dbg(0, "failed to handle redirected connection to %s\n",
-		    host_redirect);
-		goto err_hostname_free;
-	}
-
-	dbg(3, "connected to %s for op redirect\n", host_redirect);
-	*_econn_redirect = econn_redirect;
-	return 0;
-
-err_hostname_free:
-	free(econn_redirect->hostname);
-err_conn_free:
-	free(econn_redirect);
-err_out:
-	return ret;
-}
-
-static void
-elasto_conn_redirect_close(struct elasto_conn *econn_redirect)
-{
-	elasto_conn_ev_disconnect(econn_redirect);
-	free(econn_redirect->hostname);
-	free(econn_redirect);
-}
-
-int
-elasto_conn_op_txrx(struct elasto_conn *econn,
-		    struct op *op)
+struct event *
+elasto_conn_op_tx(struct elasto_conn *econn,
+		  struct op *op,
+		  void (*cb)(evutil_socket_t, short, void *),
+		  void *cb_arg)
 {
 	int ret;
 	enum evhttp_cmd_type ev_req_type;
 	char *url;
 	struct conn_op *conn_op;
 
+	conn_op = malloc(sizeof(*conn_op));
+	if (conn_op == NULL) {
+		return NULL;
+	}
+	memset(conn_op, 0, sizeof(*conn_op));
+	conn_op->econn_orig = econn;
+	conn_op->econn = econn;
+	conn_op->op = op;
+
+	dbg(2, "sending op 0x%x (%p) on conn %p\n", op->opcode, op, econn);
+
+	ret = event_assign(&conn_op->ev_xchng, econn->ev_base, -1, 0,
+			   cb, cb_arg);
+	if (ret < 0) {
+		conn_op_flag_error(conn_op, -EINVAL);
+		goto err_out;
+	}
+	event_add(&conn_op->ev_xchng, NULL);
+
 	if (strcmp(econn->hostname, op->url_host)) {
 		dbg(0, "invalid connection for op 0x%x: %s != %s\n",
 		    op->opcode, econn->hostname, op->url_host);
-		ret = -EINVAL;
+		conn_op_flag_error(conn_op, -EINVAL);
 		goto err_out;
 	}
 
 	if (econn->insecure_http && op->url_https_only) {
 		dbg(0, "invalid connection for op 0x%x: connection is HTTP, "
 		       "but op requires HTTPS\n", op->opcode);
-		ret = -EINVAL;
+		conn_op_flag_error(conn_op, -EINVAL);
 		goto err_out;
 	}
 
@@ -1192,19 +1207,10 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		ret = elasto_conn_ev_connect(econn);
 		if (ret < 0) {
 			dbg(0, "failed to connect on send\n");
+			conn_op_flag_error(conn_op, ret);
 			goto err_out;
 		}
 	}
-
-	conn_op = malloc(sizeof(*conn_op));
-	if (conn_op == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-	memset(conn_op, 0, sizeof(*conn_op));
-	conn_op->econn_orig = econn;
-	conn_op->econn = econn;
-	conn_op->op = op;
 
 	ret = elasto_conn_send_prepare(conn_op,
 				       &conn_op->ev_http,
@@ -1224,16 +1230,7 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		goto err_preped_free;
 	}
 
-	ret = event_base_dispatch(conn_op->econn->ev_base);
-	if (ret < 0) {
-		dbg(0, "event_base_dispatch() failed\n");
-		conn_op_flag_error(conn_op, -EBADF);
-		goto err_preped_free;
-	}
-
-	free(conn_op);
-
-	return 0;
+	return &conn_op->ev_xchng;
 
 err_preped_free:
 	if (conn_op->ev_http != NULL) {
@@ -1244,9 +1241,74 @@ err_op_unassoc:
 	if (conn_op->econn_is_redirect) {
 		elasto_conn_redirect_close(conn_op->econn);
 	}
-	ret = conn_op->error_ret;
-	free(conn_op);
 err_out:
+	return &conn_op->ev_xchng;
+}
+
+void
+elasto_conn_op_free(struct event *ev_xmit)
+{
+	struct conn_op *conn_op;
+
+	if (ev_xmit == NULL) {
+		return;
+	}
+
+	conn_op = container_of(ev_xmit, struct conn_op, ev_xchng);
+	free(conn_op);
+}
+
+int
+elasto_conn_op_rx(struct event *ev_xmit)
+{
+	struct conn_op *conn_op;
+
+	if (ev_xmit == NULL) {
+		dbg(0, "elasto_conn_op_rx() called with NULL ev!\n");
+		return -EINVAL;
+	}
+
+	conn_op = container_of(ev_xmit, struct conn_op, ev_xchng);
+	return conn_op->error_ret;
+}
+
+static void
+elasto_conn_op_txrx_cmpl(evutil_socket_t sock,
+			 short flags,
+			 void *priv)
+{
+	struct event_base *ev_base = priv;
+	int ret;
+
+	/* break the event loop */
+	ret = event_base_loopbreak(ev_base);
+	if (ret < 0) {
+		dbg(0, "failed to break connection loop\n");
+	}
+}
+
+int
+elasto_conn_op_txrx(struct elasto_conn *econn,
+		    struct op *op)
+{
+	struct event *ev_xmit;
+	int ret;
+
+	ev_xmit = elasto_conn_op_tx(econn, op, elasto_conn_op_txrx_cmpl,
+				    econn->ev_base);
+	if (ev_xmit == NULL) {
+		return -ENOMEM;
+	}
+
+	ret = event_base_dispatch(econn->ev_base);
+	if (ret < 0) {
+		dbg(0, "event_base_dispatch() failed\n");
+		elasto_conn_op_free(ev_xmit);
+	}
+
+	ret = elasto_conn_op_rx(ev_xmit);
+	elasto_conn_op_free(ev_xmit);
+
 	return ret;
 }
 
@@ -1414,6 +1476,12 @@ ev_log_cb(int severity, const char *msg)
 	}
 
 	dbg(mapped_level, "%s\n", msg);
+}
+
+struct event_base *
+elasto_conn_ev_base_get(struct elasto_conn *econn)
+{
+	return econn->ev_base;
 }
 
 int

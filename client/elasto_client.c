@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -31,6 +31,11 @@
 #include "linenoise.h"
 #include "cli_common.h"
 
+/*
+ * cli_args needs to be a global for the linenoise hint callback, otherwise
+ * passed as a function parameter.
+ */
+static struct cli_args cli_args;
 static struct list_head cli_cmds = LIST_HEAD_INIT(cli_cmds);
 
 void
@@ -493,6 +498,47 @@ cli_cmd_line_completion(const char *line,
 	}
 }
 
+static char *
+cli_cmd_line_hint(const char *line,
+		  int *color,
+		  int *bold)
+{
+	struct cli_cmd_spec *cmd;
+	char *s;
+
+	if (line == NULL) {
+	       return NULL;
+	}
+	for (;*line == ' '; line++);
+
+	/* only show args hint if line matches "<cmd> " */
+	s = strchr(line, ' ');
+	if ((s == NULL) || (s == line) || (*(s + 1) != '\0')) {
+		return NULL;
+	}
+	assert(s > line);
+
+	*color = -1;
+	*bold = 1;
+	list_for_each(&cli_cmds, cmd, list) {
+		if (strncmp(cmd->name, line, s - line)) {
+			continue;
+		}
+		switch (cmd->feature_flags & cli_args.flags & ~CLI_FL_PROMPT) {
+		case CLI_FL_AZ:
+			return cmd->az_help;
+		case CLI_FL_AFS:
+			return cmd->afs_help;
+		case CLI_FL_S3:
+			return cmd->s3_help;
+		default:
+			/* multiple or none relevant */
+			return NULL;
+		}
+	}
+	return NULL;
+}
+
 #define ARGS_MAX 20
 static int
 cli_cmd_tokenize(char *line,
@@ -597,6 +643,7 @@ cli_cmd_line_start(struct cli_args *cli_args)
 	int ret = 0;
 
 	linenoiseSetCompletionCallback(cli_cmd_line_completion);
+	linenoiseSetHintsCallback(cli_cmd_line_hint);
 	linenoiseHistoryLoad(cli_args->history_file);
 	while (ret != CLI_HANDLE_RET_EXIT) {
 		char *line = linenoise("elasto> ");
@@ -613,7 +660,6 @@ cli_cmd_line_start(struct cli_args *cli_args)
 int
 main(int argc, char * const *argv)
 {
-	struct cli_args cli_args;
 	int opt_idx = 0;
 	int ret;
 

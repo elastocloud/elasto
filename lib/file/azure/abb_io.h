@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2015-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -11,46 +11,27 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
-#ifndef _APB_IO_H_
-#define _APB_IO_H_
+#ifndef _ABB_IO_H_
+#define _ABB_IO_H_
 
-/* page blob operations */
+/* block blob operations */
 int
-apb_fwrite(void *mod_priv,
+abb_fwrite(void *mod_priv,
 	   uint64_t dest_off,
 	   uint64_t dest_len,
 	   struct elasto_data *src_data);
 
 int
-apb_fread(void *mod_priv,
+abb_fread(void *mod_priv,
 	  uint64_t src_off,
 	  uint64_t src_len,
 	  struct elasto_data *dest_data);
 
 int
-apb_ftruncate(void *mod_priv,
-	      uint64_t len);
-
-int
-apb_fallocate(void *mod_priv,
-	      uint32_t mode,
-	      uint64_t dest_off,
-	      uint64_t dest_len);
-
-int
-apb_fsplice(void *src_mod_priv,
+abb_fsplice(void *src_mod_priv,
 	    uint64_t src_off,
 	    void *dest_mod_priv,
 	    uint64_t dest_off,
 	    uint64_t len);
 
-int
-apb_flist_ranges(void *mod_priv,
-		 uint64_t off,
-		 uint64_t len,
-		 uint64_t flags,	/* reserved */
-		 void *cb_priv,
-		 int (*range_cb)(struct elasto_frange *range,
-				 void *priv));
-
-#endif /* _APB_IO_H_ */
+#endif /* _ABB_IO_H_ */

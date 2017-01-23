@@ -1,0 +1,20 @@
+Elasto
+======
+
+hostcheck
+---------
+
+This directory contains external sources to perform hostname validation
+against server certificates:
+- openssl_hostname_validation from
+  https://github.com/iSECPartners/ssl-conservatory
+- hostcheck from the cURL project, which adds wildcard hostname matching
+- libevent_https_client which was obtained from the libevent
+  https-client source https://github.com/libevent/libevent. This is a
+  thin wrapper around openssl_hostname_validation and hostcheck, to
+  setup the verification callbacks.
+
+According to https://wiki.openssl.org/index.php/Hostname_validation,
+OpenSSL 1.1.0 will provide built-in functionality to handle this, but
+until it's widely available the cURL and ssl-conservatory source here
+can be utilized.

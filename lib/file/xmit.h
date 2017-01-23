@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -13,6 +13,9 @@
  */
 #ifndef _XMIT_H_
 #define _XMIT_H_
+
+int
+elasto_fop_err_code_map(uint32_t err_code);
 
 int
 elasto_fop_send_recv(struct elasto_conn *conn,

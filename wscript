@@ -4,7 +4,7 @@ LIBELASTO_API_VERS = '0.1.0'
 
 top = '.'
 out = 'build'
-recurse_subdirs = 'ccan lib client test doc libworkqueue tcmu'
+recurse_subdirs = 'ccan lib client test doc third_party tcmu'
 
 def options(opt):
 	opt.load('compiler_c')
