@@ -230,6 +230,7 @@ main(int argc,
 	cm_az_fs_path_run();
 	cm_s3_path_run();
 	cm_cli_path_run();
+	cm_cli_util_run();
 	cm_file_local_run();
 	if ((cm_ustate->ps_file == NULL)
 					&& (cm_ustate->az_access_key == NULL)) {
