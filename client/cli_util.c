@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2016, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -24,6 +24,7 @@
 #include <inttypes.h>
 
 #include "lib/util.h"
+#include "client/cli_util.h"
 
 void
 cli_human_size(double bytes,
@@ -38,4 +39,23 @@ cli_human_size(double bytes,
 		i++;
 	}
 	snprintf(buf, buflen, "%.*f %s", i, bytes, units[i]);
+}
+
+int
+cli_progress_print(FILE *stream,
+		   double pcnt_fract)
+{
+	char bar_str[CLI_PROGRESS_MAX_LEN]
+				= "#################################"
+				  "#################################";
+	int pcnt = (int)(pcnt_fract * 100);
+	int lpad = (int)(pcnt_fract * ARRAY_SIZE(bar_str));
+	int rpad = ARRAY_SIZE(bar_str) - lpad;
+	int len;
+
+	len = fprintf(stream, "\r%3d%% [%.*s%*s]",
+		      pcnt, lpad, bar_str, rpad, "");
+	fflush(stream);
+
+	return len;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2016, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -16,3 +16,8 @@ void
 cli_human_size(double bytes,
 	       char *buf,
 	       size_t buflen);
+
+#define CLI_PROGRESS_MAX_LEN 66
+int
+cli_progress_print(FILE *stream,
+		   double pcnt_fract);
