@@ -20,6 +20,6 @@ def build(bld):
 		    lib=['crypto', 'cmocka', 'expat', 'ssl', 'uuid']
 			+ bld.env.LIBEVENT_LIBS,
 		    use=['elasto_req_azure_blob', 'elasto_req_azure_fs',
-			 'elasto_req_s3', 'elasto_file', 'cli_path'],
+			 'elasto_req_s3', 'elasto_file', 'cli_lib'],
 		    includes = '. .. ../lib',
 		    install_path = None)
