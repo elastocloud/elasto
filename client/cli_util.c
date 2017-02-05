@@ -34,7 +34,7 @@ cli_human_size(double bytes,
 	int i = 0;
 	const char* units[] = {"B", "K", "M", "G", "T", "P", "E", "Z"};
 
-	while ((bytes > 1024) && (i < ARRAY_SIZE(units) - 1)) {
+	while ((bytes >= 1024) && (i < ARRAY_SIZE(units) - 1)) {
 		bytes /= 1024;
 		i++;
 	}
