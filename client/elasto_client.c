@@ -28,7 +28,7 @@
 #include "lib/file/file_api.h"
 #include "lib/dbg.h"
 #include "lib/util.h"
-#include "linenoise.h"
+#include "third_party/linenoise/linenoise.h"
 #include "cli_common.h"
 
 /*
