@@ -1182,10 +1182,7 @@ elasto_conn_op_tx(struct elasto_conn *econn,
 
 	ret = event_assign(&conn_op->ev_xchng, econn->ev_base, -1, 0,
 			   cb, cb_arg);
-	if (ret < 0) {
-		conn_op_flag_error(conn_op, -EINVAL);
-		goto err_out;
-	}
+	assert(ret == 0);
 	event_add(&conn_op->ev_xchng, NULL);
 
 	if (strcmp(econn->hostname, op->url_host)) {
