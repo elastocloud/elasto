@@ -1,11 +1,9 @@
 recurse_subdirs = 'file'
 
 def options(opt):
-	opt.load('compiler_c')
 	opt.recurse(recurse_subdirs)
 
 def configure(conf):
-	conf.load('compiler_c')
 	conf.env.append_unique('CFLAGS', ['-fPIC'])
 	conf.recurse(recurse_subdirs)
 

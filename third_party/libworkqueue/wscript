@@ -1,8 +1,8 @@
 def options(opt):
-	opt.load('compiler_c')
+	pass
 
 def configure(conf):
-	conf.load('compiler_c')
+	pass
 
 def build(bld):
 	bld.stlib(source='workqueue.c', target='elasto_wq')

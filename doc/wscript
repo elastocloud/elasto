@@ -1,8 +1,7 @@
 def options(opt):
-	opt.load('compiler_c')
+	pass
 
 def configure(conf):
-	conf.load('compiler_c')
 	conf.find_program('a2x', mandatory=False, var='A2X')
 	conf.find_program('gzip', mandatory=True, var='GZIP')
 

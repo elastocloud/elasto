@@ -1,11 +1,9 @@
 recurse_subdirs = 'azure amazon local'
 
 def options(opt):
-	opt.load('compiler_c')
 	opt.recurse(recurse_subdirs)
 
 def configure(conf):
-	conf.load('compiler_c')
 	conf.recurse(recurse_subdirs)
 
 def call_ldconfig(bld):
