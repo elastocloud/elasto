@@ -15,7 +15,8 @@
 #define _S3_OPEN_H_
 
 int
-s3_fopen(void *mod_priv,
+s3_fopen(struct event_base *ev_base,
+	 void *mod_priv,
 	 const char *path,
 	 uint64_t flags,
 	 struct elasto_ftoken_list *toks);

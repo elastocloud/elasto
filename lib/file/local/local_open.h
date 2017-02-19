@@ -15,10 +15,11 @@
 #define _LOCAL_OPEN_H_
 
 int
-local_fopen(void *mod_priv,
-	 const char *path,
-	 uint64_t flags,
-	 struct elasto_ftoken_list *toks);
+local_fopen(struct event_base *ev_base,
+	    void *mod_priv,
+	    const char *path,
+	    uint64_t flags,
+	    struct elasto_ftoken_list *toks);
 
 int
 local_fclose(void *mod_priv);

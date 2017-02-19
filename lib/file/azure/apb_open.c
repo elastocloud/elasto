@@ -87,7 +87,8 @@ err_out:
 }
 
 static int
-apb_io_conn_init(struct apb_fh *apb_fh,
+apb_io_conn_init(struct event_base *ev_base,
+		 struct apb_fh *apb_fh,
 		 struct elasto_conn **_io_conn)
 {
 	int ret;
@@ -113,7 +114,7 @@ apb_io_conn_init(struct apb_fh *apb_fh,
 	}
 
 	/* pem_file not needed for IO conn */
-	ret = elasto_conn_init_az(NULL, apb_fh->insecure_http,
+	ret = elasto_conn_init_az(ev_base, NULL, apb_fh->insecure_http,
 				  url_host, &io_conn);
 	free(url_host);
 	if (ret < 0) {
@@ -561,7 +562,8 @@ err_out:
 }
 
 static int
-apb_abb_fopen(void *mod_priv,
+apb_abb_fopen(struct event_base *ev_base,
+	      void *mod_priv,
 	      const char *path,
 	      uint64_t flags,
 	      struct elasto_ftoken_list *open_toks,
@@ -589,8 +591,8 @@ apb_abb_fopen(void *mod_priv,
 			goto err_out;
 		}
 
-		ret = elasto_conn_init_az(apb_fh->pem_path, false, mgmt_host,
-					  &apb_fh->mgmt_conn);
+		ret = elasto_conn_init_az(ev_base, apb_fh->pem_path, false,
+					  mgmt_host, &apb_fh->mgmt_conn);
 		free(mgmt_host);
 		if (ret < 0) {
 			goto err_path_free;
@@ -601,7 +603,7 @@ apb_abb_fopen(void *mod_priv,
 	}
 
 	if (apb_fh->path.blob != NULL) {
-		ret = apb_io_conn_init(apb_fh, &apb_fh->io_conn);
+		ret = apb_io_conn_init(ev_base, apb_fh, &apb_fh->io_conn);
 		if (ret < 0) {
 			goto err_mgmt_conn_free;
 		}
@@ -615,7 +617,7 @@ apb_abb_fopen(void *mod_priv,
 			goto err_io_conn_free;
 		}
 	} else if (apb_fh->path.ctnr != NULL) {
-		ret = apb_io_conn_init(apb_fh, &apb_fh->io_conn);
+		ret = apb_io_conn_init(ev_base, apb_fh, &apb_fh->io_conn);
 		if (ret < 0) {
 			goto err_mgmt_conn_free;
 		}
@@ -631,13 +633,15 @@ apb_abb_fopen(void *mod_priv,
 				goto err_mgmt_conn_free;
 			}
 
-			ret = apb_io_conn_init(apb_fh, &apb_fh->io_conn);
+			ret = apb_io_conn_init(ev_base, apb_fh,
+					       &apb_fh->io_conn);
 			if (ret < 0) {
 				goto err_mgmt_conn_free;
 			}
 			ret = ELASTO_FOPEN_RET_CREATED;
 		} else {
-			ret = apb_io_conn_init(apb_fh, &apb_fh->io_conn);
+			ret = apb_io_conn_init(ev_base, apb_fh,
+					       &apb_fh->io_conn);
 			if (ret < 0) {
 				goto err_mgmt_conn_free;
 			}
@@ -670,12 +674,13 @@ err_out:
 }
 
 int
-apb_fopen(void *mod_priv,
+apb_fopen(struct event_base *ev_base,
+	  void *mod_priv,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
-	return apb_abb_fopen(mod_priv, path, flags, open_toks, true);
+	return apb_abb_fopen(ev_base, mod_priv, path, flags, open_toks, true);
 }
 
 int
@@ -692,10 +697,11 @@ apb_fclose(void *mod_priv)
 }
 
 int
-abb_fopen(void *mod_priv,
+abb_fopen(struct event_base *ev_base,
+	  void *mod_priv,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
-	return apb_abb_fopen(mod_priv, path, flags, open_toks, false);
+	return apb_abb_fopen(ev_base, mod_priv, path, flags, open_toks, false);
 }

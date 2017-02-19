@@ -202,7 +202,8 @@ err_out:
 }
 
 int
-s3_fopen(void *mod_priv,
+s3_fopen(struct event_base *ev_base,
+	 void *mod_priv,
 	 const char *path,
 	 uint64_t flags,
 	 struct elasto_ftoken_list *open_toks)
@@ -222,7 +223,7 @@ s3_fopen(void *mod_priv,
 		goto err_path_free;
 	}
 
-	ret = elasto_conn_init_s3(s3_fh->key_id, s3_fh->secret,
+	ret = elasto_conn_init_s3(ev_base, s3_fh->key_id, s3_fh->secret,
 				  s3_fh->insecure_http, url_host, &s3_fh->conn);
 	free(url_host);
 	if (ret < 0) {

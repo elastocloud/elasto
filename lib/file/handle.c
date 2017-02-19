@@ -84,12 +84,18 @@ elasto_fh_init(const struct elasto_fauth *auth,
 	}
 	fh->open_flags = open_flags;
 
+	fh->ev_base = event_base_new();
+	if (fh->ev_base == NULL) {
+		ret = -ENOMEM;
+		goto err_path_free;
+	}
+
 	fh->mod_dl_h = dlopen(mod_path, RTLD_NOW);
 	if (fh->mod_dl_h == NULL) {
 		dbg(0, "failed to load module (%d) at path \"%s\": %s\n",
 		    auth->type, mod_path, dlerror());
 		ret = -EFAULT;
-		goto err_path_free;
+		goto err_base_free;
 	}
 
 	_mod_vers = dlsym(fh->mod_dl_h, ELASTO_FILE_MOD_VERS_SYM);
@@ -130,6 +136,8 @@ elasto_fh_init(const struct elasto_fauth *auth,
 
 err_dl_close:
 	dlclose(fh->mod_dl_h);
+err_base_free:
+	event_base_free(fh->ev_base);
 err_path_free:
 	free(fh->open_path);
 err_fh_free:
@@ -149,6 +157,7 @@ elasto_fh_free(struct elasto_fh *fh)
 		dbg(0, "failed to unload module (%d): %s\n",
 		    fh->type, dlerror());
 	}
+	event_base_free(fh->ev_base);
 	free(fh->open_path);
 
 	BUILD_ASSERT(sizeof(ELASTO_FH_POISON) <= ARRAY_SIZE(fh->magic));

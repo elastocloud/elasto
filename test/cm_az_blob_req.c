@@ -25,6 +25,7 @@
 #include <stddef.h>
 #include <setjmp.h>
 #include <cmocka.h>
+#include <event2/event.h>
 
 #include "lib/file/file_api.h"
 #include "cm_test.h"
@@ -44,6 +45,7 @@ static struct {
 	char *pem_file;
 	char *sub_id;
 	char *sub_name;
+	struct event_base *ev_base;
 	struct elasto_conn *io_conn;
 	char *ctnr;
 } cm_op_az_blob_req_state = {
@@ -70,6 +72,9 @@ cm_az_blob_req_init(void **state)
 	ret = elasto_conn_subsys_init();
 	assert_true(ret >= 0);
 
+	cm_op_az_blob_req_state.ev_base = event_base_new();
+	assert_true(cm_op_az_blob_req_state.ev_base != NULL);
+
 	ret = azure_ssl_pubset_process(cm_us->ps_file,
 				       &cm_op_az_blob_req_state.pem_file,
 				       &cm_op_az_blob_req_state.sub_id,
@@ -79,7 +84,8 @@ cm_az_blob_req_init(void **state)
 	ret = az_mgmt_req_hostname_get(&mgmt_host);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_init_az(cm_op_az_blob_req_state.pem_file,
+	ret = elasto_conn_init_az(cm_op_az_blob_req_state.ev_base,
+				  cm_op_az_blob_req_state.pem_file,
 				  false,	/* mgmt must use https */
 				  mgmt_host,
 				  &mgmt_conn);
@@ -102,7 +108,7 @@ cm_az_blob_req_init(void **state)
 	ret = az_blob_req_hostname_get(cm_us->acc, &url_host);
 	assert_true(ret >= 0);
 
-	ret = elasto_conn_init_az(NULL,
+	ret = elasto_conn_init_az(cm_op_az_blob_req_state.ev_base, NULL,
 				  cm_us->insecure_http, url_host,
 				  &cm_op_az_blob_req_state.io_conn);
 	assert_true(ret >= 0);
@@ -161,6 +167,7 @@ cm_az_blob_req_deinit(void **state)
 	free(cm_op_az_blob_req_state.pem_file);
 	free(cm_op_az_blob_req_state.sub_id);
 	free(cm_op_az_blob_req_state.sub_name);
+	event_base_free(cm_op_az_blob_req_state.ev_base);
 }
 
 static void

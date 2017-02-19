@@ -14,12 +14,15 @@
 #ifndef _HANDLE_H_
 #define _HANDLE_H_
 
+#include <event2/event.h>
+
 #define ELASTO_FH_MAGIC "ElastoF"
 #define ELASTO_FH_POISON "PoisonF"
 
 struct elasto_fh_mod_ops {
 	void (*fh_free)(void *mod_priv);
-	int (*open)(void *mod_priv,
+	int (*open)(struct event_base *ev_base,
+		    void *mod_priv,
 		    const char *path,
 		    uint64_t flags,
 		    struct elasto_ftoken_list *open_toks);
@@ -79,6 +82,9 @@ struct elasto_fh_mod_ops {
 /*
  * @magic: magic to verify handle on use
  * @type: module identifier
+ * @open_path: path provided by open caller
+ * @open_flags: flags provided by open caller
+ * @ev_base: libevent base context
  * @mod_dl_h: module dlopen handle
  * @mod_priv: private module data returned on module init
  * @ops: module functions
@@ -90,6 +96,7 @@ struct elasto_fh {
 	enum elasto_ftype type;
 	char *open_path;
 	uint64_t open_flags;
+	struct event_base *ev_base;
 	void *mod_dl_h;
 	void *mod_priv;
 	struct elasto_fh_mod_ops ops;
@@ -111,5 +118,9 @@ elasto_fh_free(struct elasto_fh *fh);
 
 int
 elasto_fh_validate(struct elasto_fh *fh);
+
+#define elasto_fh_ev_base_get(mod_priv) \
+	(struct event_base *) \
+		(container_of(mod_priv, struct elasto_fh, mod_priv))->ev_base
 
 #endif /* _HANDLE_H_ */

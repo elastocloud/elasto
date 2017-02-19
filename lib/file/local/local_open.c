@@ -148,10 +148,11 @@ err_out:
 }
 
 int
-local_fopen(void *mod_priv,
-	 const char *path,
-	 uint64_t flags,
-	 struct elasto_ftoken_list *open_toks)
+local_fopen(struct event_base *ev_base,
+	    void *mod_priv,
+	    const char *path,
+	    uint64_t flags,
+	    struct elasto_ftoken_list *open_toks)
 {
 	int ret;
 	struct local_fh *local_fh = mod_priv;

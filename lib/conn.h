@@ -64,13 +64,15 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 		    struct op *op);
 
 int
-elasto_conn_init_az(const char *pem_file,
+elasto_conn_init_az(struct event_base *ev_base,
+		    const char *pem_file,
 		    bool insecure_http,
 		    const char *host,
 		    struct elasto_conn **econn);
 
 int
-elasto_conn_init_s3(const char *id,
+elasto_conn_init_s3(struct event_base *ev_base,
+		    const char *id,
 		    const char *secret,
 		    bool insecure_http,
 		    const char *host,

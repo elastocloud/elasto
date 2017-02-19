@@ -1310,7 +1310,8 @@ elasto_conn_op_txrx(struct elasto_conn *econn,
 }
 
 static int
-elasto_conn_init_common(bool insecure_http,
+elasto_conn_init_common(struct event_base *ev_base,
+			bool insecure_http,
 			const char *host,
 			struct elasto_conn **_econn)
 {
@@ -1322,25 +1323,18 @@ elasto_conn_init_common(bool insecure_http,
 	}
 	memset(econn, 0, sizeof(*econn));
 
-	econn->ev_base = event_base_new();
-	if (econn->ev_base == NULL) {
-		ret = -ENOMEM;
-		goto err_conn_free;
-	}
-
+	econn->ev_base = ev_base;
 	econn->insecure_http = insecure_http;
 	econn->hostname = strdup(host);
 	if (econn->hostname == NULL) {
 		ret = -ENOMEM;
-		goto err_base_free;
+		goto err_conn_free;
 	}
 
 	*_econn = econn;
 
 	return 0;
 
-err_base_free:
-	event_base_free(econn->ev_base);
 err_conn_free:
 	free(econn);
 err_out:
@@ -1348,7 +1342,8 @@ err_out:
 }
 
 int
-elasto_conn_init_az(const char *pem_file,
+elasto_conn_init_az(struct event_base *ev_base,
+		    const char *pem_file,
 		    bool insecure_http,
 		    const char *host,
 		    struct elasto_conn **econn_out)
@@ -1356,7 +1351,7 @@ elasto_conn_init_az(const char *pem_file,
 	struct elasto_conn *econn;
 	int ret;
 
-	ret = elasto_conn_init_common(insecure_http, host, &econn);
+	ret = elasto_conn_init_common(ev_base, insecure_http, host, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -1389,7 +1384,8 @@ err_out:
 
 /* signing keys are set immediately for S3 */
 int
-elasto_conn_init_s3(const char *id,
+elasto_conn_init_s3(struct event_base *ev_base,
+		    const char *id,
 		    const char *secret,
 		    bool insecure_http,
 		    const char *host,
@@ -1398,7 +1394,7 @@ elasto_conn_init_s3(const char *id,
 	struct elasto_conn *econn;
 	int ret;
 
-	ret = elasto_conn_init_common(insecure_http, host, &econn);
+	ret = elasto_conn_init_common(ev_base, insecure_http, host, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -1439,7 +1435,6 @@ elasto_conn_free(struct elasto_conn *econn)
 		return;
 	}
 	elasto_conn_ev_disconnect(econn);
-	event_base_free(econn->ev_base);
 	if (econn->sign.key_len > 0) {
 		free(econn->sign.key);
 		free(econn->sign.account);

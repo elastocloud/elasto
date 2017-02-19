@@ -87,7 +87,8 @@ err_out:
 }
 
 static int
-afs_io_conn_init(struct afs_fh *afs_fh,
+afs_io_conn_init(struct event_base *ev_base,
+		 struct afs_fh *afs_fh,
 		 struct elasto_conn **_io_conn)
 {
 	int ret;
@@ -112,7 +113,7 @@ afs_io_conn_init(struct afs_fh *afs_fh,
 		goto err_out;
 	}
 
-	ret = elasto_conn_init_az(NULL, afs_fh->insecure_http,
+	ret = elasto_conn_init_az(ev_base, NULL, afs_fh->insecure_http,
 				  url_host, &io_conn);
 	free(url_host);
 	if (ret < 0) {
@@ -524,7 +525,8 @@ err_out:
 }
 
 int
-afs_fopen(void *mod_priv,
+afs_fopen(struct event_base *ev_base,
+	  void *mod_priv,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
@@ -551,8 +553,8 @@ afs_fopen(void *mod_priv,
 			goto err_out;
 		}
 
-		ret = elasto_conn_init_az(afs_fh->pem_path, false, mgmt_host,
-					  &afs_fh->mgmt_conn);
+		ret = elasto_conn_init_az(ev_base, afs_fh->pem_path, false,
+					  mgmt_host, &afs_fh->mgmt_conn);
 		free(mgmt_host);
 		if (ret < 0) {
 			goto err_path_free;
@@ -563,7 +565,7 @@ afs_fopen(void *mod_priv,
 	}
 
 	if (afs_fh->path.fs_ent != NULL) {
-		ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
+		ret = afs_io_conn_init(ev_base, afs_fh, &afs_fh->io_conn);
 		if (ret < 0) {
 			goto err_mgmt_conn_free;
 		}
@@ -577,7 +579,7 @@ afs_fopen(void *mod_priv,
 			goto err_io_conn_free;
 		}
 	} else if (afs_fh->path.share != NULL) {
-		ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
+		ret = afs_io_conn_init(ev_base, afs_fh, &afs_fh->io_conn);
 		if (ret < 0) {
 			goto err_mgmt_conn_free;
 		}
@@ -597,13 +599,15 @@ afs_fopen(void *mod_priv,
 			 * IO conn not needed for mgmt reqs, but in case of readdir
 			 * (List Shares).
 			 */
-			ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
+			ret = afs_io_conn_init(ev_base, afs_fh,
+					       &afs_fh->io_conn);
 			if (ret < 0) {
 				goto err_mgmt_conn_free;
 			}
 			ret = ELASTO_FOPEN_RET_CREATED;
 		} else {
-			ret = afs_io_conn_init(afs_fh, &afs_fh->io_conn);
+			ret = afs_io_conn_init(ev_base, afs_fh,
+					       &afs_fh->io_conn);
 			if (ret < 0) {
 				goto err_mgmt_conn_free;
 			}

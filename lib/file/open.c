@@ -69,7 +69,7 @@ elasto_fopen(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	ret = fh->ops.open(fh->mod_priv, path, flags, open_toks);
+	ret = fh->ops.open(fh->ev_base, fh->mod_priv, path, flags, open_toks);
 	if (ret < 0) {
 		goto err_fh_free;
 	}

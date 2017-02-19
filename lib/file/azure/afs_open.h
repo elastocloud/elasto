@@ -15,7 +15,8 @@
 #define _AFS_OPEN_H_
 
 int
-afs_fopen(void *mod_priv,
+afs_fopen(struct event_base *ev_base,
+	  void *mod_priv,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *toks);
