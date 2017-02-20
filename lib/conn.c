@@ -672,7 +672,11 @@ elasto_conn_ev_ssl_init(struct elasto_conn *econn,
 	}
 
 	store = SSL_CTX_get_cert_store(ssl_ctx);
-	X509_STORE_set_default_paths(store);
+	ret = X509_STORE_set_default_paths(store);
+	if (ret != 1) {
+		ret = -EINVAL;
+		goto err_ctx_free;
+	}
 
 	/*
 	 * OpenSSL doesn't (currently) do server certificate hostname
