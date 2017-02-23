@@ -50,6 +50,11 @@ elasto_fwrite(struct elasto_fh *fh,
 		goto err_out;
 	}
 
+	if (fh->ops.write == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
 	if (fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
 		dbg(1, "invalid IO request for directory handle\n");
 		ret = -EINVAL;
@@ -101,6 +106,11 @@ elasto_fwrite_cb(struct elasto_fh *fh,
 		goto err_out;
 	}
 
+	if (fh->ops.write == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
 	if (fh->open_flags & ELASTO_FOPEN_DIRECTORY) {
 		dbg(1, "invalid IO request for directory handle\n");
 		ret = -EINVAL;
@@ -143,6 +153,11 @@ elasto_fread(struct elasto_fh *fh,
 
 	ret = elasto_fh_validate(fh);
 	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (fh->ops.read == NULL) {
+		ret = -ENOTSUP;
 		goto err_out;
 	}
 
@@ -193,6 +208,11 @@ elasto_fread_cb(struct elasto_fh *fh,
 
 	ret = elasto_fh_validate(fh);
 	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (fh->ops.read == NULL) {
+		ret = -ENOTSUP;
 		goto err_out;
 	}
 

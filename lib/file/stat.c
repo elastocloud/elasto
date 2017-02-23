@@ -46,6 +46,11 @@ elasto_fstat(struct elasto_fh *fh,
 		goto err_out;
 	}
 
+	if (fh->ops.stat == NULL) {
+		ret = -ENOTSUP;
+		goto err_out;
+	}
+
 	if (fstat == NULL) {
 		ret = -EINVAL;
 		goto err_out;
@@ -69,6 +74,11 @@ elasto_fstatfs(struct elasto_fh *fh,
 
 	ret = elasto_fh_validate(fh);
 	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (fh->ops.statfs == NULL) {
+		ret = -ENOTSUP;
 		goto err_out;
 	}
 
