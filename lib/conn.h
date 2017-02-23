@@ -19,6 +19,7 @@
 enum elasto_conn_type {
 	CONN_TYPE_AZURE = 1,
 	CONN_TYPE_S3,
+	CONN_TYPE_WEB,
 };
 
 struct ssl_ctx_st;
@@ -77,6 +78,12 @@ elasto_conn_init_s3(struct event_base *ev_base,
 		    bool insecure_http,
 		    const char *host,
 		    struct elasto_conn **econn);
+
+int
+elasto_conn_init_web(struct event_base *ev_base,
+		     bool insecure_http,
+		     const char *host,
+		     struct elasto_conn **econn_out);
 
 void
 elasto_conn_free(struct elasto_conn *econn);

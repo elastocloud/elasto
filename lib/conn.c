@@ -1432,6 +1432,37 @@ err_out:
 	return ret;
 }
 
+int
+elasto_conn_init_web(struct event_base *ev_base,
+		    bool insecure_http,
+		    const char *host,
+		    struct elasto_conn **econn_out)
+{
+	struct elasto_conn *econn;
+	int ret;
+
+	ret = elasto_conn_init_common(ev_base, insecure_http, host, &econn);
+	if (ret < 0) {
+		goto err_out;
+	}
+	econn->type = CONN_TYPE_WEB;
+
+	ret = elasto_conn_ev_connect(econn);
+	if (ret < 0) {
+		dbg(0, "failed to connect to %s\n", host);
+		goto err_conn_free;
+	}
+
+	*econn_out = econn;
+
+	return 0;
+
+err_conn_free:
+	elasto_conn_free(econn);
+err_out:
+	return ret;
+}
+
 void
 elasto_conn_free(struct elasto_conn *econn)
 {
