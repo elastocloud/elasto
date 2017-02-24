@@ -41,11 +41,11 @@ cm_file_mkdir(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fmkdir(&cm_us->az_auth,
 			    path);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
@@ -60,12 +60,12 @@ cm_file_rmdir(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	cm_us->ctnr_suffix++; /* ensure future creations don't conflict */
 
 	ret = elasto_frmdir(&cm_us->az_auth,
 			    path);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
@@ -81,14 +81,14 @@ cm_file_share_create(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth, path, ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL
 				        | ELASTO_FOPEN_DIRECTORY, NULL, &fh);
 	assert_int_equal(ret, ELASTO_FOPEN_RET_CREATED);
 
 	ret = elasto_fclose(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
@@ -104,7 +104,7 @@ cm_file_share_del(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	cm_us->share_suffix++; /* ensure future creations don't conflict */
 
 	ret = elasto_fopen(&cm_us->az_auth, path, ELASTO_FOPEN_DIRECTORY, NULL,
@@ -112,7 +112,7 @@ cm_file_share_del(void **state)
 	assert_int_equal(ret, ELASTO_FOPEN_RET_EXISTED);
 
 	ret = elasto_funlink_close(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
@@ -128,7 +128,7 @@ cm_file_create(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/create_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -137,7 +137,7 @@ cm_file_create(void **state)
 	assert_int_equal(ret, ELASTO_FOPEN_RET_CREATED);
 
 	ret = elasto_fclose(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -152,17 +152,17 @@ cm_file_create(void **state)
 	assert_int_equal(ret, ELASTO_FOPEN_RET_EXISTED);
 
 	ret = elasto_fclose(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   ELASTO_FOPEN_CREATE,
 			   NULL, &fh);
 	assert_int_equal(ret, ELASTO_FOPEN_RET_EXISTED);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fclose(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
@@ -214,7 +214,7 @@ cm_file_io(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/io_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -224,20 +224,20 @@ cm_file_io(void **state)
 
 	/* must truncate to size writing to the range */
 	ret = elasto_ftruncate(fh, (1024 * 1024 * 1024));
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
 	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
 	ret = elasto_fread(fh, 0, ARRAY_SIZE(buf), buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
 
 	ret = elasto_fclose(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
@@ -254,7 +254,7 @@ cm_file_lease_basic(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/lease_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -299,7 +299,7 @@ cm_file_lease_multi(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/lease_multi_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -356,7 +356,7 @@ cm_file_lease_break(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/lease_multi_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -412,7 +412,7 @@ cm_file_truncate_basic(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/truncate_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -421,23 +421,23 @@ cm_file_truncate_basic(void **state)
 	assert_int_equal(ret, ELASTO_FOPEN_RET_CREATED);
 
 	ret = elasto_fstat(fh, &fstat);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	assert_int_equal(fstat.size, 0);
 
 	ret = elasto_ftruncate(fh, (1024 * 1024 * 1024));
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fstat(fh, &fstat);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	assert_int_equal(fstat.size, (1024 * 1024 * 1024));
 
 	ret = elasto_ftruncate(fh, (1024 * 1024));
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fstat(fh, &fstat);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	assert_int_equal(fstat.size, (1024 * 1024));
 
@@ -461,7 +461,7 @@ cm_file_stat_basic(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/stat_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -470,12 +470,12 @@ cm_file_stat_basic(void **state)
 	assert_int_equal(ret, ELASTO_FOPEN_RET_CREATED);
 
 	ret = elasto_fstat(fh, &fstat);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	assert_int_equal(fstat.size, 0);
 
 	ret = elasto_fstatfs(fh, &fstatfs);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	assert_int_equal(fstat.size, 0);
 	assert_true(fstatfs.iosize_min > 0);
@@ -575,7 +575,7 @@ cm_file_dir_open(void **state)
 
 	ret = elasto_frmdir(&cm_us->az_auth,
 			    path);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 
 	/* open root with invalid flags */
@@ -599,7 +599,7 @@ cm_file_dir_lease_basic(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -647,7 +647,7 @@ cm_file_dir_lease_multi(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -706,7 +706,7 @@ cm_file_dir_lease_break(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -871,7 +871,7 @@ cm_file_dir_readdir(void **state)
 
 	ret = elasto_frmdir(&cm_us->az_auth,
 			    ctnr_path);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(acc_path);
 	free(ctnr_path);
 }
@@ -964,7 +964,7 @@ cm_file_abb_io(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/abb_io_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -974,24 +974,24 @@ cm_file_abb_io(void **state)
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
 	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
 	/* read at arbitrary offsets, first half then second */
 	half = ARRAY_SIZE(buf) / 2;
 	ret = elasto_fread(fh, 0, half, buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	cm_file_buf_check(buf, half, 0);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
 	ret = elasto_fread(fh, half, half, buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	cm_file_buf_check(buf, half, half);
 
 	ret = elasto_fclose(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
@@ -1003,11 +1003,11 @@ cm_file_data_out_cb(uint64_t stream_off,
 		    void *priv)
 {
 	uint8_t *buf = malloc(need);
-	assert_false(buf == NULL);
+	assert_true(buf != NULL);
 
-	assert_false(_out_buf == NULL);
+	assert_true(_out_buf != NULL);
 	assert_true(*_out_buf == NULL);
-	assert_false(buf_len == NULL);
+	assert_true(buf_len != NULL);
 
 	cm_file_buf_fill(buf, need, stream_off);
 	*_out_buf = buf;
@@ -1040,7 +1040,7 @@ cm_file_data_cb(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/cb_io_test",
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -1049,13 +1049,13 @@ cm_file_data_cb(void **state)
 	assert_int_equal(ret, ELASTO_FOPEN_RET_CREATED);
 
 	ret = elasto_fwrite_cb(fh, 0, 1024, NULL, cm_file_data_out_cb);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fread_cb(fh, 0, 1024, NULL, cm_file_data_in_cb);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fclose(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
@@ -1072,7 +1072,7 @@ cm_file_afs_io(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/afs_io_test",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -1082,32 +1082,32 @@ cm_file_afs_io(void **state)
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
 	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	/* leave a 1k hole between first and second write */
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), ARRAY_SIZE(buf));
 	ret = elasto_fwrite(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	memset(buf, 0, ARRAY_SIZE(buf));
 	/* check first, hole zeros, then last chunk */
 	ret = elasto_fread(fh, 0, ARRAY_SIZE(buf), buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
 
 	ret = elasto_fread(fh, ARRAY_SIZE(buf), ARRAY_SIZE(buf), buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	cm_file_buf_check_zero(buf, ARRAY_SIZE(buf));
 
 	ret = elasto_fread(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), ARRAY_SIZE(buf));
 
 	ret = elasto_funlink_close(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
@@ -1142,7 +1142,7 @@ cm_file_afs_path_encoding(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/afs encoding test",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -1151,12 +1151,12 @@ cm_file_afs_path_encoding(void **state)
 	assert_int_equal(ret, ELASTO_FOPEN_RET_CREATED);
 
 	ret = elasto_fclose(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 
 	ret = asprintf(&path, "/%s/%s%d/afs$",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -1166,13 +1166,13 @@ cm_file_afs_path_encoding(void **state)
 	assert_int_equal(ret, ELASTO_FOPEN_RET_CREATED);
 
 	ret = elasto_fclose(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 
 	/* Azure FS supports '/' and '\' as directory path separators */
 	ret = asprintf(&path, "/%s/%s%d/afs$\\both path separators",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -1182,12 +1182,12 @@ cm_file_afs_path_encoding(void **state)
 	assert_int_equal(ret, ELASTO_FOPEN_RET_CREATED);
 
 	ret = elasto_funlink_close(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 
 	ret = asprintf(&path, "/%s/%s%d",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -1197,11 +1197,11 @@ cm_file_afs_path_encoding(void **state)
 
 	cb_called = 0;
 	ret = elasto_freaddir(fh, &cb_called, cm_file_afs_path_encoding_dent_cb);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	assert_int_equal(cb_called, 2);
 
 	ret = elasto_fclose(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
@@ -1234,7 +1234,7 @@ cm_file_afs_list_ranges(void **state)
 
 	ret = asprintf(&path, "/%s/%s%d/afs_io_test",
 		       cm_us->acc, cm_us->share, cm_us->share_suffix);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
@@ -1244,12 +1244,12 @@ cm_file_afs_list_ranges(void **state)
 
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 0);
 	ret = elasto_fwrite(fh, 0, ARRAY_SIZE(buf), buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	/* leave a 2k hole between start of file and write */
 	cm_file_buf_fill(buf, ARRAY_SIZE(buf), 2 * ARRAY_SIZE(buf));
 	ret = elasto_fwrite(fh, ARRAY_SIZE(buf) * 2, ARRAY_SIZE(buf), buf);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 
 	/* ftruncate file to 1GB (unallocated after write) */
 	ret = elasto_ftruncate(fh, BYTES_IN_GB);
@@ -1263,7 +1263,7 @@ cm_file_afs_list_ranges(void **state)
 	assert_int_equal(num_cbs, 2);
 
 	ret = elasto_funlink_close(fh);
-	assert_false(ret < 0);
+	assert_true(ret >= 0);
 	free(path);
 }
 
