@@ -37,16 +37,6 @@ enum op_req_method {
 	REQ_METHOD_HEAD,
 };
 
-struct op;
-typedef int (*req_sign_cb_t)(const char *acc,
-			     const uint8_t *key,
-			     int key_len,
-			     struct op *op);
-typedef void (*req_free_cb_t)(struct op *op);
-typedef void (*rsp_free_cb_t)(struct op *op);
-typedef int (*rsp_process_cb_t)(struct op *op);
-typedef void (*ebo_free_cb_t)(struct op *op);
-
 struct op {
 	int opcode;
 	char *sig_src;	/* debug, compare with signing error response */
@@ -78,11 +68,14 @@ struct op {
 		struct list_head hdrs;
 	} rsp;
 
-	req_sign_cb_t req_sign;
-	req_free_cb_t req_free;
-	rsp_free_cb_t rsp_free;
-	rsp_process_cb_t rsp_process;
-	ebo_free_cb_t ebo_free;
+	int (*req_sign)(const char *acc,
+			const uint8_t *key,
+			int key_len,
+			struct op *op);
+	void (*req_free)(struct op *op);
+	void (*rsp_free)(struct op *op);
+	int (*rsp_process)(struct op *op);
+	void (*ebo_free)(struct op *op);
 };
 
 void
