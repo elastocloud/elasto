@@ -66,6 +66,11 @@ elasto_fwrite(struct elasto_fh *fh,
 		goto err_out;
 	}
 
+	if (dest_len == 0) {
+		dbg(3, "zero length write\n");
+		return 0;
+	}
+
 	ret = elasto_data_iov_new(out_buf, dest_len, false, &src_data);
 	if (ret < 0) {
 		goto err_out;
@@ -122,6 +127,11 @@ elasto_fwrite_cb(struct elasto_fh *fh,
 		goto err_out;
 	}
 
+	if (dest_len == 0) {
+		dbg(3, "zero length write\n");
+		return 0;
+	}
+
 	ret = elasto_data_cb_new(dest_len, out_cb, 0, NULL, cb_priv, &src_data);
 	if (ret < 0) {
 		goto err_out;
@@ -170,6 +180,11 @@ elasto_fread(struct elasto_fh *fh,
 	if (in_buf == NULL) {
 		ret = -EINVAL;
 		goto err_out;
+	}
+
+	if (src_len == 0) {
+		dbg(3, "zero length read\n");
+		return 0;
 	}
 
 	ret = elasto_data_iov_new(in_buf, src_len, false, &dest_data);
@@ -225,6 +240,11 @@ elasto_fread_cb(struct elasto_fh *fh,
 	if (in_cb == NULL) {
 		ret = -EINVAL;
 		goto err_out;
+	}
+
+	if (src_len == 0) {
+		dbg(3, "zero length read\n");
+		return 0;
 	}
 
 	ret = elasto_data_cb_new(0, NULL, src_len, in_cb, cb_priv, &dest_data);
