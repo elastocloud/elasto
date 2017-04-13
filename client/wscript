@@ -20,8 +20,9 @@ def build(bld):
 		  includes = '. ..')
 	bld.program(source='''elasto_client.c cli_put.c cli_get.c cli_del.c
 			      cli_create.c cli_cp.c cli_ls.c cli_stat.c''',
-		    target='elasto_cli',
+		    target='elasto',
 		    lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		    use=['elasto_file', 'cli_lib', 'linenoise'],
 		    includes = '. ..',
 		    install_path = '${BINDIR}')
+	bld.symlink_as('${BINDIR}/elasto_cli', 'elasto')
