@@ -9,6 +9,8 @@ recurse_subdirs = 'ccan lib client test doc third_party tcmu'
 def options(opt):
 	opt.load('compiler_c')
 	opt.load('gnu_dirs')
+	opt.add_option('--developer', action='store_true', default=False,
+		       help='build test and debug utilities')
 	opt.recurse(recurse_subdirs)
 
 def configure(conf):
@@ -17,6 +19,7 @@ def configure(conf):
 	conf.env.CFLAGS = ['-Wall', '-D_LARGEFILE64_SOURCE', '-D_GNU_SOURCE']
 	# append flags from CFLAGS environment var
 	conf.cc_add_flags()
+	conf.env.DEVEL = conf.options.developer
 	conf.env.LIBELASTO_API_VERS = LIBELASTO_API_VERS
 	conf.define('LIBELASTO_API_VERS', LIBELASTO_API_VERS)
 	conf.define('ELASTO_VERS', VERSION)

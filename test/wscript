@@ -1,23 +1,23 @@
-def options(opt):
+def options(ctx):
 	pass
 
-def configure(conf):
-	if not conf.check(lib='cmocka', mandatory=False):
-		conf.env.SKIP_TEST = "yes"
-	if not conf.check(lib='uuid', mandatory=False):
-		conf.env.SKIP_TEST = "yes"
-
-def build(bld):
-	if bld.env.SKIP_TEST in ["yes"]:
-		print("Skipping test: Cmocka and uuid libraries required")
+def configure(ctx):
+	if not ctx.options.developer:
+		print("Skipping tests for non-developer build")
 		return
-	bld.program(source='''cm_unity.c cm_data.c cm_sign_azure.c cm_sign_s3.c
+	ctx.check(lib='cmocka', mandatory=True)
+	ctx.check(lib='uuid', mandatory=True)
+
+def build(ctx):
+	if not ctx.env.DEVEL:
+		return
+	ctx.program(source='''cm_unity.c cm_data.c cm_sign_azure.c cm_sign_s3.c
 			      cm_file.c cm_file_local.c cm_xml.c cm_az_fs_req.c
 			      cm_az_blob_req.c cm_cli_util.c cm_az_blob_path.c
 			      cm_az_fs_path.c cm_s3_path.c cm_cli_path.c''',
 		    target='cm_unity',
 		    lib=['crypto', 'cmocka', 'expat', 'ssl', 'uuid']
-			+ bld.env.LIBEVENT_LIBS,
+			+ ctx.env.LIBEVENT_LIBS,
 		    use=['elasto_req_azure_blob', 'elasto_req_azure_fs',
 			 'elasto_req_s3', 'elasto_file', 'cli_lib'],
 		    includes = '. .. ../lib',

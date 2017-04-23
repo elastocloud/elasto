@@ -6,9 +6,6 @@ def options(opt):
 def configure(conf):
 	conf.recurse(recurse_subdirs)
 
-def call_ldconfig(bld):
-	bld.exec_command('/sbin/ldconfig')
-
 def build(bld):
 	bld.shlib(source='''handle.c io.c open.c xmit.c dir.c lease.c
 			    stat.c token.c''',
@@ -22,6 +19,4 @@ def build(bld):
 	    source="elasto_file.pc.in",
 	    target="elasto_file.pc",
 	    install_path="${LIBDIR}/pkgconfig")
-	if bld.cmd == 'install':
-		bld.add_post_fun(call_ldconfig)
 	bld.recurse(recurse_subdirs)

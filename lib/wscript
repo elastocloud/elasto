@@ -7,6 +7,9 @@ def configure(conf):
 	conf.env.append_unique('CFLAGS', ['-fPIC'])
 	conf.recurse(recurse_subdirs)
 
+def call_ldconfig(bld):
+	bld.exec_command('/sbin/ldconfig')
+
 def build(bld):
 	bld.shlib(source='''op.c sign.c base64.c conn.c dbg.c data.c exml.c
 			    util.c''',
@@ -36,3 +39,6 @@ def build(bld):
 		  use=['elasto_req_azure_core'],
 		  includes = '. ..')
 	bld.recurse(recurse_subdirs)
+	# invoke ldconfig once after installing all (recursed) libs
+	if bld.cmd == 'install':
+		bld.add_post_fun(call_ldconfig)

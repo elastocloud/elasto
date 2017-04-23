@@ -4,9 +4,6 @@ def options(opt):
 def configure(conf):
 	pass
 
-def call_ldconfig(bld):
-	bld.exec_command('/sbin/ldconfig')
-
 def build(bld):
 	bld.shlib(source='''s3_dir.c s3_handle.c s3_io.c s3_open.c s3_stat.c
 			 s3_unlink.c''',
@@ -15,5 +12,3 @@ def build(bld):
 		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_file', 'elasto_req_s3'],
 		  includes = '. .. ../../ ../../../')
-	if bld.cmd == 'install':
-		bld.add_post_fun(call_ldconfig)

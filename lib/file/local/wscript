@@ -1,18 +1,20 @@
-def options(opt):
+def options(ctx):
 	pass
 
-def configure(conf):
-	pass
+def configure(ctx):
+	if not ctx.options.developer:
+		print("Skipping local file I/O back-end - non-developer build")
+		return
+	# TODO should check for FALLOC_FL_PUNCH_HOLE here
 
-def call_ldconfig(bld):
-	bld.exec_command('/sbin/ldconfig')
-
-def build(bld):
-	bld.shlib(source='''local_dir.c local_handle.c local_io.c local_open.c
+def build(ctx):
+	if not ctx.env.DEVEL:
+		return
+	ctx.shlib(source='''local_dir.c local_handle.c local_io.c local_open.c
 			 local_stat.c local_unlink.c local_path.c''',
 		  target='elasto_file_mod_local',
-		  vnum=bld.env.LIBELASTO_API_VERS,
-		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
+		  vnum=ctx.env.LIBELASTO_API_VERS,
+		  lib=['crypto', 'expat', 'ssl'] + ctx.env.LIBEVENT_LIBS,
 		  use=['elasto_file'],
 		  includes = '. .. ../../ ../../../',
 		  install_path = None)	# test backend - don't ship
