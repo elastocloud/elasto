@@ -35,7 +35,9 @@ def configure(conf):
 		       mandatory=True)
 	conf.check_cfg(package='libevent_openssl', args='--libs')
 	conf.env.append_unique('LIBEVENT_LIBS', conf.env.LIB_LIBEVENT_OPENSSL)
-	conf.check(lib='crypto')
+	conf.check_cfg(package='libcrypto', mandatory=True)
+	conf.check_cfg(package='libcrypto', atleast_version='1.1.0',
+		       mandatory=False, uselib_store='OPAQUE_HMAC_CTX')
 	conf.check(lib='expat')
 	conf.recurse(recurse_subdirs)
 	conf.write_config_header('config.h')
