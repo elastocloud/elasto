@@ -27,106 +27,62 @@
 #include "lib/dbg.h"
 #include "lib/s3_path.h"
 
-#define S3_URI_PREFIX "s3://"
-
-/* _very_ basic URI host component parser. Doesn't come close to RFC 3986 */
-static int
-s3_path_uri_pull(const char *path,
-		 char **_host,
-		 char **_after_host)
-{
-	int ret;
-	char *host_start;
-	char *host;
-	char *s = (char *)path;
-
-	if (strncmp(s, S3_URI_PREFIX, sizeof(S3_URI_PREFIX) - 1) != 0) {
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	s += (sizeof(S3_URI_PREFIX) - 1);
-
-	while (*s == '/')
-		s++;
-
-	if (*s == '\0') {
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	host_start = s;
-
-	s = strchr(host_start, '/');
-	if (s == NULL) {
-		/* host only */
-		ret = -EINVAL;
-		goto err_out;
-	}
-
-	host = strndup(host_start, s - host_start);
-	if (host == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
-
-	*_host = host;
-	*_after_host = s;
-
-	return 0;
-
-err_out:
-	return ret;
-}
-
 int
-s3_path_parse(const char *path,
+s3_path_parse(const char *custom_host,
+	      uint16_t port,
+	      const char *path,
+	      bool insecure_http,
 	      struct s3_path *s3_path)
 {
 	int ret;
+	const char *cs;
 	char *s;
 	char *host = NULL;
 	char *comp1 = NULL;
 	char *comp2 = NULL;
+	/*
+	 * use $bkt.s3.amazonaws.com by default, or $custom_host/$bkt/... if an
+	 * explicit hostname has been provided.
+	 */
+	bool bkt_as_host_prefix = true;
 
 	if ((path == NULL) || (s3_path == NULL)) {
 		ret = -EINVAL;
 		goto err_out;
 	}
 
-	if (strstr(path, "://")) {
-		char *after_host;
-		ret = s3_path_uri_pull(path, &host, &after_host);
-		if (ret < 0) {
-			goto err_out;
-		}
-		s = after_host;
+	if (custom_host != NULL) {
+		bkt_as_host_prefix = false;
+		host = strdup(custom_host);
 	} else {
-		s = (char *)path;
-
 		host = strdup(S3_PATH_HOST_DEFAULT);
-		if (host == NULL) {
-			ret = -ENOMEM;
-			goto err_out;
-		}
+	}
+	if (host == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	if (port == 0) {
+		port = (insecure_http ? 80 : 443);
+		dbg(1, "default port %d in use\n", port);
 	}
 
-	if (*s != '/') {
+	cs = path;
+	if (*cs != '/') {
 		/* no leading slash */
 		ret = -EINVAL;
 		goto err_host_free;
 	}
 
-	while (*s == '/')
-		s++;
+	while (*cs == '/')
+		cs++;
 
-	if (*s == '\0') {
+	if (*cs == '\0') {
 		/* empty or leading slashes only */
 		s3_path->type = S3_PATH_ROOT;
 		goto done;
 	}
 
-	comp1 = strdup(s);
+	comp1 = strdup(cs);
 	if (comp1 == NULL) {
 		ret = -ENOMEM;
 		goto err_host_free;
@@ -165,10 +121,13 @@ s3_path_parse(const char *path,
 done:
 	assert(s3_path->type != 0);
 	s3_path->host = host;
+	s3_path->port = port;
 	s3_path->bkt = comp1;
 	s3_path->obj = comp2;
-	dbg(2, "parsed %s as S3 path: host=%s, bkt=%s, obj=%s\n",
-	    path, s3_path->host, (s3_path->bkt ? s3_path->bkt : ""),
+	s3_path->bkt_as_host_prefix = bkt_as_host_prefix;
+	dbg(2, "parsed %s as S3 path: host%s=%s, port=%d, bkt=%s, obj=%s\n",
+	    path, (s3_path->bkt_as_host_prefix ? "(prior to bkt prefix)" : ""),
+	    s3_path->host, s3_path->port, (s3_path->bkt ? s3_path->bkt : ""),
 	    (s3_path->obj ? s3_path->obj : ""));
 
 	return 0;
@@ -187,11 +146,9 @@ void
 s3_path_free(struct s3_path *s3_path)
 {
 	free(s3_path->host);
-	s3_path->host = NULL;
 	free(s3_path->bkt);
-	s3_path->bkt = NULL;
 	free(s3_path->obj);
-	s3_path->obj = NULL;
+	memset(s3_path, 0, sizeof(*s3_path));
 }
 
 int
@@ -201,13 +158,24 @@ s3_path_dup(const struct s3_path *path_orig,
 	int ret;
 	struct s3_path dup = { 0 };
 
-	if (path_orig->host != NULL) {
-		dup.host = strdup(path_orig->host);
-		if (dup.host == NULL) {
-			ret = -ENOMEM;
-			goto err_out;
-		}
+	if ((path_orig == NULL) || (path_dup == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
 	}
+
+	if (path_orig->host == NULL) {
+		dbg(0, "host not set in orig path\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	dup.host = strdup(path_orig->host);
+	if (dup.host == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	dup.bkt_as_host_prefix = path_orig->bkt_as_host_prefix;
+	dup.port = path_orig->port;
 
 	dup.type = path_orig->type;
 	if (path_orig->bkt != NULL) {

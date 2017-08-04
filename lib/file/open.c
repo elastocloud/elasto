@@ -36,11 +36,13 @@
 #include "xmit.h"
 
 int
-elasto_fopen(const struct elasto_fauth *auth,
-	     const char *path,
-	     uint64_t flags,
-	     struct elasto_ftoken_list *open_toks,
-	     struct elasto_fh **_fh)
+elasto_fopen_host(const struct elasto_fauth *auth,
+		  const char *host,
+		  uint16_t port,
+		  const char *path,
+		  uint64_t flags,
+		  struct elasto_ftoken_list *open_toks,
+		  struct elasto_fh **_fh)
 {
 	int ret;
 	struct elasto_fh *fh;
@@ -60,7 +62,15 @@ elasto_fopen(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	dbg(3, "opening path %s with flags 0x%" PRIx64 "\n", path, flags);
+	if (strstr(path, "://") != NULL) {
+		dbg(0, "URI paths not supported: %s\n", path);
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	dbg(3, "opening path %s at %s:%s%d with flags 0x%" PRIx64 "\n",
+	    path, (host ? host : "<default host>"),
+	    (port ? "" : "<default port>"), port, flags);
 
 	ret = elasto_fh_init(auth, path, flags, &fh);
 	if (ret < 0) {
@@ -69,8 +79,10 @@ elasto_fopen(const struct elasto_fauth *auth,
 		goto err_out;
 	}
 
-	ret = fh->ops.open(fh->ev_base, fh->mod_priv, path, flags, open_toks);
+	ret = fh->ops.open(fh->ev_base, fh->mod_priv, host, port, path, flags,
+			   open_toks);
 	if (ret < 0) {
+		dbg(0, "failed to open elasto fh\n");
 		goto err_fh_free;
 	}
 
@@ -82,6 +94,18 @@ err_fh_free:
 err_out:
 	return ret;
 
+}
+
+int
+elasto_fopen(const struct elasto_fauth *auth,
+	     const char *path,
+	     uint64_t flags,
+	     struct elasto_ftoken_list *open_toks,
+	     struct elasto_fh **_fh)
+{
+	return elasto_fopen_host(auth,
+				 NULL, 0,	/* use default host and port */
+				 path, flags, open_toks, _fh);
 }
 
 int

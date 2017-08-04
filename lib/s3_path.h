@@ -26,12 +26,17 @@ enum s3_path_type {
 struct s3_path {
 	enum s3_path_type type;
 	char *host;
+	uint16_t port;
 	char *bkt;
 	char *obj;
+	bool bkt_as_host_prefix;
 };
 
 int
-s3_path_parse(const char *path,
+s3_path_parse(const char *custom_host,
+	      uint16_t port,
+	      const char *path,
+	      bool insecure_http,
 	      struct s3_path *s3_path);
 
 void

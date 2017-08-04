@@ -17,9 +17,11 @@
 int
 s3_fopen(struct event_base *ev_base,
 	 void *mod_priv,
+	 const char *host,
+	 uint16_t port,
 	 const char *path,
 	 uint64_t flags,
-	 struct elasto_ftoken_list *toks);
+	 struct elasto_ftoken_list *open_toks);
 
 int
 s3_fclose(void *mod_priv);

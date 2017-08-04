@@ -43,12 +43,18 @@ struct elasto_fauth {
 	bool insecure_http;
 };
 
-/* wrapper for fopen(CREATE|EXCL|DIR) + fclose() */
+/*
+ * DEPRECATED: doesn't support expicit server host.
+ * use fopen[_host](CREATE|EXCL|DIR) + fclose() instead.
+ */
 int
 elasto_fmkdir(const struct elasto_fauth *auth,
 	      const char *path);
 
-/* wrapper for fopen(DIR) + funlink_close() */
+/*
+ * DEPRECATED: doesn't support expicit server host.
+ * Use fopen[_host](DIR) + funlink_close() instead.
+ */
 int
 elasto_frmdir(const struct elasto_fauth *auth,
 	      const char *path);
@@ -94,7 +100,9 @@ enum elasto_fopen_success_ret {
 };
 
 /**
- * open and possibly create a file or directory
+ * open and possibly create a file or directory. Unlike @elasto_fopen_host, this
+ * connects to the default public cloud endpoint, using https on port 443, or
+ * http on port 80 if @insecure_http is set.
  *
  * @auth:	Cloud backend authentication information
  * @path:	Path to open
@@ -110,6 +118,31 @@ elasto_fopen(const struct elasto_fauth *auth,
 	     uint64_t flags,
 	     struct elasto_ftoken_list *open_toks,
 	     struct elasto_fh **_fh);
+
+/**
+ * open and possibly create a file or directory. Unlike @elasto_fopen, this
+ * connects to a specific host (and port), rather than the default public cloud
+ * endpoint.
+ *
+ * @auth:	Cloud backend authentication information
+ * @host:	custom host to connect to.
+ * @port:	port to connect to. If zero, port 443 or 80 will be used,
+ *		depending on whether or not @insecure_http is set.
+ * @path:	Path to open
+ * @flags:	@elasto_fopen_flags mask
+ * @open_toks:	custom open tokens
+ * @fh:		handle returned on success
+ *
+ * @returns:	-errno on error, enum elasto_fopen_success_ret on success
+ */
+int
+elasto_fopen_host(const struct elasto_fauth *auth,
+		  const char *host,
+		  uint16_t port,
+		  const char *path,
+		  uint64_t flags,
+		  struct elasto_ftoken_list *open_toks,
+		  struct elasto_fh **_fh);
 
 int
 elasto_fwrite(struct elasto_fh *fh,
@@ -267,6 +300,10 @@ elasto_freaddir(struct elasto_fh *fh,
 		int (*dent_cb)(struct elasto_dent *,
 			       void *));
 
+/**
+ * Remove a file or directory and close handle
+ * @fh: open file or directory handle
+ */
 int
 elasto_funlink_close(struct elasto_fh *fh);
 

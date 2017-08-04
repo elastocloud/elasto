@@ -755,14 +755,12 @@ elasto_conn_ev_connect(struct elasto_conn *econn)
 	struct evhttp_connection *ev_conn;
 	struct ssl_ctx_st *ssl_ctx;
 	struct ssl_st *ssl;
-	int port;
 
 	if ((econn->hostname == NULL) || (econn->ev_base == NULL)) {
 	       return -EINVAL;
 	}
 
 	if (econn->insecure_http) {
-		port = 80;
 		ev_bev = bufferevent_socket_new(econn->ev_base, -1,
 						BEV_OPT_CLOSE_ON_FREE);
 		if (ev_bev == NULL) {
@@ -771,7 +769,6 @@ elasto_conn_ev_connect(struct elasto_conn *econn)
 		}
 		dbg(1, "Using HTTP instead of HTTPS\n");
 	} else {
-		port = 443;
 		ret = elasto_conn_ev_ssl_init(econn, &ssl_ctx, &ssl);
 		if (ret < 0) {
 			goto err_out;
@@ -794,18 +791,24 @@ elasto_conn_ev_connect(struct elasto_conn *econn)
 		bufferevent_openssl_set_allow_dirty_shutdown(ev_bev, 1);
 	}
 
-	/* synchronously resolve hostname and connect */
+	/*
+	 * Address resolution and connection establishment occurs when the first
+	 * http request object is sent.
+	 */
 	ev_conn = evhttp_connection_base_bufferevent_new(econn->ev_base,
 							 NULL,
 							 ev_bev,
 							 econn->hostname,
-							 port);
+							 econn->port);
 	if (ev_conn == NULL) {
 		dbg(0, "failed to resolve/connect to %s:%d\n",
-		    econn->hostname, port);
+		    econn->hostname, econn->port);
 		ret = -EBADF;
 		goto err_bev_free;
 	}
+
+	dbg(1, "connected to %s:%d\n",
+	    econn->hostname, econn->port);
 
 	evhttp_connection_set_closecb(ev_conn, ev_conn_close_cb, econn);
 	/* 30s timeout */
@@ -1064,9 +1067,9 @@ elasto_conn_send_prepare(struct conn_op *conn_op,
 	uint64_t content_len = 0;
 	char *clen_str;
 
-	ret = asprintf(&url, "http%s://%s%s",
+	ret = asprintf(&url, "http%s://%s:%d%s",
 		       (econn->insecure_http ? "" : "s"),
-		       econn->hostname, op->url_path);
+		       econn->hostname, econn->port, op->url_path);
 	if (ret < 0) {
 		return -ENOMEM;
 	}
@@ -1126,6 +1129,10 @@ elasto_conn_send_prepare(struct conn_op *conn_op,
 		goto err_ev_req_free;
 	}
 
+	/*
+	 * FIXME: S3 differs, see:
+	 * http://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html
+	 */
 	ret = evhttp_add_header(ev_out_hdrs, "Host", op->url_host);
 	if (ret < 0) {
 		ret = -EINVAL;
@@ -1195,6 +1202,7 @@ elasto_conn_op_tx(struct elasto_conn *econn,
 		conn_op_flag_error(conn_op, -EINVAL);
 		goto err_out;
 	}
+	/* XXX assume matching port for now */
 
 	if (econn->insecure_http && op->url_https_only) {
 		dbg(0, "invalid connection for op 0x%x: connection is HTTP, "
@@ -1317,10 +1325,17 @@ static int
 elasto_conn_init_common(struct event_base *ev_base,
 			bool insecure_http,
 			const char *host,
+			uint16_t port,
 			struct elasto_conn **_econn)
 {
 	int ret;
-	struct elasto_conn *econn = malloc(sizeof(*econn));
+	struct elasto_conn *econn;
+
+	if (port < 1)  {
+		return -EINVAL;
+	}
+
+	econn = malloc(sizeof(*econn));
 	if (econn == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -1334,6 +1349,7 @@ elasto_conn_init_common(struct event_base *ev_base,
 		ret = -ENOMEM;
 		goto err_conn_free;
 	}
+	econn->port = port;
 
 	*_econn = econn;
 
@@ -1355,7 +1371,8 @@ elasto_conn_init_az(struct event_base *ev_base,
 	struct elasto_conn *econn;
 	int ret;
 
-	ret = elasto_conn_init_common(ev_base, insecure_http, host, &econn);
+	ret = elasto_conn_init_common(ev_base, insecure_http, host,
+				      (insecure_http ? 80 : 443), &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -1393,12 +1410,14 @@ elasto_conn_init_s3(struct event_base *ev_base,
 		    const char *secret,
 		    bool insecure_http,
 		    const char *host,
+		    uint16_t port,
 		    struct elasto_conn **econn_out)
 {
 	struct elasto_conn *econn;
 	int ret;
 
-	ret = elasto_conn_init_common(ev_base, insecure_http, host, &econn);
+	ret = elasto_conn_init_common(ev_base, insecure_http, host, port,
+				      &econn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -1441,7 +1460,8 @@ elasto_conn_init_web(struct event_base *ev_base,
 	struct elasto_conn *econn;
 	int ret;
 
-	ret = elasto_conn_init_common(ev_base, insecure_http, host, &econn);
+	ret = elasto_conn_init_common(ev_base, insecure_http, host,
+				      (insecure_http ? 80 : 443), &econn);
 	if (ret < 0) {
 		goto err_out;
 	}

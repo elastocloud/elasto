@@ -527,12 +527,20 @@ err_out:
 int
 afs_fopen(struct event_base *ev_base,
 	  void *mod_priv,
+	  const char *host,
+	  uint16_t port,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
 	int ret;
 	struct afs_fh *afs_fh = mod_priv;
+
+	if (host != NULL) {
+		dbg(0, "Azure backend currently missing custom host support\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = az_fs_path_parse(path, &afs_fh->path);
 	if (ret < 0) {

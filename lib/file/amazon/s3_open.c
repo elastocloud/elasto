@@ -204,6 +204,8 @@ err_out:
 int
 s3_fopen(struct event_base *ev_base,
 	 void *mod_priv,
+	 const char *host,
+	 uint16_t port,
 	 const char *path,
 	 uint64_t flags,
 	 struct elasto_ftoken_list *open_toks)
@@ -212,19 +214,20 @@ s3_fopen(struct event_base *ev_base,
 	char *url_host;
 	struct s3_fh *s3_fh = mod_priv;
 
-	ret = s3_path_parse(path, &s3_fh->path);
+	ret = s3_path_parse(host, port, path, s3_fh->insecure_http,
+			    &s3_fh->path);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	/* TODO s3_fh->path.host is currently ignored */
-	ret = s3_req_hostname_get(s3_fh->path.bkt, &url_host);
+	ret = s3_req_hostname_gen(&s3_fh->path, &url_host);
 	if (ret < 0) {
 		goto err_path_free;
 	}
 
 	ret = elasto_conn_init_s3(ev_base, s3_fh->key_id, s3_fh->secret,
-				  s3_fh->insecure_http, url_host, &s3_fh->conn);
+				  s3_fh->insecure_http, url_host,
+				  s3_fh->path.port, &s3_fh->conn);
 	free(url_host);
 	if (ret < 0) {
 		goto err_path_free;
