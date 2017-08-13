@@ -48,13 +48,13 @@ class StarkyContext:
 	az_acc_persist_created = False
 
 	def __init__(self, options):
-		# find elasto_cli binary
-		if (os.path.exists("build/client/elasto_cli")):
-			self.cli_bin = "build/client/elasto_cli"
-		elif (os.path.exists("../build/client/elasto_cli")):
-			self.cli_bin = "../build/client/elasto_cli"
+		# find elasto client binary
+		if (os.path.exists("build/client/elasto")):
+			self.cli_bin = "build/client/elasto"
+		elif (os.path.exists("../build/client/elasto")):
+			self.cli_bin = "../build/client/elasto"
 		else:
-			raise Exception("Could not locate elasto_cli")
+			raise Exception("Could not locate elasto")
 
 		# add generic params applicable to both PS file and access key
 		self.cli_az_cmd = "%s -d %d -u %s" \
