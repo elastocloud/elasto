@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2012-2016, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2012-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -98,5 +98,11 @@ int
 cli_path_realize(const char *real_cwd,
 		 const char *usr_path,
 		 char **_real_abs_path);
+
+int
+cli_path_uri_parse(const char *uri,
+		   enum elasto_ftype *_type,
+		   char **_host,
+		   uint16_t *_port);
 
 #endif /* ifdef _CLI_COMMON_H_ */

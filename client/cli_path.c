@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2016, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2016-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <pwd.h>
 #include <linux/limits.h>
+#include <event2/http.h>
 
 #include "ccan/list/list.h"
 #include "lib/file/file_api.h"
@@ -262,5 +263,120 @@ err_pents_free:
 		cli_path_ent_del(pent, &num_pents);
 	}
 err_out:
+	return ret;
+}
+
+/**
+ * Parse REST URI in the form proto://server
+ */
+struct cli_path_uri_mapping {
+	char *uri_long;
+	char *uri_short;
+	enum elasto_ftype type;
+} cli_path_uri_mapping[] = {
+	{"azure_bb", "abb", ELASTO_FILE_ABB},
+	{"azure_pb", "apb", ELASTO_FILE_APB},
+	{"azure_fs", "afs", ELASTO_FILE_AFS},
+	{"amazon_s3", "s3", ELASTO_FILE_S3},
+};
+
+int
+cli_path_uri_parse(const char *uri,
+		   enum elasto_ftype *_type,
+		   char **_host,
+		   uint16_t *_port)
+{
+	int ret;
+	int i;
+	struct evhttp_uri *ev_uri;
+	const char *scheme;
+	const char *ev_host;
+	const char *path;
+	int type = 0;
+	char *host = NULL;
+	int port = 0;	/* doesn't match fn type! */
+
+	if ((_type == NULL) || (_host == NULL) || (_port == NULL)) {
+		return -EINVAL;
+	}
+
+	if (strstr(uri, "://") == NULL) {
+		dbg(0, "unsupported URI: %s\n", uri);
+		return -EINVAL;
+	}
+
+	ev_uri = evhttp_uri_parse(uri);
+	if (ev_uri == NULL) {
+		dbg(0, "malformed URI: %s\n", uri);
+		return -EINVAL;
+	}
+
+	if ((evhttp_uri_get_userinfo(ev_uri) != NULL)
+	 || (evhttp_uri_get_query(ev_uri) != NULL)
+	 || (evhttp_uri_get_fragment(ev_uri) != NULL)) {
+		dbg(0, "unsupported user, query or fragment in URI: %s\n", uri);
+		ret = -EINVAL;
+		goto err_uri_free;
+	}
+
+	scheme = evhttp_uri_get_scheme(ev_uri);
+	if (scheme == NULL) {
+		dbg(0, "missing scheme in URI: %s\n", uri);
+		ret = -EINVAL;
+		goto err_uri_free;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(cli_path_uri_mapping); i++) {
+		if ((strcmp(scheme, cli_path_uri_mapping[i].uri_long) == 0)
+		 || (strcmp(scheme, cli_path_uri_mapping[i].uri_short) == 0)) {
+			type = cli_path_uri_mapping[i].type;
+			break;
+		}
+	}
+
+	if (type == 0) {
+		dbg(0, "invalid URI scheme in %s\n", uri);
+		ret = -EINVAL;
+		goto err_uri_free;
+	}
+
+	ev_host = evhttp_uri_get_host(ev_uri);
+	if ((ev_host == NULL) || (strlen(ev_host) == 0)) {
+		/* URI with scheme only */
+		goto done;
+	}
+
+	port = evhttp_uri_get_port(ev_uri);
+	if (port == -1) {
+		/* not provided. port=0 means the caller should use default */
+		port = 0;
+	} else {
+		if ((port < 1) || (port > UINT16_MAX)) {
+			ret = -EINVAL;
+			goto err_uri_free;
+		}
+	}
+
+	path = evhttp_uri_get_path(ev_uri);
+	if ((path != NULL) && (strlen(path) > 0) && (strcmp(path, "/") != 0)) {
+		dbg(0, "URI path (%s) component not supported\n", path);
+		ret = -EINVAL;
+		goto err_uri_free;
+	}
+
+	host = strdup(ev_host);
+	if (host == NULL) {
+		ret = -ENOMEM;
+		goto err_uri_free;
+	}
+
+done:
+	*_host = host;
+	*_port = port;
+	*_type = type;
+	ret = 0;
+err_uri_free:
+	evhttp_uri_free(ev_uri);
+
 	return ret;
 }
