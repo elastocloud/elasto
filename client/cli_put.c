@@ -27,6 +27,7 @@
 #include "ccan/list/list.h"
 #include "lib/file/file_api.h"
 #include "cli_common.h"
+#include "cli_open.h"
 
 /* split any blob over 10MB into separate blocks */
 #define BLOCK_THRESHOLD (10 * 1024 * 1024)
@@ -307,7 +308,7 @@ cli_put_handle(struct cli_args *cli_args)
 	}
 
 	/* open with exclusive create flags */
-	ret = elasto_fopen(&cli_args->auth, cli_args->path,
+	ret = cli_open_efh(cli_args, cli_args->path,
 			   ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL,
 			   NULL, &fh);
 	if (ret < 0) {

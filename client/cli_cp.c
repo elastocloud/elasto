@@ -27,6 +27,7 @@
 #include "lib/file/file_api.h"
 #include "ccan/list/list.h"
 #include "cli_common.h"
+#include "cli_open.h"
 
 void
 cli_cp_args_free(struct cli_args *cli_args)
@@ -78,8 +79,7 @@ cli_cp_handle(struct cli_args *cli_args)
 	int ret;
 
 	/* open source without create or dir flags */
-	ret = elasto_fopen(&cli_args->auth, cli_args->cp.src_path, 0, NULL,
-			   &src_fh);
+	ret = cli_open_efh(cli_args, cli_args->cp.src_path, 0, NULL, &src_fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",
 		       cli_args->cp.src_path, strerror(-ret));
@@ -94,7 +94,7 @@ cli_cp_handle(struct cli_args *cli_args)
 	}
 
 	/* open dest with create flag */
-	ret = elasto_fopen(&cli_args->auth, cli_args->path, ELASTO_FOPEN_CREATE,
+	ret = cli_open_efh(cli_args, cli_args->path, ELASTO_FOPEN_CREATE,
 			   NULL, &dest_fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",

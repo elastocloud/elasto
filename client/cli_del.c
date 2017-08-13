@@ -25,6 +25,7 @@
 #include "lib/file/file_api.h"
 #include "ccan/list/list.h"
 #include "cli_common.h"
+#include "cli_open.h"
 
 void
 cli_del_args_free(struct cli_args *cli_args)
@@ -55,10 +56,10 @@ cli_del_handle(struct cli_args *cli_args)
 	int ret;
 
 	/* XXX not sure whether we've been given a dir or file path, try both */
-	ret = elasto_fopen(&cli_args->auth, cli_args->path,
+	ret = cli_open_efh(cli_args, cli_args->path,
 			   ELASTO_FOPEN_DIRECTORY, NULL, &fh);
 	if (ret < 0) {
-		ret = elasto_fopen(&cli_args->auth, cli_args->path, 0, NULL,
+		ret = cli_open_efh(cli_args, cli_args->path, 0, NULL,
 				   &fh);
 		if (ret < 0) {
 			printf("%s path open failed as dir and file\n",

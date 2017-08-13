@@ -27,6 +27,7 @@
 #include "lib/util.h"
 #include "ccan/list/list.h"
 #include "cli_common.h"
+#include "cli_open.h"
 #include "cli_util.h"
 
 void
@@ -87,7 +88,7 @@ cli_ls_handle(struct cli_args *cli_args)
 	struct elasto_fh *fh;
 	int ret;
 
-	ret = elasto_fopen(&cli_args->auth, cli_args->path,
+	ret = cli_open_efh(cli_args, cli_args->path,
 			   ELASTO_FOPEN_DIRECTORY, NULL, &fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",

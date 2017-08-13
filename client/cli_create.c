@@ -25,6 +25,7 @@
 #include "lib/file/file_api.h"
 #include "ccan/list/list.h"
 #include "cli_common.h"
+#include "cli_open.h"
 
 void
 cli_create_args_free(struct cli_args *cli_args)
@@ -104,7 +105,7 @@ cli_create_handle(struct cli_args *cli_args)
 		/* FIXME ABB label, desc and affin_grp are not supported */
 	}
 
-	ret = elasto_fopen(&cli_args->auth, cli_args->path,
+	ret = cli_open_efh(cli_args, cli_args->path,
 			   ELASTO_FOPEN_CREATE
 			   | ELASTO_FOPEN_EXCL
 			   | ELASTO_FOPEN_DIRECTORY,
