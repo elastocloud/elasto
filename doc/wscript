@@ -27,10 +27,10 @@ def build(bld):
 		      "AsciiDoc a2x binary required")
 		return
 
-	bld(rule=gen_manpage, source='elasto_cli.asciidoc',
-	    target='elasto_cli.1')
-	bld(rule=gz_manpage, source='elasto_cli.1', target='elasto_cli.1.gz')
-	bld.install_files('${MANDIR}/man1/', ['elasto_cli.1.gz'])
+	bld(rule=gen_manpage, source='elasto.asciidoc',
+	    target='elasto.1')
+	bld(rule=gz_manpage, source='elasto.1', target='elasto.1.gz')
+	bld.install_files('${MANDIR}/man1/', ['elasto.1.gz'])
 
 	bld(rule=gen_manpage, source='elasto_tcmu.asciidoc',
 	    target='elasto_tcmu.1')

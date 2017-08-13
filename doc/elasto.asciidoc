@@ -1,23 +1,23 @@
-ELASTO_CLI(1)
-=============
+ELASTO(1)
+=========
 :doctype: manpage
 
 
 NAME
 ----
-elasto_cli - Lightweight Cloud Storage Client Utility
+elasto - Lightweight Cloud Storage Client Utility
 
 
 SYNOPSIS
 --------
-*elasto_cli* ['-?'] ['-s Azure publish settings file'] ['-K Azure access key']
-	     ['-k Amazon IAM credentials file'] ['-d log level'] ['-i']
-	     ['-h CLI history file'] ['-u REST Server URI'] ['-- command']
+*elasto* ['-?'] ['-s Azure publish settings file'] ['-K Azure access key']
+	 ['-k Amazon IAM credentials file'] ['-d log level'] ['-i']
+	 ['-h CLI history file'] ['-u REST Server URI'] ['-- command']
 
 
 DESCRIPTION
 -----------
-elasto_cli is a command line utility for the manipulation of cloud storage
+elasto is a command line utility for the manipulation of cloud storage
 objects. It supports the Amazon S3 and Azure Blob/File Service RESTful
 protocols.
 
@@ -51,10 +51,11 @@ OPTIONS
 	Specify a file to use as storage for Elasto CLI command history, rather
 	than the default ~/.elasto_history path.
 
-*-u* 'REST server URI'::
+*-u* 'REST server URI <scheme>://[host[:port]]'::
 	Specify a protocol and server to use for the connection, instead of
-	deriving it from the credentials file. Currently only the protocol in
-	the URI is processed. Supported values are:
+	deriving it from the credentials file. The optional 'host' and 'port'
+	portion of the URI can be used to specify a custom server instead of
+	the cloud provider's default endpoint. Supported 'scheme' values are:
 [width="15%"]
 |===========================================
 |*abb://* | Azure Blob Service (Block Blobs)
@@ -98,6 +99,9 @@ AZURE BLOB SERVICE COMMANDS
 *create* '<account/container>'::
 	Creates the given container.
 
+*stat* 'account[/container[/blob]]'::
+	Dump size and type details for a given 'account', 'container' or 'blob'.
+
 
 AZURE FILE SERVICE COMMANDS
 ---------------------------
@@ -129,6 +133,9 @@ AZURE FILE SERVICE COMMANDS
 *create* '<account/share[/directory/path]>'::
 	Creates the given 'share' or 'directory path'.
 
+*stat* 'account[/share[/path]]'::
+	Dump size and type details for a given 'account', 'share' or 'path'.
+
 
 AMAZON S3 COMMANDS
 ------------------
@@ -153,6 +160,9 @@ AMAZON S3 COMMANDS
 
 *create* '[-L location]' '<bucket>'::
 	Creates the given bucket.
+
+*stat* 'bucket[/object]'::
+	Dump size and type details for a given 'bucket' or 'object'.
 
 
 RESOURCES
