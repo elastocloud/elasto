@@ -33,6 +33,8 @@ enum cli_fl {
  * @progname: client binary path, as invoked
  * @flags: features available to this instance
  * @cwd: realized current working dir (always '/', cd isn't yet implemented)
+ * @host: custom host endpoint
+ * @port: custom port endpoint
  * @path: per-command absolute realized path, to be passed to libelasto_file
  * @auth: authentication information
  * @history_file: path where client command history is preserved
@@ -41,6 +43,8 @@ struct cli_args {
 	char *progname;
 	enum cli_fl flags;
 	char *cwd;
+	char *host;
+	uint16_t port;
 	char *path;
 	struct elasto_fauth auth;
 	char *history_file;
