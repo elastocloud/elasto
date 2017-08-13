@@ -221,42 +221,6 @@ err_out:
 	return ret;
 }
 
-/**
- * Parse REST URI in the form proto://server
- */
-struct cli_uri_mapping {
-	char *uri_long;
-	char *uri_short;
-	enum elasto_ftype type;
-} cli_uri_mapping[] = {
-	{"azure_bb://", "abb://", ELASTO_FILE_ABB},
-	{"azure_pb://", "apb://", ELASTO_FILE_APB},
-	{"azure_fs://", "afs://", ELASTO_FILE_AFS},
-	{"amazon_s3://", "s3://", ELASTO_FILE_S3},
-};
-
-static int
-cli_uri_parse(const char *uri,
-	      enum elasto_ftype *type)
-{
-	int i;
-
-	if (type == NULL) {
-		return -EINVAL;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(cli_uri_mapping); i++) {
-		if ((strcmp(uri, cli_uri_mapping[i].uri_long) == 0)
-		 || (strcmp(uri, cli_uri_mapping[i].uri_short) == 0)) {
-			*type = cli_uri_mapping[i].type;
-			return 0;
-		}
-	}
-
-	dbg(0, "invalid URI string: %s\n", uri);
-	return -EINVAL;
-}
-
 static int
 cli_auth_args_validate(enum elasto_ftype type,
 		       char *az_ps_file,
@@ -403,8 +367,12 @@ cli_args_parse(int argc,
 	}
 
 	if (uri != NULL) {
-		/* parse only provider portion of the URI. TODO parse host */
-		ret = cli_uri_parse(uri, &cli_args->auth.type);
+		/*
+		 * URI must set auth.type. host and/or port will be given values
+		 * if provided with the URI, or set to NULL if not.
+		 */
+		ret = cli_path_uri_parse(uri, &cli_args->auth.type,
+					 &cli_args->host, &cli_args->port);
 		if (ret < 0) {
 			goto err_out;
 		}

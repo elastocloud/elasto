@@ -1183,7 +1183,7 @@ int main(int argc,
 	 * handler->added() will now be called from within
 	 * tcmulib_initialize().
 	 */
-	tcmulib_ctx = tcmulib_initialize(&elasto_handler, 1, errp);
+	tcmulib_ctx = tcmulib_initialize(&elasto_handler, 1);
 	if (tcmulib_ctx <= 0) {
 		errp("tcmulib_initialize failed with %p\n", tcmulib_ctx);
 		goto err_ev_base_free;

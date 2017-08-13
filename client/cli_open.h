@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -11,19 +11,14 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
-#ifndef _S3_OPEN_H_
-#define _S3_OPEN_H_
+#ifndef _CLI_OPEN_H_
+#define _CLI_OPEN_H_
 
 int
-s3_fopen(struct event_base *ev_base,
-	 void *mod_priv,
-	 const char *host,
-	 uint16_t port,
-	 const char *path,
-	 uint64_t flags,
-	 struct elasto_ftoken_list *open_toks);
+cli_open_efh(const struct cli_args *cli_args,
+	     const char *elasto_path,
+	     uint64_t flags,
+	     struct elasto_ftoken_list *open_toks,
+	     struct elasto_fh **_fh);
 
-int
-s3_fclose(void *mod_priv);
-
-#endif /* _S3_OPEN_H_ */
+#endif /* ifdef _CLI_OPEN_H_ */

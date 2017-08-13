@@ -676,10 +676,17 @@ err_out:
 int
 apb_fopen(struct event_base *ev_base,
 	  void *mod_priv,
+	  const char *host,
+	  uint16_t port,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
+	if (host != NULL) {
+		dbg(0, "Azure backend currently missing custom host support\n");
+		return -EINVAL;
+	}
+
 	return apb_abb_fopen(ev_base, mod_priv, path, flags, open_toks, true);
 }
 
@@ -699,9 +706,16 @@ apb_fclose(void *mod_priv)
 int
 abb_fopen(struct event_base *ev_base,
 	  void *mod_priv,
+	  const char *host,
+	  uint16_t port,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
+	if (host != NULL) {
+		dbg(0, "Azure backend currently missing custom host support\n");
+		return -EINVAL;
+	}
+
 	return apb_abb_fopen(ev_base, mod_priv, path, flags, open_toks, false);
 }

@@ -152,7 +152,7 @@ struct s3_rsp {
 };
 
 int
-s3_req_hostname_get(char *bkt,
+s3_req_hostname_gen(const struct s3_path *path,
 		    char **_hostname);
 
 int

@@ -22,6 +22,8 @@ apb_fsign_conn_setup(struct elasto_conn *conn,
 int
 apb_fopen(struct event_base *ev_base,
 	  void *mod_priv,
+	  const char *host,
+	  uint16_t port,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *toks);
@@ -33,6 +35,8 @@ apb_fclose(void *mod_priv);
 int
 abb_fopen(struct event_base *ev_base,
 	  void *mod_priv,
+	  const char *host,
+	  uint16_t port,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks);

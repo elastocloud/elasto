@@ -35,6 +35,7 @@ struct elasto_conn {
 	struct ssl_ctx_st *ssl_ctx;
 	struct ssl_st *ssl;
 	char *hostname;
+	uint16_t port;
 	struct {
 		char *account;
 		uint8_t *key;
@@ -77,6 +78,7 @@ elasto_conn_init_s3(struct event_base *ev_base,
 		    const char *secret,
 		    bool insecure_http,
 		    const char *host,
+		    uint16_t port,
 		    struct elasto_conn **econn);
 
 int

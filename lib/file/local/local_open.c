@@ -150,12 +150,20 @@ err_out:
 int
 local_fopen(struct event_base *ev_base,
 	    void *mod_priv,
+	    const char *host,
+	    uint16_t port,
 	    const char *path,
 	    uint64_t flags,
 	    struct elasto_ftoken_list *open_toks)
 {
 	int ret;
 	struct local_fh *local_fh = mod_priv;
+
+	if (host != NULL) {
+		dbg(0, "local back-end doesn't support open host\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
 
 	ret = local_path_parse(path, &local_fh->path);
 	if (ret < 0) {

@@ -11,6 +11,8 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
+#ifndef _CLI_UTIL_H_
+#define _CLI_UTIL_H_
 
 void
 cli_human_size(double bytes,
@@ -21,3 +23,5 @@ cli_human_size(double bytes,
 int
 cli_progress_print(FILE *stream,
 		   double pcnt_fract);
+
+#endif /* ifdef _CLI_UTIL_H_ */

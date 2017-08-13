@@ -84,6 +84,39 @@ s3_req_sign(const char *acc,
 	return 0;
 }
 
+#if 0
+static int
+s3_req_v4_sign(const char *acc,
+	    const uint8_t *key,
+	    int key_len,
+	    struct op *op)
+{
+	int ret;
+	char *sig_str;
+	char *hdr_str;
+	struct s3_ebo *ebo = container_of(op, struct s3_ebo, op);
+
+	if (key == NULL) {
+		return -EINVAL;
+	}
+
+	ret = sign_s3v4_gen(ebo->req.path.bkt, key, key_len,
+			    op, &op->sig_src, &sig_str);
+	if (ret < 0) {
+		dbg(0, "S3 signing failed: %s\n",
+		    strerror(-ret));
+		return ret;
+	}
+
+	ret = op_req_hdr_add(op, "Authorization", sig_str);
+	if (ret < 0) {
+		return ret;
+	}
+
+	return 0;
+}
+#endif
+
 static void
 s3_req_free(struct op *op);
 static void
@@ -147,29 +180,72 @@ s3_req_fill_hdr_common(struct op *op)
 }
 
 int
-s3_req_hostname_get(char *bkt,
+s3_req_hostname_gen(const struct s3_path *path,
 		    char **_hostname)
 {
 	int ret;
 	char *hostname;
 
-	if (_hostname== NULL) {
+	if ((path == NULL) || (path->host == NULL) || (_hostname == NULL)) {
 		return -EINVAL;
 	}
 
-	if (bkt == NULL) {
-		hostname = strdup("s3.amazonaws.com");
-		if (hostname == NULL) {
+	if (path->bkt_as_host_prefix && path->bkt != NULL) {
+		ret = asprintf(&hostname, "%s.%s", path->bkt, path->host);
+		if (ret < 0) {
 			return -ENOMEM;
 		}
 	} else {
-		ret = asprintf(&hostname, "%s.s3.amazonaws.com", bkt);
-		if (ret < 0) {
+		hostname = strdup(path->host);
+		if (hostname == NULL) {
 			return -ENOMEM;
 		}
 	}
 
 	*_hostname = hostname;
+	return 0;
+}
+
+static int
+s3_req_url_path_gen(const struct s3_path *path,
+		    const char *url_params,
+		    char **_url_path)
+{
+	int ret;
+	const char *params_str = url_params ? url_params : "";
+	char *url_path;
+
+	switch (path->type) {
+	case S3_PATH_ROOT:
+		ret = asprintf(&url_path, "/%s", params_str);
+		break;
+	case S3_PATH_BKT:
+		if (path->bkt_as_host_prefix) {
+			ret = asprintf(&url_path, "/%s", params_str);
+			break;
+		}
+		ret = asprintf(&url_path, "/%s%s", path->bkt, params_str);
+		break;
+	case S3_PATH_OBJ:
+		if (path->bkt_as_host_prefix) {
+			ret = asprintf(&url_path, "/%s%s",
+				       path->obj, params_str);
+			break;
+		}
+		ret = asprintf(&url_path, "/%s/%s%s",
+			       path->bkt, path->obj, params_str);
+		break;
+	default:
+		dbg(0, "can't encode S3 path\n");
+		return -EINVAL;
+		break;
+	}
+	if (ret < 0) {
+		/* asprintf error */
+		return -errno;
+	}
+	*_url_path = url_path;
+
 	return 0;
 }
 
@@ -182,29 +258,14 @@ s3_req_url_encode(const struct s3_path *path,
 	int ret;
 	char *url_host;
 	char *url_path;
-	const char *params_str = url_params ? url_params : "";
 
-	ret = s3_req_hostname_get(path->bkt, &url_host);
+	ret = s3_req_hostname_gen(path, &url_host);
 	if (ret < 0) {
 		goto err_out;
 	}
 
-	if (S3_PATH_IS_SVC(path) || S3_PATH_IS_BKT(path)) {
-		/* svc and bkt requests use the same path, but host differs */
-		ret = asprintf(&url_path, "/%s", params_str);
-		if (ret < 0) {
-			ret = -ENOMEM;
-			goto err_uhost_free;
-		}
-	} else if (S3_PATH_IS_OBJ(path)) {
-		ret = asprintf(&url_path, "/%s%s", path->obj, params_str);
-		if (ret < 0) {
-			ret = -ENOMEM;
-			goto err_uhost_free;
-		}
-	} else {
-		dbg(0, "can't encode S3 path\n");
-		ret = -EINVAL;
+	ret = s3_req_url_path_gen(path, url_params, &url_path);
+	if (ret < 0) {
 		goto err_uhost_free;
 	}
 

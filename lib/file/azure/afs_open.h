@@ -17,6 +17,8 @@
 int
 afs_fopen(struct event_base *ev_base,
 	  void *mod_priv,
+	  const char *host,
+	  uint16_t port,
 	  const char *path,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *toks);

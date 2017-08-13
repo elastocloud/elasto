@@ -23,6 +23,8 @@ struct elasto_fh_mod_ops {
 	void (*fh_free)(void *mod_priv);
 	int (*open)(struct event_base *ev_base,
 		    void *mod_priv,
+		    const char *custom_host,
+		    uint16_t custom_port,
 		    const char *path,
 		    uint64_t flags,
 		    struct elasto_ftoken_list *open_toks);
