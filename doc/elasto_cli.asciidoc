@@ -1,23 +1,23 @@
-ELASTO_CLI(1)
-=============
+ELASTO(1)
+=========
 :doctype: manpage
 
 
 NAME
 ----
-elasto_cli - Lightweight Cloud Storage Client Utility
+elasto - Lightweight Cloud Storage Client Utility
 
 
 SYNOPSIS
 --------
-*elasto_cli* ['-?'] ['-s Azure publish settings file'] ['-K Azure access key']
-	     ['-k Amazon IAM credentials file'] ['-d log level'] ['-i']
-	     ['-h CLI history file'] ['-u REST Server URI'] ['-- command']
+*elasto* ['-?'] ['-s Azure publish settings file'] ['-K Azure access key']
+	 ['-k Amazon IAM credentials file'] ['-d log level'] ['-i']
+	 ['-h CLI history file'] ['-u REST Server URI'] ['-- command']
 
 
 DESCRIPTION
 -----------
-elasto_cli is a command line utility for the manipulation of cloud storage
+elasto is a command line utility for the manipulation of cloud storage
 objects. It supports the Amazon S3 and Azure Blob/File Service RESTful
 protocols.
 

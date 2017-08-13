@@ -47,7 +47,7 @@ Azure
 3. Start the Elasto client, connecting to the *Azure Blob Service*:
 
 -----------------------------------------------------
-> elasto_cli -s Azure_PublishSettings_File
+> elasto -s Azure_PublishSettings_File
 -----------------------------------------------------
 
 
@@ -63,7 +63,7 @@ Amazon S3
 4. Start the Elasto client:
 
 -----------------------------------------------------
-> elasto_cli -k iam_creds_file
+> elasto -k iam_creds_file
 -----------------------------------------------------
 
 
@@ -85,7 +85,7 @@ credentials parameters:
   objects nested within the corresponding account. E.g.
 
 -----------------------------------------------------
-> elasto_cli -K access_key
+> elasto -K access_key
 -----------------------------------------------------
 
 *PublishSettings*::
@@ -97,24 +97,24 @@ credentials parameters:
   kept private.
 
 -----------------------------------------------------
-> elasto_cli -s PublishSettings_path
+> elasto -s PublishSettings_path
 -----------------------------------------------------
 
 Service URI
 ^^^^^^^^^^^
 *Azure Blob Service* (Block Blobs - default)::
 -----------------------------------------------------
-> elasto_cli -u abb:// ...
+> elasto -u abb:// ...
 -----------------------------------------------------
 
 *Azure Blob Service* (Page Blobs)::
 -----------------------------------------------------
-> elasto_cli -u apb:// ...
+> elasto -u apb:// ...
 -----------------------------------------------------
 
 *Azure File Service*::
 -----------------------------------------------------
-> elasto_cli -u afs:// ...
+> elasto -u afs:// ...
 -----------------------------------------------------
 
 
@@ -132,11 +132,11 @@ The IAM user creation wizard allows for the download of access
 credentials. Select "Generate an access key for each User", and
 subsequently "Download Credentials".
 
-Commands can then be issued by running the elasto_cli client binary
+Commands can then be issued by running the elasto client binary
 with the -k argument. E.g.
 
 -----------------------------------------------------
-> elasto_cli -k iam_creds_file <command>
+> elasto -k iam_creds_file <command>
 -----------------------------------------------------
 
 
