@@ -23,13 +23,22 @@ enum s3_path_type {
 /* default host. bkt is normally added as prefix for bkt and obj operations */
 #define S3_PATH_HOST_DEFAULT "s3.amazonaws.com"
 
+/**
+ * @type: entity that path refers to
+ * @host_is_custom: @host is a custom hostname. This affects how URL paths are
+ *		    generated - the bkt prefix should not be used.
+ * @host: server hostname
+ * @port: server port
+ * @bkt: s3 bucket name
+ * @obj: s3 object name
+ */
 struct s3_path {
 	enum s3_path_type type;
+	bool host_is_custom;
 	char *host;
 	uint16_t port;
 	char *bkt;
 	char *obj;
-	bool bkt_as_host_prefix;
 };
 
 int

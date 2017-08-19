@@ -40,7 +40,7 @@ cm_s3_path_root(void **state)
 	assert_true(ret >= 0);
 	assert_int_equal(path.type, S3_PATH_ROOT);
 	assert_string_equal(path.host, S3_PATH_HOST_DEFAULT);
-	assert_true(path.bkt_as_host_prefix);
+	assert_false(path.host_is_custom);
 	assert_int_equal(path.port, 443);
 	assert_null(path.bkt);
 	assert_null(path.obj);
@@ -58,7 +58,7 @@ cm_s3_path_root(void **state)
 	assert_true(ret >= 0);
 	assert_int_equal(path.type, S3_PATH_ROOT);
 	assert_string_equal(path.host, "myhost");
-	assert_false(path.bkt_as_host_prefix);
+	assert_true(path.host_is_custom);
 	assert_int_equal(path.port, 80);
 	s3_path_free(&path);
 
@@ -151,7 +151,7 @@ cm_s3_path_dup(void **state)
 
 	assert_int_equal(path.type, S3_PATH_OBJ);
 	assert_string_equal(path.host, "hosty");
-	assert_false(path.bkt_as_host_prefix);
+	assert_true(path.host_is_custom);
 	assert_int_equal(path.port, 515);
 	assert_string_equal(path.bkt, "bkt");
 	assert_string_equal(path.obj, "obj");
@@ -159,7 +159,7 @@ cm_s3_path_dup(void **state)
 
 	assert_int_equal(path_dup.type, S3_PATH_OBJ);
 	assert_string_equal(path_dup.host, "hosty");
-	assert_false(path_dup.bkt_as_host_prefix);
+	assert_true(path_dup.host_is_custom);
 	assert_int_equal(path_dup.port, 515);
 	assert_string_equal(path_dup.bkt, "bkt");
 	assert_string_equal(path_dup.obj, "obj");
@@ -177,7 +177,7 @@ cm_s3_path_host(void **state)
 
 	assert_int_equal(path.type, S3_PATH_OBJ);
 	assert_string_equal(path.host, "hosty.elasto.cloud");
-	assert_false(path.bkt_as_host_prefix);
+	assert_true(path.host_is_custom);
 	assert_int_equal(path.port, 1);
 	assert_string_equal(path.bkt, "bkt");
 	assert_string_equal(path.obj, "obj");
@@ -188,7 +188,7 @@ cm_s3_path_host(void **state)
 
 	assert_int_equal(path.type, S3_PATH_OBJ);
 	assert_string_equal(path.host, "hosty");
-	assert_false(path.bkt_as_host_prefix);
+	assert_true(path.host_is_custom);
 	assert_int_equal(path.port, 2);
 	assert_string_equal(path.bkt, "bkt");
 	assert_string_equal(path.obj, "obj");
@@ -199,7 +199,7 @@ cm_s3_path_host(void **state)
 
 	assert_int_equal(path.type, S3_PATH_OBJ);
 	assert_string_equal(path.host, "hosty");
-	assert_false(path.bkt_as_host_prefix);
+	assert_true(path.host_is_custom);
 	assert_int_equal(path.port, 443);
 	assert_string_equal(path.bkt, "bkt");
 	assert_string_equal(path.obj, "obj");

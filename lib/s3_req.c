@@ -157,7 +157,7 @@ s3_req_hostname_gen(const struct s3_path *path,
 		return -EINVAL;
 	}
 
-	if (path->bkt_as_host_prefix && path->bkt != NULL) {
+	if (!path->host_is_custom && path->bkt != NULL) {
 		ret = asprintf(&hostname, "%s.%s", path->bkt, path->host);
 		if (ret < 0) {
 			return -ENOMEM;
@@ -187,20 +187,21 @@ s3_req_url_path_gen(const struct s3_path *path,
 		ret = asprintf(&url_path, "/%s", params_str);
 		break;
 	case S3_PATH_BKT:
-		if (path->bkt_as_host_prefix) {
-			ret = asprintf(&url_path, "/%s", params_str);
+		if (path->host_is_custom) {
+			ret = asprintf(&url_path, "/%s%s", path->bkt, params_str);
 			break;
 		}
-		ret = asprintf(&url_path, "/%s%s", path->bkt, params_str);
+		/* bkt is a server hostname prefix */
+		ret = asprintf(&url_path, "/%s", params_str);
 		break;
 	case S3_PATH_OBJ:
-		if (path->bkt_as_host_prefix) {
-			ret = asprintf(&url_path, "/%s%s",
-				       path->obj, params_str);
+		if (path->host_is_custom) {
+			ret = asprintf(&url_path, "/%s/%s%s",
+				       path->bkt, path->obj, params_str);
 			break;
 		}
-		ret = asprintf(&url_path, "/%s/%s%s",
-			       path->bkt, path->obj, params_str);
+		/* bkt is a server hostname prefix */
+		ret = asprintf(&url_path, "/%s%s", path->obj, params_str);
 		break;
 	default:
 		dbg(0, "can't encode S3 path\n");

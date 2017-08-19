@@ -44,7 +44,7 @@ s3_path_parse(const char *custom_host,
 	 * use $bkt.s3.amazonaws.com by default, or $custom_host/$bkt/... if an
 	 * explicit hostname has been provided.
 	 */
-	bool bkt_as_host_prefix = true;
+	bool host_is_custom = false;
 
 	if ((path == NULL) || (s3_path == NULL)) {
 		ret = -EINVAL;
@@ -52,7 +52,7 @@ s3_path_parse(const char *custom_host,
 	}
 
 	if (custom_host != NULL) {
-		bkt_as_host_prefix = false;
+		host_is_custom = true;
 		host = strdup(custom_host);
 	} else {
 		host = strdup(S3_PATH_HOST_DEFAULT);
@@ -120,14 +120,14 @@ s3_path_parse(const char *custom_host,
 	s3_path->type = S3_PATH_OBJ;
 done:
 	assert(s3_path->type != 0);
+	s3_path->host_is_custom = host_is_custom;
 	s3_path->host = host;
 	s3_path->port = port;
 	s3_path->bkt = comp1;
 	s3_path->obj = comp2;
-	s3_path->bkt_as_host_prefix = bkt_as_host_prefix;
 	dbg(2, "parsed %s as S3 path: host%s=%s, port=%d, bkt=%s, obj=%s\n",
-	    path, (s3_path->bkt_as_host_prefix ? "(prior to bkt prefix)" : ""),
-	    s3_path->host, s3_path->port, (s3_path->bkt ? s3_path->bkt : ""),
+	    path, (s3_path->host_is_custom ? "(custom)" : ""), s3_path->host,
+	    s3_path->port, (s3_path->bkt ? s3_path->bkt : ""),
 	    (s3_path->obj ? s3_path->obj : ""));
 
 	return 0;
@@ -174,7 +174,7 @@ s3_path_dup(const struct s3_path *path_orig,
 		ret = -ENOMEM;
 		goto err_out;
 	}
-	dup.bkt_as_host_prefix = path_orig->bkt_as_host_prefix;
+	dup.host_is_custom = path_orig->host_is_custom;
 	dup.port = path_orig->port;
 
 	dup.type = path_orig->type;
