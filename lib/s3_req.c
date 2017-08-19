@@ -84,39 +84,6 @@ s3_req_sign(const char *acc,
 	return 0;
 }
 
-#if 0
-static int
-s3_req_v4_sign(const char *acc,
-	    const uint8_t *key,
-	    int key_len,
-	    struct op *op)
-{
-	int ret;
-	char *sig_str;
-	char *hdr_str;
-	struct s3_ebo *ebo = container_of(op, struct s3_ebo, op);
-
-	if (key == NULL) {
-		return -EINVAL;
-	}
-
-	ret = sign_s3v4_gen(ebo->req.path.bkt, key, key_len,
-			    op, &op->sig_src, &sig_str);
-	if (ret < 0) {
-		dbg(0, "S3 signing failed: %s\n",
-		    strerror(-ret));
-		return ret;
-	}
-
-	ret = op_req_hdr_add(op, "Authorization", sig_str);
-	if (ret < 0) {
-		return ret;
-	}
-
-	return 0;
-}
-#endif
-
 static void
 s3_req_free(struct op *op);
 static void
