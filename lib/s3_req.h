@@ -152,10 +152,6 @@ struct s3_rsp {
 };
 
 int
-s3_req_hostname_gen(const struct s3_path *path,
-		    char **_hostname);
-
-int
 s3_req_svc_list(struct s3_path *s3_path,
 		struct op **_op);
 

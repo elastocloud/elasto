@@ -27,6 +27,38 @@
 #include "lib/dbg.h"
 #include "lib/s3_path.h"
 
+static int
+s3_path_host_gen(const char *custom_host,
+		 const char *bkt,
+		 bool *_host_is_custom,
+		 char **_host)
+{
+	char *host;
+	bool host_is_custom = false;
+
+	if (custom_host != NULL) {
+		/* URL path must include bucket component (if non-root) */
+		host_is_custom = true;
+		host = strdup(custom_host);
+	} else if (bkt == NULL) {
+		/* root */
+		host = strdup(S3_PATH_HOST_DEFAULT);
+	} else {
+		int ret;
+		/* non-root with standard public cloud host */
+		ret = asprintf(&host, "%s.%s", bkt, S3_PATH_HOST_DEFAULT);
+		if (ret < 0) {
+			host = NULL;
+		}
+	}
+	if (host == NULL) {
+		return -ENOMEM;
+	}
+	*_host_is_custom = host_is_custom;
+	*_host = host;
+	return 0;
+}
+
 int
 s3_path_parse(const char *custom_host,
 	      uint16_t port,
@@ -51,16 +83,7 @@ s3_path_parse(const char *custom_host,
 		goto err_out;
 	}
 
-	if (custom_host != NULL) {
-		host_is_custom = true;
-		host = strdup(custom_host);
-	} else {
-		host = strdup(S3_PATH_HOST_DEFAULT);
-	}
-	if (host == NULL) {
-		ret = -ENOMEM;
-		goto err_out;
-	}
+	/* host is set after bkt is known */
 	if (port == 0) {
 		port = (insecure_http ? 80 : 443);
 		dbg(1, "default port %d in use\n", port);
@@ -70,7 +93,7 @@ s3_path_parse(const char *custom_host,
 	if (*cs != '/') {
 		/* no leading slash */
 		ret = -EINVAL;
-		goto err_host_free;
+		goto err_out;
 	}
 
 	while (*cs == '/')
@@ -85,7 +108,7 @@ s3_path_parse(const char *custom_host,
 	comp1 = strdup(cs);
 	if (comp1 == NULL) {
 		ret = -ENOMEM;
-		goto err_host_free;
+		goto err_out;
 	}
 
 	s = strchr(comp1, '/');
@@ -95,7 +118,7 @@ s3_path_parse(const char *custom_host,
 		goto done;
 	}
 
-	*(s++) = '\0';	/* null term for acc */
+	*(s++) = '\0';	/* null term for bkt */
 	while (*s == '/')
 		s++;
 
@@ -120,6 +143,12 @@ s3_path_parse(const char *custom_host,
 	s3_path->type = S3_PATH_OBJ;
 done:
 	assert(s3_path->type != 0);
+	ret = s3_path_host_gen(custom_host,
+			       comp1,	/* bucket */
+			       &host_is_custom, &host);
+	if (ret < 0) {
+		goto err_2_free;
+	}
 	s3_path->host_is_custom = host_is_custom;
 	s3_path->host = host;
 	s3_path->port = port;
@@ -136,8 +165,6 @@ err_2_free:
 	free(comp2);
 err_1_free:
 	free(comp1);
-err_host_free:
-	free(host);
 err_out:
 	return ret;
 }

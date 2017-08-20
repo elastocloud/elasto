@@ -146,33 +146,6 @@ s3_req_fill_hdr_common(struct op *op)
 	return 0;
 }
 
-int
-s3_req_hostname_gen(const struct s3_path *path,
-		    char **_hostname)
-{
-	int ret;
-	char *hostname;
-
-	if ((path == NULL) || (path->host == NULL) || (_hostname == NULL)) {
-		return -EINVAL;
-	}
-
-	if (!path->host_is_custom && path->bkt != NULL) {
-		ret = asprintf(&hostname, "%s.%s", path->bkt, path->host);
-		if (ret < 0) {
-			return -ENOMEM;
-		}
-	} else {
-		hostname = strdup(path->host);
-		if (hostname == NULL) {
-			return -ENOMEM;
-		}
-	}
-
-	*_hostname = hostname;
-	return 0;
-}
-
 static int
 s3_req_url_path_gen(const struct s3_path *path,
 		    const char *url_params,
@@ -227,8 +200,9 @@ s3_req_url_encode(const struct s3_path *path,
 	char *url_host;
 	char *url_path;
 
-	ret = s3_req_hostname_gen(path, &url_host);
-	if (ret < 0) {
+	url_host = strdup(path->host);
+	if (url_host == NULL) {
+		ret = -ENOMEM;
 		goto err_out;
 	}
 

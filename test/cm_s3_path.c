@@ -75,6 +75,17 @@ cm_s3_path_bkt(void **state)
 	ret = s3_path_parse(NULL, 0, "/bkt", false, &path);
 	assert_true(ret >= 0);
 	assert_int_equal(path.type, S3_PATH_BKT);
+	assert_false(path.host_is_custom);
+	assert_string_equal(path.host, "bkt." S3_PATH_HOST_DEFAULT);
+	assert_string_equal(path.bkt, "bkt");
+	assert_null(path.obj);
+	s3_path_free(&path);
+
+	ret = s3_path_parse("hosty", 0, "/bkt", false, &path);
+	assert_true(ret >= 0);
+	assert_int_equal(path.type, S3_PATH_BKT);
+	assert_true(path.host_is_custom);
+	assert_string_equal(path.host, "hosty");
 	assert_string_equal(path.bkt, "bkt");
 	assert_null(path.obj);
 	s3_path_free(&path);
@@ -99,13 +110,18 @@ cm_s3_path_obj(void **state)
 	ret = s3_path_parse(NULL, 0, "/bkt/obj", false, &path);
 	assert_true(ret >= 0);
 	assert_int_equal(path.type, S3_PATH_OBJ);
+	assert_false(path.host_is_custom);
+	assert_string_equal(path.host, "bkt." S3_PATH_HOST_DEFAULT);
 	assert_string_equal(path.bkt, "bkt");
 	assert_string_equal(path.obj, "obj");
 	s3_path_free(&path);
 
-	ret = s3_path_parse(NULL, 0, "//bkt///obe", false, &path);
+	ret = s3_path_parse("hosty", 42, "//bkt///obe", false, &path);
 	assert_true(ret >= 0);
 	assert_int_equal(path.type, S3_PATH_OBJ);
+	assert_true(path.host_is_custom);
+	assert_string_equal(path.host, "hosty");
+	assert_int_equal(path.port, 42);
 	assert_string_equal(path.bkt, "bkt");
 	assert_string_equal(path.obj, "obe");
 	s3_path_free(&path);
@@ -133,14 +149,18 @@ cm_s3_path_dup(void **state)
 	assert_true(ret >= 0);
 
 	assert_int_equal(path.type, S3_PATH_OBJ);
+	assert_false(path.host_is_custom);
+	assert_string_equal(path.host,  "bkt." S3_PATH_HOST_DEFAULT);
 	assert_int_equal(path.port, 443);
 	assert_string_equal(path.bkt, "bkt");
 	assert_string_equal(path.obj, "obj");
 	s3_path_free(&path);
 
 	assert_int_equal(path_dup.type, S3_PATH_OBJ);
-	assert_string_equal(path_dup.bkt, "bkt");
+	assert_false(path_dup.host_is_custom);
+	assert_string_equal(path_dup.host,  "bkt." S3_PATH_HOST_DEFAULT);
 	assert_int_equal(path_dup.port, 443);
+	assert_string_equal(path_dup.bkt, "bkt");
 	assert_string_equal(path_dup.obj, "obj");
 	s3_path_free(&path_dup);
 
@@ -152,6 +172,7 @@ cm_s3_path_dup(void **state)
 	assert_int_equal(path.type, S3_PATH_OBJ);
 	assert_string_equal(path.host, "hosty");
 	assert_true(path.host_is_custom);
+	assert_string_equal(path.host,  "hosty");
 	assert_int_equal(path.port, 515);
 	assert_string_equal(path.bkt, "bkt");
 	assert_string_equal(path.obj, "obj");
@@ -160,6 +181,7 @@ cm_s3_path_dup(void **state)
 	assert_int_equal(path_dup.type, S3_PATH_OBJ);
 	assert_string_equal(path_dup.host, "hosty");
 	assert_true(path_dup.host_is_custom);
+	assert_string_equal(path_dup.host,  "hosty");
 	assert_int_equal(path_dup.port, 515);
 	assert_string_equal(path_dup.bkt, "bkt");
 	assert_string_equal(path_dup.obj, "obj");
