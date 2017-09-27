@@ -89,27 +89,6 @@ az_blob_ebo_init(enum az_blob_opcode opcode,
 	return 0;
 }
 
-/* TODO DROP or move to path */
-int
-az_blob_req_hostname_get(char *acc,
-			 char **_hostname)
-{
-	int ret;
-	char *hostname;
-
-	if ((acc == NULL) || (_hostname== NULL)) {
-		return -EINVAL;
-	}
-
-	ret = asprintf(&hostname, "%s.blob.core.windows.net", acc);
-	if (ret < 0) {
-		return -ENOMEM;
-	}
-
-	*_hostname = hostname;
-	return 0;
-}
-
 static int
 az_blob_req_url_encode(const struct az_blob_path *path,
 		       const char *url_params,

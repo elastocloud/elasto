@@ -277,10 +277,6 @@ struct az_blob_rsp {
 };
 
 int
-az_blob_req_hostname_get(char *acc,
-			 char **_hostname);
-
-int
 az_req_ctnr_list(const struct az_blob_path *path,
 		 struct op **_op);
 
