@@ -92,7 +92,6 @@ apb_io_conn_init(struct event_base *ev_base,
 		 struct elasto_conn **_io_conn)
 {
 	int ret;
-	char *url_host;
 	struct elasto_conn *io_conn;
 
 	if ((apb_fh->acc_access_key == NULL) && (apb_fh->mgmt_conn != NULL)) {
@@ -108,15 +107,10 @@ apb_io_conn_init(struct event_base *ev_base,
 		goto err_out;
 	}
 
-	ret = az_blob_req_hostname_get(apb_fh->path.acc, &url_host);
-	if (ret < 0) {
-		goto err_out;
-	}
-
 	/* pem_file not needed for IO conn */
 	ret = elasto_conn_init_az(ev_base, NULL, apb_fh->insecure_http,
-				  url_host, &io_conn);
-	free(url_host);
+				  apb_fh->path.host, apb_fh->path.port,
+				  &io_conn);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -564,6 +558,8 @@ err_out:
 static int
 apb_abb_fopen(struct event_base *ev_base,
 	      void *mod_priv,
+	      const char *host,
+	      uint16_t port,
 	      const char *path,
 	      uint64_t flags,
 	      struct elasto_ftoken_list *open_toks,
@@ -572,13 +568,14 @@ apb_abb_fopen(struct event_base *ev_base,
 	int ret;
 	struct apb_fh *apb_fh = mod_priv;
 
-	ret = az_blob_path_parse(path, &apb_fh->path);
+	/* apb_fh->insecure_http set in fh_init */
+	ret = az_blob_path_parse(host, port, path, apb_fh->insecure_http,
+				 &apb_fh->path);
 	if (ret < 0) {
 		goto err_out;
 	}
 
 	if (apb_fh->pem_path != NULL) {
-		char *mgmt_host;
 		/*
 		 * for Publish Settings credentials, a mgmt connection is
 		 * required to obtain account keys, or perform root / account
@@ -586,14 +583,15 @@ apb_abb_fopen(struct event_base *ev_base,
 		 * A connection to the account host for ctnr / blob IO is
 		 * opened later if needed (non-root).
 		 */
-		ret = az_mgmt_req_hostname_get(&mgmt_host);
-		if (ret < 0) {
-			goto err_out;
+		if (apb_fh->path.host_is_custom) {
+			dbg(0, "custom host not supported with PEM auth\n");
+			ret = -EINVAL;
+			goto err_path_free;
 		}
 
 		ret = elasto_conn_init_az(ev_base, apb_fh->pem_path, false,
-					  mgmt_host, &apb_fh->mgmt_conn);
-		free(mgmt_host);
+					  AZ_BLOB_PATH_HOST_MGMT, 443,
+					  &apb_fh->mgmt_conn);
 		if (ret < 0) {
 			goto err_path_free;
 		}
@@ -682,12 +680,8 @@ apb_fopen(struct event_base *ev_base,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
-	if (host != NULL) {
-		dbg(0, "Azure backend currently missing custom host support\n");
-		return -EINVAL;
-	}
-
-	return apb_abb_fopen(ev_base, mod_priv, path, flags, open_toks, true);
+	return apb_abb_fopen(ev_base, mod_priv, host, port, path, flags,
+			     open_toks, true);
 }
 
 int
@@ -712,10 +706,6 @@ abb_fopen(struct event_base *ev_base,
 	  uint64_t flags,
 	  struct elasto_ftoken_list *open_toks)
 {
-	if (host != NULL) {
-		dbg(0, "Azure backend currently missing custom host support\n");
-		return -EINVAL;
-	}
-
-	return apb_abb_fopen(ev_base, mod_priv, path, flags, open_toks, false);
+	return apb_abb_fopen(ev_base, mod_priv, host, port, path, flags,
+			     open_toks, false);
 }

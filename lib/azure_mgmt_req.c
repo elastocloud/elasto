@@ -85,6 +85,7 @@ az_mgmt_ebo_init(enum az_mgmt_opcode opcode,
 	return 0;
 }
 
+/* TODO DROP */
 #define REQ_HOST_AZURE_MGMT "management.core.windows.net"
 
 int

@@ -89,6 +89,7 @@ az_blob_ebo_init(enum az_blob_opcode opcode,
 	return 0;
 }
 
+/* TODO DROP or move to path */
 int
 az_blob_req_hostname_get(char *acc,
 			 char **_hostname)
@@ -120,8 +121,9 @@ az_blob_req_url_encode(const struct az_blob_path *path,
 	char *url_path;
 	const char *params_str = url_params ? url_params : "";
 
-	ret = az_blob_req_hostname_get(path->acc, &url_host);
-	if (ret < 0) {
+	url_host = strdup(path->host);
+	if (url_host == NULL) {
+		ret = -ENOMEM;
 		goto err_out;
 	}
 

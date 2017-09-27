@@ -1331,7 +1331,7 @@ elasto_conn_init_common(struct event_base *ev_base,
 	int ret;
 	struct elasto_conn *econn;
 
-	if (port < 1)  {
+	if (port == 0)  {
 		return -EINVAL;
 	}
 
@@ -1366,13 +1366,14 @@ elasto_conn_init_az(struct event_base *ev_base,
 		    const char *pem_file,
 		    bool insecure_http,
 		    const char *host,
+		    uint16_t port,
 		    struct elasto_conn **econn_out)
 {
 	struct elasto_conn *econn;
 	int ret;
 
 	ret = elasto_conn_init_common(ev_base, insecure_http, host,
-				      (insecure_http ? 80 : 443), &econn);
+				      port, &econn);
 	if (ret < 0) {
 		goto err_out;
 	}

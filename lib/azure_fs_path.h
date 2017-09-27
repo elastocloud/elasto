@@ -21,6 +21,10 @@ enum az_fs_path_type {
 	AZ_FS_PATH_ENT,
 };
 
+/* default host suffix, when connected to the public cloud */
+#define AZ_BLOB_PATH_HOST_DEFAULT "blob.core.windows.net"
+#define AZ_FS_PATH_HOST_MGMT "management.core.windows.net" /* XXX Blob DUP */
+
 /**
  * Azure File Service path representation
  *

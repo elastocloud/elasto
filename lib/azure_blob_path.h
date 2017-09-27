@@ -21,6 +21,10 @@ enum az_blob_path_type {
 	AZ_BLOB_PATH_BLOB,
 };
 
+/* default host suffix, when connected to the public cloud */
+#define AZ_BLOB_PATH_HOST_DEFAULT "blob.core.windows.net"
+#define AZ_BLOB_PATH_HOST_MGMT "management.core.windows.net" /* XXX AFS DUP */
+
 /**
  * Azure Blob Service path representation
  *
@@ -29,12 +33,19 @@ enum az_blob_path_type {
  * blobs.
  *
  * @type: value to indicate which path fields are set/NULL
+ * @host_is_custom: @host is a custom hostname. This affects how URL paths
+ *		    are generated.
+ * @host: hostname for storage service
+ * @port: port to connect to
  * @acc: Storage account name
  * @ctnr: Container name
  * @blob: Blob name, used for page and block blobs.
  */
 struct az_blob_path {
 	enum az_blob_path_type type;
+	bool host_is_custom;
+	char *host;
+	uint16_t port;
 	char *acc;
 	char *ctnr;
 	char *blob;
@@ -50,8 +61,11 @@ struct az_blob_path {
 	((path != NULL) && (path->type == AZ_BLOB_PATH_BLOB))
 
 int
-az_blob_path_parse(const char *path_str,
-		   struct az_blob_path *az_blob_path);
+az_blob_path_parse(const char *custom_host,
+		   uint16_t port,
+		   const char *path,
+		   bool insecure_http,
+		   struct az_blob_path *az_path);
 
 void
 az_blob_path_free(struct az_blob_path *az_blob_path);
@@ -59,5 +73,12 @@ az_blob_path_free(struct az_blob_path *az_blob_path);
 int
 az_blob_path_dup(const struct az_blob_path *path_orig,
 		 struct az_blob_path *path_dup);
+
+/* only exported for unit testing */
+int
+az_blob_path_host_gen(const char *custom_host,
+		      const char *account,
+		      bool *_host_is_custom,
+		      char **_host);
 
 #endif /* ifdef _AZURE_BLOB_PATH_H_ */

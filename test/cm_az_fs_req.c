@@ -64,7 +64,6 @@ cm_az_fs_req_init(void **state)
 	int ret;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp;
-	char *mgmt_host;
 	char *url_host;
 	struct elasto_conn *mgmt_conn;
 	struct op *op;
@@ -82,13 +81,11 @@ cm_az_fs_req_init(void **state)
 				       &cm_op_az_fs_state.sub_name);
 	assert_true(ret >= 0);
 
-	ret = az_mgmt_req_hostname_get(&mgmt_host);
-	assert_true(ret >= 0);
-
 	ret = elasto_conn_init_az(cm_op_az_fs_state.ev_base,
 				  cm_op_az_fs_state.pem_file,
 				  false,	/* mgmt must use https */
-				  mgmt_host,
+				  "management.core.windows.net",
+				  443,
 				  &mgmt_conn);
 	assert_true(ret >= 0);
 
@@ -111,6 +108,7 @@ cm_az_fs_req_init(void **state)
 
 	ret = elasto_conn_init_az(cm_op_az_fs_state.ev_base, NULL,
 				  cm_us->insecure_http, url_host,
+				  (cm_us->insecure_http ? 80 : 443),
 				  &cm_op_az_fs_state.io_conn);
 	assert_true(ret >= 0);
 	free(url_host);

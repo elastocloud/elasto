@@ -47,12 +47,18 @@ static struct {
 	char *sub_name;
 	struct event_base *ev_base;
 	struct elasto_conn *io_conn;
+	bool io_host_is_custom;
+	char *io_host;
+	uint16_t io_port;
 	char *ctnr;
 } cm_op_az_blob_req_state = {
 	.pem_file = NULL,
 	.sub_id = NULL,
 	.sub_name = NULL,
 	.io_conn = NULL,
+	.io_host_is_custom = false,
+	.io_host = NULL,
+	.io_port = 0,
 	.ctnr = NULL,
 };
 
@@ -64,10 +70,17 @@ cm_az_blob_req_init(void **state)
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp;
 	char *mgmt_host;
-	char *url_host;
+	bool is_custom_host;
 	struct elasto_conn *mgmt_conn;
 	struct op *op;
-	struct az_blob_path path = { 0 };
+	struct az_blob_path path = {
+		.host_is_custom = false,	/* not yet supported */
+		.host = NULL,			/* set below */
+		.port = 0,			/* set below */
+		.type = AZ_BLOB_PATH_CTNR,
+		.acc = cm_us->acc,
+		.ctnr = NULL, /* set later */
+	};
 
 	ret = elasto_conn_subsys_init();
 	assert_true(ret >= 0);
@@ -81,15 +94,20 @@ cm_az_blob_req_init(void **state)
 				       &cm_op_az_blob_req_state.sub_name);
 	assert_true(ret >= 0);
 
-	ret = az_mgmt_req_hostname_get(&mgmt_host);
+	ret = az_blob_path_host_gen(NULL,
+				    NULL,	/* no account, i.e. mgmt */
+				    &is_custom_host,
+				    &mgmt_host);
 	assert_true(ret >= 0);
+	assert_false(is_custom_host);
 
 	ret = elasto_conn_init_az(cm_op_az_blob_req_state.ev_base,
 				  cm_op_az_blob_req_state.pem_file,
 				  false,	/* mgmt must use https */
-				  mgmt_host,
+				  mgmt_host, 443,
 				  &mgmt_conn);
 	assert_true(ret >= 0);
+	free(mgmt_host);
 
 	ret = az_mgmt_req_acc_keys_get(cm_op_az_blob_req_state.sub_id,
 				       cm_us->acc, &op);
@@ -105,14 +123,22 @@ cm_az_blob_req_init(void **state)
 	acc_keys_get_rsp = az_mgmt_rsp_acc_keys_get(op);
 	assert_true(acc_keys_get_rsp != NULL);
 
-	ret = az_blob_req_hostname_get(cm_us->acc, &url_host);
+	/* TODO should accept a custom hostname for testing */
+	ret = az_blob_path_host_gen(NULL,
+				    cm_us->acc,
+				    &cm_op_az_blob_req_state.io_host_is_custom,
+				    &cm_op_az_blob_req_state.io_host);
 	assert_true(ret >= 0);
+	assert_false(is_custom_host);
+	/* TODO should accept custom port for testing */
+	cm_op_az_blob_req_state.io_port = (cm_us->insecure_http ? 80 : 443),
 
 	ret = elasto_conn_init_az(cm_op_az_blob_req_state.ev_base, NULL,
-				  cm_us->insecure_http, url_host,
+				  cm_us->insecure_http,
+				  cm_op_az_blob_req_state.io_host,
+				  cm_op_az_blob_req_state.io_port,
 				  &cm_op_az_blob_req_state.io_conn);
 	assert_true(ret >= 0);
-	free(url_host);
 
 	ret = elasto_conn_sign_setkey(cm_op_az_blob_req_state.io_conn,
 				      cm_us->acc,
@@ -124,9 +150,9 @@ cm_az_blob_req_init(void **state)
 		       cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_true(ret >= 0);
 
-	path.type = AZ_BLOB_PATH_CTNR;
-	path.acc = cm_us->acc,
 	path.ctnr = cm_op_az_blob_req_state.ctnr,
+	path.host = cm_op_az_blob_req_state.io_host;
+	path.port = cm_op_az_blob_req_state.io_port;
 	ret = az_req_ctnr_create(&path, &op);
 	assert_true(ret >= 0);
 
@@ -147,6 +173,9 @@ cm_az_blob_req_deinit(void **state)
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 	struct op *op;
 	struct az_blob_path path = {
+		.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+		.host = cm_op_az_blob_req_state.io_host,
+		.port = cm_op_az_blob_req_state.io_port,
 		.type = AZ_BLOB_PATH_CTNR,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
@@ -161,6 +190,7 @@ cm_az_blob_req_deinit(void **state)
 	op_free(op);
 	free(cm_op_az_blob_req_state.ctnr);
 
+	free(cm_op_az_blob_req_state.io_host);
 	elasto_conn_free(cm_op_az_blob_req_state.io_conn);
 	elasto_conn_subsys_deinit();
 	azure_ssl_pubset_cleanup(cm_op_az_blob_req_state.pem_file);
@@ -180,6 +210,9 @@ cm_az_blob_req_ctnrs_list(void **state)
 	struct azure_ctnr *ctnr;
 	bool found_ctnr;
 	struct az_blob_path path = {
+		.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+		.host = cm_op_az_blob_req_state.io_host,
+		.port = cm_op_az_blob_req_state.io_port,
 		.type = AZ_BLOB_PATH_ACC,
 		.acc = cm_us->acc,
 	};
@@ -211,6 +244,9 @@ cm_az_blob_req_ctnr_props(void **state)
 	struct op *op;
 	struct az_rsp_ctnr_prop_get *ctnr_prop_get;
 	struct az_blob_path path = {
+		.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+		.host = cm_op_az_blob_req_state.io_host,
+		.port = cm_op_az_blob_req_state.io_port,
 		.type = AZ_BLOB_PATH_CTNR,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
@@ -241,6 +277,9 @@ cm_az_blob_req_blob_create(void **state)
 
 	/* put 1TB page blob */
 	memset(&path, 0, sizeof(path));
+	path.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+	path.host = cm_op_az_blob_req_state.io_host,
+	path.port = cm_op_az_blob_req_state.io_port,
 	path.type = AZ_BLOB_PATH_BLOB;
 	path.acc = cm_us->acc;
 	path.ctnr = cm_op_az_blob_req_state.ctnr;
@@ -255,6 +294,9 @@ cm_az_blob_req_blob_create(void **state)
 
 	/* confirm new blob exists */
 	memset(&path, 0, sizeof(path));
+	path.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+	path.host = cm_op_az_blob_req_state.io_host,
+	path.port = cm_op_az_blob_req_state.io_port,
 	path.type = AZ_BLOB_PATH_CTNR;
 	path.acc = cm_us->acc;
 	path.ctnr = cm_op_az_blob_req_state.ctnr;
@@ -277,6 +319,9 @@ cm_az_blob_req_blob_create(void **state)
 
 	/* cleanup */
 	memset(&path, 0, sizeof(path));
+	path.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+	path.host = cm_op_az_blob_req_state.io_host,
+	path.port = cm_op_az_blob_req_state.io_port,
 	path.type = AZ_BLOB_PATH_BLOB;
 	path.acc = cm_us->acc;
 	path.ctnr = cm_op_az_blob_req_state.ctnr;
@@ -299,6 +344,9 @@ cm_az_blob_req_page_blob_io(void **state)
 	struct elasto_data *data;
 	uint8_t buf[1024];
 	struct az_blob_path path = {
+		.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+		.host = cm_op_az_blob_req_state.io_host,
+		.port = cm_op_az_blob_req_state.io_port,
 		.type = AZ_BLOB_PATH_BLOB,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
@@ -376,6 +424,9 @@ cm_az_blob_req_blob_props(void **state)
 	struct op *op;
 	struct az_rsp_blob_prop_get *blob_prop_get;
 	struct az_blob_path path = {
+		.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+		.host = cm_op_az_blob_req_state.io_host,
+		.port = cm_op_az_blob_req_state.io_port,
 		.type = AZ_BLOB_PATH_BLOB,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
@@ -436,12 +487,18 @@ cm_az_blob_req_blob_cp(void **state)
 	struct elasto_data *data;
 	uint8_t buf[1024];
 	struct az_blob_path src_path = {
+		.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+		.host = cm_op_az_blob_req_state.io_host,
+		.port = cm_op_az_blob_req_state.io_port,
 		.type = AZ_BLOB_PATH_BLOB,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
 		.blob = "blob1",
 	};
 	struct az_blob_path dst_path = {
+		.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+		.host = cm_op_az_blob_req_state.io_host,
+		.port = cm_op_az_blob_req_state.io_port,
 		.type = AZ_BLOB_PATH_BLOB,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,
@@ -517,6 +574,9 @@ cm_az_blob_req_page_ranges(void **state)
 	struct elasto_data *data;
 	uint8_t buf[1024];
 	struct az_blob_path path = {
+		.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
+		.host = cm_op_az_blob_req_state.io_host,
+		.port = cm_op_az_blob_req_state.io_port,
 		.type = AZ_BLOB_PATH_BLOB,
 		.acc = cm_us->acc,
 		.ctnr = cm_op_az_blob_req_state.ctnr,

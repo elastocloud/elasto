@@ -98,11 +98,50 @@ fail:
 }
 
 int
-az_blob_path_parse(const char *path,
-		struct az_blob_path *az_path)
+az_blob_path_host_gen(const char *custom_host,
+		      const char *account,
+		      bool *_host_is_custom,
+		      char **_host)
+{
+	char *host;
+	bool host_is_custom = false;
+
+	if (custom_host != NULL) {
+		/* URL path must include account component (if non-root) */
+		host_is_custom = true;
+		host = strdup(custom_host);
+	} else if (account == NULL) {
+		/* root - XXX special hostname */
+		host = strdup(AZ_BLOB_PATH_HOST_MGMT);
+	} else {
+		int ret;
+		/* non-root with standard public cloud host */
+		ret = asprintf(&host, "%s.%s", account,
+				AZ_BLOB_PATH_HOST_DEFAULT);
+		if (ret < 0) {
+			host = NULL;
+		}
+	}
+	if (host == NULL) {
+		return -ENOMEM;
+	}
+	*_host_is_custom = host_is_custom;
+	*_host = host;
+	return 0;
+}
+
+int
+az_blob_path_parse(const char *custom_host,
+		   uint16_t port,
+		   const char *path,
+		   bool insecure_http,
+		   struct az_blob_path *az_path)
 {
 	int ret;
+	const char *cs;
 	char *s;
+	bool host_is_custom = false;
+	char *host = NULL;
 	char *comp1 = NULL;
 	char *comp2 = NULL;
 	char *comp3 = NULL;
@@ -111,24 +150,30 @@ az_blob_path_parse(const char *path,
 		return -EINVAL;
 	}
 
-	s = (char *)path;
+	/* host generated after we know the account */
+	if (port == 0) {
+		port = (insecure_http ? 80 : 443);
+		dbg(1, "default port %d in use\n", port);
+	}
 
-	if (*s != '/') {
+	cs = path;
+
+	if (*cs != '/') {
 		/* no leading slash */
 		ret = -EINVAL;
 		goto err_out;
 	}
 
-	while (*s == '/')
-		s++;
+	while (*cs == '/')
+		cs++;
 
-	if (*s == '\0') {
+	if (*cs == '\0') {
 		/* empty or leading slashes only */
 		az_path->type = AZ_BLOB_PATH_ROOT;
 		goto done;
 	}
 
-	comp1 = strdup(s);
+	comp1 = strdup(cs);
 	if (comp1 == NULL) {
 		ret = -ENOMEM;
 		goto err_out;
@@ -191,20 +236,33 @@ az_blob_path_parse(const char *path,
 	az_path->type = AZ_BLOB_PATH_BLOB;
 done:
 	assert(az_path->type != 0);
+	ret = az_blob_path_host_gen(custom_host,
+				    comp1,	/* acc (NULL for root) */
+				    &host_is_custom,
+				    &host);
+	if (ret < 0) {
+		goto err_3_free;
+	}
+	az_path->port = port;
+	az_path->host_is_custom = host_is_custom;
+	az_path->host = host;
 	az_path->acc = comp1;
 	az_path->ctnr = comp2;
 	az_path->blob = comp3;
 	ret = az_blob_path_validate(az_path);
 	if (ret < 0) {
-		goto err_3_free;
+		goto err_host_free;
 	}
-	dbg(2, "parsed %s as APB path: acc=%s, ctnr=%s, blob=%s\n",
-	    path, (az_path->acc ? az_path->acc : ""),
+	dbg(2, "parsed %s as APB path: host%s=%s, port=%d, acc=%s, ctnr=%s, "
+	    "blob=%s\n", path, (az_path->host_is_custom ? "(custom)" : ""),
+	    az_path->host, port, (az_path->acc ? az_path->acc : ""),
 	    (az_path->ctnr ? az_path->ctnr : ""),
 	    (az_path->blob ? az_path->blob : ""));
 
 	return 0;
 
+err_host_free:
+	free(host);
 err_3_free:
 	free(comp3);
 err_2_free:
@@ -218,12 +276,11 @@ err_out:
 void
 az_blob_path_free(struct az_blob_path *az_path)
 {
+	free(az_path->host);
 	free(az_path->acc);
-	az_path->acc = NULL;
 	free(az_path->ctnr);
-	az_path->ctnr = NULL;
 	free(az_path->blob);
-	az_path->blob = NULL;
+	memset(az_path, 0, sizeof(*az_path));
 }
 
 int
@@ -233,12 +290,31 @@ az_blob_path_dup(const struct az_blob_path *path_orig,
 	int ret;
 	struct az_blob_path dup = { 0 };
 
+	if ((path_orig == NULL) || (path_dup == NULL)) {
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	if (path_orig->host == NULL) {
+		dbg(0, "host not set in orig path\n");
+		ret = -EINVAL;
+		goto err_out;
+	}
+
+	dup.host = strdup(path_orig->host);
+	if (dup.host == NULL) {
+		ret = -ENOMEM;
+		goto err_out;
+	}
+	dup.host_is_custom = path_orig->host_is_custom;
+	dup.port = path_orig->port;
+
 	dup.type = path_orig->type;
 	if (path_orig->acc != NULL) {
 		dup.acc = strdup(path_orig->acc);
 		if (dup.acc == NULL) {
 			ret = -ENOMEM;
-			goto err_out;
+			goto err_path_free;
 		}
 	} else {
 		/* all nested items must also be NULL */

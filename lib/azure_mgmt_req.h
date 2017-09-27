@@ -123,9 +123,6 @@ struct az_mgmt_rsp {
 };
 
 int
-az_mgmt_req_hostname_get(char **_hostname);
-
-int
 az_mgmt_req_acc_keys_get(const char *sub_id,
 			 const char *service_name,
 			 struct op **_op);

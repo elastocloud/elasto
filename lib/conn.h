@@ -70,7 +70,8 @@ elasto_conn_init_az(struct event_base *ev_base,
 		    const char *pem_file,
 		    bool insecure_http,
 		    const char *host,
-		    struct elasto_conn **econn);
+		    uint16_t port,
+		    struct elasto_conn **econn_out);
 
 int
 elasto_conn_init_s3(struct event_base *ev_base,

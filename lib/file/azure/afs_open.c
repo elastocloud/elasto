@@ -114,7 +114,8 @@ afs_io_conn_init(struct event_base *ev_base,
 	}
 
 	ret = elasto_conn_init_az(ev_base, NULL, afs_fh->insecure_http,
-				  url_host, &io_conn);
+				  url_host, (afs_fh->insecure_http ? 80 : 443),
+				  &io_conn);
 	free(url_host);
 	if (ret < 0) {
 		goto err_out;
@@ -548,7 +549,6 @@ afs_fopen(struct event_base *ev_base,
 	}
 
 	if (afs_fh->pem_path != NULL) {
-		char *mgmt_host;
 		/*
 		 * for Publish Settings credentials, a mgmt connection is
 		 * required to obtain account keys, or perform root / account
@@ -556,14 +556,9 @@ afs_fopen(struct event_base *ev_base,
 		 * A connection to the account host for share / file IO is
 		 * opened later if needed (non-root).
 		 */
-		ret = az_mgmt_req_hostname_get(&mgmt_host);
-		if (ret < 0) {
-			goto err_out;
-		}
-
 		ret = elasto_conn_init_az(ev_base, afs_fh->pem_path, false,
-					  mgmt_host, &afs_fh->mgmt_conn);
-		free(mgmt_host);
+					  AZ_FS_PATH_HOST_MGMT, 443,
+					  &afs_fh->mgmt_conn);
 		if (ret < 0) {
 			goto err_path_free;
 		}
