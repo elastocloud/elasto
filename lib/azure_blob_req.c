@@ -90,6 +90,62 @@ az_blob_ebo_init(enum az_blob_opcode opcode,
 }
 
 static int
+az_blob_req_url_path_gen(const struct az_blob_path *path,
+			 const char *url_params,
+			 char **_url_path)
+{
+	int ret;
+	const char *params_str = url_params ? url_params : "";
+	char *url_path;
+	char *blob_encoded = NULL;
+
+
+	switch (path->type) {
+	case AZ_BLOB_PATH_ACC:
+		if (path->host_is_custom) {
+			ret = asprintf(&url_path, "/%s%s",
+				       path->acc, params_str);
+			break;
+		}
+		/* acc is a server hostname prefix */
+		ret = asprintf(&url_path, "/%s", params_str);
+		break;
+	case AZ_BLOB_PATH_CTNR:
+		if (path->host_is_custom) {
+			ret = asprintf(&url_path, "/%s/%s%s",
+				       path->acc, path->ctnr, params_str);
+			break;
+		}
+		ret = asprintf(&url_path, "/%s%s", path->ctnr, params_str);
+		break;
+	case AZ_BLOB_PATH_BLOB:
+		blob_encoded = evhttp_encode_uri(path->blob);
+		if (blob_encoded == NULL) {
+			return -ENOMEM;
+		}
+		if (path->host_is_custom) {
+			ret = asprintf(&url_path, "/%s/%s/%s%s", path->acc,
+				       path->ctnr, blob_encoded, params_str);
+		} else {
+			ret = asprintf(&url_path, "/%s/%s%s",
+				       path->ctnr, blob_encoded, params_str);
+		}
+		free(blob_encoded);
+		break;
+	default:
+		dbg(0, "can't encode Azure Blob Service path URL\n");
+		return -EINVAL;
+	}
+	if (ret < 0) {
+		/* asprintf error */
+		return -ENOMEM;
+	}
+	*_url_path = url_path;
+
+	return 0;
+}
+
+static int
 az_blob_req_url_encode(const struct az_blob_path *path,
 		       const char *url_params,
 		       char **_url_host,
@@ -98,7 +154,6 @@ az_blob_req_url_encode(const struct az_blob_path *path,
 	int ret;
 	char *url_host;
 	char *url_path;
-	const char *params_str = url_params ? url_params : "";
 
 	url_host = strdup(path->host);
 	if (url_host == NULL) {
@@ -106,36 +161,8 @@ az_blob_req_url_encode(const struct az_blob_path *path,
 		goto err_out;
 	}
 
-	if (AZ_BLOB_PATH_IS_ACC(path)) {
-		ret = asprintf(&url_path, "/%s", params_str);
-		if (ret < 0) {
-			ret = -ENOMEM;
-			goto err_uhost_free;
-		}
-	} else if (AZ_BLOB_PATH_IS_CTNR(path)) {
-		ret = asprintf(&url_path, "/%s%s", path->ctnr, params_str);
-		if (ret < 0) {
-			ret = -ENOMEM;
-			goto err_uhost_free;
-		}
-	} else if (AZ_BLOB_PATH_IS_BLOB(path)) {
-		char *blob_encoded = NULL;
-
-		blob_encoded = evhttp_encode_uri(path->blob);
-		if (blob_encoded == NULL) {
-			ret = -ENOMEM;
-			goto err_uhost_free;
-		}
-		ret = asprintf(&url_path, "/%s/%s%s",
-			       path->ctnr, blob_encoded, params_str);
-		free(blob_encoded);
-		if (ret < 0) {
-			ret = -ENOMEM;
-			goto err_uhost_free;
-		}
-	} else {
-		dbg(0, "can't encode Azure Blob Service path URL\n");
-		ret = -EINVAL;
+	ret = az_blob_req_url_path_gen(path, url_params, &url_path);
+	if (ret < 0) {
 		goto err_uhost_free;
 	}
 
