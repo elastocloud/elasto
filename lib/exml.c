@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX Products GmbH 2013, all rights reserved.
+ * Copyright (C) SUSE LINUX Products GmbH 2013-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -426,6 +426,40 @@ exml_finder_val_stash(struct xml_doc *xdoc,
 	return 0;
 }
 
+static int
+exml_finder_empty_val_stash(struct xml_doc *xdoc,
+			    struct xml_finder *finder)
+{
+	int ret;
+
+	switch (finder->type) {
+	case XML_VAL_STR:
+		/* finder becomes string owner, so need to up */
+		*finder->ret_val.str = strdup("");
+		if (*finder->ret_val.str == NULL) {
+			return -ENOMEM;
+		}
+		break;
+	case XML_VAL_CALLBACK:
+		ret = finder->ret_val.cb.fn(xdoc, xdoc->el_path, "",
+					    finder->ret_val.cb.data);
+		if (ret < 0) {
+			dbg(0, "xml callback failed\n");
+			return ret;
+		}
+		break;
+	default:
+		dbg(0, "unsupported type %d for empty value stash at path %s\n",
+		    finder->type, xdoc->el_path);
+		return -EINVAL;
+		break;
+	}
+	if (finder->_present != NULL) {
+		*finder->_present = true;
+	}
+	return 0;
+}
+
 static void
 exml_el_data_cb(void *priv_data,
 		const char *content,
@@ -466,7 +500,6 @@ exml_el_data_cb(void *priv_data,
 		list_del(&finder->list);
 		list_add_tail(&xdoc->founders, &finder->list);
 	}
-
 }
 
 static int
@@ -688,9 +721,13 @@ exml_el_start_cb(void *priv_data,
 	char *new_path;
 	int ret;
 
-	/* disable data cb here, as previous value may have been empty */
+	/*
+	 * Disable data cb here, as previous value may have been empty.
+	 * XXX This should no longer be necessary, as the end_cb should handle
+	 * any found paths with empty values
+	 */
 	if (!list_empty(&xdoc->finders_val_wait)) {
-		dbg(2, "finders awaiting value at start cb\n");
+		dbg(0, "finders awaiting value at start cb\n");
 	}
 	XML_SetCharacterDataHandler(xdoc->parser, NULL);
 
@@ -727,6 +764,34 @@ exml_el_end_cb(void *priv_data,
 	int elem_len = strlen(elem);
 	int path_len;
 	char *tok;
+	struct xml_finder *finder;
+	struct xml_finder *finder_n;
+
+	/* check for found paths awaiting values which may be missing (empty) */
+	list_for_each_safe(&xdoc->finders_val_wait, finder, finder_n, list) {
+		int ret;
+
+		dbg(2, "finder %s awaiting value at %s end cb\n",
+		    finder->found_el_path, elem);
+		if (strcmp(finder->found_el_path, xdoc->el_path) != 0) {
+			dbg(0, "ignoring unmatched finder awaiting value %s\n",
+			    finder->found_el_path);
+			continue;
+		}
+
+		assert(finder->handled == 0);
+		ret = exml_finder_empty_val_stash(xdoc, finder);
+		if (ret < 0) {
+			XML_StopParser(xdoc->parser, XML_FALSE);
+			xdoc->parse_ret = ret;
+			return;
+		}
+		finder->handled++;
+		list_del(&finder->list);
+		list_add_tail(&xdoc->founders, &finder->list);
+	}
+	/* disable data cb here, as previous value may have been empty */
+	XML_SetCharacterDataHandler(xdoc->parser, NULL);
 
 	/* overwrite the last leaf index */
 	tok = strrchr(xdoc->el_path, '[');
