@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2013-2015, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2017, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -745,6 +745,24 @@ cm_xml_indexed(void **state)
 }
 
 static int
+cm_xml_empty_cb(struct xml_doc *xdoc,
+		   const char *path,
+		   const char *val,
+		   void *cb_data)
+{
+	int *cb_i = cb_data;
+
+	assert_string_equal(val, "");
+	assert_string_equal(path,
+			    "/StorageServices[0]/StorageService[0]"
+			    "/StorageServiceProperties[0]"
+			    "/Description[0]/");
+	(*cb_i)++;
+
+	return 0;
+}
+
+static int
 cm_xml_empty_path_cb(struct xml_doc *xdoc,
 		   const char *path,
 		   const char *val,
@@ -795,7 +813,7 @@ cm_xml_empty_vals(void **state)
 			   "/StorageServices/StorageService"
 			   "/StorageServiceProperties/Description",
 			   false,
-			   cm_xml_empty_path_cb,
+			   cm_xml_empty_cb,
 			   &cb_i,
 			   &val1_present);
 	assert_int_equal(ret, 0);
@@ -823,15 +841,19 @@ cm_xml_empty_vals(void **state)
 
 	exml_free(xdoc);
 
-	assert_false(val0_present);
-	assert_false(val1_present);
-	assert_false(val2_present);
+	assert_true(val0_present);
+	assert_string_equal(val0, "");
+	assert_true(val1_present);
+	assert_true(val2_present);
+	assert_string_equal(val2, "");
 	assert_true(path_present);
-	assert_int_equal(1, cb_i);
-	assert_null(val0);
-	assert_null(val2);
+	assert_int_equal(2, cb_i);
 
-	/* mandatory values should cause parse failure */
+	free(val0);
+	free(val2);
+	cb_i = 0;
+
+	/* mandatory values should still pass for empty strings/cbs */
 	ret = exml_slurp(cm_xml_data_nil_vals,
 			strlen(cm_xml_data_nil_vals), &xdoc);
 	assert_int_equal(ret, 0);
@@ -848,7 +870,7 @@ cm_xml_empty_vals(void **state)
 			   "/StorageServices/StorageService"
 			   "/StorageServiceProperties/Description",
 			   true,
-			   cm_xml_empty_path_cb,
+			   cm_xml_empty_cb,
 			   &cb_i,
 			   &val1_present);
 	assert_int_equal(ret, 0);
@@ -862,16 +884,90 @@ cm_xml_empty_vals(void **state)
 	assert_int_equal(ret, 0);
 
 	ret = exml_parse(xdoc);
-	assert_int_not_equal(ret, 0);
+	assert_int_equal(ret, 0);
 
 	exml_free(xdoc);
 
-	assert_false(val0_present);
-	assert_false(val1_present);
-	assert_false(val2_present);
+	assert_true(val0_present);
+	assert_string_equal(val0, "");
+	assert_true(val1_present);
+	assert_true(val2_present);
+	assert_string_equal(val2, "");
 	assert_int_equal(1, cb_i);
+
+	free(val0);
+	free(val2);
+	cb_i = 0;
+
+}
+
+/* non-string/cb types should cause failure for empty values */
+static void
+cm_xml_empty_vals_non_str(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	uint64_t u64_val = 0;
+	bool bool_val = false;
+	char *val0 = NULL;
+	bool val0_present = false;
+	time_t time_val = 0;
+
+	ret = exml_slurp(cm_xml_data_nil_vals,
+			strlen(cm_xml_data_nil_vals), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_uint64_want(xdoc,
+			       "/StorageServices/StorageService"
+			       "/StorageServiceProperties/Description",
+			       false, &u64_val, NULL);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, -EINVAL);
+	exml_free(xdoc);
+
+	ret = exml_slurp(cm_xml_data_nil_vals,
+			strlen(cm_xml_data_nil_vals), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_bool_want(xdoc,
+			     "/StorageServices/StorageService"
+			     "/StorageServiceProperties/Description",
+			     false, &bool_val, NULL);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, -EINVAL);
+	exml_free(xdoc);
+
+	ret = exml_slurp(cm_xml_data_nil_vals,
+			strlen(cm_xml_data_nil_vals), &xdoc);
+	assert_int_equal(ret, 0);
+	val0 = NULL;
+	val0_present = false;
+	/* XXX not sure whether we should just return an empty string here */
+	ret = exml_base64_want(xdoc,
+			       "/StorageServices/StorageService"
+			       "/StorageServiceProperties/Description",
+			       true, &val0, &val0_present);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, -EINVAL);
+	exml_free(xdoc);
 	assert_null(val0);
-	assert_null(val2);
+	assert_false(val0_present);
+
+	ret = exml_slurp(cm_xml_data_nil_vals,
+			strlen(cm_xml_data_nil_vals), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_date_time_want(xdoc,
+				  "/StorageServices/StorageService"
+				  "/StorageServiceProperties/Description",
+				  false, &time_val, NULL);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, -EINVAL);
+	exml_free(xdoc);
 }
 
 /*
@@ -1121,6 +1217,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_xpath_wildcard),
 	unit_test(cm_xml_indexed),
 	unit_test(cm_xml_empty_vals),
+	unit_test(cm_xml_empty_vals_non_str),
 	unit_test(cm_xml_empty_attrs),
 	unit_test(cm_xml_attr_key_val_match),
 	unit_test(cm_xml_parse_multi),
