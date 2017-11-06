@@ -818,7 +818,8 @@ exml_parse(struct xml_doc *xdoc)
 	if (xret != XML_STATUS_OK) {
 		enum XML_Error xerr = XML_GetErrorCode(xdoc->parser);
 		dbg(0, "bad parsing status: %s\n", XML_ErrorString(xerr));
-		return -EIO;
+		/* XML_StopParser() callers set parse_ret, so use it if set */
+		return (xdoc->parse_ret ? xdoc->parse_ret : -EIO);
 	} else if (xdoc->parse_ret < 0) {
 		dbg(0, "parsing failed: %s\n", strerror(-xdoc->parse_ret));
 		return xdoc->parse_ret;
