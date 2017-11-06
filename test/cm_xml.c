@@ -98,6 +98,11 @@ static char cm_xml_data_attr_key_val_match[]
 static char cm_xml_data_date_time_basic[]
 	= "<outer><Label1>Wed, 12 Aug 2009 20:39:39 GMT</Label1>"
 	  "<Label2>Mon, 27 Jan 2014 22:48:29 GMT</Label2></outer>";
+static char cm_xml_data_rgw_s3_loc[]
+	= "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+	  "<LocationConstraint "
+		"xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+	  "</LocationConstraint>";
 
 /*
  * TODO test:
@@ -1201,6 +1206,65 @@ cm_xml_date_time_basic(void **state)
 	assert_string_equal(val_str, "Mon, 27 Jan 2014 22:48:29 GMT");
 }
 
+static int
+cm_xml_rgw_s3_loc_cb(struct xml_doc *xdoc,
+		     const char *path,
+		     const char *val,
+		     void *cb_data)
+{
+	assert_string_equal(path, "/LocationConstraint[0]/");
+	assert_non_null(val);
+	assert_string_equal(val, "");
+}
+
+/*
+ * Similar to cm_xml_empty_vals(), check how S3 get location responses are
+ * handled when the value is empty, as is the case for Ceph rgw.
+ */
+static void
+cm_xml_rgw_s3_location(void **state)
+{
+	int ret;
+	struct xml_doc *xdoc;
+	char *val0 = NULL;
+	bool val0_present = false;
+	bool cb_present = false;
+
+	ret = exml_slurp(cm_xml_data_rgw_s3_loc,
+			strlen(cm_xml_data_rgw_s3_loc), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_str_want(xdoc, "/LocationConstraint", false,
+			    &val0, &val0_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+
+	assert_true(val0_present);
+	assert_string_equal(val0, "");
+
+	ret = exml_slurp(cm_xml_data_rgw_s3_loc,
+			strlen(cm_xml_data_rgw_s3_loc), &xdoc);
+	assert_int_equal(ret, 0);
+
+	ret = exml_val_cb_want(xdoc,
+			       "/LocationConstraint",
+			       false,
+			       cm_xml_rgw_s3_loc_cb,
+			       NULL,
+			       &cb_present);
+	assert_int_equal(ret, 0);
+
+	ret = exml_parse(xdoc);
+	assert_int_equal(ret, 0);
+
+	exml_free(xdoc);
+	assert_true(cb_present);
+}
+
 static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_str_basic),
 	unit_test(cm_xml_str_dup),
@@ -1223,6 +1287,7 @@ static const UnitTest cm_xml_tests[] = {
 	unit_test(cm_xml_parse_multi),
 	unit_test(cm_xml_attr_find_partial),
 	unit_test(cm_xml_date_time_basic),
+	unit_test(cm_xml_rgw_s3_location),
 };
 
 int
