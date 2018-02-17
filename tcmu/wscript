@@ -1,20 +1,22 @@
 def options(opt):
-	pass
+        opt.add_option('--with-tcmu', action='store_true', default=False,
+                       help='build with tcmu-runner support (deprecated)')
 
 def configure(conf):
-	if not conf.check(lib='tcmu', mandatory=False):
-		conf.env.SKIP_TCMU = "yes"
+        conf.env.WITH_TCMU = conf.options.with_tcmu
+        if conf.env.WITH_TCMU == True:
+                print("WARNING: elasto_tcmu is deprecated!")
+                conf.check(lib='tcmu', mandatory=True)
 
 def build(bld):
-	if bld.env.SKIP_TCMU in ["yes"]:
-		print("Skipping elasto_tcmu build: tcmu library required")
-		return
-	bld.program(source='consumer.c',
-		    target='elasto_tcmu',
-		    lib=['crypto', 'expat', 'ssl', 'tcmu', 'pthread']
-			+ bld.env.LIBEVENT_LIBS,
-		    use=['elasto_file', 'elasto_wq'],
-		    includes = '. ..',
-		    install_path = '${BINDIR}')
-	bld.install_as('${BINDIR}/elasto_tcmu_configfs',
-		       'elasto_tcmu_configfs.sh')
+        if bld.env.WITH_TCMU == False:
+                return
+        bld.program(source='consumer.c',
+                    target='elasto_tcmu',
+                    lib=['crypto', 'expat', 'ssl', 'tcmu', 'pthread']
+                        + bld.env.LIBEVENT_LIBS,
+                    use=['elasto_file', 'elasto_wq'],
+                    includes = '. ..',
+                    install_path = '${BINDIR}')
+        bld.install_as('${BINDIR}/elasto_tcmu_configfs',
+                       'elasto_tcmu_configfs.sh')
