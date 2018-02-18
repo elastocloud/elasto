@@ -63,7 +63,7 @@ cm_az_fs_req_init(void **state)
 {
 	int ret;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
-	struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp;
+	char *sign_key;
 	char *url_host;
 	struct elasto_conn *mgmt_conn;
 	struct op *op;
@@ -75,33 +75,45 @@ cm_az_fs_req_init(void **state)
 	cm_op_az_fs_state.ev_base = event_base_new();
 	assert_true(cm_op_az_fs_state.ev_base != NULL);
 
-	ret = azure_ssl_pubset_process(cm_us->ps_file,
-				       &cm_op_az_fs_state.pem_file,
-				       &cm_op_az_fs_state.sub_id,
-				       &cm_op_az_fs_state.sub_name);
-	assert_true(ret >= 0);
+	if (cm_us->ps_file != NULL) {
+		struct az_mgmt_rsp_acc_keys_get *acc_keys_get_rsp;
 
-	ret = elasto_conn_init_az(cm_op_az_fs_state.ev_base,
-				  cm_op_az_fs_state.pem_file,
-				  false,	/* mgmt must use https */
-				  "management.core.windows.net",
-				  443,
-				  &mgmt_conn);
-	assert_true(ret >= 0);
+		/* publish settings based auth */
+		ret = azure_ssl_pubset_process(cm_us->ps_file,
+					       &cm_op_az_fs_state.pem_file,
+					       &cm_op_az_fs_state.sub_id,
+					       &cm_op_az_fs_state.sub_name);
+		assert_true(ret >= 0);
 
-	ret = az_mgmt_req_acc_keys_get(cm_op_az_fs_state.sub_id, cm_us->acc,
-				       &op);
-	assert_true(ret >= 0);
+		ret = elasto_conn_init_az(cm_op_az_fs_state.ev_base,
+					  cm_op_az_fs_state.pem_file,
+					  false,	/* mgmt must use https */
+					  "management.core.windows.net",
+					  443,
+					  &mgmt_conn);
+		assert_true(ret >= 0);
 
-	ret = elasto_conn_op_txrx(mgmt_conn, op);
-	assert_true(ret >= 0);
-	assert_true(!op->rsp.is_error);
+		ret = az_mgmt_req_acc_keys_get(cm_op_az_fs_state.sub_id, cm_us->acc,
+					       &op);
+		assert_true(ret >= 0);
 
-	/* mgmt_conn is no longer needed for AFS IO */
-	elasto_conn_free(mgmt_conn);
+		ret = elasto_conn_op_txrx(mgmt_conn, op);
+		assert_true(ret >= 0);
+		assert_true(!op->rsp.is_error);
 
-	acc_keys_get_rsp = az_mgmt_rsp_acc_keys_get(op);
-	assert_true(acc_keys_get_rsp != NULL);
+		/* mgmt_conn is no longer needed for AFS IO */
+		elasto_conn_free(mgmt_conn);
+
+		acc_keys_get_rsp = az_mgmt_rsp_acc_keys_get(op);
+		assert_true(acc_keys_get_rsp != NULL);
+
+		sign_key = strdup(acc_keys_get_rsp->primary);
+		op_free(op);
+	} else {
+		assert(cm_us->az_access_key != NULL);
+		sign_key = strdup(cm_us->az_access_key);
+	}
+	assert_non_null(sign_key);
 
 	ret = az_fs_req_hostname_get(cm_us->acc, &url_host);
 	assert_true(ret >= 0);
@@ -114,9 +126,9 @@ cm_az_fs_req_init(void **state)
 	free(url_host);
 
 	ret = elasto_conn_sign_setkey(cm_op_az_fs_state.io_conn, cm_us->acc,
-				      acc_keys_get_rsp->primary);
+				      sign_key);
 	assert_true(ret >= 0);
-	op_free(op);
+	free(sign_key);
 
 	ret = asprintf(&cm_op_az_fs_state.share, "%s%d",
 		       cm_us->ctnr, cm_us->ctnr_suffix);
