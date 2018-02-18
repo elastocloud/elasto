@@ -677,10 +677,8 @@ canon_rsc_gen(const char *account,
 	int ret;
 	char *s;
 	char *q;
-	char *comp;
 	char *buf = NULL;
 	int buf_len;
-	char *canon_query_str = NULL;
 
 	dbg(3, "generating canon rsc from: %s and %s\n", account, url_path);
 
