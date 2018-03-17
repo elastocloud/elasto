@@ -37,7 +37,7 @@ hmac_sha(const EVP_MD *type, const uint8_t *key, int key_len,
 	 const uint8_t *msg, int msg_len,
 	 uint8_t **md, int *md_len)
 {
-#ifndef HAVE_OPAQUE_HMAC_CTX
+#ifndef HAVE_LIBCRYPTO_110_PLUS
 	HMAC_CTX ctx;
 #endif
 	HMAC_CTX *_ctx = NULL;
@@ -55,7 +55,7 @@ hmac_sha(const EVP_MD *type, const uint8_t *key, int key_len,
 	if (md_buf == NULL)
 		return -ENOMEM;
 
-#ifdef HAVE_OPAQUE_HMAC_CTX
+#ifdef HAVE_LIBCRYPTO_110_PLUS
 	_ctx = HMAC_CTX_new();
 #else
 	HMAC_CTX_init(&ctx);
@@ -68,7 +68,7 @@ hmac_sha(const EVP_MD *type, const uint8_t *key, int key_len,
 	HMAC_Init_ex(_ctx, key, key_len, type, NULL);
 	HMAC_Update(_ctx, msg, msg_len);
 	HMAC_Final(_ctx, md_buf, &len);
-#ifdef HAVE_OPAQUE_HMAC_CTX
+#ifdef HAVE_LIBCRYPTO_110_PLUS
 	HMAC_CTX_free(_ctx);
 #else
 	HMAC_CTX_cleanup(_ctx);
