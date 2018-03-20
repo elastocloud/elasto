@@ -72,6 +72,12 @@ elasto_fopen_host(const struct elasto_fauth *auth,
 	    path, (host ? host : "<default host>"),
 	    (port ? "" : "<default port>"), port, flags);
 
+	ret = elasto_conn_subsys_init();
+	if (ret < 0) {
+		dbg(0, "failed to initialize connection subsystem\n");
+		goto err_out;
+	}
+
 	ret = elasto_fh_init(auth, path, flags, &fh);
 	if (ret < 0) {
 		dbg(0, "failed to initialize elasto fh\n");
