@@ -1307,9 +1307,5 @@ static const UnitTest cm_file_tests[] = {
 int
 cm_file_run(void)
 {
-	int ret;
-
-	ret = elasto_subsystem_init();
-	assert_true(ret >= 0);
 	return run_tests(cm_file_tests);
 }
