@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2013-2016, all rights reserved.
+ * Copyright (C) SUSE LINUX GmbH 2013-2018, all rights reserved.
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -29,6 +29,14 @@ enum elasto_ftype {
 	ELASTO_FILE_LOCAL,	/* test back-end: local FS I/O */
 };
 
+/**
+ * @type:	Cloud provider service identifier (see struct @elasto_ftype)
+ * @ps_path:	Azure PublishSettings file path
+ * @access_key:	Azure account access key
+ * @creds_path:	S3 IAM credentials path. IAM is a CSV file in format:
+ *			User Name,Access Key Id,Secret Access Key
+ *			"johndoe",0123456789abcdef0123,qwerty.../QWERTY...==
+ */
 struct elasto_fauth {
 	enum elasto_ftype type;
 	union {
@@ -108,7 +116,7 @@ enum elasto_fopen_success_ret {
  * @path:	Path to open
  * @flags:	@elasto_fopen_flags mask
  * @open_toks:	custom open tokens
- * @fh:		handle returned on success
+ * @_fh:	Elasto file/dir handle returned on success
  *
  * @returns:	-errno on error, enum elasto_fopen_success_ret on success
  */
@@ -131,7 +139,7 @@ elasto_fopen(const struct elasto_fauth *auth,
  * @path:	Path to open
  * @flags:	@elasto_fopen_flags mask
  * @open_toks:	custom open tokens
- * @fh:		handle returned on success
+ * @_fh:	Elasto file/dir handle returned on success
  *
  * @returns:	-errno on error, enum elasto_fopen_success_ret on success
  */
@@ -144,12 +152,42 @@ elasto_fopen_host(const struct elasto_fauth *auth,
 		  struct elasto_ftoken_list *open_toks,
 		  struct elasto_fh **_fh);
 
+/**
+ * Write @dest_len bytes from @out_bytes to an open file at offset @dest_off.
+ * I/O is not in any way atomic, and will collide with any concurrent writers.
+ *
+ * NOTE: Azure Block Blobs and S3 Objects don't support writes at arbitrary
+ * offsets, so need to be written all in one go from @dest_off=0. Page Blobs and
+ * Azure Files *can* be written to at arbitrary offsets.
+ *
+ * @fh:		Elasto file handle
+ * @dest_off:	File offset to write at
+ * @dest_len:	Number of bytes to write
+ * @out_buf:	Buffer containing write buffer
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_fwrite(struct elasto_fh *fh,
 	      uint64_t dest_off,
 	      uint64_t dest_len,
 	      uint8_t *out_buf);
 
+/**
+ * Write @dest_len bytes to an open file at offset @dest_off. Write data is
+ * obtained from the caller via the @out_cb callback.
+ * I/O is not in any way atomic, and will collide with any concurrent writers.
+ *
+ * NOTE: see @elasto_fwrite note regarding non-zero @dest_off.
+ *
+ * @fh:		Elasto file handle
+ * @dest_off:	File offset to write at
+ * @dest_len:	Number of bytes to write
+ * @cb_priv:	Private pointer to pass to the @out_cb callback
+ * @out_priv:	Callback to obtain write data from the caller
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_fwrite_cb(struct elasto_fh *fh,
 		 uint64_t dest_off,
@@ -161,12 +199,37 @@ elasto_fwrite_cb(struct elasto_fh *fh,
 			       uint64_t *buf_len,
 			       void *priv));
 
+/**
+ * Read @src_len bytes from an open file at offset @src_off and store the result
+ * in @in_buf.
+ * I/O is not in any way atomic, and will collide with any concurrent writers.
+ *
+ * @fh:		Elasto file handle
+ * @src_off:	File offset to read at
+ * @src_len:	Number of bytes to read
+ * @in_buf:	Buffer to use to store the read result
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_fread(struct elasto_fh *fh,
 	     uint64_t src_off,
 	     uint64_t src_len,
 	     uint8_t *in_buf);
 
+/**
+ * Read @src_len bytes from an open file at offset @src_off. Read data is
+ * provided to the caller via the @in_cb callback.
+ * I/O is not in any way atomic, and will collide with any concurrent writers.
+ *
+ * @fh:		Elasto file handle
+ * @src_off:	File offset to read at
+ * @src_len:	Number of bytes to read
+ * @cb_priv:	Private pointer to pass to the @in_cb callback
+ * @in_priv:	Callback to provide read data to the caller
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_fread_cb(struct elasto_fh *fh,
 		uint64_t src_off,
@@ -184,16 +247,45 @@ enum elasto_falloc_flags {
 	ELASTO_FALLOC_ALL_MASK		= 0x0001,
 };
 
+/**
+ * Discard (hole punch) a given file range.
+ *
+ * @fh:		Elasto file handle
+ * @mode:	Currently only ELASTO_FALLOC_PUNCH_HOLE is supported
+ * @dest_off:	Offset to act upon
+ * @dest_len:	Length to discard
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_fallocate(struct elasto_fh *fh,
 		 uint32_t mode,
 		 uint64_t dest_off,
 		 uint64_t dest_len);
 
+/**
+ * truncate a file to length @len.
+ *
+ * @fh:		Elasto file handle
+ * @len:	New length to take
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_ftruncate(struct elasto_fh *fh,
 		 uint64_t len);
 
+/**
+ * Copy data from source to destination.
+ *
+ * @src_fh:	Source Elasto file handle
+ * @src_off:	Source file offset
+ * @dest_fh:	Destination Elasto file handle
+ * @dest_off:	Destination file offset
+ * @len:	Length to copy in bytes
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_fsplice(struct elasto_fh *src_fh,
 	       uint64_t src_off,
@@ -201,16 +293,49 @@ elasto_fsplice(struct elasto_fh *src_fh,
 	       uint64_t dest_off,
 	       uint64_t len);
 
+/**
+ * Close an Elasto handle. This currently releases any leases / locks
+ * associated with the handle, but do not rely on this behaviour (see
+ * elasto_flease_*).
+ *
+ * @fh:		Elasto file/dir handle
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_fclose(struct elasto_fh *fh);
 
+/**
+ * Acquire a lock on an open Elasto handle (EXPERIMENTAL).
+ * The lock state is *currently* stored with the open handle, and will be
+ * released on close.
+ *
+ * @fh:		Elasto handle
+ * @duration:	Duration to retain lock
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_flease_acquire(struct elasto_fh *fh,
 		      int32_t duration);
 
+/**
+ * Break a lock on an open Elasto handle (EXPERIMENTAL).
+ *
+ * @fh:		Elasto handle
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_flease_break(struct elasto_fh *fh);
 
+/**
+ * Release a lock on an open Elasto handle (EXPERIMENTAL).
+ *
+ * @fh:		Elasto handle
+ *
+ * @returns:	-errno on error
+ */
 int
 elasto_flease_release(struct elasto_fh *fh);
 
@@ -236,6 +361,7 @@ enum elasto_fstat_ent_type {
 };
 
 /**
+ * @field_mask: indicates which fields from struct elasto_fstat are valid
  * @ent_type: type of entry
  * @size: total size, in bytes
  * @blksize: blocksize for file system I/O
@@ -249,6 +375,12 @@ struct elasto_fstat {
 	enum elasto_flease_status lease_status;
 };
 
+/**
+ * Obtain details about a given file or directory.
+ *
+ * @fh:		Valid Elasto file/dir handle
+ * @fstat:	File/dir details (see corresponding struct @elasto_fstat)
+ */
 int
 elasto_fstat(struct elasto_fh *fh,
 	     struct elasto_fstat *fstat);
@@ -285,6 +417,12 @@ struct elasto_fstatfs {
 	const struct elasto_fstatfs_region *regions;
 };
 
+/**
+ * Obtain details about a given cloud backend (filesystem).
+ *
+ * @fh:		Valid Elasto directory handle
+ * @fstatfs:	Filesystem details (see corresponding struct @elasto_fstatfs)
+ */
 int
 elasto_fstatfs(struct elasto_fh *fh,
 	       struct elasto_fstatfs *fstatfs);
@@ -294,6 +432,13 @@ struct elasto_dent {
 	struct elasto_fstat fstat;
 };
 
+/**
+ * Iterate files/dirs within a given directory.
+ *
+ * @fh:		Valid Elasto directory handle
+ * @priv:	Private pointer passed to @dent_cb
+ * @dent_cb:	Callback for each file/dir within the directory
+ */
 int
 elasto_freaddir(struct elasto_fh *fh,
 		void *priv,
@@ -301,7 +446,8 @@ elasto_freaddir(struct elasto_fh *fh,
 			       void *));
 
 /**
- * Remove a file or directory and close handle
+ * Remove a file or directory and close handle.
+ *
  * @fh: open file or directory handle
  */
 int
@@ -319,7 +465,8 @@ struct elasto_frange {
 };
 
 /**
- * For a sparse file, check which regions are allocated
+ * For a sparse file, check which regions are allocated.
+ *
  * @fh: a valid Elasto file handle
  * @off: the first offset to start checking for allocated ranges
  * @len: the amount of bytes to check for allocated ranges, from @off
@@ -337,11 +484,13 @@ elasto_flist_ranges(struct elasto_fh *fh,
 		    int (*range_cb)(struct elasto_frange *range,
 				    void *priv));
 
+/**
+ * Enable @stderr debug output.
+ *
+ * @level:	Debug level verbosity. Higher = more verbose.
+ */
 int
 elasto_fdebug(int level);
-
-int
-elasto_subsystem_init(void);
 
 #ifdef  __cplusplus
 }

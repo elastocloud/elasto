@@ -26,6 +26,8 @@
 
 #include "ccan/list/list.h"
 #include "lib/file/file_api.h"
+#include "lib/op.h"
+#include "lib/conn.h"
 #include "lib/dbg.h"
 #include "lib/util.h"
 #include "third_party/linenoise/linenoise.h"
@@ -640,7 +642,7 @@ main(int argc, char * const *argv)
 		goto err_out;
 	}
 
-	ret = elasto_subsystem_init();
+	ret = elasto_conn_subsys_init();
 	if (ret < 0) {
 		goto err_args_free;
 	}
@@ -655,10 +657,12 @@ main(int argc, char * const *argv)
 					&cli_args);
 	}
 	if (ret < 0) {
-		goto err_args_free;
+		goto err_global_clean;
 	}
 
 	ret = 0;
+err_global_clean:
+	elasto_conn_subsys_deinit();
 err_args_free:
 	cli_args_free(&cli_args);
 err_out:
