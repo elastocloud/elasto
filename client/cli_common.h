@@ -74,6 +74,7 @@ struct cli_args {
 struct cli_cmd_spec {
 	struct list_node list;
 	char *name;
+	char *generic_help;
 	char *az_help;
 	char *afs_help;
 	char *s3_help;

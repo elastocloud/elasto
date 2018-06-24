@@ -375,6 +375,7 @@ err_out:
 
 static struct cli_cmd_spec spec = {
 	.name = "put",
+	.generic_help = "<local path> <cloud path>",
 	.az_help = "<local path> <account>/<container>/<blob>",
 	.afs_help = "<local path> <account>/<share>/<file path>",
 	.s3_help = "<local path> <bucket>/<object>",

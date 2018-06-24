@@ -126,6 +126,7 @@ err_out:
 
 static struct cli_cmd_spec spec = {
 	.name = "cp",
+	.generic_help = "<cloud src path> <cloud dst path>",
 	.az_help = "<src_acc>/<src_ctnr>/<src_blob> "
 		   "<dst_acc>/<dst_ctnr>/<dst_blob>",
 	.afs_help = "<src_acc>/<src_share>/<src_file_path> "

@@ -125,6 +125,7 @@ err_out:
 
 static struct cli_cmd_spec spec = {
 	.name = "create",
+	.generic_help = "<cloud path>",
 	.az_help = "[-L <location>] <account>[/<container>]",
 	.afs_help = "[-L <location>] <account>[/<share>[/<dir path>]]",
 	.s3_help = "[-L <location>] <bucket>",

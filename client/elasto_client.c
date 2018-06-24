@@ -139,7 +139,11 @@ cli_args_usage(const char *progname,
 		 */
 		if ((cmd->feature_flags & flags & CLI_FL_BIN_ARG)
 		 || (cmd->feature_flags & flags & CLI_FL_PROMPT)) {
-			if ((cmd->feature_flags & CLI_FL_CLOUD_MASK_ALL) == 0) {
+			if (((cmd->feature_flags & flags & CLI_FL_CLOUD_MASK_ALL)
+						== CLI_FL_CLOUD_MASK_ALL)
+			    && cmd->generic_help) {
+				fprintf(stderr, "\t%s\t%s\n", cmd->name,
+					cmd->generic_help);
 				continue;
 			}
 			if (cmd->feature_flags & flags & CLI_FL_CLOUD_ABS) {

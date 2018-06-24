@@ -113,6 +113,7 @@ err_out:
 
 static struct cli_cmd_spec spec = {
 	.name = "ls",
+	.generic_help = "[cloud path]",
 	.az_help = "[<account>[/container[/blob]]]",
 	.afs_help = "[<account>[/share[/dir path]]]",
 	.s3_help = "[<bucket>]",
