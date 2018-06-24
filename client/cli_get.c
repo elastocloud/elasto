@@ -334,7 +334,7 @@ static struct cli_cmd_spec spec = {
 	.handle = &cli_get_handle,
 	.args_free = &cli_get_args_free,
 	.feature_flags = CLI_FL_PROMPT | CLI_FL_BIN_ARG
-				| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+				| CLI_FL_CLOUD_MASK_ALL,
 };
 
 static cli_cmd_init cli_get_init(void)

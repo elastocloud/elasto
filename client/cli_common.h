@@ -17,16 +17,19 @@
 /**
  * @CLI_FL_BIN_ARG:	run as argument to binary
  * @CLI_FL_PROMPT:	run from elasto> prompt
- * @CLI_FL_AZ:		command can be run against Azure Blob Service
- * @CLI_FL_S3:		command can be run against Amazon S3
- * @CLI_FL_AFS:		command can be run against Azure File Service
+ * @CLI_FL_CLOUD_ABS:	command can be run against Azure Blob Service
+ * @CLI_FL_CLOUD_S3:	command can be run against Amazon S3
+ * @CLI_FL_CLOUD_AFS:	command can be run against Azure File Service
+ * @CLI_FL_CLOUD_MASK_ALL:	mask covering all cloud backends
  */
 enum cli_fl {
-	CLI_FL_BIN_ARG	= 0x00000001,
-	CLI_FL_PROMPT	= 0x00000002,
-	CLI_FL_AZ	= 0x00000004,
-	CLI_FL_S3	= 0x00000008,
-	CLI_FL_AFS	= 0x00000010,
+	CLI_FL_BIN_ARG		= 0x00000001,
+	CLI_FL_PROMPT		= 0x00000002,
+	CLI_FL_CLOUD_ABS	= 0x00000004,
+	CLI_FL_CLOUD_S3		= 0x00000008,
+	CLI_FL_CLOUD_AFS	= 0x00000010,
+	CLI_FL_CLOUD_MASK_ALL	= (CLI_FL_CLOUD_ABS | CLI_FL_CLOUD_S3
+				   | CLI_FL_CLOUD_AFS),
 };
 
 /*

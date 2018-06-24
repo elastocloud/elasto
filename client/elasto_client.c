@@ -69,7 +69,7 @@ cli_help_handle(struct cli_args *cli_args)
 static struct cli_cmd_spec help_spec = {
 	.name = "help",
 	.handle = &cli_help_handle,
-	.feature_flags = CLI_FL_PROMPT | CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+	.feature_flags = CLI_FL_PROMPT | CLI_FL_CLOUD_MASK_ALL,
 };
 
 static struct cli_cmd_spec exit_spec = {
@@ -82,7 +82,7 @@ static struct cli_cmd_spec exit_spec = {
 static struct cli_cmd_spec quit_spec = {
 	.name = "quit",
 	.handle = &cli_exit_handle,
-	.feature_flags = CLI_FL_PROMPT | CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+	.feature_flags = CLI_FL_PROMPT | CLI_FL_CLOUD_MASK_ALL,
 };
 
 __attribute__((constructor))
@@ -139,19 +139,18 @@ cli_args_usage(const char *progname,
 		 */
 		if ((cmd->feature_flags & flags & CLI_FL_BIN_ARG)
 		 || (cmd->feature_flags & flags & CLI_FL_PROMPT)) {
-			if ((cmd->feature_flags
-				| CLI_FL_S3 | CLI_FL_AZ | CLI_FL_AFS) == 0) {
+			if ((cmd->feature_flags & CLI_FL_CLOUD_MASK_ALL) == 0) {
 				continue;
 			}
-			if (cmd->feature_flags & flags & CLI_FL_AZ) {
+			if (cmd->feature_flags & flags & CLI_FL_CLOUD_ABS) {
 				fprintf(stderr, "\t%s\t%s\n", cmd->name,
 					(cmd->az_help ? cmd->az_help : ""));
 			}
-			if (cmd->feature_flags & flags & CLI_FL_AFS) {
+			if (cmd->feature_flags & flags & CLI_FL_CLOUD_AFS) {
 				fprintf(stderr, "\t%s\t%s\n", cmd->name,
 					(cmd->afs_help ? cmd->afs_help : ""));
 			}
-			if (cmd->feature_flags & flags & CLI_FL_S3) {
+			if (cmd->feature_flags & flags & CLI_FL_CLOUD_S3) {
 				fprintf(stderr, "\t%s\t%s\n", cmd->name,
 					(cmd->s3_help ? cmd->s3_help : ""));
 			}
@@ -310,7 +309,7 @@ cli_args_parse(int argc,
 
 	cli_args->auth.insecure_http = false;
 	/* show help for all backends by default */
-	cli_args->flags = CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3;
+	cli_args->flags = CLI_FL_CLOUD_MASK_ALL;
 
 	while ((opt = getopt(argc, argv, "s:K:k:d:?ih:u:")) != -1) {
 		uint32_t debug_level;
@@ -360,7 +359,7 @@ cli_args_parse(int argc,
 		default: /* '?' */
 			cli_args_usage(progname,
 				       CLI_FL_BIN_ARG
-				       | CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+				       | CLI_FL_CLOUD_MASK_ALL,
 				       NULL);
 			ret = -EINVAL;
 			goto err_out;
@@ -386,7 +385,7 @@ cli_args_parse(int argc,
 		cli_args->auth.type = ELASTO_FILE_S3;
 	} else {
 		cli_args_usage(argv[0], CLI_FL_BIN_ARG
-					| CLI_FL_AZ | CLI_FL_AFS | CLI_FL_S3,
+					| CLI_FL_CLOUD_MASK_ALL,
 			       "Either an Azure PublishSettings file, access "
 			       "key, or Amazon S3 key file is required");
 		ret = -EINVAL;
@@ -404,16 +403,16 @@ cli_args_parse(int argc,
 		cli_args->auth.az.ps_path = az_ps_file;
 		cli_args->auth.az.access_key = az_access_key;
 		/* don't show S3 or AFS usage strings */
-		cli_args->flags &= ~(CLI_FL_S3 | CLI_FL_AFS);
+		cli_args->flags &= ~(CLI_FL_CLOUD_S3 | CLI_FL_CLOUD_AFS);
 	} else if (cli_args->auth.type == ELASTO_FILE_AFS) {
 		cli_args->auth.az.ps_path = az_ps_file;
 		cli_args->auth.az.access_key = az_access_key;
 		/* don't show S3 or Azure Blob usage strings */
-		cli_args->flags &= ~(CLI_FL_S3 | CLI_FL_AZ);
+		cli_args->flags &= ~(CLI_FL_CLOUD_S3 | CLI_FL_CLOUD_ABS);
 	} else if (cli_args->auth.type == ELASTO_FILE_S3) {
 		cli_args->auth.s3.creds_path = s3_creds_file;
 		/* don't show Azure usage strings */
-		cli_args->flags &= ~(CLI_FL_AZ | CLI_FL_AFS);
+		cli_args->flags &= ~(CLI_FL_CLOUD_ABS | CLI_FL_CLOUD_AFS);
 	} else {
 		assert(false);
 	}
@@ -495,11 +494,11 @@ cli_cmd_line_hint(const char *line,
 			continue;
 		}
 		switch (cmd->feature_flags & cli_args.flags & ~CLI_FL_PROMPT) {
-		case CLI_FL_AZ:
+		case CLI_FL_CLOUD_ABS:
 			return cmd->az_help;
-		case CLI_FL_AFS:
+		case CLI_FL_CLOUD_AFS:
 			return cmd->afs_help;
-		case CLI_FL_S3:
+		case CLI_FL_CLOUD_S3:
 			return cmd->s3_help;
 		default:
 			/* multiple or none relevant */
