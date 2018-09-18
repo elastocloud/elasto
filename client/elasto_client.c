@@ -646,11 +646,6 @@ main(int argc, char * const *argv)
 		goto err_out;
 	}
 
-	ret = elasto_conn_subsys_init();
-	if (ret < 0) {
-		goto err_args_free;
-	}
-
 	if (cli_args.flags & CLI_FL_PROMPT) {
 		ret = cli_cmd_line_start(&cli_args);
 	} else {
@@ -661,12 +656,10 @@ main(int argc, char * const *argv)
 					&cli_args);
 	}
 	if (ret < 0) {
-		goto err_global_clean;
+		goto err_args_free;
 	}
 
 	ret = 0;
-err_global_clean:
-	elasto_conn_subsys_deinit();
 err_args_free:
 	cli_args_free(&cli_args);
 err_out:
