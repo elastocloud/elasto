@@ -26,10 +26,6 @@
 
 #include "ccan/list/list.h"
 #include "lib/file/file_api.h"
-#include "lib/op.h"
-#include "lib/conn.h"
-#include "lib/dbg.h"
-#include "lib/util.h"
 #include "third_party/linenoise/linenoise.h"
 #include "cli_common.h"
 

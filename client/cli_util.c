@@ -23,7 +23,6 @@
 #include <sys/stat.h>
 #include <inttypes.h>
 
-#include "lib/util.h"
 #include "client/cli_util.h"
 
 void

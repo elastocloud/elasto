@@ -28,10 +28,7 @@
 
 #include "ccan/list/list.h"
 #include "lib/file/file_api.h"
-#include "lib/op.h"
-#include "lib/conn.h"
-#include "lib/dbg.h"
-#include "lib/util.h"
+#include "cli_util.h"
 #include "cli_common.h"
 
 struct cli_path_ent {
