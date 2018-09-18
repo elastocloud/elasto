@@ -342,7 +342,7 @@ cli_args_parse(int argc,
 			break;
 		case 'd':
 			debug_level = (uint32_t)strtol(optarg, NULL, 10);
-			dbg_level_set(debug_level);
+			elasto_fdebug(debug_level);
 			break;
 		case 'i':
 			cli_args->auth.insecure_http = true;
