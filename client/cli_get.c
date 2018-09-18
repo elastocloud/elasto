@@ -29,19 +29,36 @@
 #include "cli_common.h"
 #include "cli_open.h"
 
-void
-cli_get_args_free(struct cli_args *cli_args)
-{
-	free(cli_args->path);
-	free(cli_args->get.local_path);
+struct cli_get_args {
+    char *remote_path;
+    char *local_path;
+};
+
+static void
+_cli_get_args_free(struct cli_get_args *get_args) {
+	if (get_args == NULL) {
+		return;
+	}
+
+	free(get_args->remote_path);
+	free(get_args->local_path);
+	free(get_args);
 }
 
-int
+static void
+cli_get_args_free(struct cli_args *cli_args)
+{
+	_cli_get_args_free(cli_args->cmd_priv);
+	cli_args->cmd_priv = NULL;
+}
+
+static int
 cli_get_args_parse(int argc,
 		   char * const *argv,
 		   struct cli_args *cli_args)
 {
 	int ret;
+	struct cli_get_args *get_args = NULL;
 
 	if ((cli_args->auth.type != ELASTO_FILE_ABB)
 	 && (cli_args->auth.type != ELASTO_FILE_APB)
@@ -51,22 +68,28 @@ cli_get_args_parse(int argc,
 		goto err_out;
 	}
 
-	/* path is parsed by libfile on open */
-	ret = cli_path_realize(cli_args->cwd, argv[1], &cli_args->path);
-	if (ret < 0) {
+	get_args = calloc(1, sizeof(*get_args));
+	if (get_args == NULL) {
 		goto err_out;
 	}
 
-	cli_args->get.local_path = strdup(argv[2]);
-	if (cli_args->get.local_path == NULL) {
-		ret = -ENOMEM;
-		goto err_path_free;
+	/* path is parsed by libfile on open */
+	ret = cli_path_realize(cli_args->cwd, argv[1], &get_args->remote_path);
+	if (ret < 0) {
+		goto err_free;
 	}
+
+	get_args->local_path = strdup(argv[2]);
+	if (get_args->local_path == NULL) {
+		ret = -ENOMEM;
+		goto err_free;
+	}
+	cli_args->cmd_priv = get_args;
 
 	return 0;
 
-err_path_free:
-	free(cli_args->path);
+err_free:
+	_cli_get_args_free(get_args);
 err_out:
 	return ret;
 }
@@ -236,7 +259,7 @@ cli_get_data_ctx_free(struct cli_get_data_ctx *data_ctx)
 	free(data_ctx);
 }
 
-int
+static int
 cli_get_handle(struct cli_args *cli_args)
 {
 	struct elasto_fh *fh;
@@ -244,21 +267,22 @@ cli_get_handle(struct cli_args *cli_args)
 	struct stat st;
 	struct elasto_fstat fstat;
 	struct cli_get_data_ctx *data_ctx;
+	struct cli_get_args *get_args = cli_args->cmd_priv;
 	int ret;
 
-	ret = stat(cli_args->get.local_path, &st);
+	ret = stat(get_args->local_path, &st);
 	if (ret == 0) {
 		printf("destination already exists at %s\n",
-		       cli_args->get.local_path);
+		       get_args->local_path);
 		ret = -EEXIST;
 		goto err_out;
 	}
 
 	/* open without create or dir flags */
-	ret = cli_open_efh(cli_args, cli_args->path, 0, NULL, &fh);
+	ret = cli_open_efh(cli_args, get_args->remote_path, 0, NULL, &fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",
-		       cli_args->path, strerror(-ret));
+		       get_args->remote_path, strerror(-ret));
 		goto err_out;
 	}
 
@@ -276,7 +300,7 @@ cli_get_handle(struct cli_args *cli_args)
 		goto err_fclose;
 	}
 
-	ret = cli_get_data_ctx_setup(fh, cli_args->get.local_path, fstat.size,
+	ret = cli_get_data_ctx_setup(fh, get_args->local_path, fstat.size,
 				     &data_ctx);
 	if (ret < 0) {
 		goto err_fclose;
@@ -297,7 +321,7 @@ cli_get_handle(struct cli_args *cli_args)
 		struct cli_get_range_ctx *range_ctx;
 
 		printf("getting %" PRIu64 " bytes from %s for %s\n",
-		       fstat.size, cli_args->path, cli_args->get.local_path);
+		       fstat.size, get_args->remote_path, get_args->local_path);
 
 		ret = cli_get_range_ctx_setup(data_ctx, 0, fstat.size,
 					      &range_ctx);

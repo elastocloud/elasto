@@ -41,6 +41,7 @@ enum cli_fl {
  * @path: per-command absolute realized path, to be passed to libelasto_file
  * @auth: authentication information
  * @history_file: path where client command history is preserved
+ * @cmd_priv: private command specific state
  */
 struct cli_args {
 	char *progname;
@@ -48,27 +49,9 @@ struct cli_args {
 	char *cwd;
 	char *host;
 	uint16_t port;
-	char *path;
 	struct elasto_fauth auth;
 	char *history_file;
-	union {
-		struct {
-		} ls;
-		struct {
-			char *local_path;
-		} put;
-		struct {
-			char *local_path;
-		} get;
-		struct {
-		} del;
-		struct {
-			char *src_path;
-		} cp;
-		struct {
-			char *location;
-		} create;
-	};
+	void *cmd_priv;
 };
 
 struct cli_cmd_spec {

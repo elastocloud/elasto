@@ -30,17 +30,35 @@
 #include "cli_open.h"
 #include "cli_util.h"
 
-void
-cli_stat_args_free(struct cli_args *cli_args)
-{
-	free(cli_args->path);
+struct cli_stat_args {
+    char *remote_path;
+};
+
+static void
+_cli_stat_args_free(struct cli_stat_args *stat_args) {
+	if (stat_args == NULL) {
+		return;
+	}
+
+	free(stat_args->remote_path);
+	free(stat_args);
 }
 
-int
+static void
+cli_stat_args_free(struct cli_args *cli_args)
+{
+	_cli_stat_args_free(cli_args->cmd_priv);
+	cli_args->cmd_priv = NULL;
+}
+
+static int
 cli_stat_args_parse(int argc,
 		    char * const *argv,
 		    struct cli_args *cli_args)
 {
+	struct cli_stat_args *stat_args = NULL;
+	int ret;
+
 	if ((cli_args->auth.type != ELASTO_FILE_ABB)
 	 && (cli_args->auth.type != ELASTO_FILE_APB)
 	 && (cli_args->auth.type != ELASTO_FILE_AFS)
@@ -48,8 +66,24 @@ cli_stat_args_parse(int argc,
 		return -ENOTSUP;
 	}
 
+	stat_args = calloc(1, sizeof(*stat_args));
+	if (stat_args == NULL) {
+		goto err_out;
+	}
+
 	/* path is parsed by libfile on open */
-	return cli_path_realize(cli_args->cwd, argv[1], &cli_args->path);
+	ret = cli_path_realize(cli_args->cwd, argv[1], &stat_args->remote_path);
+	if (ret < 0) {
+		goto err_free;
+	}
+	cli_args->cmd_priv = stat_args;
+
+	return 0;
+
+err_free:
+	_cli_stat_args_free(stat_args);
+err_out:
+	return ret;
 }
 
 static char *
@@ -86,17 +120,18 @@ cli_stat_handle(struct cli_args *cli_args)
 	struct elasto_fh *fh;
 	struct elasto_fstat fstat;
 	char size_buf[20];
+	struct cli_stat_args *stat_args = cli_args->cmd_priv;
 	int ret;
 
 	/* XXX not sure whether we've been given a dir or file path, try both */
-	ret = cli_open_efh(cli_args, cli_args->path,
+	ret = cli_open_efh(cli_args, stat_args->remote_path,
 			   ELASTO_FOPEN_DIRECTORY, NULL, &fh);
 	if (ret < 0) {
-		ret = cli_open_efh(cli_args, cli_args->path, 0, NULL,
+		ret = cli_open_efh(cli_args, stat_args->remote_path, 0, NULL,
 				   &fh);
 		if (ret < 0) {
 			printf("%s path open failed as dir and file\n",
-			       cli_args->path);
+			       stat_args->remote_path);
 			goto err_out;
 		}
 	}
@@ -107,7 +142,7 @@ cli_stat_handle(struct cli_args *cli_args)
 		goto err_fclose;
 	}
 
-	printf("path: %s\n", cli_args->path);
+	printf("path: %s\n", stat_args->remote_path);
 	if (fstat.field_mask & ELASTO_FSTAT_FIELD_TYPE) {
 		printf("type: %s\n", cli_stat_ent_str(fstat.ent_type));
 	} else {

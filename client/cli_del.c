@@ -27,17 +27,35 @@
 #include "cli_common.h"
 #include "cli_open.h"
 
-void
-cli_del_args_free(struct cli_args *cli_args)
-{
-	free(cli_args->path);
+struct cli_del_args {
+    char *remote_path;
+};
+
+static void
+_cli_del_args_free(struct cli_del_args *del_args) {
+	if (del_args == NULL) {
+		return;
+	}
+
+	free(del_args->remote_path);
+	free(del_args);
 }
 
-int
+static void
+cli_del_args_free(struct cli_args *cli_args)
+{
+	_cli_del_args_free(cli_args->cmd_priv);
+	cli_args->cmd_priv = NULL;
+}
+
+static int
 cli_del_args_parse(int argc,
 		   char * const *argv,
 		   struct cli_args *cli_args)
 {
+	struct cli_del_args *del_args = NULL;
+	int ret;
+
 	if ((cli_args->auth.type != ELASTO_FILE_ABB)
 	 && (cli_args->auth.type != ELASTO_FILE_APB)
 	 && (cli_args->auth.type != ELASTO_FILE_AFS)
@@ -45,25 +63,42 @@ cli_del_args_parse(int argc,
 		return -ENOTSUP;
 	}
 
+	del_args = calloc(1, sizeof(*del_args));
+	if (del_args == NULL) {
+		goto err_out;
+	}
+
 	/* path is parsed by libfile on open */
-	return cli_path_realize(cli_args->cwd, argv[1], &cli_args->path);
+	ret = cli_path_realize(cli_args->cwd, argv[1], &del_args->remote_path);
+	if (ret < 0) {
+		goto err_free;
+	}
+	cli_args->cmd_priv = del_args;
+
+	return 0;
+
+err_free:
+	_cli_del_args_free(del_args);
+err_out:
+	return ret;
 }
 
-int
+static int
 cli_del_handle(struct cli_args *cli_args)
 {
 	struct elasto_fh *fh;
+	struct cli_del_args *del_args = cli_args->cmd_priv;
 	int ret;
 
 	/* XXX not sure whether we've been given a dir or file path, try both */
-	ret = cli_open_efh(cli_args, cli_args->path,
+	ret = cli_open_efh(cli_args, del_args->remote_path,
 			   ELASTO_FOPEN_DIRECTORY, NULL, &fh);
 	if (ret < 0) {
-		ret = cli_open_efh(cli_args, cli_args->path, 0, NULL,
+		ret = cli_open_efh(cli_args, del_args->remote_path, 0, NULL,
 				   &fh);
 		if (ret < 0) {
 			printf("%s path open failed as dir and file\n",
-			       cli_args->path);
+			       del_args->remote_path);
 			goto err_out;
 		}
 	}
@@ -71,7 +106,7 @@ cli_del_handle(struct cli_args *cli_args)
 	ret = elasto_funlink_close(fh);
 	if (ret < 0) {
 		printf("%s path unlink failed with: %s\n",
-		       cli_args->path, strerror(-ret));
+		       del_args->remote_path, strerror(-ret));
 		if (elasto_fclose(fh) < 0) {
 			printf("close failed\n");
 		}

@@ -29,19 +29,36 @@
 #include "cli_common.h"
 #include "cli_open.h"
 
-void
-cli_cp_args_free(struct cli_args *cli_args)
-{
-	free(cli_args->cp.src_path);
-	free(cli_args->path);
+struct cli_cp_args {
+    char *src_path;
+    char *dst_path;
+};
+
+static void
+_cli_cp_args_free(struct cli_cp_args *cp_args) {
+	if (cp_args == NULL) {
+		return;
+	}
+
+	free(cp_args->src_path);
+	free(cp_args->dst_path);
+	free(cp_args);
 }
 
-int
+static void
+cli_cp_args_free(struct cli_args *cli_args)
+{
+	_cli_cp_args_free(cli_args->cmd_priv);
+	cli_args->cmd_priv = NULL;
+}
+
+static int
 cli_cp_args_parse(int argc,
 		  char * const *argv,
 		  struct cli_args *cli_args)
 {
 	int ret;
+	struct cli_cp_args *cp_args = NULL;
 
 	if ((cli_args->auth.type != ELASTO_FILE_ABB)
 	 && (cli_args->auth.type != ELASTO_FILE_APB)
@@ -51,38 +68,45 @@ cli_cp_args_parse(int argc,
 		goto err_out;
 	}
 
-	/* paths parsed by libfile on open */
-	ret = cli_path_realize(cli_args->cwd, argv[1], &cli_args->cp.src_path);
-	if (ret < 0) {
+	cp_args = calloc(1, sizeof(*cp_args));
+	if (cp_args == NULL) {
 		goto err_out;
 	}
 
-	ret = cli_path_realize(cli_args->cwd, argv[2], &cli_args->path);
+	/* paths parsed by libfile on open */
+	ret = cli_path_realize(cli_args->cwd, argv[1], &cp_args->src_path);
 	if (ret < 0) {
-		goto err_src_free;
+		goto err_free;
 	}
+
+	ret = cli_path_realize(cli_args->cwd, argv[2], &cp_args->dst_path);
+	if (ret < 0) {
+		goto err_free;
+	}
+	cli_args->cmd_priv = cp_args;
 
 	return 0;
 
-err_src_free:
-	free(cli_args->cp.src_path);
+err_free:
+	_cli_cp_args_free(cp_args);
 err_out:
 	return ret;
 }
 
-int
+static int
 cli_cp_handle(struct cli_args *cli_args)
 {
 	struct elasto_fh *src_fh;
 	struct elasto_fh *dest_fh;
 	struct elasto_fstat fstat;
+	struct cli_cp_args *cp_args = cli_args->cmd_priv;
 	int ret;
 
 	/* open source without create or dir flags */
-	ret = cli_open_efh(cli_args, cli_args->cp.src_path, 0, NULL, &src_fh);
+	ret = cli_open_efh(cli_args, cp_args->src_path, 0, NULL, &src_fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",
-		       cli_args->cp.src_path, strerror(-ret));
+		       cp_args->src_path, strerror(-ret));
 		goto err_out;
 	}
 
@@ -94,16 +118,16 @@ cli_cp_handle(struct cli_args *cli_args)
 	}
 
 	/* open dest with create flag */
-	ret = cli_open_efh(cli_args, cli_args->path, ELASTO_FOPEN_CREATE,
+	ret = cli_open_efh(cli_args, cp_args->dst_path, ELASTO_FOPEN_CREATE,
 			   NULL, &dest_fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",
-		       cli_args->path, strerror(-ret));
+		       cp_args->dst_path, strerror(-ret));
 		goto err_src_close;
 	}
 
 	printf("copying %" PRIu64 " bytes from %s to %s\n",
-	       fstat.size, cli_args->cp.src_path, cli_args->path);
+	       fstat.size, cp_args->src_path, cp_args->dst_path);
 
 	ret = elasto_fsplice(src_fh, 0, dest_fh, 0, fstat.size);
 	if (ret < 0) {

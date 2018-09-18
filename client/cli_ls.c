@@ -30,18 +30,35 @@
 #include "cli_open.h"
 #include "cli_util.h"
 
-void
-cli_ls_args_free(struct cli_args *cli_args)
-{
-	free(cli_args->path);
+struct cli_ls_args {
+	char *remote_path;
+};
+
+static void
+_cli_ls_args_free(struct cli_ls_args *ls_args) {
+	if (ls_args == NULL) {
+		return;
+	}
+
+	free(ls_args->remote_path);
+	free(ls_args);
 }
 
-int
+static void
+cli_ls_args_free(struct cli_args *cli_args)
+{
+	_cli_ls_args_free(cli_args->cmd_priv);
+	cli_args->cmd_priv = NULL;
+}
+
+static int
 cli_ls_args_parse(int argc,
 		  char * const *argv,
 		  struct cli_args *cli_args)
 {
+	struct cli_ls_args *ls_args = NULL;
 	char *usr_path = NULL;
+	int ret;
 
 	if ((cli_args->auth.type != ELASTO_FILE_ABB)
 	 && (cli_args->auth.type != ELASTO_FILE_APB)
@@ -50,11 +67,27 @@ cli_ls_args_parse(int argc,
 		return -ENOTSUP;
 	}
 
+	ls_args = calloc(1, sizeof(*ls_args));
+	if (ls_args == NULL) {
+		goto err_out;
+	}
+
 	if (argc == 2) {
 		usr_path = argv[1];
 	}
 
-	return cli_path_realize(cli_args->cwd, usr_path, &cli_args->path);
+	ret = cli_path_realize(cli_args->cwd, usr_path, &ls_args->remote_path);
+	if (ret < 0) {
+		goto err_free;
+	}
+	cli_args->cmd_priv = ls_args;
+
+	return 0;
+
+err_free:
+	_cli_ls_args_free(ls_args);
+err_out:
+	return ret;
 }
 
 static int
@@ -82,17 +115,18 @@ cli_ls_readdir_cb(struct elasto_dent *dent,
 	return 0;
 }
 
-int
+static int
 cli_ls_handle(struct cli_args *cli_args)
 {
 	struct elasto_fh *fh;
+	struct cli_ls_args *ls_args = cli_args->cmd_priv;
 	int ret;
 
-	ret = cli_open_efh(cli_args, cli_args->path,
+	ret = cli_open_efh(cli_args, ls_args->remote_path,
 			   ELASTO_FOPEN_DIRECTORY, NULL, &fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",
-		       cli_args->path, strerror(-ret));
+		       ls_args->remote_path, strerror(-ret));
 		goto err_out;
 	}
 

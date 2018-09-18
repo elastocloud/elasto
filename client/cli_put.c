@@ -32,19 +32,36 @@
 /* split any blob over 10MB into separate blocks */
 #define BLOCK_THRESHOLD (10 * 1024 * 1024)
 
-void
-cli_put_args_free(struct cli_args *cli_args)
-{
-	free(cli_args->path);
-	free(cli_args->put.local_path);
+struct cli_put_args {
+    char *local_path;
+    char *remote_path;
+};
+
+static void
+_cli_put_args_free(struct cli_put_args *put_args) {
+	if (put_args == NULL) {
+		return;
+	}
+
+	free(put_args->local_path);
+	free(put_args->remote_path);
+	free(put_args);
 }
 
-int
+static void
+cli_put_args_free(struct cli_args *cli_args)
+{
+	_cli_put_args_free(cli_args->cmd_priv);
+	cli_args->cmd_priv = NULL;
+}
+
+static int
 cli_put_args_parse(int argc,
 		   char * const *argv,
 		   struct cli_args *cli_args)
 {
 	int ret;
+	struct cli_put_args *put_args = NULL;
 
 	if ((cli_args->auth.type != ELASTO_FILE_ABB)
 	 && (cli_args->auth.type != ELASTO_FILE_APB)
@@ -54,22 +71,28 @@ cli_put_args_parse(int argc,
 		goto err_out;
 	}
 
-	cli_args->put.local_path = strdup(argv[1]);
-	if (cli_args->put.local_path == NULL) {
-		ret = -ENOMEM;
+	put_args = calloc(1, sizeof(*put_args));
+	if (put_args == NULL) {
 		goto err_out;
 	}
 
-	/* path is parsed by libfile on open */
-	ret = cli_path_realize(cli_args->cwd, argv[2], &cli_args->path);
-	if (ret < 0) {
-		goto err_local_free;
+	put_args->local_path = strdup(argv[1]);
+	if (put_args->local_path == NULL) {
+		ret = -ENOMEM;
+		goto err_free;
 	}
+
+	/* path is parsed by libfile on open */
+	ret = cli_path_realize(cli_args->cwd, argv[2], &put_args->remote_path);
+	if (ret < 0) {
+		goto err_free;
+	}
+	cli_args->cmd_priv = put_args;
 
 	return 0;
 
-err_local_free:
-	free(cli_args->put.local_path);
+err_free:
+	_cli_put_args_free(put_args);
 err_out:
 	return ret;
 }
@@ -292,28 +315,29 @@ err_out:
 	return ret;
 }
 
-int
+static int
 cli_put_handle(struct cli_args *cli_args)
 {
 	struct elasto_fh *fh;
 	struct elasto_fstatfs fstatfs;
 	struct cli_put_data_ctx *data_ctx;
+	struct cli_put_args *put_args = cli_args->cmd_priv;
 	struct stat st;
 	int ret;
 
-	ret = stat(cli_args->put.local_path, &st);
+	ret = stat(put_args->local_path, &st);
 	if (ret < 0) {
-		printf("failed to stat %s\n", cli_args->put.local_path);
+		printf("failed to stat %s\n", put_args->local_path);
 		goto err_out;
 	}
 
 	/* open with exclusive create flags */
-	ret = cli_open_efh(cli_args, cli_args->path,
+	ret = cli_open_efh(cli_args, put_args->remote_path,
 			   ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL,
 			   NULL, &fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",
-		       cli_args->path, strerror(-ret));
+		       put_args->remote_path, strerror(-ret));
 		goto err_out;
 	}
 
@@ -324,7 +348,7 @@ cli_put_handle(struct cli_args *cli_args)
 		goto err_fclose;
 	}
 
-	ret = cli_put_data_ctx_setup(fh, cli_args->put.local_path, st.st_size,
+	ret = cli_put_data_ctx_setup(fh, put_args->local_path, st.st_size,
 				     &data_ctx);
 	if (ret < 0) {
 		goto err_fclose;
@@ -345,8 +369,8 @@ cli_put_handle(struct cli_args *cli_args)
 		struct cli_put_range_ctx *range_ctx;
 
 		printf("putting %ld bytes from %s to %s\n",
-		       (long int)st.st_size, cli_args->put.local_path,
-		       cli_args->path);
+		       (long int)st.st_size, put_args->local_path,
+		       put_args->remote_path);
 
 		ret = cli_put_range_ctx_setup(data_ctx, 0, st.st_size,
 					      &range_ctx);
