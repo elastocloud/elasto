@@ -14,6 +14,10 @@
 #ifndef _CLI_UTIL_H_
 #define _CLI_UTIL_H_
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#endif
+
 void
 cli_human_size(double bytes,
 	       char *buf,
