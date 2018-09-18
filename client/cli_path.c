@@ -97,7 +97,8 @@ cli_path_ents_parse(const char *path,
 		if (strcmp("..", tok) == 0) {
 			/* drop the last component */
 			if (*num_pents == 0) {
-				dbg(0, "can't go past path root at %s\n", tok);
+				fprintf(stderr,
+					"can't go past path root at %s\n", tok);
 				ret = -EINVAL;
 				goto err_pdup_free;
 			}
@@ -301,27 +302,29 @@ cli_path_uri_parse(const char *uri,
 	}
 
 	if (strstr(uri, "://") == NULL) {
-		dbg(0, "unsupported URI: %s\n", uri);
+		fprintf(stderr, "unsupported URI: %s\n", uri);
 		return -EINVAL;
 	}
 
 	ev_uri = evhttp_uri_parse(uri);
 	if (ev_uri == NULL) {
-		dbg(0, "malformed URI: %s\n", uri);
+		fprintf(stderr, "malformed URI: %s\n", uri);
 		return -EINVAL;
 	}
 
 	if ((evhttp_uri_get_userinfo(ev_uri) != NULL)
 	 || (evhttp_uri_get_query(ev_uri) != NULL)
 	 || (evhttp_uri_get_fragment(ev_uri) != NULL)) {
-		dbg(0, "unsupported user, query or fragment in URI: %s\n", uri);
+		fprintf(stderr,
+			"unsupported user, query or fragment in URI: %s\n",
+			uri);
 		ret = -EINVAL;
 		goto err_uri_free;
 	}
 
 	scheme = evhttp_uri_get_scheme(ev_uri);
 	if (scheme == NULL) {
-		dbg(0, "missing scheme in URI: %s\n", uri);
+		fprintf(stderr, "missing scheme in URI: %s\n", uri);
 		ret = -EINVAL;
 		goto err_uri_free;
 	}
@@ -335,7 +338,7 @@ cli_path_uri_parse(const char *uri,
 	}
 
 	if (type == 0) {
-		dbg(0, "invalid URI scheme in %s\n", uri);
+		fprintf(stderr, "invalid URI scheme in %s\n", uri);
 		ret = -EINVAL;
 		goto err_uri_free;
 	}
@@ -359,7 +362,8 @@ cli_path_uri_parse(const char *uri,
 
 	path = evhttp_uri_get_path(ev_uri);
 	if ((path != NULL) && (strlen(path) > 0) && (strcmp(path, "/") != 0)) {
-		dbg(0, "URI path (%s) component not supported\n", path);
+		fprintf(stderr, "URI path (%s) component not supported\n",
+			path);
 		ret = -EINVAL;
 		goto err_uri_free;
 	}

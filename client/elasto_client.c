@@ -238,29 +238,30 @@ cli_auth_args_validate(enum elasto_ftype type,
 	case ELASTO_FILE_AFS:
 		if (((az_ps_file == NULL) && (az_access_key == NULL))
 		 || ((az_ps_file != NULL) && (az_access_key != NULL))) {
-			dbg(0, "either a PublishSettings file or an access key "
-			       "is required for Azure access\n");
+			fprintf(stderr, "either a PublishSettings file or an "
+				"access key is required for Azure access\n");
 			return -EINVAL;
 		}
 		if (s3_creds_file != NULL) {
-			dbg(0, "S3 credentials incorrectly provided for "
-			       "Azure access\n");
+			fprintf(stderr, "S3 credentials incorrectly provided "
+				"for Azure access\n");
 			return -EINVAL;
 		}
 		break;
 	case ELASTO_FILE_S3:
 		if (s3_creds_file == NULL) {
-			dbg(0, "S3 credentials required for Amazon access\n");
+			fprintf(stderr, "S3 credentials required for Amazon "
+				"access\n");
 			return -EINVAL;
 		}
 		if ((az_ps_file != NULL) || (az_access_key != NULL)) {
-			dbg(0, "Azure credentials incorrectly provided for "
-			    "Amazon S3 access\n");
+			fprintf(stderr, "Azure credentials incorrectly provided "
+				"for Amazon S3 access\n");
 			return -EINVAL;
 		}
 		break;
 	default:
-		dbg(0, "invalid cli type: %d\n", type);
+		fprintf(stderr, "invalid cli type: %d\n", type);
 		return -EINVAL;
 	}
 
