@@ -466,7 +466,7 @@ s3_fwrite(void *mod_priv,
 		return ret;
 	}
 
-	ret = s3_req_obj_put(&s3_fh->path, src_data, &op);
+	ret = s3_req_obj_put(&s3_fh->path, src_data, NULL, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

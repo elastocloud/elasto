@@ -77,7 +77,7 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		if (ret < 0) {
 			goto err_out;
 		}
-		ret = s3_req_obj_put(&s3_fh->path, data, &op);
+		ret = s3_req_obj_put(&s3_fh->path, data, NULL, &op);
 		if (ret < 0) {
 			goto err_out;
 		}

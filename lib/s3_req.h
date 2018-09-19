@@ -175,6 +175,7 @@ s3_req_bkt_loc_get(const struct s3_path *path,
 int
 s3_req_obj_put(const struct s3_path *path,
 	       struct elasto_data *data,
+	       const char *content_type,
 	       struct op **_op);
 
 int

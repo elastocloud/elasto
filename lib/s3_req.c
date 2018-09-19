@@ -876,12 +876,39 @@ err_out:
 	return ret;
 }
 
+static int
+s3_req_obj_put_hdr_fill(const char *content_type,
+			struct op *op)
+{
+	int ret;
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (content_type != NULL) {
+		ret = op_req_hdr_add(op, "Content-Type", content_type);
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
 /*
  * @len bytes from @buf are put if @data_type is ELASTO_DATA_IOV.
  */
 int
 s3_req_obj_put(const struct s3_path *path,
 	       struct elasto_data *data,
+	       const char *content_type,
 	       struct op **_op)
 {
 	int ret;
@@ -916,7 +943,7 @@ s3_req_obj_put(const struct s3_path *path,
 		goto err_data_close;
 	}
 
-	ret = s3_req_fill_hdr_common(op);
+	ret = s3_req_obj_put_hdr_fill(content_type, op);
 	if (ret < 0) {
 		goto err_url_free;
 	}
