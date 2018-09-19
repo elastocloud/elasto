@@ -437,6 +437,8 @@ apb_fopen_acc_create(struct apb_fh *apb_fh,
 			dbg(1, "location token not specified for new account "
 			    "%s, using default: %s\n",
 			    apb_fh->path.acc, location);
+		} else if (ret < 0) {
+			goto err_out;
 		}
 
 		ret = az_mgmt_req_acc_create(apb_fh->sub_id,

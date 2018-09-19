@@ -138,6 +138,8 @@ s3_fopen_bkt(struct s3_fh *s3_fh,
 			dbg(1, "location token not specified for new bucket "
 			    "%s, using default: %s\n",
 			    s3_fh->path.bkt, location);
+		} else if (ret < 0) {
+			goto err_out;
 		}
 
 		ret = s3_req_bkt_create(&s3_fh->path, location, &op);
