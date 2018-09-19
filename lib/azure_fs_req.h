@@ -247,6 +247,7 @@ az_fs_rsp_dir_prop_get(struct op *op);
 int
 az_fs_req_file_create(const struct az_fs_path *path,
 		      uint64_t max_size_bytes,
+		      const char *content_type,
 		      struct op **_op);
 
 int

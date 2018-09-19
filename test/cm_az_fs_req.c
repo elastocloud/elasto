@@ -434,7 +434,7 @@ cm_az_fs_req_file_create(void **state)
 	path.acc = cm_us->acc;
 	path.share = cm_op_az_fs_state.share;
 	path.file = "file1";
-	ret = az_fs_req_file_create(&path, BYTES_IN_TB, &op);
+	ret = az_fs_req_file_create(&path, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
@@ -462,7 +462,7 @@ cm_az_fs_req_file_create(void **state)
 	path.share = cm_op_az_fs_state.share;
 	path.parent_dir = "dir1";
 	path.file = "file2";
-	ret = az_fs_req_file_create(&path, BYTES_IN_MB, &op);
+	ret = az_fs_req_file_create(&path, BYTES_IN_MB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
@@ -571,7 +571,7 @@ cm_az_fs_req_file_io(void **state)
 	};
 
 	/* create base file and directory */
-	ret = az_fs_req_file_create(&path, BYTES_IN_TB, &op);
+	ret = az_fs_req_file_create(&path, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
@@ -648,7 +648,7 @@ cm_az_fs_req_file_props(void **state)
 		.file = "file1",
 	};
 
-	ret = az_fs_req_file_create(&path, BYTES_IN_TB, &op);
+	ret = az_fs_req_file_create(&path, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
@@ -719,7 +719,7 @@ cm_az_fs_req_file_cp(void **state)
 	};
 
 	/* create base file and directory */
-	ret = az_fs_req_file_create(&src_path, BYTES_IN_TB, &op);
+	ret = az_fs_req_file_create(&src_path, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
@@ -741,7 +741,7 @@ cm_az_fs_req_file_cp(void **state)
 	op_free(op);
 
 	/* create copy destination file */
-	ret = az_fs_req_file_create(&dst_path, BYTES_IN_TB, &op);
+	ret = az_fs_req_file_create(&dst_path, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
@@ -814,7 +814,7 @@ cm_az_fs_req_file_ranges(void **state)
 	};
 
 	/* create base file */
-	ret = az_fs_req_file_create(&path, BYTES_IN_TB, &op);
+	ret = az_fs_req_file_create(&path, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
@@ -946,7 +946,7 @@ cm_az_fs_req_file_ranges_unaligned(void **state)
 	uint64_t aligned_off_end = BYTES_IN_GB + ARRAY_SIZE(buf) + 512 - 1;
 
 	/* create base file */
-	ret = az_fs_req_file_create(&path, BYTES_IN_TB, &op);
+	ret = az_fs_req_file_create(&path, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);

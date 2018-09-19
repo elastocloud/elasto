@@ -999,6 +999,7 @@ err_out:
 
 static int
 az_fs_req_file_create_hdr_fill(struct az_fs_req_file_create *file_create_req,
+			       const char *content_type,
 			       struct op *op)
 {
 	int ret;
@@ -1020,6 +1021,14 @@ az_fs_req_file_create_hdr_fill(struct az_fs_req_file_create *file_create_req,
 		goto err_hdrs_free;
 	}
 
+	if (content_type != NULL) {
+		/* XXX could also use Content-Type header */
+		ret = op_req_hdr_add(op, "x-ms-content-type", content_type);
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	}
+
 	ret = op_req_hdr_add(op, "x-ms-type", "file");
 	if (ret < 0) {
 		goto err_hdrs_free;
@@ -1036,6 +1045,7 @@ err_out:
 int
 az_fs_req_file_create(const struct az_fs_path *path,
 		      uint64_t max_size_bytes,
+		      const char *content_type,
 		      struct op **_op)
 {
 	int ret;
@@ -1071,7 +1081,7 @@ az_fs_req_file_create(const struct az_fs_path *path,
 		goto err_path_free;
 	}
 
-	ret = az_fs_req_file_create_hdr_fill(file_create_req, op);
+	ret = az_fs_req_file_create_hdr_fill(file_create_req, content_type, op);
 	if (ret < 0) {
 		goto err_url_free;
 	}

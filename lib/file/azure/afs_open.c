@@ -166,7 +166,8 @@ afs_fopen_file(struct afs_fh *afs_fh,
 		dbg(4, "file not found, creating\n");
 		op_free(op);
 		ret = az_fs_req_file_create(&afs_fh->path,
-					    0,	/* initial size */
+					    0,		/* initial size */
+					    NULL,	/* content-type */
 					    &op);
 		if (ret < 0) {
 			goto err_out;
