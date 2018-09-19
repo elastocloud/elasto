@@ -192,7 +192,7 @@ s3_fwrite_multi_start(struct s3_fh *s3_fh,
 	struct s3_rsp_mp_start *mp_start_rsp;
 	char *upload_id;
 
-	ret = s3_req_mp_start(&s3_fh->path, &op);
+	ret = s3_req_mp_start(&s3_fh->path, NULL, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

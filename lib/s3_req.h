@@ -200,7 +200,8 @@ s3_req_obj_head(const struct s3_path *path,
 
 int
 s3_req_mp_start(const struct s3_path *path,
-		   struct op **_op);
+		const char *content_type,
+		struct op **_op);
 
 int
 s3_req_mp_done(const struct s3_path *path,

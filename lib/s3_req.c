@@ -1305,8 +1305,35 @@ s3_rsp_mp_start_free(struct s3_rsp_mp_start *mp_start_rsp)
 	free(mp_start_rsp->upload_id);
 }
 
+static int
+s3_req_mp_start_hdr_fill(const char *content_type,
+			 struct op *op)
+{
+	int ret;
+
+	ret = s3_req_fill_hdr_common(op);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (content_type != NULL) {
+		ret = op_req_hdr_add(op, "Content-Type", content_type);
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
 int
 s3_req_mp_start(const struct s3_path *path,
+		const char *content_type,
 		struct op **_op)
 {
 	int ret;
@@ -1336,7 +1363,7 @@ s3_req_mp_start(const struct s3_path *path,
 		goto err_path_free;
 	}
 
-	ret = s3_req_fill_hdr_common(op);
+	ret = s3_req_mp_start_hdr_fill(content_type, op);
 	if (ret < 0) {
 		goto err_url_free;
 	}
