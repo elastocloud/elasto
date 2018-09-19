@@ -308,6 +308,7 @@ int
 az_req_blob_put(const struct az_blob_path *path,
 		struct elasto_data *data,
 		uint64_t page_len,
+		const char *content_type,
 		struct op **_op);
 
 int

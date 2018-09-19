@@ -593,6 +593,7 @@ abb_fwrite(void *mod_priv,
 
 	ret = az_req_blob_put(&apb_fh->path,
 			      src_data, 0,	/* non-page block blob */
+			      NULL,		/* content-type */
 			      &op);
 	if (ret < 0) {
 		goto err_out;

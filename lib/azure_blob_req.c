@@ -1061,6 +1061,7 @@ err_out:
 
 static int
 az_req_blob_put_hdr_fill(struct az_req_blob_put *blob_put_req,
+			 const char *content_type,
 			 struct op *op)
 {
 	int ret;
@@ -1094,6 +1095,15 @@ az_req_blob_put_hdr_fill(struct az_req_blob_put *blob_put_req,
 		}
 	}
 
+	if (content_type != NULL) {
+		/* XXX could also use Content-Type header */
+		ret = op_req_hdr_add(op, "x-ms-blob-content-type",
+				     content_type);
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	}
+
 	return 0;
 
 err_hdrs_free:
@@ -1110,6 +1120,7 @@ int
 az_req_blob_put(const struct az_blob_path *path,
 		struct elasto_data *data,
 		uint64_t page_len,
+		const char *content_type,
 		struct op **_op)
 {
 	int ret;
@@ -1158,7 +1169,7 @@ az_req_blob_put(const struct az_blob_path *path,
 		goto err_path_free;
 	}
 
-	ret = az_req_blob_put_hdr_fill(blob_put_req, op);
+	ret = az_req_blob_put_hdr_fill(blob_put_req, content_type, op);
 	if (ret < 0)
 		goto err_url_free;
 

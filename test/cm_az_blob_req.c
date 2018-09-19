@@ -293,7 +293,7 @@ cm_az_blob_req_blob_create(void **state)
 	path.acc = cm_us->acc;
 	path.ctnr = cm_op_az_blob_req_state.ctnr;
 	path.blob = "blob1";
-	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, &op);
+	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
@@ -363,7 +363,7 @@ cm_az_blob_req_page_blob_io(void **state)
 	};
 
 	/* create base blob */
-	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, &op);
+	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
@@ -442,7 +442,7 @@ cm_az_blob_req_blob_props(void **state)
 		.blob = "blob1",
 	};
 
-	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, &op);
+	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
@@ -521,6 +521,7 @@ cm_az_blob_req_blob_cp(void **state)
 
 	ret = az_req_blob_put(&src_path, data,
 			      0,	/* page_len - ignored */
+			      NULL,	/* content-type */
 			      &op);
 	assert_true(ret >= 0);
 
@@ -593,7 +594,7 @@ cm_az_blob_req_page_ranges(void **state)
 	};
 
 	/* create base page blob */
-	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, &op);
+	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, NULL, &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);

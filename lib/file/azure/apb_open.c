@@ -160,7 +160,7 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = az_req_blob_put(&apb_fh->path, NULL, 0, &op);
+		ret = az_req_blob_put(&apb_fh->path, NULL, 0, NULL, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -230,7 +230,7 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 		if (ret < 0) {
 			goto err_out;
 		}
-		ret = az_req_blob_put(&apb_fh->path, data, 0, &op);
+		ret = az_req_blob_put(&apb_fh->path, data, 0, NULL, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
