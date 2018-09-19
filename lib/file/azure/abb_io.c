@@ -304,7 +304,7 @@ abb_fwrite_multi_finish(struct abb_io_multi_state *multi_state)
 
 	ret = az_req_block_list_put(&multi_state->apb_fh->path,
 				    multi_state->blk_num, &multi_state->blks,
-				    &finish_state->op);
+				    NULL, &finish_state->op);
 	if (ret < 0) {
 		dbg(0, "multi-part done req init failed: %s\n", strerror(-ret));
 		goto err_state_free;

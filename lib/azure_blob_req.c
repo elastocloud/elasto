@@ -1557,6 +1557,34 @@ err_out:
 	return ret;
 }
 
+static int
+az_req_block_list_put_hdr_fill(const char *content_type,
+			       struct op *op)
+{
+	int ret;
+
+	ret = az_req_common_hdr_fill(op, false);
+	if (ret < 0) {
+		goto err_out;
+	}
+
+	if (content_type != NULL) {
+		/* XXX could also use Content-Type header */
+		ret = op_req_hdr_add(op, "x-ms-blob-content-type",
+				     content_type);
+		if (ret < 0) {
+			goto err_hdrs_free;
+		}
+	}
+
+	return 0;
+
+err_hdrs_free:
+	op_hdrs_free(&op->req.hdrs);
+err_out:
+	return ret;
+}
+
 #define AZ_REQ_BLK_LIST_PUT_PFX \
 		"<?xml version=\"1.0\" encoding=\"utf-8\"?>" \
 		"<BlockList>"
@@ -1670,6 +1698,7 @@ int
 az_req_block_list_put(const struct az_blob_path *path,
 		      uint64_t num_blks,
 		      struct list_head *blks,
+		      const char *content_type,
 		      struct op **_op)
 {
 	int ret;
@@ -1699,7 +1728,7 @@ az_req_block_list_put(const struct az_blob_path *path,
 		goto err_path_free;
 	}
 
-	ret = az_req_common_hdr_fill(op, false);
+	ret = az_req_block_list_put_hdr_fill(content_type, op);
 	if (ret < 0) {
 		goto err_url_free;
 	}

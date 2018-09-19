@@ -336,6 +336,7 @@ int
 az_req_block_list_put(const struct az_blob_path *path,
 		      uint64_t num_blks,
 		      struct list_head *blks,
+		      const char *content_type,
 		      struct op **_op);
 
 int
