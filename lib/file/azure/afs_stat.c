@@ -72,6 +72,21 @@ afs_fstat_file(struct afs_fh *afs_fh,
 	/* flag which values are valid in the stat response */
 	fstat->field_mask = (ELASTO_FSTAT_FIELD_TYPE
 				| ELASTO_FSTAT_FIELD_SIZE);
+	/*
+	 * content-type header in file_prop_get response is optional.
+	 */
+	if (file_prop_get_rsp->relevant | AZ_FS_FILE_PROP_CTYPE) {
+		size_t ctlen = strlen(file_prop_get_rsp->content_type);
+		if (ctlen >= ARRAY_SIZE(fstat->content_type)) {
+			dbg(0, "oversize file content-type\n");
+			ret = -EINVAL;
+			goto err_op_free;
+		}
+		strncpy(fstat->content_type,
+			file_prop_get_rsp->content_type,
+			ARRAY_SIZE(fstat->content_type));
+		fstat->field_mask |= ELASTO_FSTAT_FIELD_CONTENT_TYPE;
+	}
 	ret = 0;
 
 err_op_free:
