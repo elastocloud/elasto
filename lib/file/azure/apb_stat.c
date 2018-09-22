@@ -48,6 +48,7 @@ apb_fstat_blob(struct apb_fh *apb_fh,
 	int ret;
 	struct op *op;
 	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
+	size_t ctlen;
 
 	ret = az_req_blob_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
@@ -80,11 +81,20 @@ apb_fstat_blob(struct apb_fh *apb_fh,
 	} else if (blob_prop_get_rsp->lease_status == AOP_LEASE_STATUS_LOCKED) {
 		fstat->lease_status = ELASTO_FLEASE_LOCKED;
 	}
+	ctlen = strlen(blob_prop_get_rsp->content_type);
+	if (ctlen >= ARRAY_SIZE(fstat->content_type)) {
+		dbg(0, "oversize blob content-type\n");
+		ret = -EINVAL;
+		goto err_op_free;
+	}
+	strncpy(fstat->content_type, blob_prop_get_rsp->content_type,
+		ARRAY_SIZE(fstat->content_type));
 	/* flag which values are valid in the stat response */
 	fstat->field_mask = (ELASTO_FSTAT_FIELD_TYPE
 				| ELASTO_FSTAT_FIELD_SIZE
 				| ELASTO_FSTAT_FIELD_BSIZE
-				| ELASTO_FSTAT_FIELD_LEASE);
+				| ELASTO_FSTAT_FIELD_LEASE
+				| ELASTO_FSTAT_FIELD_CONTENT_TYPE);
 	ret = 0;
 
 err_op_free:
@@ -283,6 +293,7 @@ abb_fstat_blob(struct apb_fh *apb_fh,
 	int ret;
 	struct op *op;
 	struct az_rsp_blob_prop_get *blob_prop_get_rsp;
+	size_t ctlen;
 
 	ret = az_req_blob_prop_get(&apb_fh->path, &op);
 	if (ret < 0) {
@@ -315,10 +326,19 @@ abb_fstat_blob(struct apb_fh *apb_fh,
 	} else if (blob_prop_get_rsp->lease_status == AOP_LEASE_STATUS_LOCKED) {
 		fstat->lease_status = ELASTO_FLEASE_LOCKED;
 	}
+	ctlen = strlen(blob_prop_get_rsp->content_type);
+	if (ctlen >= ARRAY_SIZE(fstat->content_type)) {
+		dbg(0, "oversize blob content-type\n");
+		ret = -EINVAL;
+		goto err_op_free;
+	}
+	strncpy(fstat->content_type, blob_prop_get_rsp->content_type,
+		ARRAY_SIZE(fstat->content_type));
 	/* flag which values are valid in the stat response */
 	fstat->field_mask = (ELASTO_FSTAT_FIELD_TYPE
 				| ELASTO_FSTAT_FIELD_SIZE
-				| ELASTO_FSTAT_FIELD_LEASE);
+				| ELASTO_FSTAT_FIELD_LEASE
+				| ELASTO_FSTAT_FIELD_CONTENT_TYPE);
 	ret = 0;
 
 err_op_free:
