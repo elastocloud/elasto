@@ -169,6 +169,11 @@ cli_stat_handle(struct cli_args *cli_args)
 	} else {
 		printf("lease: -\n");
 	}
+	if (fstat.field_mask & ELASTO_FSTAT_FIELD_CONTENT_TYPE) {
+		printf("content-type: %s\n", fstat.content_type);
+	} else {
+		printf("content-type: -\n");
+	}
 
 	ret = 0;
 err_fclose:
