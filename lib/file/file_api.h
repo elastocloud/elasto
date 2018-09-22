@@ -350,8 +350,9 @@ enum elasto_fstat_field {
 	ELASTO_FSTAT_FIELD_SIZE		= 0x0002,
 	ELASTO_FSTAT_FIELD_BSIZE	= 0x0004,
 	ELASTO_FSTAT_FIELD_LEASE	= 0x0008,
+	ELASTO_FSTAT_FIELD_CONTENT_TYPE	= 0x0010,
 
-	ELASTO_FSTAT_FIELD_ALL_MASK	= 0x000F,
+	ELASTO_FSTAT_FIELD_ALL_MASK	= 0x001F,
 };
 
 enum elasto_fstat_ent_type {
@@ -366,6 +367,7 @@ enum elasto_fstat_ent_type {
  * @size: total size, in bytes
  * @blksize: blocksize for file system I/O
  * @lease_status: whether locked or unlocked
+ * @content_type: content-type / MIME type
  */
 struct elasto_fstat {
 	uint64_t field_mask;
@@ -373,6 +375,7 @@ struct elasto_fstat {
 	uint64_t size;
 	uint64_t blksize;
 	enum elasto_flease_status lease_status;
+	char content_type[256];
 };
 
 /**
