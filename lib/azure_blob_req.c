@@ -2198,7 +2198,7 @@ az_rsp_blob_prop_get_process(struct op *op,
 	ret = op_hdr_val_lookup(&op->rsp.hdrs,
 				"Content-Type",
 				&blob_prop_get_rsp->content_type);
-	if ((ret < 0) && (ret != -ENOENT)) {
+	if (ret < 0) {
 		goto err_out;
 	}
 
