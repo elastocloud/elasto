@@ -45,6 +45,7 @@ s3_fstat_obj(struct s3_fh *s3_fh,
 	int ret;
 	struct op *op;
 	struct s3_rsp_obj_head *obj_head_rsp;
+	size_t ctlen;
 
 	ret = s3_req_obj_head(&s3_fh->path, &op);
 	if (ret < 0) {
@@ -66,9 +67,19 @@ s3_fstat_obj(struct s3_fh *s3_fh,
 	fstat->size = obj_head_rsp->len;
 	fstat->blksize = 0;	/* leave vacant for now */
 	fstat->lease_status = ELASTO_FLEASE_UNLOCKED;
+
+	ctlen = strlen(obj_head_rsp->content_type);
+	if (ctlen >= ARRAY_SIZE(fstat->content_type)) {
+		dbg(0, "oversize object content-type\n");
+		ret = -EINVAL;
+		goto err_op_free;
+	}
+	strncpy(fstat->content_type, obj_head_rsp->content_type,
+		ARRAY_SIZE(fstat->content_type));
 	/* flag which values are valid in the stat response */
 	fstat->field_mask = (ELASTO_FSTAT_FIELD_TYPE
-				| ELASTO_FSTAT_FIELD_SIZE);
+				| ELASTO_FSTAT_FIELD_SIZE
+				| ELASTO_FSTAT_FIELD_CONTENT_TYPE);
 	ret = 0;
 
 err_op_free:
