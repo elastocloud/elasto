@@ -65,6 +65,7 @@ struct abb_io_multi_state {
 	 */
 	uint32_t blk_num;
 	struct list_head blks;
+	char *content_type;
 };
 
 struct abb_fwrite_multi_data_ctx {
@@ -304,7 +305,8 @@ abb_fwrite_multi_finish(struct abb_io_multi_state *multi_state)
 
 	ret = az_req_block_list_put(&multi_state->apb_fh->path,
 				    multi_state->blk_num, &multi_state->blks,
-				    NULL, &finish_state->op);
+				    multi_state->content_type,
+				    &finish_state->op);
 	if (ret < 0) {
 		dbg(0, "multi-part done req init failed: %s\n", strerror(-ret));
 		goto err_state_free;
@@ -481,7 +483,8 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 		 uint64_t dest_off,
 		 uint64_t dest_len,
 		 struct elasto_data *src_data,
-		 uint64_t max_io)
+		 uint64_t max_io,
+		 const char *content_type)
 {
 	int ret;
 	struct abb_io_multi_state *multi_state;
@@ -511,6 +514,13 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 	multi_state->max_in_flight = ABB_MAX_IN_FLIGHT;
 	/* blk_num can start at 0, unlike S3 multi-part */
 	list_head_init(&multi_state->blks);
+	if (content_type != NULL) {
+		multi_state->content_type = strdup(content_type);
+		if (multi_state->content_type == NULL) {
+			ret = -ENOMEM;
+			goto err_mstate_free;
+		}
+	}
 
 	abb_io_multi_tx_pipe_fill(multi_state);
 
@@ -526,6 +536,7 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 	}
 
 	abb_fwrite_multi_data_list_free(&multi_state->blks);
+	free(multi_state->content_type);
 	free(multi_state);
 
 	return 0;
@@ -533,6 +544,8 @@ abb_fwrite_multi(struct apb_fh *apb_fh,
 err_mp_abort:
 	/* FIXME cleanup uploaded blob blocks */
 	abb_fwrite_multi_data_list_free(&multi_state->blks);
+	free(multi_state->content_type);
+err_mstate_free:
 	free(multi_state);
 err_out:
 	return ret;
@@ -566,7 +579,19 @@ abb_fwrite(void *mod_priv,
 	ret = abb_fstat(mod_priv, &fstat);
 	if (ret < 0) {
 		goto err_out;
-	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+	}
+
+       if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+               ret = -EBADF;
+               goto err_out;
+       }
+
+	/*
+	 * XXX we're overwriting an existing object, so need to retain the
+	 * content-type provided at open+create time.
+	 */
+	if ((fstat.field_mask & ELASTO_FSTAT_FIELD_CONTENT_TYPE) == 0) {
+		dbg(0, "Block blob stat content-type missing\n");
 		ret = -EBADF;
 		goto err_out;
 	}
@@ -587,13 +612,13 @@ abb_fwrite(void *mod_priv,
 	if (dest_len > max_io) {
 		/* split large IOs into multi-part uploads */
 		ret = abb_fwrite_multi(apb_fh, dest_off, dest_len, src_data,
-				       max_io);
+				       max_io, fstat.content_type);
 		return ret;
 	}
 
 	ret = az_req_blob_put(&apb_fh->path,
 			      src_data, 0,	/* non-page block blob */
-			      NULL,		/* content-type */
+			      fstat.content_type,
 			      &op);
 	if (ret < 0) {
 		goto err_out;

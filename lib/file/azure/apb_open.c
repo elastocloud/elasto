@@ -133,7 +133,8 @@ err_out:
 
 static int
 apb_fopen_blob(struct apb_fh *apb_fh,
-	       uint64_t flags)
+	       uint64_t flags,
+	       struct elasto_ftoken_list *open_toks)
 {
 	int ret;
 	struct op *op;
@@ -158,9 +159,20 @@ apb_fopen_blob(struct apb_fh *apb_fh,
 		ret = -EEXIST;
 		goto err_op_free;
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
+		const char *content_type = NULL;
+
 		dbg(4, "path not found, creating\n");
 		op_free(op);
-		ret = az_req_blob_put(&apb_fh->path, NULL, 0, NULL, &op);
+
+		ret = elasto_ftoken_find(open_toks,
+					 ELASTO_FOPEN_TOK_CREATE_CONTENT_TYPE,
+					 &content_type);
+		if ((ret < 0) && (ret != -ENOENT)) {
+			goto err_out;
+		}
+		/* content_type remains NULL on -ENOENT */
+
+		ret = az_req_blob_put(&apb_fh->path, NULL, 0, content_type, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -197,7 +209,8 @@ err_out:
 
 static int
 abb_fopen_blob(struct apb_fh *apb_fh,
-	       uint64_t flags)
+	       uint64_t flags,
+	       struct elasto_ftoken_list *open_toks)
 {
 	int ret;
 	struct op *op;
@@ -223,14 +236,26 @@ abb_fopen_blob(struct apb_fh *apb_fh,
 		goto err_op_free;
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		struct elasto_data *data;
+		const char *content_type = NULL;
+
 		/* put a zero length block blob */
 		dbg(4, "path not found, creating\n");
 		op_free(op);
+
+		ret = elasto_ftoken_find(open_toks,
+					 ELASTO_FOPEN_TOK_CREATE_CONTENT_TYPE,
+					 &content_type);
+		if ((ret < 0) && (ret != -ENOENT)) {
+			goto err_out;
+		}
+		/* content_type remains NULL on -ENOENT */
+
 		ret = elasto_data_iov_new(NULL, 0, false, &data);
 		if (ret < 0) {
 			goto err_out;
 		}
-		ret = az_req_blob_put(&apb_fh->path, data, 0, NULL, &op);
+		ret = az_req_blob_put(&apb_fh->path, data, 0, content_type,
+				      &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -609,9 +634,9 @@ apb_abb_fopen(struct event_base *ev_base,
 		}
 
 		if (page_blob) {
-			ret = apb_fopen_blob(apb_fh, flags);
+			ret = apb_fopen_blob(apb_fh, flags, open_toks);
 		} else {
-			ret = abb_fopen_blob(apb_fh, flags);
+			ret = abb_fopen_blob(apb_fh, flags, open_toks);
 		}
 		if (ret < 0) {
 			goto err_io_conn_free;

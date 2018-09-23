@@ -139,7 +139,8 @@ err_out:
 
 static int
 afs_fopen_file(struct afs_fh *afs_fh,
-	       uint64_t flags)
+	       uint64_t flags,
+	       struct elasto_ftoken_list *open_toks)
 {
 	int ret;
 	struct op *op;
@@ -163,11 +164,22 @@ afs_fopen_file(struct afs_fh *afs_fh,
 		ret = -EEXIST;
 		goto err_op_free;
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
+		const char *content_type = NULL;
+
 		dbg(4, "file not found, creating\n");
 		op_free(op);
+
+		ret = elasto_ftoken_find(open_toks,
+					 ELASTO_FOPEN_TOK_CREATE_CONTENT_TYPE,
+					 &content_type);
+		if ((ret < 0) && (ret != -ENOENT)) {
+			goto err_out;
+		}
+		/* content_type remains NULL on -ENOENT */
+
 		ret = az_fs_req_file_create(&afs_fh->path,
 					    0,		/* initial size */
-					    NULL,	/* content-type */
+					    content_type,
 					    &op);
 		if (ret < 0) {
 			goto err_out;
@@ -579,7 +591,7 @@ afs_fopen(struct event_base *ev_base,
 		if (flags & ELASTO_FOPEN_DIRECTORY) {
 			ret = afs_fopen_dir(afs_fh, flags);
 		} else {
-			ret = afs_fopen_file(afs_fh, flags);
+			ret = afs_fopen_file(afs_fh, flags, open_toks);
 		}
 		if (ret < 0) {
 			goto err_io_conn_free;
