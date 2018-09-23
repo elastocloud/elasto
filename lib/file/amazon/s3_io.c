@@ -185,6 +185,7 @@ s3_fwrite_multi_data_free(struct elasto_data *this_data)
 
 static int
 s3_fwrite_multi_start(struct s3_fh *s3_fh,
+		      const char *content_type,
 		      char **_upload_id)
 {
 	int ret;
@@ -192,7 +193,7 @@ s3_fwrite_multi_start(struct s3_fh *s3_fh,
 	struct s3_rsp_mp_start *mp_start_rsp;
 	char *upload_id;
 
-	ret = s3_req_mp_start(&s3_fh->path, NULL, &op);
+	ret = s3_req_mp_start(&s3_fh->path, content_type, &op);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -348,7 +349,8 @@ s3_fwrite_multi(struct s3_fh *s3_fh,
 		uint64_t dest_off,
 		uint64_t dest_len,
 		struct elasto_data *src_data,
-		uint64_t max_io)
+		uint64_t max_io,
+		const char *content_type)
 {
 	int ret;
 	char *upload_id;
@@ -358,7 +360,7 @@ s3_fwrite_multi(struct s3_fh *s3_fh,
 	struct list_head parts;
 	uint64_t part_num = 1;	/* must be > 0 */
 
-	ret = s3_fwrite_multi_start(s3_fh, &upload_id);
+	ret = s3_fwrite_multi_start(s3_fh, content_type, &upload_id);
 	if (ret < 0) {
 		goto err_out;
 	}
@@ -441,7 +443,19 @@ s3_fwrite(void *mod_priv,
 	ret = s3_fstat(mod_priv, &fstat);
 	if (ret < 0) {
 		goto err_out;
-	} else if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+	}
+
+	if ((fstat.field_mask & ELASTO_FSTAT_FIELD_SIZE) == 0) {
+		ret = -EBADF;
+		goto err_out;
+	}
+
+	/*
+	 * XXX we're overwriting an existing object, so need to retain the
+	 * content-type provided at open+create time.
+	 */
+	if ((fstat.field_mask & ELASTO_FSTAT_FIELD_CONTENT_TYPE) == 0) {
+		dbg(0, "S3 stat content-type missing\n");
 		ret = -EBADF;
 		goto err_out;
 	}
@@ -462,11 +476,11 @@ s3_fwrite(void *mod_priv,
 	if (dest_len > max_io) {
 		/* split large IOs into multi-part uploads */
 		ret = s3_fwrite_multi(s3_fh, dest_off, dest_len,
-				      src_data, max_io);
+				      src_data, max_io, fstat.content_type);
 		return ret;
 	}
 
-	ret = s3_req_obj_put(&s3_fh->path, src_data, NULL, &op);
+	ret = s3_req_obj_put(&s3_fh->path, src_data, fstat.content_type, &op);
 	if (ret < 0) {
 		goto err_out;
 	}

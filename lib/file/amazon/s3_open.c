@@ -44,7 +44,8 @@
 
 static int
 s3_fopen_obj(struct s3_fh *s3_fh,
-	     uint64_t flags)
+	     uint64_t flags,
+	     struct elasto_ftoken_list *open_toks)
 {
 	int ret;
 	struct op *op;
@@ -69,15 +70,25 @@ s3_fopen_obj(struct s3_fh *s3_fh,
 		goto err_op_free;
 	} else if ((ret == -ENOENT) && (flags & ELASTO_FOPEN_CREATE)) {
 		struct elasto_data *data;
+		const char *content_type = NULL;
 
 		/* put a zero length object */
 		dbg(4, "path not found, creating\n");
 		op_free(op);
+
+		ret = elasto_ftoken_find(open_toks,
+					 ELASTO_FOPEN_TOK_CREATE_CONTENT_TYPE,
+					 &content_type);
+		if ((ret < 0) && (ret != -ENOENT)) {
+			goto err_out;
+		}
+		/* content_type remains NULL on -ENOENT */
+
 		ret = elasto_data_iov_new(NULL, 0, false, &data);
 		if (ret < 0) {
 			goto err_out;
 		}
-		ret = s3_req_obj_put(&s3_fh->path, data, NULL, &op);
+		ret = s3_req_obj_put(&s3_fh->path, data, content_type, &op);
 		if (ret < 0) {
 			goto err_out;
 		}
@@ -229,7 +240,7 @@ s3_fopen(struct event_base *ev_base,
 	}
 
 	if (s3_fh->path.obj != NULL) {
-		ret = s3_fopen_obj(s3_fh, flags);
+		ret = s3_fopen_obj(s3_fh, flags, open_toks);
 		if (ret < 0) {
 			goto err_conn_free;
 		}
