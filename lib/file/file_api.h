@@ -88,11 +88,16 @@ enum elasto_fopen_flags {
 /**
  * Miscellaneous open parameters
  *
- * @ELASTO_FOPEN_TOK_CREATE_AT_LOCATION specifies a location constraint for a
- * newly created directory, where applicable (e.g. Azure Account).
+ * @ELASTO_FOPEN_TOK_CREATE_AT_LOCATION:	specifies a location constraint
+ *						for a newly created directory,
+ *						where applicable (e.g. Azure
+ *						Account).
+ * @ELASTO_FOPEN_TOK_CREATE_CONTENT_TYPE:	specifies the content type to
+ *						use for newly created files.
  */
 enum elasto_fopen_token_key {
 	ELASTO_FOPEN_TOK_CREATE_AT_LOCATION	= 1,
+	ELASTO_FOPEN_TOK_CREATE_CONTENT_TYPE	= 2,
 };
 
 /**
