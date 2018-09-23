@@ -101,6 +101,7 @@ cli_cp_handle(struct cli_args *cli_args)
 	struct elasto_fstat fstat;
 	struct cli_cp_args *cp_args = cli_args->cmd_priv;
 	int ret;
+	struct elasto_ftoken_list *toks = NULL;
 
 	/* open source without create or dir flags */
 	ret = cli_open_efh(cli_args, cp_args->src_path, 0, NULL, &src_fh);
@@ -110,16 +111,24 @@ cli_cp_handle(struct cli_args *cli_args)
 		goto err_out;
 	}
 
-	/* stat to determine size to copy */
+	/* stat to determine size to copy and content-type for dest */
 	ret = elasto_fstat(src_fh, &fstat);
 	if (ret < 0) {
 		printf("stat failed with: %s\n", strerror(-ret));
 		goto err_src_close;
 	}
 
+	if (strlen(fstat.content_type) != 0) {
+		ret = elasto_ftoken_add(ELASTO_FOPEN_TOK_CREATE_CONTENT_TYPE,
+					fstat.content_type, &toks);
+		if (ret < 0) {
+			goto err_src_close;
+		}
+	}
+
 	/* open dest with create flag */
 	ret = cli_open_efh(cli_args, cp_args->dst_path, ELASTO_FOPEN_CREATE,
-			   NULL, &dest_fh);
+			   toks, &dest_fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",
 		       cp_args->dst_path, strerror(-ret));
