@@ -1,5 +1,5 @@
 /*
- * Copyright (C) SUSE LINUX GmbH 2017, all rights reserved.
+ * Copyright (C) David Disseldorp 2018
  *
  * This library is free software; you can redistribute it and/or modify it
  * under the terms of the GNU Lesser General Public License as published
@@ -11,23 +11,10 @@
  * or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser General Public
  * License for more details.
  */
-#ifndef _CLI_UTIL_H_
-#define _CLI_UTIL_H_
+#ifndef _CLI_MIME_H
+#define _CLI_MIME_H
 
-#include <stdio.h>
+const char *
+cli_mime_type_lookup(const char *file_path);
 
-#ifndef ARRAY_SIZE
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
-#endif
-
-void
-cli_human_size(double bytes,
-	       char *buf,
-	       size_t buflen);
-
-#define CLI_PROGRESS_MAX_LEN 66
-int
-cli_progress_print(FILE *stream,
-		   double pcnt_fract);
-
-#endif /* ifdef _CLI_UTIL_H_ */
+#endif /* ifdef _CLI_MIME_H_ */
