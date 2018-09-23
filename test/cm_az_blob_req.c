@@ -293,7 +293,7 @@ cm_az_blob_req_blob_create(void **state)
 	path.acc = cm_us->acc;
 	path.ctnr = cm_op_az_blob_req_state.ctnr;
 	path.blob = "blob1";
-	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, NULL, &op);
+	ret = az_req_blob_put(&path, NULL, BYTES_IN_TB, "text/plain", &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
@@ -323,6 +323,7 @@ cm_az_blob_req_blob_create(void **state)
 		assert_true(blob->is_page);
 		assert_string_equal(blob->name, "blob1");
 		assert_int_equal(blob->len, BYTES_IN_TB);
+		assert_string_equal(blob->content_type, "text/plain");
 	}
 	op_free(op);
 
@@ -495,6 +496,7 @@ cm_az_blob_req_blob_cp(void **state)
 	struct op *op;
 	struct elasto_data *data;
 	uint8_t buf[1024];
+	struct az_rsp_blob_prop_get *blob_prop_get;
 	struct az_blob_path src_path = {
 		.host_is_custom = cm_op_az_blob_req_state.io_host_is_custom,
 		.host = cm_op_az_blob_req_state.io_host,
@@ -521,7 +523,7 @@ cm_az_blob_req_blob_cp(void **state)
 
 	ret = az_req_blob_put(&src_path, data,
 			      0,	/* page_len - ignored */
-			      NULL,	/* content-type */
+			      "text/html",	/* content-type */
 			      &op);
 	assert_true(ret >= 0);
 
@@ -552,6 +554,18 @@ cm_az_blob_req_blob_cp(void **state)
 	assert_true(!op->rsp.is_error);
 
 	cm_file_buf_check(buf, ARRAY_SIZE(buf), 0);
+	op_free(op);
+
+	/* check content-type is copied */
+	ret = az_req_blob_prop_get(&dst_path, &op);
+	assert_true(ret >= 0);
+
+	ret = elasto_conn_op_txrx(cm_op_az_blob_req_state.io_conn, op);
+	assert_true(ret >= 0);
+	assert_true(!op->rsp.is_error);
+
+	blob_prop_get = az_rsp_blob_prop_get(op);
+	assert_string_equal(blob_prop_get->content_type, "text/html");
 	op_free(op);
 
 	/* cleanup base blob */
