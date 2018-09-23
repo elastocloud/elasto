@@ -874,6 +874,7 @@ az_rsp_blob_list_free(struct az_rsp_blob_list *blob_list_rsp)
 
 	list_for_each_safe(&blob_list_rsp->blobs, blob, blob_n, list) {
 		free(blob->name);
+		free(blob->content_type);
 		free(blob);
 	}
 }
@@ -1002,6 +1003,18 @@ az_rsp_blob_iter_process(struct xml_doc *xdoc,
 		goto err_blob_free;
 	}
 
+	ret = exml_date_time_want(xdoc, "./Properties/Last-Modified", true,
+				  &blob->last_mod, NULL);
+	if (ret < 0) {
+		goto err_blob_free;
+	}
+
+	ret = exml_str_want(xdoc, "./Properties/Content-Type", true,
+			    &blob->content_type, NULL);
+	if (ret < 0) {
+		goto err_blob_free;
+	}
+
 	list_add_tail(&blob_list_rsp->blobs, &blob->list);
 	blob_list_rsp->num_blobs++;
 
@@ -1051,6 +1064,7 @@ az_rsp_blob_list_process(struct op *op,
 err_blobs_free:
 	list_for_each_safe(&blob_list_rsp->blobs, blob, blob_n, list) {
 		free(blob->name);
+		free(blob->content_type);
 		free(blob);
 	}
 err_xdoc_free:

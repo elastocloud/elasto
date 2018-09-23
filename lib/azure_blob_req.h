@@ -94,6 +94,8 @@ struct azure_blob {
 	bool is_page;
 	uint64_t len;
 	enum az_lease_status lease_status;
+	time_t last_mod;
+	char *content_type;
 };
 
 /* @blobs: struct azure_blob list */
