@@ -99,7 +99,7 @@ elasto_ftoken_find(struct elasto_ftoken_list *toks,
 {
 	struct elasto_kv *kv;
 
-	if (*_val == NULL) {
+	if (_val == NULL) {
 		return -EINVAL;
 	}
 
