@@ -27,6 +27,7 @@
 #include "ccan/list/list.h"
 #include "lib/file/file_api.h"
 #include "cli_common.h"
+#include "cli_mime.h"
 #include "cli_open.h"
 
 /* split any blob over 10MB into separate blocks */
@@ -324,6 +325,8 @@ cli_put_handle(struct cli_args *cli_args)
 	struct cli_put_args *put_args = cli_args->cmd_priv;
 	struct stat st;
 	int ret;
+	const char *content_type;
+	struct elasto_ftoken_list *toks = NULL;
 
 	ret = stat(put_args->local_path, &st);
 	if (ret < 0) {
@@ -331,10 +334,19 @@ cli_put_handle(struct cli_args *cli_args)
 		goto err_out;
 	}
 
+	content_type = cli_mime_type_lookup(put_args->local_path);
+	if (content_type != NULL) {
+		ret = elasto_ftoken_add(ELASTO_FOPEN_TOK_CREATE_CONTENT_TYPE,
+					content_type, &toks);
+		if (ret < 0) {
+			goto err_out;
+		}
+	}
+
 	/* open with exclusive create flags */
 	ret = cli_open_efh(cli_args, put_args->remote_path,
 			   ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL,
-			   NULL, &fh);
+			   toks, &fh);
 	if (ret < 0) {
 		printf("%s path open failed with: %s\n",
 		       put_args->remote_path, strerror(-ret));
