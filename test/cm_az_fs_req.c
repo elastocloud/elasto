@@ -648,7 +648,7 @@ cm_az_fs_req_file_props(void **state)
 		.file = "file1",
 	};
 
-	ret = az_fs_req_file_create(&path, BYTES_IN_TB, NULL, &op);
+	ret = az_fs_req_file_create(&path, BYTES_IN_TB, "application/xml", &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
@@ -666,7 +666,7 @@ cm_az_fs_req_file_props(void **state)
 	file_prop_get = az_fs_rsp_file_prop_get(op);
 	assert_true(file_prop_get->len == BYTES_IN_TB);
 	assert_string_equal(file_prop_get->content_type,
-			    "application/octet-stream");
+			    "application/xml");
 
 	op_free(op);
 
@@ -719,7 +719,7 @@ cm_az_fs_req_file_cp(void **state)
 	};
 
 	/* create base file and directory */
-	ret = az_fs_req_file_create(&src_path, BYTES_IN_TB, NULL, &op);
+	ret = az_fs_req_file_create(&src_path, BYTES_IN_TB, "video/webm", &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
@@ -741,7 +741,7 @@ cm_az_fs_req_file_cp(void **state)
 	op_free(op);
 
 	/* create copy destination file */
-	ret = az_fs_req_file_create(&dst_path, BYTES_IN_TB, NULL, &op);
+	ret = az_fs_req_file_create(&dst_path, BYTES_IN_TB, "video/ogg", &op);
 	assert_true(ret >= 0);
 
 	ret = elasto_conn_op_txrx(cm_op_az_fs_state.io_conn, op);
