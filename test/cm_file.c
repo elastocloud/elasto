@@ -454,6 +454,7 @@ cm_file_stat_basic(void **state)
 	struct elasto_fh *fh;
 	struct elasto_fstat fstat;
 	struct elasto_fstatfs fstatfs;
+	struct elasto_ftoken_list *toks = NULL;
 	int i;
 	struct cm_unity_state *cm_us = cm_unity_state_get();
 
@@ -463,16 +464,21 @@ cm_file_stat_basic(void **state)
 		       cm_us->acc, cm_us->ctnr, cm_us->ctnr_suffix);
 	assert_true(ret >= 0);
 
+	ret = elasto_ftoken_add(ELASTO_FOPEN_TOK_CREATE_CONTENT_TYPE,
+				"audio/ogg", &toks);
+	assert_true(ret >= 0);
+
 	ret = elasto_fopen(&cm_us->az_auth,
 			   path,
 			   (ELASTO_FOPEN_CREATE | ELASTO_FOPEN_EXCL),
-			   NULL, &fh);
+			   toks, &fh);
 	assert_int_equal(ret, ELASTO_FOPEN_RET_CREATED);
 
 	ret = elasto_fstat(fh, &fstat);
 	assert_true(ret >= 0);
 
 	assert_int_equal(fstat.size, 0);
+	assert_string_equal(fstat.content_type, "audio/ogg");
 
 	ret = elasto_fstatfs(fh, &fstatfs);
 	assert_true(ret >= 0);
