@@ -67,6 +67,9 @@ int
 cm_cli_util_run(void);
 
 int
+cm_cli_mime_run(void);
+
+int
 cm_file_run(void);
 
 int
