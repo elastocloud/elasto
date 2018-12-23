@@ -29,6 +29,9 @@
 #include "third_party/linenoise/linenoise.h"
 #include "cli_common.h"
 
+#define CLI_PROMPT "elasto> "
+#define CLI_HISTORY_DEFAULT ".elasto_history"
+
 /*
  * cli_args needs to be a global for the linenoise hint callback, otherwise
  * passed as a function parameter.
@@ -120,7 +123,7 @@ cli_args_usage(const char *progname,
 "-d log_level:		Log debug messages (default: 0)\n"
 "-i			Insecure, use HTTP where possible "
 "(default: HTTPS only)\n"
-"-h history:		CLI history file (default: ~/.elasto_history)\n"
+"-h history:		CLI history file (default: ~/" CLI_HISTORY_DEFAULT ")\n"
 "-u URI:\t		REST Server URI (default: derived from credentials)"
 "\n\n",
 			progname);
@@ -425,7 +428,7 @@ cli_args_parse(int argc,
 			ret = -EINVAL;
 			goto err_out;
 		}
-		ret = asprintf(&history_file, "%s/.elasto_history", pw->pw_dir);
+		ret = asprintf(&history_file, "%s/" CLI_HISTORY_DEFAULT, pw->pw_dir);
 		if (ret < 0) {
 			ret = -ENOMEM;
 			goto err_out;
@@ -616,7 +619,7 @@ cli_cmd_line_start(struct cli_args *cli_args)
 	linenoiseSetHintsCallback(cli_cmd_line_hint);
 	linenoiseHistoryLoad(cli_args->history_file);
 	while (ret != CLI_HANDLE_RET_EXIT) {
-		char *line = linenoise("elasto> ");
+		char *line = linenoise(CLI_PROMPT);
 		if (line == NULL) {
 			break;
 		} else if (line[0] != '\0') {
