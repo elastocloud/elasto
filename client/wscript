@@ -17,13 +17,13 @@ def build(bld):
 	bld.stlib(source='cli_path.c cli_util.c cli_mime.c',
 		  target='cli_lib',
 		  use=['elasto_core'],
-		  includes = '. ..')
+		  includes = '. .. ../include')
 	bld.program(source='''elasto_client.c cli_put.c cli_get.c cli_del.c
 			      cli_create.c cli_cp.c cli_ls.c cli_stat.c
 			      cli_open.c''',
 		    target='elasto',
 		    lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		    use=['elasto_file', 'cli_lib', 'linenoise'],
-		    includes = '. ..',
+		    includes = '. .. ../include',
 		    install_path = '${BINDIR}')
 	bld.symlink_as('${BINDIR}/elasto_cli', 'elasto')

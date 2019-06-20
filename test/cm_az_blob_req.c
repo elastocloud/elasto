@@ -27,7 +27,7 @@
 #include <cmocka.h>
 #include <event2/event.h>
 
-#include "lib/file/file_api.h"
+#include "elasto/file.h"
 #include "cm_test.h"
 #include "ccan/list/list.h"
 #include "lib/exml.h"

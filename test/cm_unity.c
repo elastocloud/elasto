@@ -26,7 +26,7 @@
 #include <cmocka.h>
 
 #include "ccan/list/list.h"
-#include "lib/file/file_api.h"
+#include "elasto/file.h"
 #include "lib/exml.h"
 #include "lib/op.h"
 #include "lib/sign.h"

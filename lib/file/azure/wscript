@@ -11,11 +11,11 @@ def build(bld):
 		  vnum=bld.env.LIBELASTO_API_VERS,
 		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_file', 'elasto_req_azure_blob'],
-		  includes = '. .. ../../ ../../../')
+		  includes = '. .. ../../ ../../../ ../../../include')
 	bld.shlib(source='''afs_dir.c afs_handle.c afs_io.c afs_open.c
 			    afs_stat.c afs_unlink.c''',
 		  target='elasto_file_mod_afs',
 		  vnum=bld.env.LIBELASTO_API_VERS,
 		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_file', 'elasto_req_azure_fs'],
-		  includes = '. .. ../../ ../../../')
+		  includes = '. .. ../../ ../../../ ../../../include')

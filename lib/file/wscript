@@ -13,8 +13,8 @@ def build(bld):
 		  vnum=bld.env.LIBELASTO_API_VERS,
 		  lib=['crypto', 'expat', 'ssl', 'dl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_core'],
-		  includes = '. .. ../../')
-	bld.install_as('${INCLUDEDIR}/elasto/file.h', 'file_api.h')
+		  includes = '. .. ../../ ../../include')
+	bld.install_as('${INCLUDEDIR}/elasto/file.h', '../../include/elasto/file.h')
 	bld(features="subst",
 	    source="elasto_file.pc.in",
 	    target="elasto_file.pc",

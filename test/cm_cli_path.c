@@ -27,7 +27,7 @@
 #include <cmocka.h>
 
 #include "ccan/list/list.h"
-#include "lib/file/file_api.h"
+#include "elasto/file.h"
 #include "client/cli_common.h"
 #include "dbg.h"
 

@@ -11,4 +11,4 @@ def build(bld):
 		  vnum=bld.env.LIBELASTO_API_VERS,
 		  lib=['crypto', 'expat', 'ssl'] + bld.env.LIBEVENT_LIBS,
 		  use=['elasto_file', 'elasto_req_s3'],
-		  includes = '. .. ../../ ../../../')
+		  includes = '. .. ../../ ../../../ ../../../include')

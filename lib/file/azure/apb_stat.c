@@ -35,7 +35,7 @@
 #include "lib/azure_ssl.h"
 #include "lib/util.h"
 #include "lib/dbg.h"
-#include "lib/file/file_api.h"
+#include "elasto/file.h"
 #include "lib/file/xmit.h"
 #include "lib/file/handle.h"
 #include "apb_handle.h"

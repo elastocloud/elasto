@@ -21,5 +21,5 @@ def build(ctx):
 			+ ctx.env.LIBEVENT_LIBS,
 		    use=['elasto_req_azure_blob', 'elasto_req_azure_fs',
 			 'elasto_req_s3', 'elasto_file', 'cli_lib'],
-		    includes = '. .. ../lib',
+		    includes = '. .. ../lib ../include',
 		    install_path = None)

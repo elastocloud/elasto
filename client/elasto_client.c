@@ -25,7 +25,7 @@
 #include <pwd.h>
 
 #include "ccan/list/list.h"
-#include "lib/file/file_api.h"
+#include "elasto/file.h"
 #include "third_party/linenoise/linenoise.h"
 #include "cli_common.h"
 

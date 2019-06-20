@@ -31,7 +31,7 @@
 #include "lib/util.h"
 #include "lib/dbg.h"
 #include "lib/data.h"
-#include "lib/file/file_api.h"
+#include "elasto/file.h"
 #include "lib/file/handle.h"
 #include "lib/file/token.h"
 #include "local_path.h"

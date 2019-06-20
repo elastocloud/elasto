@@ -27,7 +27,7 @@
 #include <event2/http.h>
 
 #include "ccan/list/list.h"
-#include "lib/file/file_api.h"
+#include "elasto/file.h"
 #include "cli_util.h"
 #include "cli_common.h"
 

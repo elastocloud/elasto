@@ -32,7 +32,7 @@
 #include "lib/util.h"
 #include "lib/dbg.h"
 #include "lib/data.h"
-#include "file_api.h"
+#include "elasto/file.h"
 #include "handle.h"
 #include "xmit.h"
 

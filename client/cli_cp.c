@@ -24,7 +24,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 
-#include "lib/file/file_api.h"
+#include "elasto/file.h"
 #include "ccan/list/list.h"
 #include "cli_common.h"
 #include "cli_open.h"

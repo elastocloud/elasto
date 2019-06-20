@@ -26,7 +26,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
-#include "lib/file/file_api.h"
+#include "elasto/file.h"
 #include "cm_test.h"
 #include "lib/util.h"
 
