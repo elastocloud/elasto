@@ -1,6 +1,9 @@
 Elasto
 ======
 
+*Warning: This project is no longer actively maintained and should not
+be used.*
+
 Summary
 -------
 
@@ -144,17 +147,9 @@ Alternatives
 ------------
 
 [horizontal]
-libs3::		A C Library API for Amazon S3.
-		https://github.com/bji/libs3
+Ceph::			Open-source, distributed storage system.
+			https://ceph.com
 
-fog::		Ruby cloud services library.
-		http://fog.io/
+Azure SDK for Rust::	https://github.com/Azure/azure-sdk-for-rust
 
-rest-client-c::	Object-oriented REST client in C.
-		https://github.com/emcvipr/rest-client-c
-
-atmos-c::	C library for EMC Atmos cloud storage.
-		https://github.com/emcvipr/atmos-client-c
-
-Droplet::	Cloud storage client library
-		https://github.com/scality/Droplet
+AWS SDK for Rust::	https://github.com/awslabs/aws-sdk-rust
